@@ -9,8 +9,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		const { userQuery, personaName } = await request.json();
 
 		// TODO: Get user ID from auth session
-		// For now, using a placeholder
-		const userId = 'test-user-id';
+		// For now, using a fixed test UUID
+		const userId = '00000000-0000-0000-0000-000000000001';
 
 		if (!userQuery || !personaName) {
 			return json({ error: 'Missing required fields' }, { status: 400 });

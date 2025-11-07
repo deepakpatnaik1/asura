@@ -95,13 +95,13 @@
 
 <div class="flex h-screen flex-col">
 	<!-- Header -->
-	<header class="border-b border-slate-700 bg-slate-800 px-6 py-4">
+	<header class="border-b border-slate-700 bg-slate-800 px-6 py-2">
 		<div class="mx-auto flex max-w-4xl items-center justify-between">
-			<h1 class="text-2xl font-bold text-white">Asura</h1>
+			<h1 class="text-xl font-bold text-white">Asura</h1>
 			<div class="flex gap-2">
 				{#each personas as persona}
 					<button
-						class="rounded-lg px-3 py-2 text-sm font-medium text-white transition-colors {selectedPersona ===
+						class="rounded px-2 py-1 text-xs font-medium text-white transition-colors {selectedPersona ===
 						persona.name
 							? persona.color
 							: 'bg-slate-700 hover:bg-slate-600'}"
@@ -115,7 +115,7 @@
 	</header>
 
 	<!-- Messages -->
-	<div bind:this={messagesContainer} class="flex-1 overflow-y-auto px-6 py-8">
+	<div bind:this={messagesContainer} class="flex-1 overflow-y-auto px-6 py-4">
 		<div class="mx-auto max-w-4xl space-y-6">
 			{#each messages as message}
 				<div class="flex {message.role === 'user' ? 'justify-end' : 'justify-start'}">
@@ -151,28 +151,23 @@
 	</div>
 
 	<!-- Input -->
-	<div class="border-t border-slate-700 bg-slate-800 px-6 py-4">
-		<div class="mx-auto max-w-4xl">
-			<div class="flex gap-3">
-				<textarea
-					bind:value={userInput}
-					onkeydown={handleKeydown}
-					placeholder="Ask {personas.find((p) => p.name === selectedPersona)?.label} anything..."
-					class="flex-1 resize-none rounded-lg border border-slate-600 bg-slate-700 px-4 py-3 text-slate-100 placeholder-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-					rows="1"
-					disabled={isLoading}
-				></textarea>
-				<button
-					onclick={sendMessage}
-					disabled={isLoading || !userInput.trim()}
-					class="rounded-lg bg-blue-600 px-6 py-3 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-				>
-					Send
-				</button>
-			</div>
-			<div class="mt-2 text-xs text-slate-400">
-				Press Enter to send, Shift+Enter for new line
-			</div>
+	<div class="border-t border-slate-700 bg-slate-800 px-6 py-2">
+		<div class="mx-auto flex max-w-4xl gap-2">
+			<textarea
+				bind:value={userInput}
+				onkeydown={handleKeydown}
+				placeholder="Ask {personas.find((p) => p.name === selectedPersona)?.label} anything..."
+				class="flex-1 resize-none rounded border border-slate-600 bg-slate-700 px-3 py-1.5 text-sm text-slate-100 placeholder-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+				rows="1"
+				disabled={isLoading}
+			></textarea>
+			<button
+				onclick={sendMessage}
+				disabled={isLoading || !userInput.trim()}
+				class="rounded bg-blue-600 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+			>
+				Send
+			</button>
 		</div>
 	</div>
 </div>
