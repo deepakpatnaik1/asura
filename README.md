@@ -10,6 +10,10 @@ A sophisticated web application built with SvelteKit, Supabase, and Tailwind CSS
 - **AI Services**:
   - Fireworks AI
   - Voyage AI
+- **MCP Integration**:
+  - Supabase MCP Server (database operations via AI)
+  - Playwright MCP Server (browser automation via AI)
+- **Testing**: Playwright for E2E testing
 
 ## Project Structure
 
@@ -17,6 +21,7 @@ A sophisticated web application built with SvelteKit, Supabase, and Tailwind CSS
 asura/
 ├── src/                    # SvelteKit application
 │   ├── lib/               # Shared libraries and utilities
+│   │   ├── mcp/           # MCP integration helpers
 │   │   └── supabase.ts    # Supabase client
 │   ├── routes/            # SvelteKit routes
 │   └── app.css            # Global styles with Tailwind
@@ -25,6 +30,10 @@ asura/
 │   │   └── _shared/       # Shared utilities for functions
 │   ├── migrations/        # Database migrations
 │   └── config.toml        # Supabase config
+├── tests/                 # Playwright E2E tests
+├── docs/                  # Documentation
+│   └── MCP_SETUP.md       # MCP configuration guide
+├── mcp.json              # MCP server configuration
 └── static/                # Static assets
 ```
 
@@ -94,6 +103,36 @@ Deploy an edge function:
 ```bash
 supabase functions deploy function-name
 ```
+
+## Model Context Protocol (MCP)
+
+Asura is equipped with MCP servers for AI-assisted development.
+
+### Available MCP Servers
+
+1. **Supabase MCP** - Database operations via AI
+   ```bash
+   npm run mcp:supabase
+   ```
+
+2. **Playwright MCP** - Browser automation via AI
+   ```bash
+   npm run mcp:playwright
+   ```
+
+### Testing
+
+Run end-to-end tests:
+```bash
+npm run test:e2e
+```
+
+Run tests with UI:
+```bash
+npm run test:e2e:ui
+```
+
+For detailed MCP setup and usage, see [docs/MCP_SETUP.md](docs/MCP_SETUP.md).
 
 ## Environment Variables
 
