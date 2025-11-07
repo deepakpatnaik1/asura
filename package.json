@@ -33,6 +33,7 @@
 		"vite": "^7.1.10"
 	},
 	"dependencies": {
-		"@supabase/supabase-js": "^2.80.0"
+		"@supabase/supabase-js": "^2.80.0",
+		"@tailwindcss/postcss": "^4.1.17"
 	}
 }
