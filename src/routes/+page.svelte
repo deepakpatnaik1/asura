@@ -394,10 +394,8 @@
 		display: flex;
 		gap: 12px;
 		align-items: flex-end;
-		max-width: var(--middle-section-width);
-		margin: 0 auto;
-		width: 100%;
-		padding: 0 24px;
+		width: calc(100% + (var(--boss-card-margin-x) * -2));
+		margin-left: var(--boss-card-margin-x);
 	}
 
 	.input-field-wrapper {
