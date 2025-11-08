@@ -202,7 +202,14 @@ CRITICAL RULES:
 – Always provide both arc and score together - both are REQUIRED fields
 – Use punctuation ( . , ; : - ) to write efficiently but preserve content`;
 
-const CALL2B_PROMPT = 'Critique the previous response and present a higher quality one. Present your response as the official response without mentioning that it is a critique.';
+const CALL2B_PROMPT = `Review the previous JSON output for accuracy and quality:
+- Verify boss_essence preserves all key information from user message
+- Verify persona_essence is compressed intelligently without losing critical insights
+- Verify decision_arc_summary accurately captures the behavioral pattern (50-150 chars)
+- Verify salience_score matches the tier criteria (1-10 scale)
+- Verify is_instruction and instruction_scope are correctly detected
+
+Return ONLY the improved JSON object (no additional text, analysis, or commentary).`;
 
 // Helper function to extract JSON from LLM output (handles <think> tags)
 function extractJSON(text: string): string {
