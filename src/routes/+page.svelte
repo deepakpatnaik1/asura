@@ -305,7 +305,8 @@
 		display: flex;
 		gap: 12px;
 		align-items: center;
-		width: 100%;
+		width: calc(100% + (var(--boss-card-margin-x) * -2));
+		margin-left: var(--boss-card-margin-x);
 	}
 
 	.message-input {
