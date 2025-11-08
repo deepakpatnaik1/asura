@@ -209,6 +209,8 @@
 	.boss-label {
 		color: var(--boss-accent);
 		border-bottom: 1px solid var(--boss-accent);
+		position: relative;
+		top: -1px;
 	}
 
 	.ai-label {
@@ -277,7 +279,8 @@
 		align-items: center;
 		gap: var(--action-icon-gap);
 		margin-bottom: 0px;
-		flex-wrap: wrap;
+		flex-wrap: nowrap;
+		overflow-x: auto;
 	}
 
 	.control-btn {
@@ -302,6 +305,7 @@
 		opacity: 0.7;
 		transition: opacity 0.2s;
 		padding: 4px;
+		flex-shrink: 0;
 	}
 
 	.model-dropdown:hover {
@@ -311,6 +315,10 @@
 	.model-name {
 		font-size: 1em;
 		color: hsl(var(--foreground));
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		max-width: 140px;
 	}
 
 	.persona-dropdown {
@@ -322,6 +330,7 @@
 		opacity: 0.7;
 		transition: opacity 0.2s;
 		padding: 4px;
+		flex-shrink: 0;
 	}
 
 	.persona-dropdown:hover {
@@ -331,6 +340,10 @@
 	.persona-name {
 		font-size: 1em;
 		color: hsl(var(--foreground));
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		max-width: 80px;
 	}
 
 	.icon-group {
