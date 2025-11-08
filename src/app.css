@@ -1,1 +1,84 @@
 @import "tailwindcss";
+
+@layer base {
+  :root {
+    /* Core color system - exact Aether values */
+    --background: 0 0% 8%;
+    --foreground: 39 35% 90%;
+
+    --card: 0 0% 10%;
+    --card-foreground: 39 35% 80%;
+
+    --primary: 0 0% 95%;
+    --primary-foreground: 0 0% 8%;
+
+    --secondary: 0 0% 12%;
+    --secondary-foreground: 0 0% 85%;
+
+    --muted: 0 0% 14%;
+    --muted-foreground: 39 35% 80%;
+
+    --accent: 0 0% 16%;
+    --accent-foreground: 0 0% 95%;
+
+    --border: 0 0% 20%;
+    --input: 0 0% 12%;
+    --ring: 0 0% 30%;
+
+    --popover: 0 0% 10%;
+    --popover-foreground: 39 35% 80%;
+
+    --chat-border: 0 0% 18%;
+    --chat-label: 39 35% 80%;
+
+    --prose-body: 0 0% 85%;
+
+    /* Boss message specific */
+    --boss-bg: rgba(217, 133, 107, 0.08);
+    --boss-accent: rgb(217, 133, 107);
+
+    /* Layout system */
+    --middle-section-width: 700px;
+
+    /* Spacing system - Figma-like design */
+    --message-padding-x: 16px;
+    --message-padding-y: 16px;
+    --message-gap: 8px;
+
+    --boss-card-padding-x: 16px;
+    --boss-card-padding-y: 16px;
+    --boss-card-margin-x: -16px;
+    --boss-card-border-radius: 8px;
+
+    --action-bar-offset-x: 16px;
+    --action-bar-offset-y: 16px;
+    --action-icon-gap: 8px;
+
+    --input-bottom-offset: 0px;
+    --input-padding: 12px;
+    --input-max-height: 200px;
+
+    /* Z-index system */
+    --z-base: 1;
+    --z-messages: 10;
+    --z-sticky: 20;
+    --z-dropdown: 30;
+    --z-modal: 40;
+    --z-toast: 50;
+
+    --radius: 0.25rem;
+  }
+}
+
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  body {
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: "iA Writer Quattro V", system-ui, -apple-system, sans-serif;
+    font-size: 8pt;
+  }
+}
