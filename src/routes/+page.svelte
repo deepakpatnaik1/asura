@@ -2,6 +2,7 @@
 	import { Icon } from 'svelte-icons-pack';
 	import { LuStar, LuCopy, LuTrash2, LuArchive, LuRefreshCw, LuPaperclip, LuFolder, LuChevronDown, LuSettings, LuLogOut, LuCloudDownload, LuEllipsisVertical, LuArrowDown, LuArrowUp, LuMessageSquare, LuFlame } from 'svelte-icons-pack/lu';
 	import { currentMessage, isLoading, sendMessage } from '$lib/stores/chat';
+	import { tick } from 'svelte';
 
 	// Receive loaded messages from server
 	let { data } = $props();
@@ -9,6 +10,7 @@
 	let allMessages = $state([...(data.messages || [])].reverse());
 
 	let inputMessage = $state('');
+	let messagesEndRef: HTMLDivElement;
 
 	// Helper function to format timestamps
 	function formatTimestamp(dateString: string) {
@@ -22,16 +24,55 @@
 		});
 	}
 
+	// Auto-scroll to bottom
+	async function scrollToBottom() {
+		await tick();
+		messagesEndRef?.scrollIntoView({ behavior: 'smooth' });
+	}
+
+	// Watch for new messages and scroll
+	$effect(() => {
+		if ($currentMessage) {
+			scrollToBottom();
+		}
+	});
+
+	// Scroll to bottom on initial load (instant, not smooth)
+	$effect(() => {
+		if (allMessages.length > 0 && messagesEndRef) {
+			messagesEndRef.scrollIntoView({ behavior: 'instant' });
+		}
+	});
+
 	async function handleSend() {
 		if (!inputMessage.trim() || $isLoading) return;
 
 		const message = inputMessage.trim();
 		inputMessage = '';
 
+		// Send message and wait for response
 		await sendMessage(message);
 
-		// TODO: After successful send, add new message to allMessages array
-		// Will implement after we return the saved message from the API
+		// Add the completed message to allMessages
+		if ($currentMessage) {
+			const now = new Date().toISOString();
+			const formattedTimestamp = formatTimestamp(now);
+
+			allMessages = [...allMessages, {
+				id: crypto.randomUUID(),
+				user_message: $currentMessage.boss,
+				ai_response: $currentMessage.ai,
+				persona_name: 'ananya',
+				created_at: now,
+				formatted_timestamp: formattedTimestamp
+			}];
+
+			// Clear current message after adding to history
+			currentMessage.set(null);
+
+			// Scroll to show new message
+			scrollToBottom();
+		}
 	}
 
 	function handleKeyDown(event: KeyboardEvent) {
@@ -117,6 +158,9 @@
 					</div>
 				</div>
 			{/if}
+
+			<!-- Scroll anchor -->
+			<div bind:this={messagesEndRef}></div>
 		</div>
 	</div>
 
