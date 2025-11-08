@@ -5,7 +5,8 @@
 
 	// Receive loaded messages from server
 	let { data } = $props();
-	let allMessages = $state(data.messages || []);
+	// Reverse to show oldest first (most recent at bottom)
+	let allMessages = $state([...(data.messages || [])].reverse());
 
 	let inputMessage = $state('');
 
@@ -50,7 +51,7 @@
 				<div class="message-group">
 					<div class="boss-message">
 						<!-- Turn Indicator -->
-						<div class="turn-indicator">turn {allMessages.length - index}</div>
+						<div class="turn-indicator">turn {index + 1}</div>
 
 						<div class="message-header">
 							<span class="message-label boss-label">Boss</span>
