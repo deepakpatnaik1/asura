@@ -1,7 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
+import { VOYAGE_API_KEY } from '$env/static/private';
+import { VoyageAIClient } from 'voyageai';
 
 const supabase = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY);
+const voyage = new VoyageAIClient({ apiKey: VOYAGE_API_KEY });
 
 // Token estimation (rough approximation: 1 token ≈ 4 characters)
 function estimateTokens(text: string): number {
@@ -54,7 +57,8 @@ interface ContextStats {
 export async function buildContextForCalls1A1B(
 	userId: string | null,
 	personaName: string = 'ananya',
-	modelIdentifier: string = 'accounts/fireworks/models/qwen3-235b-a22b'
+	modelIdentifier: string = 'accounts/fireworks/models/qwen3-235b-a22b',
+	userQuery?: string // Optional: enables vector search (Priority 5)
 ): Promise<{ context: string; stats: ContextStats }> {
 	// Get model's context window and calculate budget
 	const contextWindow = await getModelContextWindow(modelIdentifier);
@@ -175,52 +179,121 @@ export async function buildContextForCalls1A1B(
 		}
 	}
 
-	// Priority 4: High-salience decision arcs (8-10)
-	let highSalienceQuery = supabase
-		.from('journal')
-		.select('decision_arc_summary, salience_score, created_at')
-		.gte('salience_score', 8);
+	// Priority 5: Vector search results (only if userQuery provided and journal count > 100)
+	if (userQuery) {
+		// Check journal count first
+		let countQuery = supabase
+			.from('journal')
+			.select('id', { count: 'exact', head: true })
+			.eq('is_instruction', false);
 
-	if (userId === null) {
-		highSalienceQuery = highSalienceQuery.is('user_id', null);
-	} else {
-		highSalienceQuery = highSalienceQuery.eq('user_id', userId);
-	}
-
-	const { data: highSalienceData } = await highSalienceQuery
-		.order('salience_score', { ascending: false })
-		.order('created_at', { ascending: false });
-
-	if (highSalienceData && highSalienceData.length > 0) {
-		const highSalienceText = formatDecisionArcs(highSalienceData, 'High-Salience');
-		const highSalienceTokens = estimateTokens(highSalienceText);
-		if (totalTokens + highSalienceTokens <= contextBudget) {
-			components.highSalienceArcs = highSalienceText;
-			totalTokens += highSalienceTokens;
+		if (userId === null) {
+			countQuery = countQuery.is('user_id', null);
+		} else {
+			countQuery = countQuery.eq('user_id', userId);
 		}
-	}
 
-	// Priority 5: Other decision arcs (1-7) - fit as many as possible
-	let otherArcsQuery = supabase
-		.from('journal')
-		.select('decision_arc_summary, salience_score, created_at')
-		.lt('salience_score', 8);
+		const { count: journalCount } = await countQuery;
 
-	if (userId === null) {
-		otherArcsQuery = otherArcsQuery.is('user_id', null);
-	} else {
-		otherArcsQuery = otherArcsQuery.eq('user_id', userId);
-	}
+		if (journalCount && journalCount > 100) {
+			try {
+				// Generate embedding for user query
+				console.log('[Context Builder] Generating query embedding for vector search');
+				const queryEmbedding = await voyage.embed({
+					input: userQuery,
+					model: 'voyage-3'
+				});
 
-	const { data: otherArcsData } = await otherArcsQuery
-		.order('salience_score', { ascending: false })
-		.order('created_at', { ascending: false });
+				const queryVector = queryEmbedding.data[0].embedding;
 
-	if (otherArcsData && otherArcsData.length > 0) {
-		const remainingBudget = contextBudget - totalTokens;
-		const otherArcsText = truncateArcsToFit(otherArcsData, remainingBudget);
-		components.otherArcs = otherArcsText;
-		totalTokens += estimateTokens(otherArcsText);
+				// Collect IDs to exclude (already loaded in Priorities 1-4)
+				const excludeIds: string[] = [];
+
+				// Get last 5 Superjournal IDs
+				let superjournalExcludeQuery = supabase
+					.from('superjournal')
+					.select('id');
+
+				if (userId === null) {
+					superjournalExcludeQuery = superjournalExcludeQuery.is('user_id', null);
+				} else {
+					superjournalExcludeQuery = superjournalExcludeQuery.eq('user_id', userId);
+				}
+
+				const { data: superjournalIds } = await superjournalExcludeQuery
+					.order('created_at', { ascending: false })
+					.limit(5);
+
+				// Get corresponding Journal IDs via Superjournal IDs
+				if (superjournalIds && superjournalIds.length > 0) {
+					const sjIds = superjournalIds.map(s => s.id);
+					const { data: journalFromSj } = await supabase
+						.from('journal')
+						.select('id')
+						.in('superjournal_id', sjIds);
+
+					if (journalFromSj) {
+						excludeIds.push(...journalFromSj.map(j => j.id));
+					}
+				}
+
+				// Get last 100 Journal IDs
+				let journalExcludeQuery = supabase
+					.from('journal')
+					.select('id')
+					.eq('is_instruction', false);
+
+				if (userId === null) {
+					journalExcludeQuery = journalExcludeQuery.is('user_id', null);
+				} else {
+					journalExcludeQuery = journalExcludeQuery.eq('user_id', userId);
+				}
+
+				const { data: last100Ids } = await journalExcludeQuery
+					.order('created_at', { ascending: false })
+					.limit(100);
+
+				if (last100Ids) {
+					excludeIds.push(...last100Ids.map(j => j.id));
+				}
+
+				// Perform vector search with salience weighting
+				// Note: pgvector doesn't support complex expressions in ORDER BY
+				// So we'll fetch top 50 by similarity and re-rank in app code
+				const { data: vectorResults } = await supabase.rpc('search_journal_by_embedding', {
+					query_embedding: JSON.stringify(queryVector),
+					match_count: 50,
+					exclude_ids: excludeIds,
+					user_id_filter: userId
+				});
+
+				if (vectorResults && vectorResults.length > 0) {
+					// Re-rank by weighted score: similarity × (salience/10)
+					const reranked = vectorResults
+						.map((entry: any) => ({
+							...entry,
+							weighted_score: entry.similarity * (entry.salience_score / 10.0)
+						}))
+						.sort((a: any, b: any) => b.weighted_score - a.weighted_score)
+						.slice(0, 10); // Top 10
+
+					// Format vector search results
+					const vectorText = formatVectorSearchResults(reranked);
+					const vectorTokens = estimateTokens(vectorText);
+
+					if (totalTokens + vectorTokens <= contextBudget) {
+						components.highSalienceArcs = vectorText; // Reuse highSalienceArcs component
+						totalTokens += vectorTokens;
+					}
+
+					console.log('[Context Builder] Vector search loaded', reranked.length, 'results');
+				}
+			} catch (vectorError) {
+				console.error('[Context Builder] Vector search error:', vectorError);
+			}
+		} else {
+			console.log('[Context Builder] Skipping vector search (journal count <=100)');
+		}
 	}
 
 	// Priority 6: File uploads (artisan cut compressed) - TODO: Implement when file upload is ready
@@ -347,6 +420,32 @@ Arc: ${entry.decision_arc_summary}`
 		.join('\n\n');
 
 	return `--- BEHAVIORAL INSTRUCTIONS (Persistent Directives) ---\n${formatted}\n\n`;
+}
+
+// Format vector search results
+function formatVectorSearchResults(
+	entries: Array<{
+		boss_essence: string;
+		persona_essence: string;
+		decision_arc_summary: string;
+		salience_score: number;
+		created_at: string;
+		weighted_score: number;
+	}>
+): string {
+	if (entries.length === 0) return '';
+
+	const formatted = entries
+		.map(
+			(entry) =>
+				`[Relevant Memory - ${new Date(entry.created_at).toLocaleDateString()} - Salience: ${entry.salience_score}]
+User: ${entry.boss_essence}
+AI: ${entry.persona_essence}
+Arc: ${entry.decision_arc_summary}`
+		)
+		.join('\n\n');
+
+	return `--- SEMANTICALLY RELEVANT MEMORIES (Vector Search Results) ---\n${formatted}\n\n`;
 }
 
 // Format decision arcs

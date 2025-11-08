@@ -352,11 +352,12 @@ export const POST: RequestHandler = async ({ request }) => {
 			return json({ error: 'Message is required' }, { status: 400 });
 		}
 
-		// Build context for Call 1A/1B (memory injection)
+		// Build context for Call 1A/1B (memory injection with vector search)
 		const { context, stats } = await buildContextForCalls1A1B(
 			null, // user_id (null for development, no auth yet)
 			persona, // current persona for instruction filtering
-			'accounts/fireworks/models/qwen3-235b-a22b'
+			'accounts/fireworks/models/qwen3-235b-a22b',
+			message // user query for vector search (Priority 5)
 		);
 
 		console.log('[Chat API] Context stats:', stats);
