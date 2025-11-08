@@ -11,6 +11,9 @@
 
 	let inputMessage = $state('');
 	let messagesEndRef: HTMLDivElement;
+	let showNukeConfirm = $state(false);
+	let nukeProgress = $state(0);
+	let nukeTimer: number | null = null;
 
 	// Helper function to format timestamps
 	function formatTimestamp(dateString: string) {
@@ -79,6 +82,59 @@
 		if (event.key === 'Enter' && !event.shiftKey) {
 			event.preventDefault();
 			handleSend();
+		}
+	}
+
+	function handleNukeClick() {
+		showNukeConfirm = true;
+		nukeProgress = 0;
+
+		// Auto-confirm after 3 seconds
+		const duration = 3000; // 3 seconds
+		const interval = 50; // Update every 50ms
+		const increment = (interval / duration) * 100;
+
+		nukeTimer = window.setInterval(() => {
+			nukeProgress += increment;
+
+			if (nukeProgress >= 100) {
+				if (nukeTimer) clearInterval(nukeTimer);
+				handleNukeConfirm();
+			}
+		}, interval);
+	}
+
+	function handleNukeCancel() {
+		if (nukeTimer) {
+			clearInterval(nukeTimer);
+			nukeTimer = null;
+		}
+		showNukeConfirm = false;
+		nukeProgress = 0;
+	}
+
+	async function handleNukeConfirm() {
+		if (nukeTimer) {
+			clearInterval(nukeTimer);
+			nukeTimer = null;
+		}
+		showNukeConfirm = false;
+		nukeProgress = 0;
+
+		try {
+			const response = await fetch('/api/nuke', {
+				method: 'POST'
+			});
+
+			if (!response.ok) {
+				throw new Error('Failed to nuke database');
+			}
+
+			// Clear local messages
+			allMessages = [];
+			currentMessage.set(null);
+		} catch (error) {
+			console.error('Nuke error:', error);
 		}
 	}
 </script>
@@ -195,7 +251,7 @@
 						<button class="logout-btn logout-btn-inline"><Icon src={LuLogOut} size="11" /></button>
 					</div>
 
-					<button class="control-btn settings-btn" title="Burn"><Icon src={LuFlame} size="11" /></button>
+					<button class="control-btn settings-btn" title="Nuke all history" onclick={handleNukeClick}><Icon src={LuFlame} size="11" /></button>
 				</div>
 				<input
 					type="text"
@@ -216,6 +272,21 @@
 	<div class="user-controls">
 		<button class="logout-btn"><Icon src={LuLogOut} size="16" /></button>
 	</div>
+
+	<!-- Nuke Confirmation Modal -->
+	{#if showNukeConfirm}
+		<div class="modal-overlay" onclick={handleNukeCancel}>
+			<div class="modal-content" onclick={(e) => e.stopPropagation()}>
+				<p class="modal-text">Do nothing to proceed or hit cancel</p>
+				<div class="progress-bar-container">
+					<div class="progress-bar" style="width: {nukeProgress}%"></div>
+				</div>
+				<div class="modal-actions">
+					<button class="modal-btn modal-btn-cancel" onclick={handleNukeCancel}>Cancel</button>
+				</div>
+			</div>
+		</div>
+	{/if}
 </div>
 
 <style>
@@ -655,5 +726,72 @@
 	.send-button:hover:not(:disabled) {
 		background: var(--boss-accent);
 		color: hsl(var(--background));
+	}
+
+	/* Nuke Confirmation Modal */
+	.modal-overlay {
+		position: fixed;
+		inset: 0;
+		background: rgba(0, 0, 0, 0.7);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		z-index: 1000;
+	}
+
+	.modal-content {
+		background: hsl(var(--background));
+		border: 1px solid hsl(var(--border));
+		border-radius: 8px;
+		padding: 24px;
+		min-width: 300px;
+		max-width: 400px;
+	}
+
+	.modal-text {
+		color: hsl(var(--foreground));
+		font-size: 16px;
+		margin: 0 0 16px 0;
+		text-align: center;
+	}
+
+	.progress-bar-container {
+		width: 100%;
+		height: 4px;
+		background: hsl(var(--border));
+		border-radius: 2px;
+		overflow: hidden;
+		margin-bottom: 24px;
+	}
+
+	.progress-bar {
+		height: 100%;
+		background: var(--boss-accent);
+		transition: width 50ms linear;
+	}
+
+	.modal-actions {
+		display: flex;
+		gap: 12px;
+		justify-content: flex-end;
+	}
+
+	.modal-btn {
+		padding: 8px 16px;
+		border-radius: 4px;
+		border: none;
+		cursor: pointer;
+		font-size: 14px;
+		transition: all 0.2s;
+	}
+
+	.modal-btn-cancel {
+		background: transparent;
+		color: hsl(var(--muted-foreground));
+		border: 1px solid hsl(var(--border));
+	}
+
+	.modal-btn-cancel:hover {
+		background: hsl(var(--muted) / 0.1);
 	}
 </style>
