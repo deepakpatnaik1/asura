@@ -153,7 +153,6 @@
 
 	/* Turn Indicator */
 	.turn-indicator {
-		font-size: 11px;
 		color: hsl(var(--muted-foreground));
 		opacity: 0.6;
 		margin-bottom: 8px;
@@ -194,7 +193,6 @@
 
 	/* Message Labels */
 	.message-label {
-		font-size: 14px;
 		font-weight: 500;
 		color: hsl(var(--chat-label));
 	}
@@ -223,7 +221,6 @@
 		background: transparent;
 		border: none;
 		cursor: pointer;
-		font-size: 14px;
 		opacity: 0.6;
 		transition: opacity 0.2s;
 		padding: 4px;
@@ -234,7 +231,6 @@
 	}
 
 	.timestamp {
-		font-size: 11px;
 		color: hsl(var(--muted-foreground));
 		opacity: 0.7;
 		margin-left: 8px;
@@ -242,7 +238,6 @@
 
 	/* Message Text */
 	.message-text {
-		font-size: 14px;
 		line-height: 1.6;
 		color: hsl(var(--foreground));
 		white-space: pre-wrap;
@@ -269,7 +264,6 @@
 		background: transparent;
 		border: none;
 		cursor: pointer;
-		font-size: 16px;
 		opacity: 0.7;
 		transition: opacity 0.2s;
 		padding: 4px 8px;
@@ -286,7 +280,6 @@
 		border: 1px solid hsl(var(--border));
 		border-radius: 4px;
 		padding: 6px 12px;
-		font-size: 13px;
 		cursor: pointer;
 	}
 
@@ -296,7 +289,6 @@
 	}
 
 	.token-percentage {
-		font-size: 12px;
 		color: hsl(var(--muted-foreground));
 		margin-left: auto;
 	}
@@ -316,7 +308,6 @@
 		border: 1px solid hsl(var(--border));
 		border-radius: 6px;
 		padding: 12px 16px;
-		font-size: 14px;
 		outline: none;
 		transition: border-color 0.2s;
 	}
@@ -336,7 +327,6 @@
 		border: none;
 		border-radius: 6px;
 		padding: 12px 24px;
-		font-size: 14px;
 		font-weight: 500;
 		cursor: pointer;
 		transition: opacity 0.2s;
@@ -367,7 +357,6 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		font-size: 9px;
 		font-weight: 600;
 		cursor: pointer;
 	}
@@ -376,7 +365,6 @@
 		background: transparent;
 		border: none;
 		color: hsl(var(--chat-label));
-		font-size: 12px;
 		cursor: pointer;
 		padding: 4px 8px;
 		opacity: 0.7;
