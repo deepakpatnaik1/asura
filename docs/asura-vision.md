@@ -44,14 +44,14 @@ All context (base instructions, persona prompt, memory tiers, decision arcs) fit
 
 ## Multi-Call Architecture
 
-Every user message triggers a sophisticated three-call sequence:
+Every user message triggers a sophisticated **four-call sequence** with built-in quality verification:
 
 ### Call 1A: Hidden Reasoning Call
 
 **Input:**
 - User query
-- Base instructions
-- Persona-specific prompt
+- Base instructions (see system-prompts.md)
+- Persona-specific prompt (see system-prompts.md)
 - Last 5 Superjournal turns (full)
 - Last 100 Journal turns (compressed)
 - Starred/pinned messages (salience 10)
@@ -63,27 +63,29 @@ Every user message triggers a sophisticated three-call sequence:
 
 **Purpose:** First-pass reasoning to generate informed response
 
-### Call 1B: User-Visible Response Call
+### Call 1B: Critique & Refinement Call
 
 **Input:**
-- Everything from Call 1A
-- Call 1A user query
-- Call 1A LLM response
+- Everything from Call 1A (base instructions + persona profile + memory context + user query)
+- Call 1A's response
+- CALL1B_PROMPT: "Critique the previous response and present a higher quality one. Present your response as the official response without mentioning that it is a critique."
 
 **Output:**
 - Refined LLM response (streamed to user)
 - Saved to **Superjournal** table
 
-**Purpose:** Second-pass reasoning produces polished, user-visible response
+**Purpose:** Self-critique produces polished, user-visible response with higher quality than single-pass generation
 
-### Call 2: Artisan Cut Compression
+**Key Innovation:** Call 1B receives the original Call 1A prompt context, enabling informed critique rather than blind refinement.
+
+### Call 2A: Initial Artisan Cut Compression
 
 **Input:**
-- System prompt: `CALL2_PROMPT` (Artisan Cut instructions)
+- System prompt: `CALL2A_PROMPT` (Artisan Cut instructions - see system-prompts.md)
 - Call 1B user query
 - Call 1B LLM response
 
-**Output:** JSON object
+**Output:** JSON object (not immediately saved)
 ```json
 {
   "boss_essence": "[User message with minimal compression]",
@@ -94,9 +96,29 @@ Every user message triggers a sophisticated three-call sequence:
 }
 ```
 
-**Purpose:** Create compressed memory entry for long-term storage
+**Purpose:** First-pass compression attempt
 
-**Saved to:** Journal table
+### Call 2B: Compression Verification & Refinement
+
+**Input:**
+- CALL2A_PROMPT (Artisan Cut instructions)
+- Call 2A's compressed JSON output
+- CALL2B_PROMPT: "Critique the previous response and present a higher quality one. Present your response as the official response without mentioning that it is a critique."
+
+**Output:**
+- Verified/refined compressed JSON
+- Saved to **Journal** table with embedding
+
+**Purpose:** Self-verification ensures compression quality and adherence to Artisan Cut principles
+
+**Key Innovation:** Call 2B receives the original Artisan Cut instructions, allowing it to verify:
+- Were specific numbers/dates/names preserved in boss_essence?
+- Does persona_essence capture key strategic insights?
+- Is the decision_arc reflective of actual behavior?
+- Is salience score appropriate for emotional/strategic weight?
+- Was any non-regenerable information lost?
+
+**Quality Assurance:** This two-step compression process (2A → 2B) prevents permanent memory degradation from poor initial compression. The LLM self-corrects before the compressed memory is saved.
 
 ## Artisan Cut: Lossless High-Signal Compression
 
@@ -284,8 +306,9 @@ Stores Artisan Cut compressed turns and file descriptions.
 - 1 call × expensive model (GPT-4/Claude) = High cost per message
 
 **Asura approach:**
-- 3 calls × cheap model (Qwen) = Still lower cost per message
+- 4 calls × cheap model (Qwen) = Still lower cost per message
 - Architecture quality boost > model quality difference
+- Self-critique mechanism ensures quality without expensive models
 - Automatic prompt caching reduces input token costs significantly
 
 **Caching Benefits:**
@@ -401,8 +424,27 @@ Output:
 Saved to Journal with embedding generated
 ```
 
-**Total API calls per user message: 3**
-**Cost:** ~1/3 of single Claude Opus call despite 3x calls
+**4. Call 2B (Compression Verification)**
+```
+Input:
+- CALL2A_PROMPT (Artisan Cut instructions)
+- Call 2A's JSON output
+- CALL2B_PROMPT
+
+Output (verified and saved to Journal):
+{
+  "boss_essence": "Should we raise prices 20%?",
+  "persona_name": "gunnar",
+  "persona_essence": "Suggested testing 15-20% increase with cohort; watch churn...",
+  "decision_arc_summary": "Pricing strategy: considering 20% increase, testing approach",
+  "salience_score": 6
+}
+
+Embedding generated via Voyage AI and saved
+```
+
+**Total API calls per user message: 4**
+**Cost:** ~1/3 of single Claude Opus call despite 4x calls (due to cheaper model + caching)
 
 ## Future Enhancements
 
@@ -424,17 +466,20 @@ Saved to Journal with embedding generated
 ## Key Design Principles
 
 1. **Memory Over Model:** Architecture compensates for cheaper models
-2. **Lossless Compression:** Artisan Cut preserves regenerability, not just summarization
-3. **Human-Like Memory:** Three tiers mirror working/recent/long-term human memory
-4. **Cost Efficiency:** Premium experience at budget pricing through design
-5. **Perpetual Continuity:** AI never forgets foundational decisions
-6. **Salience Matters:** Important memories naturally rise to top
-7. **User Control:** Manual starring overrides automatic salience
+2. **Self-Critique Quality:** LLM refines its own output (Calls 1B & 2B) ensuring quality without expensive models
+3. **Lossless Compression:** Artisan Cut preserves regenerability, not just summarization
+4. **Verified Compression:** Two-step process (2A→2B) prevents memory degradation
+5. **Human-Like Memory:** Three tiers mirror working/recent/long-term human memory
+6. **Cost Efficiency:** Premium experience at budget pricing through design
+7. **Perpetual Continuity:** AI never forgets foundational decisions
+8. **Salience Matters:** Important memories naturally rise to top
+9. **User Control:** Manual starring overrides automatic salience
 
 ## Success Metrics
 
 - **Memory Retention:** AI recalls decisions from months ago accurately
-- **Cost Per Message:** <$0.01 per user message (3 calls combined)
-- **Response Quality:** Comparable to premium models despite budget pricing
+- **Compression Quality:** No information loss in Artisan Cut verified by Call 2B
+- **Cost Per Message:** <$0.01 per user message (4 calls combined)
+- **Response Quality:** Comparable to premium models despite budget pricing, enhanced by self-critique
 - **Conversation Continuity:** Zero "I don't recall" moments for high-salience items
 - **User Satisfaction:** Founders feel "understood" across long time horizons

@@ -1,148 +1,139 @@
 # Asura
 
-A sophisticated web application built with SvelteKit, Supabase, and Tailwind CSS.
+AI advisory system for startup founders with perpetual conversation continuity. Unlike traditional AI chat applications that eventually "forget" past conversations, Asura implements a sophisticated multi-call architecture with intelligent memory compression that never loses context.
+
+## Core Innovation
+
+**Perpetual Memory Through Artisan Cut Compression**
+
+- Three-tier memory architecture (working/recent/long-term) mimicking human cognitive patterns
+- Four-call system with self-critique: Call 1A → 1B → 2A → 2B
+- Regenerability-based compression (not naive summarization)
+- Decision Arcs with salience scoring (1-10) for semantic retrieval
+- Cost-effective: 4 cheap LLM calls < 1 expensive call
+
+## Documentation
+
+- [asura-vision.md](docs/asura-vision.md) - Complete architecture and design philosophy
+- [system-prompts.md](docs/system-prompts.md) - All system prompts for the multi-call architecture
+
+## Six AI Personas
+
+1. **Gunnar** - YC Startup Mentor (execution, WHAT and HOW)
+2. **Vlad** - First Principles Thinker (reasoning, WHY and WHETHER)
+3. **Kirby** - Guerrilla Marketer (marketing, sales, growth)
+4. **Stefan** - Finance Expert (unit economics, metrics, fundraising)
+5. **Ananya** - Intellectual Companion (books, ideas, culture)
+6. **Samara** - Journal Companion (emotional processing, reflection)
 
 ## Tech Stack
 
 - **Frontend**: SvelteKit + TypeScript
-- **Styling**: Tailwind CSS (with Typography & Forms plugins)
-- **Backend**: Supabase (PostgreSQL, Auth, Edge Functions)
+- **Styling**: Tailwind CSS v4 (with Typography & Forms plugins)
+- **Backend**: Supabase (PostgreSQL + pgvector)
 - **AI Services**:
-  - Fireworks AI
-  - Voyage AI
-- **MCP Integration**:
-  - Supabase MCP Server (database operations via AI)
-  - Playwright MCP Server (browser automation via AI)
-- **Testing**: Playwright for E2E testing
-
-## Project Structure
-
-```
-asura/
-├── src/                    # SvelteKit application
-│   ├── lib/               # Shared libraries and utilities
-│   │   ├── mcp/           # MCP integration helpers
-│   │   └── supabase.ts    # Supabase client
-│   ├── routes/            # SvelteKit routes
-│   └── app.css            # Global styles with Tailwind
-├── supabase/              # Supabase configuration
-│   ├── functions/         # Edge Functions
-│   │   └── _shared/       # Shared utilities for functions
-│   ├── migrations/        # Database migrations
-│   └── config.toml        # Supabase config
-├── tests/                 # Playwright E2E tests
-├── docs/                  # Documentation
-│   └── MCP_SETUP.md       # MCP configuration guide
-├── mcp.json              # MCP server configuration
-└── static/                # Static assets
-```
+  - Fireworks AI (Qwen 2.5 235B) - LLM inference
+  - Voyage AI (Gemini) - Embeddings
+- **Development**:
+  - MCP Servers (Supabase, Playwright)
+  - Playwright for E2E testing
 
 ## Getting Started
 
 ### Prerequisites
 
 - Node.js 22+ (use nvm: `nvm use 22`)
-- Supabase CLI (optional, for local development)
+- Supabase CLI (for local development)
 
 ### Installation
 
-1. Clone the repository:
+1. Clone and install:
 ```bash
 git clone https://github.com/deepakpatnaik1/asura.git
 cd asura
-```
-
-2. Install dependencies:
-```bash
 npm install
 ```
 
-3. Copy `.env.example` to `.env` and configure your environment variables:
+2. Configure environment:
 ```bash
 cp .env.example .env
+# Edit .env with your API keys
 ```
 
-### Development
-
-Start the development server:
+3. Start development:
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173) in your browser.
-
-### Building
-
-Create a production build:
-```bash
-npm run build
-```
-
-Preview the production build:
-```bash
-npm run preview
-```
-
-## Supabase Setup
-
-### Local Development
-
-Start Supabase locally:
-```bash
-supabase start
-```
-
-### Edge Functions
-
-Create a new edge function:
-```bash
-supabase functions new function-name
-```
-
-Deploy an edge function:
-```bash
-supabase functions deploy function-name
-```
-
-## Model Context Protocol (MCP)
-
-Asura is equipped with MCP servers for AI-assisted development.
-
-### Available MCP Servers
-
-1. **Supabase MCP** - Database operations via AI
-   ```bash
-   npm run mcp:supabase
-   ```
-
-2. **Playwright MCP** - Browser automation via AI
-   ```bash
-   npm run mcp:playwright
-   ```
-
-### Testing
-
-Run end-to-end tests:
-```bash
-npm run test:e2e
-```
-
-Run tests with UI:
-```bash
-npm run test:e2e:ui
-```
-
-For detailed MCP setup and usage, see [docs/MCP_SETUP.md](docs/MCP_SETUP.md).
+Open [http://localhost:5173](http://localhost:5173)
 
 ## Environment Variables
 
-See `.env.example` for required environment variables:
+Required in `.env`:
 
-- `PUBLIC_SUPABASE_URL` - Your Supabase project URL
-- `PUBLIC_SUPABASE_ANON_KEY` - Supabase anonymous key (safe for client-side)
-- `SUPABASE_SERVICE_ROLE_KEY` - Supabase service role key (server-side only)
+- `PUBLIC_SUPABASE_URL` - Supabase project URL
+- `PUBLIC_SUPABASE_ANON_KEY` - Supabase anonymous key
+- `SUPABASE_SERVICE_ROLE_KEY` - Supabase service role key
 - `FIREWORKS_API_KEY` - Fireworks AI API key
 - `VOYAGE_API_KEY` - Voyage AI API key
+
+## Multi-Call Architecture
+
+Every user message triggers 4 sequential AI calls:
+
+1. **Call 1A**: Hidden reasoning with full memory context
+2. **Call 1B**: Self-critique → refined response (streamed to user)
+3. **Call 2A**: Initial Artisan Cut compression
+4. **Call 2B**: Compression verification → saved to perpetual memory
+
+This architecture ensures both response quality and memory preservation without expensive models.
+
+## Memory Tiers
+
+- **Working Memory**: Last 5 full turns (Superjournal)
+- **Recent Memory**: Last 100 compressed turns (Journal)
+- **Long-Term Memory**: Decision Arcs retrieved via vector search
+
+All context fits within 40% of LLM context window, leaving 60% for generation.
+
+## Database Schema
+
+- **superjournal**: Full conversation turns
+- **journal**: Artisan Cut compressed turns with embeddings
+- **profiles**: User metadata
+
+Uses Supabase pgvector for semantic search over Decision Arcs.
+
+## Development Tools
+
+### MCP Servers
+
+Configured in `mcp.json`:
+
+1. **Supabase MCP** - Database operations via AI
+2. **Playwright MCP** - Browser automation via AI
+
+### Supabase Local Development
+
+```bash
+supabase start
+supabase db reset  # Reset with migrations
+```
+
+### Testing
+
+```bash
+npm run test:e2e        # Run E2E tests
+npm run test:e2e:ui     # Run with Playwright UI
+```
+
+## Key Design Principles
+
+1. **Memory Over Model** - Architecture compensates for cheaper models
+2. **Self-Critique Quality** - LLM refines its own output (1B & 2B)
+3. **Lossless Compression** - Regenerability-based, not summarization
+4. **Verified Compression** - Two-step process (2A→2B) prevents memory degradation
+5. **Cost Efficiency** - Premium experience at budget pricing
 
 ## License
 
