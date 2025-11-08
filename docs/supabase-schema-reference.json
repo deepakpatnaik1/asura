@@ -1,0 +1,502 @@
+[
+  {
+    "full_table_name": "auth.audit_log_entries",
+    "column_name": "instance_id",
+    "data_type": "uuid"
+  },
+  {
+    "full_table_name": "auth.audit_log_entries",
+    "column_name": "id",
+    "data_type": "uuid"
+  },
+  {
+    "full_table_name": "auth.audit_log_entries",
+    "column_name": "payload",
+    "data_type": "json"
+  },
+  {
+    "full_table_name": "auth.audit_log_entries",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "full_table_name": "auth.audit_log_entries",
+    "column_name": "ip_address",
+    "data_type": "character varying"
+  },
+  {
+    "full_table_name": "auth.flow_state",
+    "column_name": "id",
+    "data_type": "uuid"
+  },
+  {
+    "full_table_name": "auth.flow_state",
+    "column_name": "user_id",
+    "data_type": "uuid"
+  },
+  {
+    "full_table_name": "auth.flow_state",
+    "column_name": "auth_code",
+    "data_type": "text"
+  },
+  {
+    "full_table_name": "auth.flow_state",
+    "column_name": "code_challenge_method",
+    "data_type": "USER-DEFINED"
+  },
+  {
+    "full_table_name": "auth.flow_state",
+    "column_name": "code_challenge",
+    "data_type": "text"
+  },
+  {
+    "full_table_name": "auth.flow_state",
+    "column_name": "provider_type",
+    "data_type": "text"
+  },
+  {
+    "full_table_name": "auth.flow_state",
+    "column_name": "provider_access_token",
+    "data_type": "text"
+  },
+  {
+    "full_table_name": "auth.flow_state",
+    "column_name": "provider_refresh_token",
+    "data_type": "text"
+  },
+  {
+    "full_table_name": "auth.flow_state",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "full_table_name": "auth.flow_state",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "full_table_name": "auth.flow_state",
+    "column_name": "authentication_method",
+    "data_type": "text"
+  },
+  {
+    "full_table_name": "auth.flow_state",
+    "column_name": "auth_code_issued_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "full_table_name": "auth.identities",
+    "column_name": "provider_id",
+    "data_type": "text"
+  },
+  {
+    "full_table_name": "auth.identities",
+    "column_name": "user_id",
+    "data_type": "uuid"
+  },
+  {
+    "full_table_name": "auth.identities",
+    "column_name": "identity_data",
+    "data_type": "jsonb"
+  },
+  {
+    "full_table_name": "auth.identities",
+    "column_name": "provider",
+    "data_type": "text"
+  },
+  {
+    "full_table_name": "auth.identities",
+    "column_name": "last_sign_in_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "full_table_name": "auth.identities",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "full_table_name": "auth.identities",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "full_table_name": "auth.identities",
+    "column_name": "email",
+    "data_type": "text"
+  },
+  {
+    "full_table_name": "auth.identities",
+    "column_name": "id",
+    "data_type": "uuid"
+  },
+  {
+    "full_table_name": "auth.instances",
+    "column_name": "id",
+    "data_type": "uuid"
+  },
+  {
+    "full_table_name": "auth.instances",
+    "column_name": "uuid",
+    "data_type": "uuid"
+  },
+  {
+    "full_table_name": "auth.instances",
+    "column_name": "raw_base_config",
+    "data_type": "text"
+  },
+  {
+    "full_table_name": "auth.instances",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "full_table_name": "auth.instances",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "full_table_name": "auth.mfa_amr_claims",
+    "column_name": "session_id",
+    "data_type": "uuid"
+  },
+  {
+    "full_table_name": "auth.mfa_amr_claims",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "full_table_name": "auth.mfa_amr_claims",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "full_table_name": "auth.mfa_amr_claims",
+    "column_name": "authentication_method",
+    "data_type": "text"
+  },
+  {
+    "full_table_name": "auth.mfa_amr_claims",
+    "column_name": "id",
+    "data_type": "uuid"
+  },
+  {
+    "full_table_name": "auth.mfa_challenges",
+    "column_name": "id",
+    "data_type": "uuid"
+  },
+  {
+    "full_table_name": "auth.mfa_challenges",
+    "column_name": "factor_id",
+    "data_type": "uuid"
+  },
+  {
+    "full_table_name": "auth.mfa_challenges",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "full_table_name": "auth.mfa_challenges",
+    "column_name": "verified_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "full_table_name": "auth.mfa_challenges",
+    "column_name": "ip_address",
+    "data_type": "inet"
+  },
+  {
+    "full_table_name": "auth.mfa_challenges",
+    "column_name": "otp_code",
+    "data_type": "text"
+  },
+  {
+    "full_table_name": "auth.mfa_challenges",
+    "column_name": "web_authn_session_data",
+    "data_type": "jsonb"
+  },
+  {
+    "full_table_name": "auth.mfa_factors",
+    "column_name": "id",
+    "data_type": "uuid"
+  },
+  {
+    "full_table_name": "auth.mfa_factors",
+    "column_name": "user_id",
+    "data_type": "uuid"
+  },
+  {
+    "full_table_name": "auth.mfa_factors",
+    "column_name": "friendly_name",
+    "data_type": "text"
+  },
+  {
+    "full_table_name": "auth.mfa_factors",
+    "column_name": "factor_type",
+    "data_type": "USER-DEFINED"
+  },
+  {
+    "full_table_name": "auth.mfa_factors",
+    "column_name": "status",
+    "data_type": "USER-DEFINED"
+  },
+  {
+    "full_table_name": "auth.mfa_factors",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "full_table_name": "auth.mfa_factors",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "full_table_name": "auth.mfa_factors",
+    "column_name": "secret",
+    "data_type": "text"
+  },
+  {
+    "full_table_name": "auth.mfa_factors",
+    "column_name": "phone",
+    "data_type": "text"
+  },
+  {
+    "full_table_name": "auth.mfa_factors",
+    "column_name": "last_challenged_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "full_table_name": "auth.mfa_factors",
+    "column_name": "web_authn_credential",
+    "data_type": "jsonb"
+  },
+  {
+    "full_table_name": "auth.mfa_factors",
+    "column_name": "web_authn_aaguid",
+    "data_type": "uuid"
+  },
+  {
+    "full_table_name": "auth.mfa_factors",
+    "column_name": "last_webauthn_challenge_data",
+    "data_type": "jsonb"
+  },
+  {
+    "full_table_name": "auth.oauth_authorizations",
+    "column_name": "id",
+    "data_type": "uuid"
+  },
+  {
+    "full_table_name": "auth.oauth_authorizations",
+    "column_name": "authorization_id",
+    "data_type": "text"
+  },
+  {
+    "full_table_name": "auth.oauth_authorizations",
+    "column_name": "client_id",
+    "data_type": "uuid"
+  },
+  {
+    "full_table_name": "auth.oauth_authorizations",
+    "column_name": "user_id",
+    "data_type": "uuid"
+  },
+  {
+    "full_table_name": "auth.oauth_authorizations",
+    "column_name": "redirect_uri",
+    "data_type": "text"
+  },
+  {
+    "full_table_name": "auth.oauth_authorizations",
+    "column_name": "scope",
+    "data_type": "text"
+  },
+  {
+    "full_table_name": "auth.oauth_authorizations",
+    "column_name": "state",
+    "data_type": "text"
+  },
+  {
+    "full_table_name": "auth.oauth_authorizations",
+    "column_name": "resource",
+    "data_type": "text"
+  },
+  {
+    "full_table_name": "auth.oauth_authorizations",
+    "column_name": "code_challenge",
+    "data_type": "text"
+  },
+  {
+    "full_table_name": "auth.oauth_authorizations",
+    "column_name": "code_challenge_method",
+    "data_type": "USER-DEFINED"
+  },
+  {
+    "full_table_name": "auth.oauth_authorizations",
+    "column_name": "response_type",
+    "data_type": "USER-DEFINED"
+  },
+  {
+    "full_table_name": "auth.oauth_authorizations",
+    "column_name": "status",
+    "data_type": "USER-DEFINED"
+  },
+  {
+    "full_table_name": "auth.oauth_authorizations",
+    "column_name": "authorization_code",
+    "data_type": "text"
+  },
+  {
+    "full_table_name": "auth.oauth_authorizations",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "full_table_name": "auth.oauth_authorizations",
+    "column_name": "expires_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "full_table_name": "auth.oauth_authorizations",
+    "column_name": "approved_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "full_table_name": "auth.oauth_clients",
+    "column_name": "id",
+    "data_type": "uuid"
+  },
+  {
+    "full_table_name": "auth.oauth_clients",
+    "column_name": "client_secret_hash",
+    "data_type": "text"
+  },
+  {
+    "full_table_name": "auth.oauth_clients",
+    "column_name": "registration_type",
+    "data_type": "USER-DEFINED"
+  },
+  {
+    "full_table_name": "auth.oauth_clients",
+    "column_name": "redirect_uris",
+    "data_type": "text"
+  },
+  {
+    "full_table_name": "auth.oauth_clients",
+    "column_name": "grant_types",
+    "data_type": "text"
+  },
+  {
+    "full_table_name": "auth.oauth_clients",
+    "column_name": "client_name",
+    "data_type": "text"
+  },
+  {
+    "full_table_name": "auth.oauth_clients",
+    "column_name": "client_uri",
+    "data_type": "text"
+  },
+  {
+    "full_table_name": "auth.oauth_clients",
+    "column_name": "logo_uri",
+    "data_type": "text"
+  },
+  {
+    "full_table_name": "auth.oauth_clients",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "full_table_name": "auth.oauth_clients",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "full_table_name": "auth.oauth_clients",
+    "column_name": "deleted_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "full_table_name": "auth.oauth_clients",
+    "column_name": "client_type",
+    "data_type": "USER-DEFINED"
+  },
+  {
+    "full_table_name": "auth.oauth_consents",
+    "column_name": "id",
+    "data_type": "uuid"
+  },
+  {
+    "full_table_name": "auth.oauth_consents",
+    "column_name": "user_id",
+    "data_type": "uuid"
+  },
+  {
+    "full_table_name": "auth.oauth_consents",
+    "column_name": "client_id",
+    "data_type": "uuid"
+  },
+  {
+    "full_table_name": "auth.oauth_consents",
+    "column_name": "scopes",
+    "data_type": "text"
+  },
+  {
+    "full_table_name": "auth.oauth_consents",
+    "column_name": "granted_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "full_table_name": "auth.oauth_consents",
+    "column_name": "revoked_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "full_table_name": "auth.one_time_tokens",
+    "column_name": "id",
+    "data_type": "uuid"
+  },
+  {
+    "full_table_name": "auth.one_time_tokens",
+    "column_name": "user_id",
+    "data_type": "uuid"
+  },
+  {
+    "full_table_name": "auth.one_time_tokens",
+    "column_name": "token_type",
+    "data_type": "USER-DEFINED"
+  },
+  {
+    "full_table_name": "auth.one_time_tokens",
+    "column_name": "token_hash",
+    "data_type": "text"
+  },
+  {
+    "full_table_name": "auth.one_time_tokens",
+    "column_name": "relates_to",
+    "data_type": "text"
+  },
+  {
+    "full_table_name": "auth.one_time_tokens",
+    "column_name": "created_at",
+    "data_type": "timestamp without time zone"
+  },
+  {
+    "full_table_name": "auth.one_time_tokens",
+    "column_name": "updated_at",
+    "data_type": "timestamp without time zone"
+  },
+  {
+    "full_table_name": "auth.refresh_tokens",
+    "column_name": "instance_id",
+    "data_type": "uuid"
+  },
+  {
+    "full_table_name": "auth.refresh_tokens",
+    "column_name": "id",
+    "data_type": "bigint"
+  },
+  {
+    "full_table_name": "auth.refresh_tokens",
+    "column_name": "token",
+    "data_type": "character varying"
+  }
+]
