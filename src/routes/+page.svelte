@@ -98,6 +98,11 @@
 						<button class="control-btn" title="Messages"><Icon src={LuMessageSquare} size="11" /></button>
 					</div>
 
+					<!-- User Controls (inline on narrow screens) -->
+					<div class="user-controls-inline">
+						<button class="logout-btn logout-btn-inline"><Icon src={LuLogOut} size="11" /></button>
+					</div>
+
 					<button class="control-btn settings-btn" title="Burn"><Icon src={LuFlame} size="11" /></button>
 				</div>
 				<input type="text" placeholder="Type your message..." class="message-input" />
@@ -108,8 +113,7 @@
 
 	<!-- User Avatar/Logout (top right) -->
 	<div class="user-controls">
-		<div class="user-avatar">TEST</div>
-		<button class="logout-btn"><Icon src={LuLogOut} size="11" /> Logout</button>
+		<button class="logout-btn"><Icon src={LuLogOut} size="16" /></button>
 	</div>
 </div>
 
@@ -118,7 +122,7 @@
 	.chat-container {
 		display: grid;
 		grid-template-rows: 1fr auto;
-		grid-template-columns: 1fr var(--middle-section-width) 1fr;
+		grid-template-columns: 1fr min(var(--middle-section-width), 100%) 1fr;
 		grid-template-areas:
 			'left-blank messages right-blank'
 			'left-blank input right-blank';
@@ -127,6 +131,14 @@
 		background: hsl(var(--background));
 		color: hsl(var(--foreground));
 		position: relative;
+	}
+
+	/* Responsive adjustments for narrow screens */
+	@media (max-width: 900px) {
+		.chat-container {
+			grid-template-columns: 0 1fr 0;
+			padding: 0 16px;
+		}
 	}
 
 	/* Messages Area - middle column */
@@ -337,6 +349,13 @@
 		color: rgb(220, 38, 38);
 	}
 
+	/* On narrow screens, remove margin from fire icon since logout handles positioning */
+	@media (max-width: 900px) {
+		.settings-btn {
+			margin-left: 0;
+		}
+	}
+
 	.model-select,
 	.persona-select {
 		background: hsl(var(--input));
@@ -394,18 +413,19 @@
 	}
 
 	.send-button {
-		background: var(--boss-accent);
-		color: hsl(var(--background));
-		border: none;
+		background: transparent;
+		color: var(--boss-accent);
+		border: 1px solid var(--boss-accent);
 		border-radius: 6px;
 		padding: 12px 24px;
 		font-weight: 500;
 		cursor: pointer;
-		transition: opacity 0.2s;
+		transition: all 0.2s;
 	}
 
 	.send-button:hover {
-		opacity: 0.9;
+		background: var(--boss-accent);
+		color: hsl(var(--background));
 	}
 
 	/* User Controls - absolutely positioned top right */
@@ -415,22 +435,30 @@
 		right: 16px;
 		z-index: var(--z-sticky);
 		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 8px;
-	}
-
-	.user-avatar {
-		width: 40px;
-		height: 40px;
-		border-radius: 50%;
-		background: hsl(var(--accent));
-		color: hsl(var(--foreground));
-		display: flex;
 		align-items: center;
 		justify-content: center;
-		font-weight: 600;
-		cursor: pointer;
+	}
+
+	/* Hide top-right logout on narrow screens */
+	@media (max-width: 900px) {
+		.user-controls {
+			display: none;
+		}
+	}
+
+	/* Inline logout button container */
+	.user-controls-inline {
+		display: none;
+		margin-left: auto;
+		padding-right: 2px;
+	}
+
+	/* Show inline logout on narrow screens */
+	@media (max-width: 900px) {
+		.user-controls-inline {
+			display: flex;
+			align-items: center;
+		}
 	}
 
 	.logout-btn {
@@ -438,9 +466,16 @@
 		border: none;
 		color: hsl(var(--chat-label));
 		cursor: pointer;
-		padding: 4px 8px;
+		padding: 8px;
 		opacity: 0.7;
 		transition: all 0.2s;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.logout-btn-inline {
+		padding: 4px;
 	}
 
 	.logout-btn:hover {
