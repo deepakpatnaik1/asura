@@ -14,6 +14,9 @@
 - [ ] **Add memory context loading** - Load last 5 Superjournal + last 100 Journal into Call 1A/1B
 - [ ] **Implement Decision Arcs retrieval** - Vector search for relevant context
 
+## Production Readiness
+- [ ] **Migrate to Supabase Edge Functions** - Move from SvelteKit endpoints to Edge Functions for global low-latency deployment. Currently using `src/routes/api/chat/+server.ts` for development speed.
+
 ## Features
 - [ ] **File upload with logical chunking** - LLM-based intelligent file processing
 - [ ] **Starred messages** - UI and backend for pinning important conversations
