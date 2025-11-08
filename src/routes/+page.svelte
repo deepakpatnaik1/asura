@@ -125,7 +125,7 @@
 		grid-template-columns: 1fr min(var(--middle-section-width), 100%) 1fr;
 		grid-template-areas:
 			'left-blank messages right-blank'
-			'left-blank input right-blank';
+			'input input input';
 		height: 100vh;
 		overflow: hidden;
 		background: hsl(var(--background));
@@ -209,6 +209,8 @@
 	.boss-label {
 		color: var(--boss-accent);
 		border-bottom: 1px solid var(--boss-accent);
+		position: relative;
+		top: -1px;
 	}
 
 	.ai-label {
@@ -241,7 +243,7 @@
 		padding: 4px;
 		display: inline-flex;
 		align-items: center;
-		margin-top: -2px;
+		margin-top: -4px;
 	}
 
 	.action-btn:hover {
@@ -266,7 +268,7 @@
 	/* Input Area - explicitly positioned at bottom */
 	.input-area {
 		grid-area: input;
-		background: hsl(var(--background));
+		background: hsl(var(--card));
 		border-top: 1px solid hsl(var(--chat-border));
 		padding: 16px 24px;
 		position: relative;
@@ -277,7 +279,8 @@
 		align-items: center;
 		gap: var(--action-icon-gap);
 		margin-bottom: 0px;
-		flex-wrap: wrap;
+		flex-wrap: nowrap;
+		overflow-x: auto;
 	}
 
 	.control-btn {
@@ -302,6 +305,7 @@
 		opacity: 0.7;
 		transition: opacity 0.2s;
 		padding: 4px;
+		flex-shrink: 0;
 	}
 
 	.model-dropdown:hover {
@@ -311,6 +315,10 @@
 	.model-name {
 		font-size: 1em;
 		color: hsl(var(--foreground));
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		max-width: 140px;
 	}
 
 	.persona-dropdown {
@@ -322,6 +330,7 @@
 		opacity: 0.7;
 		transition: opacity 0.2s;
 		padding: 4px;
+		flex-shrink: 0;
 	}
 
 	.persona-dropdown:hover {
@@ -331,6 +340,10 @@
 	.persona-name {
 		font-size: 1em;
 		color: hsl(var(--foreground));
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		max-width: 80px;
 	}
 
 	.icon-group {
@@ -341,7 +354,6 @@
 	}
 
 	.settings-btn {
-		margin-left: auto;
 		color: rgb(239, 68, 68);
 	}
 
@@ -349,10 +361,10 @@
 		color: rgb(220, 38, 38);
 	}
 
-	/* On narrow screens, remove margin from fire icon since logout handles positioning */
-	@media (max-width: 900px) {
+	/* On wide screens, push fire icon to the right */
+	@media (min-width: 901px) {
 		.settings-btn {
-			margin-left: 0;
+			margin-left: auto;
 		}
 	}
 
@@ -381,8 +393,10 @@
 		display: flex;
 		gap: 12px;
 		align-items: flex-end;
-		width: calc(100% + (var(--boss-card-margin-x) * -2));
-		margin-left: var(--boss-card-margin-x);
+		max-width: var(--middle-section-width);
+		margin: 0 auto;
+		width: 100%;
+		padding: 0 24px;
 	}
 
 	.input-field-wrapper {
