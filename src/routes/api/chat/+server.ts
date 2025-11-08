@@ -299,7 +299,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		const call1AResponse = call1A.choices[0]?.message?.content || 'No response generated';
 
-		// Call 1B: Refine response with critique prompt
+		// Call 1B: Refine response with critique prompt - STREAMING
 		const call1B = await fireworks.chat.completions.create({
 			model: 'accounts/fireworks/models/qwen3-235b-a22b',
 			messages: [
@@ -308,37 +308,67 @@ export const POST: RequestHandler = async ({ request }) => {
 				{ role: 'user', content: 'Shorten this response.' }
 			],
 			max_tokens: 4096,
-			temperature: 0.7
+			temperature: 0.7,
+			stream: true
 		});
 
-		const call1BResponse = call1B.choices[0]?.message?.content || 'No response generated';
+		// Create a ReadableStream for SSE
+		const stream = new ReadableStream({
+			async start(controller) {
+				const encoder = new TextEncoder();
+				let fullResponse = '';
 
-		// Save to Superjournal and get the ID
-		const { data: superjournalData, error: dbError } = await supabase
-			.from('superjournal')
-			.insert({
-				user_id: null, // Nullable for development
-				persona_name: persona,
-				user_message: message,
-				ai_response: call1BResponse
-			})
-			.select('id')
-			.single();
+				try {
+					for await (const chunk of call1B) {
+						const content = chunk.choices[0]?.delta?.content || '';
+						if (content) {
+							fullResponse += content;
+							// Send SSE format: data: {json}\n\n
+							controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content })}\n\n`));
+						}
+					}
 
-		if (dbError) {
-			console.error('Database error:', dbError);
-			// Don't fail the request if DB write fails
-		}
+					// Send completion event
+					controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true })}\n\n`));
 
-		// Trigger background compression (Call 2A/2B) - non-blocking
-		if (superjournalData?.id) {
-			// Use setTimeout to defer execution and not block response
-			setTimeout(() => {
-				compressToJournal(superjournalData.id, message, call1BResponse, persona);
-			}, 0);
-		}
+					// Save to Superjournal after streaming completes
+					const { data: superjournalData, error: dbError } = await supabase
+						.from('superjournal')
+						.insert({
+							user_id: null,
+							persona_name: persona,
+							user_message: message,
+							ai_response: fullResponse
+						})
+						.select('id')
+						.single();
 
-		return json({ response: call1BResponse });
+					if (dbError) {
+						console.error('Database error:', dbError);
+					}
+
+					// Trigger background compression
+					if (superjournalData?.id) {
+						setTimeout(() => {
+							compressToJournal(superjournalData.id, message, fullResponse, persona);
+						}, 0);
+					}
+
+					controller.close();
+				} catch (error) {
+					console.error('Stream error:', error);
+					controller.error(error);
+				}
+			}
+		});
+
+		return new Response(stream, {
+			headers: {
+				'Content-Type': 'text/event-stream',
+				'Cache-Control': 'no-cache',
+				'Connection': 'keep-alive'
+			}
+		});
 	} catch (error) {
 		console.error('Chat API error:', error);
 		return json({ error: 'Failed to generate response' }, { status: 500 });
