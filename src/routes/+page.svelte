@@ -3,7 +3,23 @@
 	import { LuStar, LuCopy, LuTrash2, LuArchive, LuRefreshCw, LuPaperclip, LuFolder, LuChevronDown, LuSettings, LuLogOut, LuCloudDownload, LuEllipsisVertical, LuArrowDown, LuArrowUp, LuMessageSquare, LuFlame } from 'svelte-icons-pack/lu';
 	import { currentMessage, isLoading, sendMessage } from '$lib/stores/chat';
 
+	// Receive loaded messages from server
+	let { data } = $props();
+	let allMessages = $state(data.messages || []);
+
 	let inputMessage = $state('');
+
+	// Helper function to format timestamps
+	function formatTimestamp(dateString: string) {
+		const date = new Date(dateString);
+		return date.toLocaleString('en-US', {
+			month: 'short',
+			day: 'numeric',
+			hour: 'numeric',
+			minute: '2-digit',
+			hour12: true
+		});
+	}
 
 	async function handleSend() {
 		if (!inputMessage.trim() || $isLoading) return;
@@ -12,6 +28,9 @@
 		inputMessage = '';
 
 		await sendMessage(message);
+
+		// TODO: After successful send, add new message to allMessages array
+		// Will implement after we return the saved message from the API
 	}
 
 	function handleKeyDown(event: KeyboardEvent) {
@@ -26,12 +45,47 @@
 	<!-- Messages Area -->
 	<div class="messages-area">
 		<div class="messages-content">
-			{#if $currentMessage}
+			{#each allMessages as msg, index}
 				<!-- Boss Message -->
 				<div class="message-group">
 					<div class="boss-message">
 						<!-- Turn Indicator -->
-						<div class="turn-indicator">turn 1</div>
+						<div class="turn-indicator">turn {allMessages.length - index}</div>
+
+						<div class="message-header">
+							<span class="message-label boss-label">Boss</span>
+							<div class="message-actions">
+								<div class="action-icons">
+									<button class="action-btn" title="Star"><Icon src={LuStar} size="11" /></button>
+									<button class="action-btn" title="Copy"><Icon src={LuCopy} size="11" /></button>
+									<button class="action-btn" title="Delete"><Icon src={LuTrash2} size="11" /></button>
+									<button class="action-btn" title="Archive"><Icon src={LuArchive} size="11" /></button>
+									<button class="action-btn" title="Refresh"><Icon src={LuRefreshCw} size="11" /></button>
+								</div>
+								<span class="timestamp">{msg.formatted_timestamp}</span>
+							</div>
+						</div>
+						<div class="message-text">{msg.user_message}</div>
+					</div>
+				</div>
+
+				<!-- AI Response -->
+				<div class="message-group">
+					<div class="ai-message">
+						<div class="message-header">
+							<span class="message-label ai-label">{msg.persona_name.charAt(0).toUpperCase() + msg.persona_name.slice(1)}</span>
+						</div>
+						<div class="message-text">{msg.ai_response}</div>
+					</div>
+				</div>
+			{/each}
+
+			<!-- Show loading state for new message being sent -->
+			{#if $isLoading && $currentMessage}
+				<!-- Boss Message -->
+				<div class="message-group">
+					<div class="boss-message">
+						<div class="turn-indicator">turn {allMessages.length + 1}</div>
 
 						<div class="message-header">
 							<span class="message-label boss-label">Boss</span>
@@ -50,19 +104,15 @@
 					</div>
 				</div>
 
-				<!-- AI Response -->
+				<!-- AI Response Loading -->
 				<div class="message-group">
 					<div class="ai-message">
 						<div class="message-header">
 							<span class="message-label ai-label">Ananya</span>
 						</div>
-						{#if $isLoading}
-							<div class="message-text loading-text">
-								Thinking<span class="dots"><span>.</span><span>.</span><span>.</span></span>
-							</div>
-						{:else}
-							<div class="message-text">{$currentMessage.ai}</div>
-						{/if}
+						<div class="message-text loading-text">
+							Thinking<span class="dots"><span>.</span><span>.</span><span>.</span></span>
+						</div>
 					</div>
 				</div>
 			{/if}
@@ -250,6 +300,9 @@
 		display: inline-flex;
 		align-items: center;
 		margin-top: -4px;
+		min-width: 19px;
+		min-height: 19px;
+		justify-content: center;
 	}
 
 	.action-btn:hover {

@@ -17,4 +17,4 @@
 ## Features
 - [ ] **File upload with logical chunking** - LLM-based intelligent file processing
 - [ ] **Starred messages** - UI and backend for pinning important conversations
-- [ ] **Message history UI** - Lazy-load Superjournal on app startup
+- [ ] **Lazy loading for message history** - Currently loads all Superjournal entries on startup. Implement infinite scroll: load last 10 turns initially, then load next 10 as user scrolls up
