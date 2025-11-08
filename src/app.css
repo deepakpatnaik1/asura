@@ -37,6 +37,9 @@
     --boss-bg: rgba(217, 133, 107, 0.08);
     --boss-accent: rgb(217, 133, 107);
 
+    /* Layout system */
+    --middle-section-width: 700px;
+
     /* Spacing system - Figma-like design */
     --message-padding-x: 16px;
     --message-padding-y: 16px;

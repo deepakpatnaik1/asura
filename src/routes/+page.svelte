@@ -121,14 +121,14 @@
 </div>
 
 <style>
-	/* Main Layout - CSS Grid for explicit placement */
+	/* Main Layout - Three-column grid */
 	.chat-container {
 		display: grid;
 		grid-template-rows: 1fr auto;
-		grid-template-columns: 1fr;
+		grid-template-columns: 1fr var(--middle-section-width) 1fr;
 		grid-template-areas:
-			'messages'
-			'input';
+			'left-blank messages right-blank'
+			'left-blank input right-blank';
 		height: 100vh;
 		overflow: hidden;
 		background: hsl(var(--background));
@@ -136,7 +136,7 @@
 		position: relative;
 	}
 
-	/* Messages Area */
+	/* Messages Area - middle column */
 	.messages-area {
 		grid-area: messages;
 		overflow-y: auto;
@@ -145,8 +145,7 @@
 	}
 
 	.messages-content {
-		max-width: 900px;
-		margin: 0 auto;
+		width: 100%;
 		display: flex;
 		flex-direction: column;
 		gap: var(--message-gap);
@@ -306,8 +305,7 @@
 		display: flex;
 		gap: 12px;
 		align-items: center;
-		max-width: 900px;
-		margin: 0 auto;
+		width: 100%;
 	}
 
 	.message-input {
