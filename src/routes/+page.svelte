@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Icon } from 'svelte-icons-pack';
-	import { LuStar, LuCopy, LuTrash2, LuArchive, LuRefreshCw, LuPaperclip, LuDownload, LuFolder, LuChevronUp, LuChevronDown, LuCornerUpLeft, LuSettings, LuLogOut } from 'svelte-icons-pack/lu';
+	import { LuStar, LuCopy, LuTrash2, LuArchive, LuRefreshCw, LuPaperclip, LuFolder, LuChevronDown, LuSettings, LuLogOut, LuCloudDownload, LuEllipsisVertical, LuArrowDown, LuArrowUp, LuMessageSquare, LuFlame } from 'svelte-icons-pack/lu';
 
 	// Placeholder data for chat interface
 	const messages = [
@@ -74,38 +74,34 @@
 
 	<!-- Input Area -->
 	<div class="input-area">
-		<div class="input-controls">
-			<button class="control-btn" title="Attach file"><Icon src={LuPaperclip} size="11" /></button>
-			<button class="control-btn" title="Download"><Icon src={LuDownload} size="11" /></button>
-			<button class="control-btn" title="Files"><Icon src={LuFolder} size="11" /></button>
-
-			<select class="model-select">
-				<option>Sonnet 4.5</option>
-				<option>GPT-4</option>
-				<option>Claude Opus</option>
-			</select>
-
-			<select class="persona-select">
-				<option>Ananya</option>
-				<option>Gunnar</option>
-				<option>Vlad</option>
-				<option>Kirby</option>
-				<option>Stefan</option>
-				<option>Samara</option>
-			</select>
-
-			<div class="control-icons">
-				<button class="control-btn"><Icon src={LuChevronUp} size="11" /></button>
-				<button class="control-btn"><Icon src={LuChevronDown} size="11" /></button>
-				<button class="control-btn"><Icon src={LuCornerUpLeft} size="11" /></button>
-			</div>
-
-			<span class="token-percentage">0%</span>
-			<button class="control-btn" title="Settings"><Icon src={LuSettings} size="11" /></button>
-		</div>
-
 		<div class="input-container">
-			<input type="text" placeholder="Type your message..." class="message-input" />
+			<div class="input-field-wrapper">
+				<div class="input-controls">
+					<button class="control-btn" title="Attach file"><Icon src={LuPaperclip} size="11" /></button>
+					<button class="control-btn" title="Download from cloud"><Icon src={LuCloudDownload} size="11" /></button>
+					<button class="control-btn" title="Browse folder"><Icon src={LuFolder} size="11" /></button>
+
+					<div class="model-dropdown">
+						<span class="model-name">Qwen 2.5 32B</span>
+						<Icon src={LuChevronDown} size="11" />
+					</div>
+
+					<div class="persona-dropdown">
+						<span class="persona-name">Gunnar</span>
+						<Icon src={LuChevronDown} size="11" />
+					</div>
+
+					<div class="icon-group">
+						<button class="control-btn" title="Auto-scroll"><Icon src={LuEllipsisVertical} size="11" /></button>
+						<button class="control-btn" title="Scroll down"><Icon src={LuArrowDown} size="11" /></button>
+						<button class="control-btn" title="Scroll up"><Icon src={LuArrowUp} size="11" /></button>
+						<button class="control-btn" title="Messages"><Icon src={LuMessageSquare} size="11" /></button>
+					</div>
+
+					<button class="control-btn settings-btn" title="Burn"><Icon src={LuFlame} size="11" /></button>
+				</div>
+				<input type="text" placeholder="Type your message..." class="message-input" />
+			</div>
 			<button class="send-button">Send</button>
 		</div>
 	</div>
@@ -267,8 +263,8 @@
 	.input-controls {
 		display: flex;
 		align-items: center;
-		gap: 8px;
-		margin-bottom: 8px;
+		gap: var(--action-icon-gap);
+		margin-bottom: 0px;
 		flex-wrap: wrap;
 	}
 
@@ -278,11 +274,67 @@
 		cursor: pointer;
 		opacity: 0.7;
 		transition: opacity 0.2s;
-		padding: 4px 8px;
+		padding: 4px;
 	}
 
 	.control-btn:hover {
 		opacity: 1;
+	}
+
+	.model-dropdown {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		margin-left: 12px;
+		cursor: pointer;
+		opacity: 0.7;
+		transition: opacity 0.2s;
+		padding: 4px;
+	}
+
+	.model-dropdown:hover {
+		opacity: 1;
+	}
+
+	.model-name {
+		font-size: 1em;
+		color: hsl(var(--foreground));
+	}
+
+	.persona-dropdown {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		margin-left: 4px;
+		cursor: pointer;
+		opacity: 0.7;
+		transition: opacity 0.2s;
+		padding: 4px;
+	}
+
+	.persona-dropdown:hover {
+		opacity: 1;
+	}
+
+	.persona-name {
+		font-size: 1em;
+		color: hsl(var(--foreground));
+	}
+
+	.icon-group {
+		display: flex;
+		align-items: center;
+		gap: var(--action-icon-gap);
+		margin-left: 12px;
+	}
+
+	.settings-btn {
+		margin-left: auto;
+		color: rgb(239, 68, 68);
+	}
+
+	.settings-btn:hover {
+		color: rgb(220, 38, 38);
 	}
 
 	.model-select,
@@ -303,14 +355,22 @@
 	.token-percentage {
 		color: hsl(var(--muted-foreground));
 		margin-left: auto;
+		padding-right: 8px;
 	}
 
 	.input-container {
 		display: flex;
 		gap: 12px;
-		align-items: center;
+		align-items: flex-end;
 		width: calc(100% + (var(--boss-card-margin-x) * -2));
 		margin-left: var(--boss-card-margin-x);
+	}
+
+	.input-field-wrapper {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
 	}
 
 	.message-input {
