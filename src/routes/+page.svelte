@@ -354,7 +354,6 @@
 	}
 
 	.settings-btn {
-		margin-left: auto;
 		color: rgb(239, 68, 68);
 	}
 
@@ -362,10 +361,10 @@
 		color: rgb(220, 38, 38);
 	}
 
-	/* On narrow screens, remove margin from fire icon since logout handles positioning */
-	@media (max-width: 900px) {
+	/* On wide screens, push fire icon to the right */
+	@media (min-width: 901px) {
 		.settings-btn {
-			margin-left: 0;
+			margin-left: auto;
 		}
 	}
 
@@ -394,8 +393,10 @@
 		display: flex;
 		gap: 12px;
 		align-items: flex-end;
-		width: calc(100% + (var(--boss-card-margin-x) * -2));
-		margin-left: var(--boss-card-margin-x);
+		max-width: var(--middle-section-width);
+		margin: 0 auto;
+		width: 100%;
+		padding: 0 24px;
 	}
 
 	.input-field-wrapper {
