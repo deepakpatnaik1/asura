@@ -1,4 +1,7 @@
 <script lang="ts">
+	import { Icon } from 'svelte-icons-pack';
+	import { LuStar, LuCopy, LuTrash2, LuArchive, LuRefreshCw, LuPaperclip, LuDownload, LuFolder, LuChevronUp, LuChevronDown, LuCornerUpLeft, LuSettings, LuLogOut } from 'svelte-icons-pack/lu';
+
 	// Placeholder data for chat interface
 	const messages = [
 		{
@@ -42,11 +45,11 @@
 						<div class="message-header">
 							<span class="message-label boss-label">Boss</span>
 							<div class="message-actions">
-								<button class="action-btn" title="Star">⭐</button>
-								<button class="action-btn" title="Copy">📋</button>
-								<button class="action-btn" title="Delete">🗑️</button>
-								<button class="action-btn" title="Archive">📦</button>
-								<button class="action-btn" title="Refresh">🔄</button>
+								<button class="action-btn" title="Star"><Icon src={LuStar} size="11" /></button>
+								<button class="action-btn" title="Copy"><Icon src={LuCopy} size="11" /></button>
+								<button class="action-btn" title="Delete"><Icon src={LuTrash2} size="11" /></button>
+								<button class="action-btn" title="Archive"><Icon src={LuArchive} size="11" /></button>
+								<button class="action-btn" title="Refresh"><Icon src={LuRefreshCw} size="11" /></button>
 								<span class="timestamp">{msg.timestamp}</span>
 							</div>
 						</div>
@@ -60,11 +63,11 @@
 						<div class="message-header">
 							<span class="message-label ai-label">{msg.persona}</span>
 							<div class="message-actions">
-								<button class="action-btn" title="Star">⭐</button>
-								<button class="action-btn" title="Copy">📋</button>
-								<button class="action-btn" title="Delete">🗑️</button>
-								<button class="action-btn" title="Archive">📦</button>
-								<button class="action-btn" title="Refresh">🔄</button>
+								<button class="action-btn" title="Star"><Icon src={LuStar} size="11" /></button>
+								<button class="action-btn" title="Copy"><Icon src={LuCopy} size="11" /></button>
+								<button class="action-btn" title="Delete"><Icon src={LuTrash2} size="11" /></button>
+								<button class="action-btn" title="Archive"><Icon src={LuArchive} size="11" /></button>
+								<button class="action-btn" title="Refresh"><Icon src={LuRefreshCw} size="11" /></button>
 								<span class="timestamp">{msg.timestamp}</span>
 							</div>
 						</div>
@@ -78,9 +81,9 @@
 	<!-- Input Area -->
 	<div class="input-area">
 		<div class="input-controls">
-			<button class="control-btn" title="Attach file">📎</button>
-			<button class="control-btn" title="Download">⬇️</button>
-			<button class="control-btn" title="Files">📁</button>
+			<button class="control-btn" title="Attach file"><Icon src={LuPaperclip} size="11" /></button>
+			<button class="control-btn" title="Download"><Icon src={LuDownload} size="11" /></button>
+			<button class="control-btn" title="Files"><Icon src={LuFolder} size="11" /></button>
 
 			<select class="model-select">
 				<option>Sonnet 4.5</option>
@@ -98,13 +101,13 @@
 			</select>
 
 			<div class="control-icons">
-				<button class="control-btn">⬆️</button>
-				<button class="control-btn">⬇️</button>
-				<button class="control-btn">↩️</button>
+				<button class="control-btn"><Icon src={LuChevronUp} size="11" /></button>
+				<button class="control-btn"><Icon src={LuChevronDown} size="11" /></button>
+				<button class="control-btn"><Icon src={LuCornerUpLeft} size="11" /></button>
 			</div>
 
 			<span class="token-percentage">0%</span>
-			<button class="control-btn" title="Settings">⚙️</button>
+			<button class="control-btn" title="Settings"><Icon src={LuSettings} size="11" /></button>
 		</div>
 
 		<div class="input-container">
@@ -116,7 +119,7 @@
 	<!-- User Avatar/Logout (top right) -->
 	<div class="user-controls">
 		<div class="user-avatar">TEST</div>
-		<button class="logout-btn">🚪 Logout</button>
+		<button class="logout-btn"><Icon src={LuLogOut} size="11" /> Logout</button>
 	</div>
 </div>
 
