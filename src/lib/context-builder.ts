@@ -26,8 +26,9 @@ async function getModelContextWindow(modelIdentifier: string): Promise<number> {
 
 interface ContextComponents {
 	superjournal: string;
-	journal: string;
 	starred: string;
+	instructions: string;
+	journal: string;
 	highSalienceArcs: string;
 	otherArcs: string;
 	files: string;
@@ -37,8 +38,9 @@ interface ContextStats {
 	totalTokens: number;
 	components: {
 		superjournal: number;
-		journal: number;
 		starred: number;
+		instructions: number;
+		journal: number;
 		highSalienceArcs: number;
 		otherArcs: number;
 		files: number;
@@ -51,6 +53,7 @@ interface ContextStats {
  */
 export async function buildContextForCalls1A1B(
 	userId: string | null,
+	personaName: string = 'ananya',
 	modelIdentifier: string = 'accounts/fireworks/models/qwen3-235b-a22b'
 ): Promise<{ context: string; stats: ContextStats }> {
 	// Get model's context window and calculate budget
@@ -60,8 +63,9 @@ export async function buildContextForCalls1A1B(
 	// Initialize context components
 	const components: ContextComponents = {
 		superjournal: '',
-		journal: '',
 		starred: '',
+		instructions: '',
+		journal: '',
 		highSalienceArcs: '',
 		otherArcs: '',
 		files: ''
@@ -113,7 +117,32 @@ export async function buildContextForCalls1A1B(
 		}
 	}
 
-	// Priority 3: Last 100 Journal turns (recent memory)
+	// Priority 3: Instructions (global + current persona behavioral directives)
+	let instructionsQuery = supabase
+		.from('journal')
+		.select('boss_essence, persona_essence, decision_arc_summary, persona_name, created_at')
+		.eq('is_instruction', true);
+
+	if (userId === null) {
+		instructionsQuery = instructionsQuery.is('user_id', null);
+	} else {
+		instructionsQuery = instructionsQuery.eq('user_id', userId);
+	}
+
+	const { data: instructionsData } = await instructionsQuery
+		.or(`instruction_scope.eq.global,instruction_scope.eq.${personaName}`)
+		.order('created_at', { ascending: false });
+
+	if (instructionsData && instructionsData.length > 0) {
+		const instructionsText = formatInstructions(instructionsData.reverse()); // Oldest first
+		const instructionsTokens = estimateTokens(instructionsText);
+		if (totalTokens + instructionsTokens <= contextBudget) {
+			components.instructions = instructionsText;
+			totalTokens += instructionsTokens;
+		}
+	}
+
+	// Priority 4: Last 100 Journal turns (recent memory)
 	let journalQuery = supabase
 		.from('journal')
 		.select('boss_essence, persona_essence, decision_arc_summary, persona_name, created_at');
@@ -205,8 +234,9 @@ export async function buildContextForCalls1A1B(
 		totalTokens,
 		components: {
 			superjournal: estimateTokens(components.superjournal),
-			journal: estimateTokens(components.journal),
 			starred: estimateTokens(components.starred),
+			instructions: estimateTokens(components.instructions),
+			journal: estimateTokens(components.journal),
 			highSalienceArcs: estimateTokens(components.highSalienceArcs),
 			otherArcs: estimateTokens(components.otherArcs),
 			files: estimateTokens(components.files)
@@ -294,6 +324,31 @@ ${entry.persona_name}: ${entry.ai_response}`
 	return `--- STARRED MESSAGES (User-Pinned Memory) ---\n${formatted}\n\n`;
 }
 
+// Format instructions (behavioral directives)
+function formatInstructions(
+	entries: Array<{
+		boss_essence: string;
+		persona_essence: string;
+		decision_arc_summary: string;
+		persona_name: string;
+		created_at: string;
+	}>
+): string {
+	if (entries.length === 0) return '';
+
+	const formatted = entries
+		.map(
+			(entry) =>
+				`[Instruction - ${new Date(entry.created_at).toLocaleDateString()}]
+User: ${entry.boss_essence}
+${entry.persona_name}: ${entry.persona_essence}
+Arc: ${entry.decision_arc_summary}`
+		)
+		.join('\n\n');
+
+	return `--- BEHAVIORAL INSTRUCTIONS (Persistent Directives) ---\n${formatted}\n\n`;
+}
+
 // Format decision arcs
 function formatDecisionArcs(
 	entries: Array<{ decision_arc_summary: string; salience_score: number; created_at: string }>,
@@ -353,6 +408,7 @@ function assembleContext(components: ContextComponents): string {
 	const parts = [
 		components.superjournal,
 		components.starred,
+		components.instructions,
 		components.journal,
 		components.highSalienceArcs,
 		components.otherArcs,

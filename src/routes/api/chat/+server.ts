@@ -1,7 +1,8 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import OpenAI from 'openai';
-import { FIREWORKS_API_KEY } from '$env/static/private';
+import { VoyageAIClient } from 'voyageai';
+import { FIREWORKS_API_KEY, VOYAGE_API_KEY } from '$env/static/private';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
 import { createClient } from '@supabase/supabase-js';
 import { buildContextForCalls1A1B } from '$lib/context-builder';
@@ -10,6 +11,8 @@ const fireworks = new OpenAI({
 	baseURL: 'https://api.fireworks.ai/inference/v1',
 	apiKey: FIREWORKS_API_KEY
 });
+
+const voyage = new VoyageAIClient({ apiKey: VOYAGE_API_KEY });
 
 const supabase = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY);
 
@@ -151,6 +154,27 @@ CRITICAL RULES:
 
 ---
 
+INSTRUCTION DETECTION
+
+Behavioral instructions are directives about how the persona should or should not respond in future conversations.
+
+DETECT INSTRUCTIONS IF:
+– User tells persona to "never", "always", "don't", "stop", "avoid", "from now on" do/say something
+– Message contains directives about response style, tone, format, or behavior
+– User corrects unwanted patterns: "stop using analogies", "don't be so verbose", "always ask follow-ups"
+– NOT instructions: questions, business decisions, strategy discussions
+
+SCOPE DETERMINATION:
+– **Persona-specific:** User addresses persona by name OR says "you" in persona-specific context
+  Example: "Gunnar, stop using sports analogies" → scope: "gunnar"
+– **Global:** Instruction is general OR addresses "all personas" OR no specific persona mentioned
+  Example: "Don't use sports analogies" → scope: "global"
+
+SPECIAL SALIENCE RULE FOR INSTRUCTIONS:
+If is_instruction = true, automatically set salience_score = 10 (regardless of other criteria). Behavioral directives must persist indefinitely.
+
+---
+
 OUTPUT FORMAT:
 
 You MUST return a JSON object with this EXACT structure:
@@ -160,7 +184,9 @@ You MUST return a JSON object with this EXACT structure:
   "persona_name": "[Exact name: gunnar, samara, kirby, stefan, vlad, or ananya - lowercase]",
   "persona_essence": "[Persona's response with intelligent compression]",
   "decision_arc_summary": "[Arc summary - pattern type: specific behavior when condition]",
-  "salience_score": [Integer 1-10 based on emotional/strategic weight]
+  "salience_score": [Integer 1-10 based on emotional/strategic weight],
+  "is_instruction": [Boolean: true if behavioral directive, false otherwise],
+  "instruction_scope": "[Only if is_instruction=true: 'global' or persona name lowercase, else null]"
 }
 
 CRITICAL RULES:
@@ -170,7 +196,9 @@ CRITICAL RULES:
 – persona_essence: compress strategically based on regenerability
 – persona_name must be lowercase and exact (gunnar, samara, kirby, stefan, vlad, or ananya)
 – decision_arc_summary: 50-150 chars, artisan cut style, NEVER null
-– salience_score: integer 1-10 based on tier criteria, NEVER null
+– salience_score: integer 1-10 based on tier criteria, NEVER null (auto-10 if is_instruction=true)
+– is_instruction: boolean, default false for normal conversation turns
+– instruction_scope: null if is_instruction=false, otherwise 'global' or specific persona name
 – Always provide both arc and score together - both are REQUIRED fields
 – Use punctuation ( . , ; : - ) to write efficiently but preserve content`;
 
@@ -257,25 +285,59 @@ async function compressToJournal(
 			return; // Abort if Call 2B output is invalid
 		}
 
-		// Save to Journal table
-		const { error: journalError } = await supabase.from('journal').insert({
-			superjournal_id: superjournalId,
-			user_id: null, // Nullable for development
-			persona_name: call2BJson.persona_name || personaName,
-			boss_essence: call2BJson.boss_essence || userMessage,
-			persona_essence: call2BJson.persona_essence || aiResponse,
-			decision_arc_summary: call2BJson.decision_arc_summary || 'No arc generated',
-			salience_score: call2BJson.salience_score || 5,
-			is_starred: false,
-			file_name: null,
-			file_type: null,
-			embedding: null // Will add Voyage AI embeddings later
-		});
+		// Save to Journal table (without embedding initially)
+		const { data: journalData, error: journalError } = await supabase
+			.from('journal')
+			.insert({
+				superjournal_id: superjournalId,
+				user_id: null, // Nullable for development
+				persona_name: call2BJson.persona_name || personaName,
+				boss_essence: call2BJson.boss_essence || userMessage,
+				persona_essence: call2BJson.persona_essence || aiResponse,
+				decision_arc_summary: call2BJson.decision_arc_summary || 'No arc generated',
+				salience_score: call2BJson.salience_score || 5,
+				is_starred: false,
+				is_instruction: call2BJson.is_instruction || false,
+				instruction_scope: call2BJson.instruction_scope || null,
+				file_name: null,
+				file_type: null,
+				embedding: null
+			})
+			.select('id')
+			.single();
 
 		if (journalError) {
 			console.error('[Compression] Journal insert error:', journalError);
-		} else {
-			console.log('[Compression] Successfully saved to Journal');
+			return;
+		}
+
+		console.log('[Compression] Successfully saved to Journal');
+
+		// Generate embedding for decision_arc_summary
+		try {
+			const decisionArc = call2BJson.decision_arc_summary || 'No arc generated';
+			console.log('[Embedding] Generating embedding for arc:', decisionArc);
+
+			const embeddingResponse = await voyage.embed({
+				input: decisionArc,
+				model: 'voyage-3'
+			});
+
+			const embedding = embeddingResponse.data[0].embedding;
+
+			// Update Journal row with embedding
+			const { error: updateError } = await supabase
+				.from('journal')
+				.update({ embedding: JSON.stringify(embedding) })
+				.eq('id', journalData.id);
+
+			if (updateError) {
+				console.error('[Embedding] Failed to update embedding:', updateError);
+			} else {
+				console.log('[Embedding] Successfully generated and saved embedding');
+			}
+		} catch (embeddingError) {
+			console.error('[Embedding] Failed to generate embedding:', embeddingError);
 		}
 	} catch (error) {
 		console.error('[Compression] Background compression error:', error);
@@ -293,6 +355,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		// Build context for Call 1A/1B (memory injection)
 		const { context, stats } = await buildContextForCalls1A1B(
 			null, // user_id (null for development, no auth yet)
+			persona, // current persona for instruction filtering
 			'accounts/fireworks/models/qwen3-235b-a22b'
 		);
 
