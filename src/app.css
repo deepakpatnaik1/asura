@@ -43,7 +43,7 @@
     /* Spacing system - Figma-like design */
     --message-padding-x: 16px;
     --message-padding-y: 16px;
-    --message-gap: 24px;
+    --message-gap: 8px;
 
     --boss-card-padding-x: 16px;
     --boss-card-padding-y: 16px;
@@ -52,7 +52,7 @@
 
     --action-bar-offset-x: 16px;
     --action-bar-offset-y: 16px;
-    --action-icon-gap: 12px;
+    --action-icon-gap: 8px;
 
     --input-bottom-offset: 0px;
     --input-padding: 12px;

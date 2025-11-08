@@ -36,20 +36,22 @@
 	<div class="messages-area">
 		<div class="messages-content">
 			{#each messages as msg}
-				<!-- Turn Indicator -->
-				<div class="turn-indicator">Turn {msg.turn}</div>
-
 				<!-- Boss Message -->
 				<div class="message-group">
 					<div class="boss-message">
+						<!-- Turn Indicator -->
+						<div class="turn-indicator">turn {msg.turn}</div>
+
 						<div class="message-header">
 							<span class="message-label boss-label">Boss</span>
 							<div class="message-actions">
-								<button class="action-btn" title="Star"><Icon src={LuStar} size="11" /></button>
-								<button class="action-btn" title="Copy"><Icon src={LuCopy} size="11" /></button>
-								<button class="action-btn" title="Delete"><Icon src={LuTrash2} size="11" /></button>
-								<button class="action-btn" title="Archive"><Icon src={LuArchive} size="11" /></button>
-								<button class="action-btn" title="Refresh"><Icon src={LuRefreshCw} size="11" /></button>
+								<div class="action-icons">
+									<button class="action-btn" title="Star"><Icon src={LuStar} size="11" /></button>
+									<button class="action-btn" title="Copy"><Icon src={LuCopy} size="11" /></button>
+									<button class="action-btn" title="Delete"><Icon src={LuTrash2} size="11" /></button>
+									<button class="action-btn" title="Archive"><Icon src={LuArchive} size="11" /></button>
+									<button class="action-btn" title="Refresh"><Icon src={LuRefreshCw} size="11" /></button>
+								</div>
 								<span class="timestamp">{msg.timestamp}</span>
 							</div>
 						</div>
@@ -62,14 +64,6 @@
 					<div class="ai-message">
 						<div class="message-header">
 							<span class="message-label ai-label">{msg.persona}</span>
-							<div class="message-actions">
-								<button class="action-btn" title="Star"><Icon src={LuStar} size="11" /></button>
-								<button class="action-btn" title="Copy"><Icon src={LuCopy} size="11" /></button>
-								<button class="action-btn" title="Delete"><Icon src={LuTrash2} size="11" /></button>
-								<button class="action-btn" title="Archive"><Icon src={LuArchive} size="11" /></button>
-								<button class="action-btn" title="Refresh"><Icon src={LuRefreshCw} size="11" /></button>
-								<span class="timestamp">{msg.timestamp}</span>
-							</div>
 						</div>
 						<div class="message-text">{msg.ai}</div>
 					</div>
@@ -157,10 +151,11 @@
 	/* Turn Indicator */
 	.turn-indicator {
 		color: hsl(var(--muted-foreground));
-		opacity: 0.6;
-		margin-bottom: 8px;
-		text-transform: uppercase;
+		opacity: 0.3;
+		margin-bottom: 12px;
+		text-transform: capitalize;
 		letter-spacing: 0.5px;
+		font-size: 0.85em;
 	}
 
 	/* Message Groups */
@@ -198,16 +193,19 @@
 	.message-label {
 		font-weight: 500;
 		color: hsl(var(--chat-label));
+		display: block;
+		width: 100%;
+		padding-bottom: 2px;
 	}
 
 	.boss-label {
 		color: var(--boss-accent);
 		border-bottom: 1px solid var(--boss-accent);
-		padding-bottom: 2px;
 	}
 
 	.ai-label {
 		color: hsl(var(--foreground));
+		border-bottom: 1px solid hsl(var(--border));
 	}
 
 	/* Message Actions - explicitly positioned */
@@ -220,6 +218,12 @@
 		top: 0;
 	}
 
+	.action-icons {
+		display: flex;
+		align-items: baseline;
+		gap: var(--action-icon-gap);
+	}
+
 	.action-btn {
 		background: transparent;
 		border: none;
@@ -227,6 +231,9 @@
 		opacity: 0.6;
 		transition: opacity 0.2s;
 		padding: 4px;
+		display: inline-flex;
+		align-items: center;
+		margin-top: -2px;
 	}
 
 	.action-btn:hover {
@@ -237,6 +244,8 @@
 		color: hsl(var(--muted-foreground));
 		opacity: 0.7;
 		margin-left: 8px;
+		font-family: Menlo, Monaco, 'Courier New', monospace;
+		font-size: 0.85em;
 	}
 
 	/* Message Text */
@@ -258,8 +267,8 @@
 	.input-controls {
 		display: flex;
 		align-items: center;
-		gap: 12px;
-		margin-bottom: 12px;
+		gap: 8px;
+		margin-bottom: 8px;
 		flex-wrap: wrap;
 	}
 
@@ -379,21 +388,13 @@
 		color: rgb(239, 68, 68);
 	}
 
-	/* Scrollbar styling */
+	/* Hide scrollbar */
 	.messages-area::-webkit-scrollbar {
-		width: 8px;
+		display: none;
 	}
 
-	.messages-area::-webkit-scrollbar-track {
-		background: hsl(var(--background));
-	}
-
-	.messages-area::-webkit-scrollbar-thumb {
-		background: hsl(var(--border));
-		border-radius: 4px;
-	}
-
-	.messages-area::-webkit-scrollbar-thumb:hover {
-		background: hsl(var(--ring));
+	.messages-area {
+		-ms-overflow-style: none;  /* IE and Edge */
+		scrollbar-width: none;  /* Firefox */
 	}
 </style>
