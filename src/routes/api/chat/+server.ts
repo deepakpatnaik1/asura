@@ -4,6 +4,7 @@ import OpenAI from 'openai';
 import { FIREWORKS_API_KEY } from '$env/static/private';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
 import { createClient } from '@supabase/supabase-js';
+import { buildContextForCalls1A1B } from '$lib/context-builder';
 
 const fireworks = new OpenAI({
 	baseURL: 'https://api.fireworks.ai/inference/v1',
@@ -289,10 +290,23 @@ export const POST: RequestHandler = async ({ request }) => {
 			return json({ error: 'Message is required' }, { status: 400 });
 		}
 
-		// Call 1A: Initial response (hidden from user)
+		// Build context for Call 1A/1B (memory injection)
+		const { context, stats } = await buildContextForCalls1A1B(
+			null, // user_id (null for development, no auth yet)
+			'accounts/fireworks/models/qwen3-235b-a22b'
+		);
+
+		console.log('[Chat API] Context stats:', stats);
+
+		// Construct full user prompt with memory context
+		const fullUserPrompt = context.length > 0
+			? `${context}--- CURRENT QUERY ---\n${message}`
+			: message;
+
+		// Call 1A: Initial response (hidden from user) with memory context
 		const call1A = await fireworks.chat.completions.create({
 			model: 'accounts/fireworks/models/qwen3-235b-a22b',
-			messages: [{ role: 'user', content: message }],
+			messages: [{ role: 'user', content: fullUserPrompt }],
 			max_tokens: 4096,
 			temperature: 0.7
 		});
@@ -300,10 +314,11 @@ export const POST: RequestHandler = async ({ request }) => {
 		const call1AResponse = call1A.choices[0]?.message?.content || 'No response generated';
 
 		// Call 1B: Refine response with critique prompt - STREAMING
+		// Note: Call 1B receives the SAME context as Call 1A (for informed critique)
 		const call1B = await fireworks.chat.completions.create({
 			model: 'accounts/fireworks/models/qwen3-235b-a22b',
 			messages: [
-				{ role: 'user', content: message },
+				{ role: 'user', content: fullUserPrompt }, // Same context as Call 1A
 				{ role: 'assistant', content: call1AResponse },
 				{ role: 'user', content: 'Shorten this response.' }
 			],
