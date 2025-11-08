@@ -125,7 +125,7 @@
 		grid-template-columns: 1fr min(var(--middle-section-width), 100%) 1fr;
 		grid-template-areas:
 			'left-blank messages right-blank'
-			'left-blank input right-blank';
+			'input input input';
 		height: 100vh;
 		overflow: hidden;
 		background: hsl(var(--background));
@@ -241,7 +241,7 @@
 		padding: 4px;
 		display: inline-flex;
 		align-items: center;
-		margin-top: -2px;
+		margin-top: -4px;
 	}
 
 	.action-btn:hover {
@@ -266,7 +266,7 @@
 	/* Input Area - explicitly positioned at bottom */
 	.input-area {
 		grid-area: input;
-		background: hsl(var(--background));
+		background: hsl(var(--card));
 		border-top: 1px solid hsl(var(--chat-border));
 		padding: 16px 24px;
 		position: relative;
@@ -381,8 +381,10 @@
 		display: flex;
 		gap: 12px;
 		align-items: flex-end;
-		width: calc(100% + (var(--boss-card-margin-x) * -2));
-		margin-left: var(--boss-card-margin-x);
+		max-width: var(--middle-section-width);
+		margin: 0 auto;
+		width: 100%;
+		padding: 0 24px;
 	}
 
 	.input-field-wrapper {
