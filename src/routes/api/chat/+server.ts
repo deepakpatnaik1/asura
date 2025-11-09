@@ -213,9 +213,18 @@ Return ONLY the improved JSON object (no additional text, analysis, or commentar
 
 // Helper function to extract JSON from LLM output (handles <think> tags)
 function extractJSON(text: string): string {
-	// Try to find JSON object in the response (handles <think> tags from Qwen)
-	const jsonMatch = text.match(/\{[\s\S]*\}/);
-	return jsonMatch ? jsonMatch[0] : text;
+	// Remove <think> tags and content between them
+	const withoutThink = text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+
+	// Find the first { and last } to extract JSON object
+	const firstBrace = withoutThink.indexOf('{');
+	const lastBrace = withoutThink.lastIndexOf('}');
+
+	if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+		return withoutThink.substring(firstBrace, lastBrace + 1);
+	}
+
+	return withoutThink;
 }
 
 // Background compression function
@@ -327,7 +336,7 @@ async function compressToJournal(
 
 			const embeddingResponse = await voyage.embed({
 				input: decisionArc,
-				model: 'voyage-3'
+				model: 'voyage-3-large' // 1024 dimensions (default)
 			});
 
 			const embedding = embeddingResponse.data[0].embedding;
