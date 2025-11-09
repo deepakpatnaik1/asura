@@ -13,6 +13,44 @@ The goal of Phase 1 is to wire together the complete perpetual memory architectu
 - **No persona differentiation yet**: Basic scaffolding only
 - **Focus**: Get the 4-call architecture + 3-tier memory system working end-to-end
 
+### Subphase 1: Perpetual Conversation Continuity
+
+**Objective**: Complete implementation of the core feature that ensures the AI never forgets past conversations, regardless of how long the conversation runs.
+
+This subphase is exclusively focused on making the perpetual memory system fully operational. Everything else (personas, file uploads, advanced UI features) is deferred until this foundational capability is proven and working.
+
+**Definition of "Perpetual Conversation Continuity"**:
+- AI can reference conversations from 100+ turns ago
+- Context stays within 40% of model's window via intelligent compression
+- No manual intervention required to maintain memory
+- Graceful degradation when context approaches limits (older compressed memories drop first)
+- Semantic retrieval surfaces relevant past decisions even if not chronologically recent
+
+**Subphase 1 Success Criteria**:
+1. ✅ **Memory injection working**: Call 1A/1B receive working memory (last 5 Superjournal) + recent memory (last 100 Journal)
+   - Implemented in [context-builder.ts:80-180](../src/lib/context-builder.ts#L80-L180)
+   - Called from [chat/+server.ts:371-384](../src/routes/api/chat/+server.ts#L371-L384)
+2. ✅ **Embeddings pipeline operational**: Every Journal entry has a vector embedding
+   - Implemented in [chat/+server.ts:332-357](../src/routes/api/chat/+server.ts#L332-L357)
+   - Uses Voyage AI `voyage-3-large` (1024 dimensions)
+   - Schema correctly configured as `vector(1024)` - verified working
+3. ✅ **Vector search functional**: Semantically similar Decision Arcs are retrieved based on current query
+   - Implemented in [context-builder.ts:182-297](../src/lib/context-builder.ts#L182-L297)
+   - Only activates when journal count > 100
+   - Salience-weighted re-ranking: `similarity × (salience/10)`
+   - Excludes duplicates from Priorities 1-4
+4. ✅ **Context budget enforced**: Total context stays under 40% of model window (with truncation logic)
+   - Implemented in [context-builder.ts:64-179](../src/lib/context-builder.ts#L64-L179)
+   - Graceful truncation of journal entries when budget exceeded
+5. ⚠️ **Multi-turn coherence verified**: AI demonstrates recall across 20+ turn conversations
+   - Implementation complete, manual testing required
+
+**Current Status**:
+- ✅ All core features implemented and operational
+- ⚠️ Requires manual testing to verify multi-turn coherence (20+ turn conversations)
+
+Once manual testing confirms multi-turn coherence, Subphase 1 is complete and the core promise of Asura—**infinite conversation continuity**—is fully realized.
+
 ### Current Status (What's Already Wired)
 
 ✅ **Call 1A: Hidden Reasoning**
