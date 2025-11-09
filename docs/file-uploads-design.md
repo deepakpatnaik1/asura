@@ -370,10 +370,49 @@ CRITICAL RULES:
 - Refinement: Process entire 65K doc + all chunks → refine everything
 - Refinement sees more context than initial pass → fails
 
-**Cost efficiency:**
+**Cost efficiency (chunking only):**
 - Qwen3-235B via Fireworks: $0.22/M input, $0.88/M output
-- ~8 API calls for 65K document
-- Total cost: ~$0.15 per document
+- ~8 API calls for 65K document (4 windows × 2 calls each)
+- Chunking cost: ~$0.15 per document
+
+**Complete pipeline cost (chunking + compression):**
+- Chunking: 8 API calls → ~$0.15
+- Artisan Cut compression: 52 API calls (26 chunks × 2A/2B) → ~$0.009
+- Embeddings: 26 vectors via Voyage AI → ~$0.001
+- **Total: ~$0.16 per 65K strategic document**
+
+**What this buys:**
+- Perpetual memory (never re-process, never forget)
+- Semantic search across 26 decision arcs
+- Instant retrieval in conversations
+- Strategic reasoning preserved in compressed form
+
+**Economics:**
+- Process 6,250 documents for $1,000
+- Process 100 documents for $16
+- A founder's strategic library (50-100 docs) costs $8-16
+- Less than cost of a coffee for perpetual AI memory
+
+### Post-Chunking: Artisan Cut Compression
+
+After chunking completes, each strategic chunk undergoes 2A/2B compression:
+
+**Per chunk (26 total):**
+1. Extract chunk text: `fileContent.substring(chunk.start, chunk.end)`
+2. Call 2A: Initial Artisan Cut compression of chunk text only
+3. Call 2B: Verification with same chunk text + 2A output
+4. Result: `chunk_essence`, `decision_arc_summary`, `salience_score`
+5. Generate embedding from `decision_arc_summary`
+6. Save to `file_chunks` table
+
+**Key principle:** Each chunk processed independently as conversation-sized piece (1,000-4,000 chars). Same compression quality as conversation turns.
+
+**Parallelization:** All 52 calls (26 × 2A/2B) can run concurrently for faster processing.
+
+**Storage:**
+- Decision Arc (distilled pattern) → used for vector search
+- Artisan Cut (compressed understanding) → injected into Call 1A context
+- Raw text → discarded for strategic chunks (not needed)
 
 ### Implementation Notes
 
