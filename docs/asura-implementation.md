@@ -11,7 +11,7 @@ Asura is being built in **phases**, focusing on wiring the core engine first bef
 **Phase 1 Goal**: Build the **heart of Asura** - perpetual, meaningful, relevant conversations with one persona (Gunnar). Everything else is icing on the cake.
 
 We're working with:
-- **Single model**: Qwen3-235B via Fireworks AI
+- **Single model**: Qwen3-235B-A22B (MoE) via Fireworks AI
 - **Single persona**: Gunnar (YC Startup Mentor)
 - **Focus**: 4-call architecture + 3-tier memory + file uploads + persona depth
 
@@ -110,14 +110,14 @@ Multi-turn coherence testing is in the back of mind and will be observed during 
 ### Current Status (What's Already Wired - Subphase 1)
 
 ✅ **Call 1A: Hidden Reasoning**
-- Model: Qwen3-235B
+- Model: Qwen3-235B-A22B (MoE)
 - Max tokens: 4096
 - Temperature: 0.7
 - Purpose: Initial response generation
 - Status: Implemented in `src/routes/api/chat/+server.ts:293-300`
 
 ✅ **Call 1B: Self-Critique (Streaming)**
-- Model: Qwen3-235B
+- Model: Qwen3-235B-A22B (MoE)
 - Max tokens: 4096
 - Temperature: 0.7
 - Receives Call 1A output + critique prompt
@@ -125,14 +125,14 @@ Multi-turn coherence testing is in the back of mind and will be observed during 
 - Status: Implemented in `src/routes/api/chat/+server.ts:302-357`
 
 ✅ **Call 2A: Initial Artisan Cut Compression**
-- Model: Qwen3-235B
+- Model: Qwen3-235B-A22B (MoE)
 - Max tokens: 2048
 - Temperature: 0.3
 - Outputs JSON with boss_essence, persona_essence, decision_arc_summary, salience_score
 - Status: Implemented in `src/routes/api/chat/+server.ts:196-223`
 
 ✅ **Call 2B: Compression Verification**
-- Model: Qwen3-235B
+- Model: Qwen3-235B-A22B (MoE)
 - Max tokens: 2048
 - Temperature: 0.3
 - Receives Call 2A output + critique prompt
@@ -411,8 +411,8 @@ Once Phase 1 is complete, we have the **true MVP of Asura**: the heart of the sy
 - **Runtime**: SvelteKit server endpoints (Node.js)
 - **Database**: Supabase local development (`supabase start`)
 - **Auth**: Disabled (user_id nullable, RLS disabled)
-- **LLM**: Qwen3-235B via Fireworks AI
-- **Embeddings**: Not yet implemented (Voyage AI planned)
+- **LLM**: Qwen3-235B-A22B (MoE) via Fireworks AI
+- **Embeddings**: voyage-3-large via Voyage AI
 
 ### Why Not Edge Functions Yet?
 Edge Functions are primarily for **global low-latency deployment**. For single-developer local development, SvelteKit endpoints are faster to iterate on. Edge Functions will be wired in Phase 5 before production launch.

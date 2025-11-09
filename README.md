@@ -32,8 +32,8 @@ AI advisory system for startup founders with perpetual conversation continuity. 
 - **Styling**: Tailwind CSS v4 (with Typography & Forms plugins)
 - **Backend**: Supabase (PostgreSQL + pgvector)
 - **AI Services**:
-  - Fireworks AI (Qwen 2.5 235B) - LLM inference
-  - Voyage AI (Gemini) - Embeddings
+  - Fireworks AI (Qwen3-235B-A22B MoE) - LLM inference
+  - Voyage AI (voyage-3-large) - Embeddings
 - **Development**:
   - MCP Servers (Supabase, Playwright)
   - Playwright for E2E testing

@@ -520,7 +520,7 @@ Long-term emotional tracking and growth visibility
 
 ## Text Generation (LLMs)
 
-While Asura currently uses **Fireworks AI** for Qwen 2.5 235B (cost-effective cloud inference), Nexa SDK also supports local text generation.
+While Asura currently uses **Fireworks AI** for Qwen3-235B-A22B MoE (cost-effective cloud inference with superior instruction-following), Nexa SDK also supports local text generation.
 
 ### Supported LLM Models
 
@@ -535,16 +535,16 @@ While Asura currently uses **Fireworks AI** for Qwen 2.5 235B (cost-effective cl
 
 **Current setup (all cloud):**
 ```
-Call 1A: Fireworks AI (Qwen 2.5 235B) - $$$
-Call 1B: Fireworks AI (Qwen 2.5 235B) - $$$
-Call 2A: Fireworks AI (Qwen 2.5 235B) - $$$
-Call 2B: Fireworks AI (Qwen 2.5 235B) - $$$
+Call 1A: Fireworks AI (Qwen3-235B-A22B MoE) - $$$
+Call 1B: Fireworks AI (Qwen3-235B-A22B MoE) - $$$
+Call 2A: Fireworks AI (Qwen3-235B-A22B MoE) - $$$
+Call 2B: Fireworks AI (Qwen3-235B-A22B MoE) - $$$
 ```
 
 **Optimized setup (hybrid):**
 ```
-Call 1A: Fireworks AI (Qwen 2.5 235B) - $$$ (needs quality)
-Call 1B: Fireworks AI (Qwen 2.5 235B) - $$$ (user-facing, needs quality)
+Call 1A: Fireworks AI (Qwen3-235B-A22B MoE) - $$$ (needs quality + rule-following)
+Call 1B: Fireworks AI (Qwen3-235B-A22B MoE) - $$$ (user-facing, needs quality)
 Call 2A: Local (Qwen 3.5-8B) - FREE (background task, compression)
 Call 2B: Local (Qwen 3.5-8B) - FREE (verification, compression)
 ```
@@ -878,7 +878,7 @@ nexa pull Qwen3-VL-8B-Instruct:fp16
 - Total: 5M tokens/month
 - Cost: 5M × $0.06/M = **$300/month** (voyage-3-large)
 
-**Fireworks AI (Qwen 2.5 235B):**
+**Fireworks AI (Qwen3-235B-A22B MoE):**
 - Assumption: 1,000 conversations/month
 - 4 calls per conversation
 - Avg input: 15,000 tokens/call (with context)

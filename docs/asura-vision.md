@@ -290,7 +290,9 @@ Stores Artisan Cut compressed turns and file descriptions.
 
 ### Model Selection
 
-**LLM Inference: Qwen 2.5 235B via Fireworks AI**
+**LLM Inference: Qwen3-235B-A22B (MoE) via Fireworks AI**
+- 235B total parameters, 22B active per token (Mixture-of-Experts architecture)
+- Superior instruction-following and rule adherence (critical for Artisan Cut)
 - Dirt cheap compared to OpenAI/Anthropic
 - Multi-call architecture (1A→1B) compensates for any quality gaps
 - Automatic prompt caching (no developer action needed)
@@ -368,8 +370,8 @@ This enables founder teams to benefit from collective knowledge while maintainin
 - **Edge Functions:** Supabase Edge Functions (Deno runtime)
 
 ### AI Services
-- **LLM:** Qwen 2.5 235B via Fireworks AI
-- **Embeddings:** Gemini via Voyage AI
+- **LLM:** Qwen3-235B-A22B (MoE) via Fireworks AI
+- **Embeddings:** voyage-3-large via Voyage AI
 - **Vector Search:** Supabase pgvector
 
 ### Development Tools
