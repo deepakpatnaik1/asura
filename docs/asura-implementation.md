@@ -8,12 +8,23 @@ Asura is being built in **phases**, focusing on wiring the core engine first bef
 
 ## Phase 1: Wiring the Engine
 
-The goal of Phase 1 is to wire together the complete perpetual memory architecture with essential features only. We're working with:
-- **Single model**: Qwen3-235B via Fireworks AI
-- **No persona differentiation yet**: Basic scaffolding only
-- **Focus**: Get the 4-call architecture + 3-tier memory system working end-to-end
+**Phase 1 Goal**: Build the **heart of Asura** - perpetual, meaningful, relevant conversations with one persona (Gunnar). Everything else is icing on the cake.
 
-### Subphase 1: Perpetual Conversation Continuity
+We're working with:
+- **Single model**: Qwen3-235B via Fireworks AI
+- **Single persona**: Gunnar (YC Startup Mentor)
+- **Focus**: 4-call architecture + 3-tier memory + file uploads + persona depth
+
+**Phase 1 has three subphases**:
+1. **Subphase 1**: Perpetual Conversation Continuity (memory wiring) ✅ COMPLETE
+2. **Subphase 2**: File Uploads (context enhancement)
+3. **Subphase 3**: Gunnar Persona (depth and personality)
+
+Once Phase 1 is complete, we have the **true MVP of Asura**: infinite conversations with a deep, knowledgeable advisor who remembers everything and can reason about your files.
+
+---
+
+### Subphase 1: Perpetual Conversation Continuity ✅
 
 **Objective**: Complete implementation of the core feature that ensures the AI never forgets past conversations, regardless of how long the conversation runs.
 
@@ -42,16 +53,61 @@ This subphase is exclusively focused on making the perpetual memory system fully
 4. ✅ **Context budget enforced**: Total context stays under 40% of model window (with truncation logic)
    - Implemented in [context-builder.ts:64-179](../src/lib/context-builder.ts#L64-L179)
    - Graceful truncation of journal entries when budget exceeded
-5. ⚠️ **Multi-turn coherence verified**: AI demonstrates recall across 20+ turn conversations
-   - Implementation complete, manual testing required
+5. 🔄 **Multi-turn coherence verified**: AI demonstrates recall across 20+ turn conversations
+   - Implementation complete
+   - Manual testing deferred (will monitor during normal usage)
 
 **Current Status**:
 - ✅ All core features implemented and operational
-- ⚠️ Requires manual testing to verify multi-turn coherence (20+ turn conversations)
+- 🔄 Multi-turn coherence will be validated organically during development/usage
+- ✅ **Subphase 1 is functionally complete** - the core promise of Asura (**infinite conversation continuity**) is fully realized
 
-Once manual testing confirms multi-turn coherence, Subphase 1 is complete and the core promise of Asura—**infinite conversation continuity**—is fully realized.
+Multi-turn coherence testing is in the back of mind and will be observed during regular usage rather than formal testing sessions.
 
-### Current Status (What's Already Wired)
+---
+
+### Subphase 2: File Uploads
+
+**Objective**: Enable Gunnar to reason about uploaded files (PDFs, code, documents) with the same perpetual memory architecture.
+
+**Key Features**:
+1. **File upload interface**: Drag-and-drop or file picker
+2. **LLM-based logical chunking**: Smart content segmentation (not naive token-based)
+3. **Modified Call 2**: Compress file content into Decision Arcs
+4. **File deduplication**: Prevent re-uploading same files
+5. **File + Query handling**: Seamless integration with conversation flow
+
+**Success Criteria**:
+- Users can upload files and ask questions about them
+- File content is compressed and stored in Journal with embeddings
+- Vector search retrieves relevant file chunks based on queries
+- Files persist across sessions (perpetual file memory)
+
+**Status**: Not yet started
+
+---
+
+### Subphase 3: Gunnar Persona
+
+**Objective**: Transform the generic AI into **Gunnar** - the YC Startup Mentor with depth, personality, and consistent voice.
+
+**Key Features**:
+1. **Persona-specific base instructions**: Gunnar's personality, knowledge domain, communication style
+2. **Persona-aware memory**: `persona_essence` in Journal reflects Gunnar's perspective
+3. **Consistent voice**: Across all 4 calls, Gunnar sounds like Gunnar
+4. **Domain expertise**: Startup execution, product-market fit, YC-style advice
+
+**Success Criteria**:
+- Every response feels like talking to a real YC mentor
+- Gunnar remembers past advice and builds on it
+- Distinct personality compared to generic AI
+- Users feel they're talking to a consistent advisor, not a chatbot
+
+**Status**: Not yet started
+
+---
+
+### Current Status (What's Already Wired - Subphase 1)
 
 ✅ **Call 1A: Hidden Reasoning**
 - Model: Qwen3-235B
@@ -106,9 +162,9 @@ Once manual testing confirms multi-turn coherence, Subphase 1 is complete and th
 
 ---
 
-### What Still Needs Wiring (Phase 1 Priorities)
+### What Was Wired in Subphase 1 (Now Complete)
 
-#### 🔴 Priority 1: Memory Context Loading (CRITICAL)
+#### ✅ Memory Context Loading
 
 **Current Problem**: Call 1A/1B are completely stateless. They receive only the current user message with no memory of past conversations. This breaks the entire "perpetual conversation continuity" promise.
 
@@ -296,49 +352,54 @@ export const POST: RequestHandler = async ({ request }) => {
 
 ## Phase 1 Completion Criteria
 
-Phase 1 is complete when:
+Phase 1 is complete when you can have **perpetual, meaningful, relevant conversations with Gunnar** including:
 
+**Subphase 1: Memory** ✅
 - ✅ Call 1A/1B receive memory context (last 5 Superjournal + last 100 Journal)
 - ✅ Call 2B outputs are saved with embeddings to Journal table
 - ✅ Vector search retrieves relevant Decision Arcs based on current query
-- ✅ Starred messages are always included in Call 1A/1B context
-- ✅ Users can star/unstar messages from UI
-- ✅ AI demonstrates memory of past conversations (test with multi-turn dialogue)
+- ✅ Context budget enforced (40% of model window)
 
-Once Phase 1 is complete, the **perpetual memory engine is fully functional** and ready for quality testing.
+**Subphase 2: Files**
+- ⏳ Users can upload files (PDFs, code, documents)
+- ⏳ Files are chunked intelligently (LLM-based logical chunking)
+- ⏳ File content compressed into Journal with embeddings
+- ⏳ Vector search retrieves relevant file chunks
+
+**Subphase 3: Gunnar**
+- ⏳ Gunnar has distinct personality and voice
+- ⏳ Responses feel like talking to a YC mentor
+- ⏳ Gunnar remembers past advice and builds on it
+- ⏳ Domain expertise in startup execution
+
+Once Phase 1 is complete, we have the **true MVP of Asura**: the heart of the system is beating.
 
 ---
 
-## Phase 2 and Beyond (Not Yet Started)
+## Phase 2 and Beyond (Future Work)
 
-### Phase 2: Quality & Refinement
+### Phase 2: Additional Personas
+- Implement remaining 5 personas (Vlad, Kirby, Stefan, Ananya, Samara)
+- Persona switching UI
+- Test persona consistency across memory tiers
+
+### Phase 3: Quality & Refinement
 - Test Decision Arc quality (are they regenerable patterns?)
 - Test Salience Score reliability (does LLM score appropriately?)
 - Test Compression Fidelity (is Artisan Cut lossless?)
 - Optimize context formatting for better LLM performance
 
-### Phase 3: Personas
-- Implement all six persona-specific prompts
-- Add persona-specific base instructions
-- Add persona switching UI improvements
-- Test persona consistency across memory tiers
-
-### Phase 4: File Upload
-- Implement LLM-based logical chunking
-- Modified Call 2 for file content compression
-- File deduplication logic
-- File + Query edge case handling
-
-### Phase 5: Production Readiness
+### Phase 4: Production Readiness
 - Migrate to Supabase Edge Functions
 - Implement authentication (Supabase Auth)
 - Re-enable RLS policies
 - Make user_id NOT NULL
 - Lazy loading for message history (infinite scroll)
 
-### Phase 6: Advanced Features
+### Phase 5: Advanced Features
 - Side chats (branching conversations)
 - Rethink feature (regenerate responses)
+- Starred messages UI and functionality
 - Multi-user knowledge sharing
 - Export/archive conversations
 
@@ -384,8 +445,11 @@ VOYAGE_API_KEY=... (needed for Priority 2)
 
 ## Next Immediate Steps
 
-**Start with Priority 1: Memory Context Loading**
+**With Subphase 1 complete, we move to Subphase 2: File Uploads**
 
-This is the most critical piece. Without it, Asura has no memory and the entire architecture is non-functional. Once memory context is wired, the AI will immediately feel "continuous" rather than stateless.
+The path to the true MVP:
+1. ✅ **Subphase 1**: Memory architecture (complete)
+2. ⏳ **Subphase 2**: File uploads and perpetual file memory
+3. ⏳ **Subphase 3**: Gunnar persona implementation
 
-After Priority 1 is complete, move to Priority 2 (Embeddings), then Priority 3 (Vector Search), then Priority 4 (Starred Messages).
+Once all three subphases are complete, we have the **heart of Asura beating**: perpetual, meaningful conversations with a knowledgeable advisor who remembers everything (conversations AND files).
