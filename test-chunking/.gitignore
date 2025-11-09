@@ -1,0 +1,6 @@
+# Ignore test files but keep directory structure
+input/*
+!input/.gitkeep
+
+output/*
+!output/.gitkeep

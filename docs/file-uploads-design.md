@@ -329,9 +329,105 @@ When user asks a question:
 
 **The Key: Mixed = intelligent routing per chunk, not per file. Same file can have both compressed and raw chunks.**
 
+## Chunking Implementation: Successful Experiment (Jan 2025)
+
+### The Challenge: "Lost in the Middle"
+
+Initial attempts at LLM-based logical chunking revealed a critical limitation: **models stop processing mid-document** even when within context limits. A 65K-character test document (well within Qwen3-235B's 131K extended context) would only chunk the first 22% before stopping.
+
+**Root cause:** LLMs exhibit U-shaped attention patterns - strong recall at beginning/end, blind spot in middle. Even explicit "MUST chunk ENTIRE document" instructions failed. The model was optimizing for "reasonable number of logical chunks" over completeness.
+
+### The Solution: Sliding Window + Per-Window 1A/1B
+
+**Architecture:**
+- **Window size:** 20,000 characters
+- **Overlap:** 3,000 characters (prevents topic splitting at boundaries)
+- **Per window:** Call 1A (initial chunking) → Call 1B (refinement with same context)
+- **Then merge:** Deduplicate overlaps, combine all windows
+
+**Key breakthrough:** Explicitly specify character count and require last chunk to reach exact end:
+```
+CRITICAL RULES:
+1. The LAST chunk's "end" value MUST equal {charCount}
+2. Chunk by complete ideas and natural topics, NOT by arbitrary character counts
+```
+
+**Results on 10,000-word test document:**
+- **Coverage:** 95-100% (was 22% before)
+- **Chunks:** 26 logical sections (was 57 over-fragmented or 21 incomplete)
+- **Quality:** Natural size variation (230-740 words), speaker attribution preserved, excellent titles/summaries
+- **Runtime:** ~5.5 minutes for 4 windows × 2 calls each
+
+### Why Per-Window 1A/1B Works
+
+**Fair workload:**
+- Call 1A: Process 20K chars → output chunks
+- Call 1B: Process same 20K chars + 1A chunks → refine
+- Both calls see identical context (no "lost in the middle")
+
+**Unfair alternative (failed):**
+- Initial: Process 20K windows → output chunks
+- Refinement: Process entire 65K doc + all chunks → refine everything
+- Refinement sees more context than initial pass → fails
+
+**Cost efficiency:**
+- Qwen3-235B via Fireworks: $0.22/M input, $0.88/M output
+- ~8 API calls for 65K document
+- Total cost: ~$0.15 per document
+
+### Implementation Notes
+
+**Prompt engineering critical:**
+1. Specify exact character count
+2. Require last chunk.end === charCount
+3. Emphasize natural boundaries over uniform sizing
+4. Temperature 0, stop: null (disable early stopping)
+5. Aim for 6-10 chunks per window (natural variation)
+
+**Deduplication strategy:**
+- Chunks ending in overlap region (last 1,500 chars of window) discarded
+- Next window will capture those boundaries with full context
+- Sort by position, merge sequentially
+
+**Model behavior:**
+- Without constraints: Creates ~5-7 "reasonable" chunks, stops at logical endpoint
+- With character count requirement: Processes entire window
+- 1B refinement: Improves titles/summaries, adjusts boundaries, merges/splits as needed
+
+### Production Recommendations
+
+**Use sliding window + 1A/1B for:**
+- Documents > 15,000 characters
+- Any file requiring complete coverage
+- Strategic files (interview transcripts, journal entries)
+
+**Use single-pass for:**
+- Short documents < 15,000 characters (within reliable processing range)
+- Classification tasks (strategic vs factual)
+
+**Model selection:**
+- Qwen3-235B-A22B via Fireworks AI confirmed working
+- Cost-effective at $0.22/$0.88 per million tokens
+- Automatic prompt caching reduces multi-call costs
+
+### Test File Characteristics
+
+**ACD179.md:**
+- 10,004 words, 65,509 characters
+- Interview transcript: 3 experts, round-robin Q&A format
+- 24 speaker turns (BOSS → EXPERT 1 → EXPERT 2 → EXPERT 3 → repeat)
+- Perfect for testing logical boundary detection
+
+**Chunking quality metrics:**
+- Speaker attribution: Consistent ("BOSS:", "EXPERT 1:")
+- Boundary alignment: Natural topic transitions
+- Size variation: 230-740 words (not mechanically uniform)
+- Completeness: 95%+ coverage, no significant gaps
+
 ## Status: All File Types - Fully Designed
 
 This document represents the finalized design for all file handling:
 - ✅ Strategic files (Artisan Cut compression)
 - ✅ Factual files (RAG with raw text preservation)
 - ✅ Mixed files (intelligent per-chunk routing)
+- ✅ Chunking implementation validated (sliding window + 1A/1B)
