@@ -58,8 +58,8 @@ Files are automatically classified by Qwen3-VL-4B into three categories:
 
 **Upload:**
 1. User uploads file via paperclip or drag-and-drop
-2. Qwen3-VL-4B (local) classifies entire file as "strategic"
-3. Qwen3-VL-4B (local) chunks into ~15-20 logical sections
+2. Qwen3-235B (Fireworks) classifies entire file as "strategic"
+3. Qwen3-235B (Fireworks) chunks into ~15-20 logical sections
 
 **For each chunk:**
 4. Call 2A (Qwen3-235B via Fireworks): Initial Artisan Cut compression
@@ -80,12 +80,14 @@ Files are automatically classified by Qwen3-VL-4B into three categories:
 
 ## Model Architecture
 
-**Four roles, three models:**
+**Four roles, one model:**
 
-1. **File chunking & classification** → Qwen3-VL-4B (local via Nexa SDK)
-2. **Artisan cutting (Call 2A/2B)** → Qwen3-235B (cloud via Fireworks)
-3. **Conversation (Call 1A/1B)** → Qwen3-235B (cloud via Fireworks)
-4. **Vector embeddings** → Embedding model (currently Voyage AI `voyage-3-large` 1024-dim, goal: make local)
+1. **File chunking & classification** → Qwen3-235B (Fireworks AI)
+2. **Artisan cutting (Call 2A/2B)** → Qwen3-235B (Fireworks AI)
+3. **Conversation (Call 1A/1B)** → Qwen3-235B (Fireworks AI)
+4. **Vector embeddings** → Voyage AI `voyage-3-large` (1024-dim)
+
+**Simplified architecture:** One model (Qwen3-235B via Fireworks) handles everything - classification, chunking, compression, and conversation. This eliminates local dependencies, reduces complexity, and ensures full model precision.
 
 **Why embeddings for both conversations AND files:**
 - Embedding size is **fixed** (1024 dimensions) regardless of input text length
@@ -271,8 +273,8 @@ When user asks a question:
 
 **Upload:**
 1. User uploads file via paperclip or drag-and-drop
-2. Qwen3-VL-4B (local) classifies entire file as "factual"
-3. Qwen3-VL-4B (local) chunks into ~30 logical sections (Introduction, Market Size, Competitor A, Q3 Revenue, etc.)
+2. Qwen3-235B (Fireworks) classifies entire file as "factual"
+3. Qwen3-235B (Fireworks) chunks into ~30 logical sections (Introduction, Market Size, Competitor A, Q3 Revenue, etc.)
 
 **For each chunk:**
 4. **Skip Call 2A/2B** (no Artisan Cut - facts don't compress well)
@@ -295,10 +297,10 @@ When user asks a question:
 
 **Upload:**
 1. User uploads file via paperclip or drag-and-drop
-2. Qwen3-VL-4B (local) classifies entire file as "mixed"
-3. Qwen3-VL-4B (local) chunks into ~20 logical sections
+2. Qwen3-235B (Fireworks) classifies entire file as "mixed"
+3. Qwen3-235B (Fireworks) chunks into ~20 logical sections
 
-**For each chunk, Qwen3-VL-4B classifies again:** strategic or factual?
+**For each chunk, Qwen3-235B classifies again:** strategic or factual?
 
 **Strategic chunks (recommendations, advice, strategic thinking):**
 4. Call 2A (Qwen3-235B): Initial Artisan Cut compression
