@@ -13,7 +13,7 @@ Asura is being built in **phases**, focusing on wiring the core engine first bef
 We're working with:
 - **Single model**: Qwen3-235B-A22B (MoE) via Fireworks AI
 - **Single persona**: Gunnar (YC Startup Mentor)
-- **Focus**: 4-call architecture + 3-tier memory + file uploads + persona depth
+- **Focus**: 6-call architecture (1A→1B→1C + 2A→2B) + 3-tier memory + file uploads + persona depth
 
 **Phase 1 has three subphases**:
 1. **Subphase 1**: Perpetual Conversation Continuity (memory wiring) ✅ COMPLETE
@@ -94,7 +94,7 @@ Multi-turn coherence testing is in the back of mind and will be observed during 
 **Key Features**:
 1. **Persona-specific base instructions**: Gunnar's personality, knowledge domain, communication style
 2. **Persona-aware memory**: `persona_essence` in Journal reflects Gunnar's perspective
-3. **Consistent voice**: Across all 4 calls, Gunnar sounds like Gunnar
+3. **Consistent voice**: Across all 6 calls, Gunnar sounds like Gunnar
 4. **Domain expertise**: Startup execution, product-market fit, YC-style advice
 
 **Success Criteria**:
@@ -123,6 +123,16 @@ Multi-turn coherence testing is in the back of mind and will be observed during 
 - Receives Call 1A output + critique prompt
 - Streams to user via Server-Sent Events (SSE)
 - Status: Implemented in `src/routes/api/chat/+server.ts:302-357`
+
+⏳ **Call 1C: Final Polish for Specificity** (NOT YET IMPLEMENTED)
+- Model: Qwen3-235B-A22B (MoE)
+- Max tokens: 4096
+- Temperature: 0.3
+- Receives Call 1B output + specificity enhancement prompt
+- Transforms generic advice into tactical playbooks with concrete details
+- Conditional execution: Only for high-salience queries (salience ≥ 8)
+- Adds credibility through uncomfortable specificity (exact numbers, API endpoints, scar tissue)
+- Status: **Planned** - To be implemented after Subphase 2
 
 ✅ **Call 2A: Initial Artisan Cut Compression**
 - Model: Qwen3-235B-A22B (MoE)

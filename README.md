@@ -7,10 +7,10 @@ AI advisory system for startup founders with perpetual conversation continuity. 
 **Perpetual Memory Through Artisan Cut Compression**
 
 - Three-tier memory architecture (working/recent/long-term) mimicking human cognitive patterns
-- Four-call system with self-critique: Call 1A → 1B → 2A → 2B
+- Six-call system with iterative refinement: Call 1A → 1B → 1C + 2A → 2B
 - Regenerability-based compression (not naive summarization)
 - Decision Arcs with salience scoring (1-10) for semantic retrieval
-- Cost-effective: 4 cheap LLM calls < 1 expensive call
+- Cost-effective: 6 cheap LLM calls = $0.086/message (76% cheaper than premium models)
 
 ## Documentation
 
@@ -79,14 +79,15 @@ Required in `.env`:
 
 ## Multi-Call Architecture
 
-Every user message triggers 4 sequential AI calls:
+Every user message triggers 6 sequential AI calls:
 
 1. **Call 1A**: Hidden reasoning with full memory context
-2. **Call 1B**: Self-critique → refined response (streamed to user)
-3. **Call 2A**: Initial Artisan Cut compression
-4. **Call 2B**: Compression verification → saved to perpetual memory
+2. **Call 1B**: Self-critique → refined response
+3. **Call 1C**: Final polish for specificity & credibility (conditional, streamed to user)
+4. **Call 2A**: Initial Artisan Cut compression
+5. **Call 2B**: Compression verification → saved to perpetual memory
 
-This architecture ensures both response quality and memory preservation without expensive models.
+This architecture ensures maximum response quality (through iterative refinement) and memory preservation without expensive models. Call 1C is conditionally executed only for high-salience strategic questions.
 
 ## Memory Tiers
 
@@ -130,7 +131,7 @@ npm run test:e2e:ui     # Run with Playwright UI
 ## Key Design Principles
 
 1. **Memory Over Model** - Architecture compensates for cheaper models
-2. **Self-Critique Quality** - LLM refines its own output (1B & 2B)
+2. **Self-Critique Quality** - LLM refines its own output (1B, 1C, & 2B)
 3. **Lossless Compression** - Regenerability-based, not summarization
 4. **Verified Compression** - Two-step process (2A→2B) prevents memory degradation
 5. **Cost Efficiency** - Premium experience at budget pricing

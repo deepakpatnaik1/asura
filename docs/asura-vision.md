@@ -44,7 +44,7 @@ All context (base instructions, persona prompt, memory tiers, decision arcs) fit
 
 ## Multi-Call Architecture
 
-Every user message triggers a sophisticated **four-call sequence** with built-in quality verification:
+Every user message triggers a sophisticated **six-call sequence** with built-in quality verification:
 
 ### Call 1A: Hidden Reasoning Call
 
@@ -78,12 +78,29 @@ Every user message triggers a sophisticated **four-call sequence** with built-in
 
 **Key Innovation:** Call 1B receives the original Call 1A prompt context, enabling informed critique rather than blind refinement.
 
+### Call 1C: Final Polish for Specificity & Credibility
+
+**Input:**
+- Everything from Call 1A/1B (base instructions + persona profile + memory context + user query)
+- Call 1B's refined response
+- CALL1C_PROMPT: "This is good, but make it uncomfortably specific. Kill abstraction. Add tactical details. Show scar tissue from real experience. Make every sentence actionable. If you mention a pricing model, give exact numbers. If you mention a workflow, give the exact copy. Transform consultant advice into field notes from someone who just did this."
+
+**Output:**
+- Final polished response with maximum specificity and credibility (streamed to user, replaces 1B output)
+- Saved to **Superjournal** table
+
+**Purpose:** Transform generic strategic advice into tactically actionable playbooks with concrete details
+
+**Key Innovation:** The 1C pass adds credibility through uncomfortable specificity - exact dollar amounts, API endpoints, Slack notification copy, scar tissue from failures. This transforms Gunnar from "smart advisor" into "battle-scarred operator handing you the playbook."
+
+**Conditional Execution:** Call 1C is triggered only for high-salience conversations (salience ≥ 8) or strategic questions to avoid unnecessary cost for simple queries.
+
 ### Call 2A: Initial Artisan Cut Compression
 
 **Input:**
 - System prompt: `CALL2A_PROMPT` (Artisan Cut instructions - see system-prompts.md)
-- Call 1B user query
-- Call 1B LLM response
+- User query from conversation
+- Final LLM response (Call 1C if triggered, otherwise Call 1B)
 
 **Output:** JSON object (not immediately saved)
 ```json
@@ -305,11 +322,12 @@ Stores Artisan Cut compressed turns and file descriptions.
 ### Why This Works
 
 **Traditional approach:**
-- 1 call × expensive model (GPT-4/Claude) = High cost per message
+- 1 call × expensive model (GPT-4/Claude) = $0.28-0.36 per message
 
 **Asura approach:**
-- 4 calls × cheap model (Qwen) = Still lower cost per message
+- 6 calls × cheap model (Qwen) = $0.086 per message (76% cheaper)
 - Architecture quality boost > model quality difference
+- Call 1C conditional execution (only for high-salience queries)
 - Self-critique mechanism ensures quality without expensive models
 - Automatic prompt caching reduces input token costs significantly
 
@@ -468,7 +486,7 @@ Embedding generated via Voyage AI and saved
 ## Key Design Principles
 
 1. **Memory Over Model:** Architecture compensates for cheaper models
-2. **Self-Critique Quality:** LLM refines its own output (Calls 1B & 2B) ensuring quality without expensive models
+2. **Self-Critique Quality:** LLM refines its own output (Calls 1B, 1C, & 2B) ensuring quality without expensive models
 3. **Lossless Compression:** Artisan Cut preserves regenerability, not just summarization
 4. **Verified Compression:** Two-step process (2A→2B) prevents memory degradation
 5. **Human-Like Memory:** Three tiers mirror working/recent/long-term human memory
@@ -481,7 +499,7 @@ Embedding generated via Voyage AI and saved
 
 - **Memory Retention:** AI recalls decisions from months ago accurately
 - **Compression Quality:** No information loss in Artisan Cut verified by Call 2B
-- **Cost Per Message:** <$0.01 per user message (4 calls combined)
+- **Cost Per Message:** ~$0.086 per user message (6 calls combined, 76% cheaper than premium models)
 - **Response Quality:** Comparable to premium models despite budget pricing, enhanced by self-critique
 - **Conversation Continuity:** Zero "I don't recall" moments for high-salience items
 - **User Satisfaction:** Founders feel "understood" across long time horizons
