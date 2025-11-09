@@ -265,6 +265,71 @@ When user asks a question:
 12. **Parallel uploads** - Multiple files can process simultaneously
 13. **Non-blocking** - User can continue chatting during processing
 
-## Status: Strategic Files - Fully Designed
+## Processing Pipeline - Factual Files
 
-This document represents the finalized design for strategic file handling. Factual and mixed files will be documented separately.
+### Complete Flow (Factual File Example: 50-page industry report)
+
+**Upload:**
+1. User uploads file via paperclip or drag-and-drop
+2. Qwen3-VL-4B (local) classifies entire file as "factual"
+3. Qwen3-VL-4B (local) chunks into ~30 logical sections (Introduction, Market Size, Competitor A, Q3 Revenue, etc.)
+
+**For each chunk:**
+4. **Skip Call 2A/2B** (no Artisan Cut - facts don't compress well)
+5. Keep raw text as-is
+6. Embedding model generates vector from raw text
+7. Save to `file_chunks` with `chunk_type='factual'`, `raw_content` populated
+
+**Later - User Query:**
+8. User asks: "What was the market size in 2024?"
+9. Embedding model generates vector from query
+10. Vector search finds matching chunks (pgvector cosine similarity)
+11. **Raw text** of matching chunks injected into Call 1A
+12. Call 1A answers: "According to the report: $4.2B in 2024..."
+
+**The Key: No compression. Original text preserved for factual accuracy.**
+
+## Processing Pipeline - Mixed Files
+
+### Complete Flow (Mixed File Example: Expert interview with recommendations + data)
+
+**Upload:**
+1. User uploads file via paperclip or drag-and-drop
+2. Qwen3-VL-4B (local) classifies entire file as "mixed"
+3. Qwen3-VL-4B (local) chunks into ~20 logical sections
+
+**For each chunk, Qwen3-VL-4B classifies again:** strategic or factual?
+
+**Strategic chunks (recommendations, advice, strategic thinking):**
+4. Call 2A (Qwen3-235B): Initial Artisan Cut compression
+5. Call 2B (Qwen3-235B): Compression verification
+6. Result: `chunk_essence`, `decision_arc_summary`, `salience_score`
+7. Embedding model generates vector from `decision_arc_summary`
+8. Save to `file_chunks` with `chunk_type='strategic'`
+
+**Factual chunks (data citations, numbers, research references):**
+4. Skip Call 2A/2B (no compression)
+5. Keep raw text as-is
+6. Embedding model generates vector from raw text
+7. Save to `file_chunks` with `chunk_type='factual'`, `raw_content` populated
+
+**Later - Strategic Query:**
+8. User asks: "What did the expert recommend about pricing?"
+9. Vector search finds strategic chunks
+10. **Artisan Cuts** injected into Call 1A
+11. Call 1A reasons about strategic advice
+
+**Later - Factual Query:**
+8. User asks: "What was the TAM figure mentioned?"
+9. Vector search finds factual chunks
+10. **Raw text** injected into Call 1A
+11. Call 1A answers with exact data
+
+**The Key: Mixed = intelligent routing per chunk, not per file. Same file can have both compressed and raw chunks.**
+
+## Status: All File Types - Fully Designed
+
+This document represents the finalized design for all file handling:
+- ✅ Strategic files (Artisan Cut compression)
+- ✅ Factual files (RAG with raw text preservation)
+- ✅ Mixed files (intelligent per-chunk routing)
