@@ -201,7 +201,7 @@ export async function buildContextForCalls1A1B(
 				console.log('[Context Builder] Generating query embedding for vector search');
 				const queryEmbedding = await voyage.embed({
 					input: userQuery,
-					model: 'voyage-3-large' // 1024 dimensions (default)
+					model: 'voyage-3' // 1024 dimensions
 				});
 
 				const queryVector = queryEmbedding.data[0].embedding;
