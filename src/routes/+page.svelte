@@ -2,6 +2,15 @@
 	import { Icon } from 'svelte-icons-pack';
 	import { LuStar, LuCopy, LuTrash2, LuArchive, LuRefreshCw, LuPaperclip, LuFolder, LuChevronDown, LuSettings, LuLogOut, LuCloudDownload, LuEllipsisVertical, LuArrowDown, LuArrowUp, LuMessageSquare, LuFlame } from 'svelte-icons-pack/lu';
 	import { currentMessage, isLoading, sendMessage } from '$lib/stores/chat';
+	import {
+		files,
+		processingFiles,
+		readyFiles,
+		failedFiles,
+		error,
+		uploadFile,
+		deleteFile
+	} from '$lib/stores/filesStore';
 	import { tick } from 'svelte';
 
 	// Receive loaded messages from server
@@ -14,6 +23,12 @@
 	let showNukeConfirm = $state(false);
 	let nukeProgress = $state(0);
 	let nukeTimer: number | null = null;
+
+	// File upload state
+	let fileInputRef: HTMLInputElement;
+	let showFileList = $state(false);
+	let deleteConfirmId = $state<string | null>(null);
+	let dragOverActive = $state(false);
 
 	// Helper function to format timestamps
 	function formatTimestamp(dateString: string) {
@@ -82,6 +97,111 @@
 		if (event.key === 'Enter' && !event.shiftKey) {
 			event.preventDefault();
 			handleSend();
+		}
+	}
+
+	// File upload handler
+	async function handleFileSelect(event: Event) {
+		const target = event.target as HTMLInputElement;
+		const file = target.files?.[0];
+
+		if (!file) return;
+
+		// Validate file type
+		const allowedTypes = [
+			'application/pdf',
+			'text/plain',
+			'text/markdown',
+			'image/png',
+			'image/jpeg',
+			'image/gif',
+			'image/webp',
+			'text/javascript',
+			'application/typescript',
+			'text/x-python',
+			'application/vnd.ms-excel',
+			'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+			'text/csv',
+			'application/json'
+		];
+
+		if (!allowedTypes.includes(file.type)) {
+			error.set(`File type not supported: ${file.type}`);
+			return;
+		}
+
+		// Validate file size (10MB = 10485760 bytes)
+		if (file.size > 10485760) {
+			error.set('File is too large. Maximum size is 10MB.');
+			return;
+		}
+
+		try {
+			showFileList = true;
+			const fileId = await uploadFile(file);
+			console.log('[Chunk 9 UI] File uploaded:', fileId);
+		} catch (err) {
+			console.error('[Chunk 9 UI] Upload failed:', err);
+			error.set(`Upload failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+		}
+
+		// Reset input
+		target.value = '';
+	}
+
+	async function handleDeleteFile(fileId: string) {
+		try {
+			await deleteFile(fileId);
+			console.log('[Chunk 9 UI] File deleted:', fileId);
+		} catch (err) {
+			console.error('[Chunk 9 UI] Delete failed:', err);
+			error.set(`Delete failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+		}
+		deleteConfirmId = null;
+	}
+
+	function triggerFileInput() {
+		fileInputRef?.click();
+	}
+
+	// Helper to format file size
+	function formatFileSize(bytes: number): string {
+		if (bytes === 0) return '0 Bytes';
+		const k = 1024;
+		const sizes = ['Bytes', 'KB', 'MB'];
+		const i = Math.floor(Math.log(bytes) / Math.log(k));
+		return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
+	}
+
+	// Drag and drop handlers
+	function handleDragOver(event: DragEvent) {
+		event.preventDefault();
+		event.dataTransfer!.dropEffect = 'copy';
+		dragOverActive = true;
+	}
+
+	function handleDragLeave(event: DragEvent) {
+		// Check if we're leaving the wrapper entirely
+		const target = event.currentTarget as HTMLElement;
+		if (event.relatedTarget && !target.contains(event.relatedTarget as Node)) {
+			dragOverActive = false;
+		}
+	}
+
+	function handleDrop(event: DragEvent) {
+		event.preventDefault();
+		dragOverActive = false;
+		const fileList = event.dataTransfer?.files;
+		if (fileList?.length) {
+			const file = fileList[0];
+			// Create synthetic event for reuse of validation logic
+			const syntheticEvent = {
+				target: {
+					files: fileList,
+					value: ''
+				}
+			} as unknown as Event;
+			handleFileSelect(syntheticEvent);
 		}
 	}
 
@@ -223,9 +343,43 @@
 	<!-- Input Area -->
 	<div class="input-area">
 		<div class="input-container">
-			<div class="input-field-wrapper">
+			<div
+				class="input-field-wrapper"
+				ondragover={handleDragOver}
+				ondragleave={handleDragLeave}
+				ondrop={handleDrop}
+				class:drag-active={dragOverActive}
+			>
 				<div class="input-controls">
-					<button class="control-btn" title="Attach file"><Icon src={LuPaperclip} size="11" /></button>
+					<button
+						class="control-btn file-upload-btn"
+						title="Attach file"
+						onclick={triggerFileInput}
+					>
+						<Icon src={LuPaperclip} size="11" />
+					</button>
+
+					<!-- Hidden file input -->
+					<input
+						type="file"
+						bind:this={fileInputRef}
+						onchange={handleFileSelect}
+						accept=".pdf,.txt,.md,.png,.jpg,.jpeg,.gif,.webp,.js,.ts,.py,.xlsx,.csv,.json"
+						style="display: none"
+					/>
+
+					<!-- File list toggle button (show file count) -->
+					{#if $files.length > 0}
+						<button
+							class="control-btn file-list-btn"
+							title={`Files (${$files.length})`}
+							onclick={() => (showFileList = !showFileList)}
+						>
+							<Icon src={LuFolder} size="11" />
+							<span class="file-count">{$files.length}</span>
+						</button>
+					{/if}
+
 					<button class="control-btn" title="Download from cloud"><Icon src={LuCloudDownload} size="11" /></button>
 					<button class="control-btn" title="Browse folder"><Icon src={LuFolder} size="11" /></button>
 
@@ -267,6 +421,126 @@
 			</button>
 		</div>
 	</div>
+
+	<!-- File List Dropdown -->
+	{#if showFileList && $files.length > 0}
+		<div class="file-list-container">
+			<!-- Error message -->
+			{#if $error}
+				<div class="file-error-banner">
+					<span>{$error}</span>
+					<button
+						class="error-close-btn"
+						onclick={() => error.set(null)}
+					>
+						×
+					</button>
+				</div>
+			{/if}
+
+			<!-- File list header -->
+			<div class="file-list-header">
+				<span class="file-list-title">Files ({$files.length})</span>
+				<button
+					class="file-list-close-btn"
+					onclick={() => (showFileList = false)}
+				>
+					<Icon src={LuChevronDown} size="11" />
+				</button>
+			</div>
+
+			<!-- Processing files section -->
+			{#if $processingFiles.length > 0}
+				<div class="file-list-section">
+					<div class="file-list-section-label">Processing ({$processingFiles.length})</div>
+					{#each $processingFiles as file (file.id)}
+						<div class="file-item file-item-processing">
+							<div class="file-item-info">
+								<div class="file-item-name" title={file.filename}>{file.filename}</div>
+								<div class="file-item-stage">{file.processing_stage || 'pending'}</div>
+							</div>
+							<div class="file-item-progress">
+								<div class="progress-bar-container">
+									<div class="progress-bar" style="width: {file.progress}%"></div>
+								</div>
+								<span class="file-item-percent">{file.progress}%</span>
+							</div>
+						</div>
+					{/each}
+				</div>
+			{/if}
+
+			<!-- Ready files section -->
+			{#if $readyFiles.length > 0}
+				<div class="file-list-section">
+					<div class="file-list-section-label">Ready ({$readyFiles.length})</div>
+					{#each $readyFiles as file (file.id)}
+						<div class="file-item file-item-ready">
+							<div class="file-item-info">
+								<div class="file-item-status-icon">✓</div>
+								<div class="file-item-name" title={file.filename}>{file.filename}</div>
+							</div>
+							<button
+								class="file-item-delete-btn"
+								onclick={() => (deleteConfirmId = file.id)}
+								title="Delete file"
+							>
+								<Icon src={LuTrash2} size="10" />
+							</button>
+						</div>
+					{/each}
+				</div>
+			{/if}
+
+			<!-- Failed files section -->
+			{#if $failedFiles.length > 0}
+				<div class="file-list-section">
+					<div class="file-list-section-label">Failed ({$failedFiles.length})</div>
+					{#each $failedFiles as file (file.id)}
+						<div class="file-item file-item-failed">
+							<div class="file-item-info">
+								<div class="file-item-status-icon">✕</div>
+								<div class="file-item-details">
+									<div class="file-item-name" title={file.filename}>{file.filename}</div>
+									<div class="file-item-error">{file.error_message || 'Unknown error'}</div>
+								</div>
+							</div>
+							<button
+								class="file-item-delete-btn"
+								onclick={() => (deleteConfirmId = file.id)}
+								title="Delete file"
+							>
+								<Icon src={LuTrash2} size="10" />
+							</button>
+						</div>
+					{/each}
+				</div>
+			{/if}
+		</div>
+	{/if}
+
+	<!-- Delete Confirmation Modal -->
+	{#if deleteConfirmId}
+		<div class="modal-overlay" onclick={() => (deleteConfirmId = null)}>
+			<div class="modal-content" onclick={(e) => e.stopPropagation()}>
+				<p class="modal-text">Delete file permanently?</p>
+				<div class="modal-actions">
+					<button
+						class="modal-btn modal-btn-cancel"
+						onclick={() => (deleteConfirmId = null)}
+					>
+						Cancel
+					</button>
+					<button
+						class="modal-btn modal-btn-confirm"
+						onclick={() => deleteConfirmId && handleDeleteFile(deleteConfirmId)}
+					>
+						Delete
+					</button>
+				</div>
+			</div>
+		</div>
+	{/if}
 
 	<!-- User Avatar/Logout (top right) -->
 	<div class="user-controls">
@@ -793,5 +1067,309 @@
 
 	.modal-btn-cancel:hover {
 		background: hsl(var(--muted) / 0.1);
+	}
+
+	/* File Upload UI Styles */
+
+	/* File upload button */
+	.file-upload-btn {
+		position: relative;
+	}
+
+	.file-upload-btn:hover {
+		opacity: 1;
+		color: var(--boss-accent);
+	}
+
+	/* File list button with count badge */
+	.file-list-btn {
+		position: relative;
+		display: flex;
+		align-items: center;
+		gap: 4px;
+	}
+
+	.file-count {
+		font-size: 0.75em;
+		background: var(--boss-accent);
+		color: hsl(var(--background));
+		border-radius: 10px;
+		padding: 1px 4px;
+		font-weight: 600;
+		min-width: 16px;
+		text-align: center;
+	}
+
+	/* Drag and drop visual feedback */
+	.input-field-wrapper {
+		transition: background-color 0.2s, border-color 0.2s;
+	}
+
+	.input-field-wrapper.drag-active {
+		background-color: hsl(var(--input) / 0.15);
+		border-color: var(--boss-accent);
+	}
+
+	/* File List Container */
+	.file-list-container {
+		position: fixed;
+		bottom: 120px;
+		left: 50%;
+		transform: translateX(-50%);
+		width: min(calc(100% - 32px), 600px);
+		max-width: 600px;
+		max-height: 400px;
+		background: hsl(var(--card));
+		border: 1px solid hsl(var(--border));
+		border-radius: 8px;
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+		overflow-y: auto;
+		z-index: 100;
+	}
+
+	/* File list header */
+	.file-list-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 12px 16px;
+		border-bottom: 1px solid hsl(var(--border));
+		background: hsl(var(--background));
+		position: sticky;
+		top: 0;
+		z-index: 1;
+	}
+
+	.file-list-title {
+		font-weight: 600;
+		color: hsl(var(--foreground));
+		font-size: 0.9em;
+	}
+
+	.file-list-close-btn {
+		background: transparent;
+		border: none;
+		cursor: pointer;
+		padding: 4px;
+		opacity: 0.7;
+		transition: opacity 0.2s;
+		display: flex;
+		align-items: center;
+		transform: rotate(180deg);
+	}
+
+	.file-list-close-btn:hover {
+		opacity: 1;
+	}
+
+	/* File list sections */
+	.file-list-section {
+		padding: 12px 8px;
+		border-bottom: 1px solid hsl(var(--border));
+	}
+
+	.file-list-section:last-child {
+		border-bottom: none;
+	}
+
+	.file-list-section-label {
+		font-size: 0.8em;
+		color: hsl(var(--muted-foreground));
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+		margin-bottom: 8px;
+		padding: 0 8px;
+		font-weight: 500;
+	}
+
+	/* File item - base styles */
+	.file-item {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 8px;
+		border-radius: 4px;
+		gap: 8px;
+		margin-bottom: 4px;
+		transition: background-color 0.2s;
+	}
+
+	.file-item:hover {
+		background-color: hsl(var(--muted) / 0.1);
+	}
+
+	/* File item info container */
+	.file-item-info {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+
+	.file-item-details {
+		flex: 1;
+		min-width: 0;
+	}
+
+	.file-item-name {
+		font-size: 0.85em;
+		color: hsl(var(--foreground));
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.file-item-stage {
+		font-size: 0.75em;
+		color: hsl(var(--muted-foreground));
+		text-transform: capitalize;
+	}
+
+	.file-item-error {
+		font-size: 0.75em;
+		color: rgb(239, 68, 68);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	/* File item status icon */
+	.file-item-status-icon {
+		font-weight: bold;
+		font-size: 0.9em;
+		width: 20px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+	}
+
+	.file-item-ready .file-item-status-icon {
+		color: hsl(var(--foreground));
+	}
+
+	.file-item-failed .file-item-status-icon {
+		color: rgb(239, 68, 68);
+	}
+
+	/* Processing specific styles */
+	.file-item-processing {
+		flex-direction: column;
+		align-items: flex-start;
+	}
+
+	.file-item-progress {
+		width: 100%;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+
+	.progress-bar-container {
+		flex: 1;
+		height: 4px;
+		background: hsl(var(--border));
+		border-radius: 2px;
+		overflow: hidden;
+	}
+
+	.progress-bar {
+		height: 100%;
+		background: var(--boss-accent);
+		transition: width 150ms linear;
+	}
+
+	.file-item-percent {
+		font-size: 0.75em;
+		color: hsl(var(--muted-foreground));
+		min-width: 28px;
+		text-align: right;
+	}
+
+	/* Delete button */
+	.file-item-delete-btn {
+		background: transparent;
+		border: none;
+		cursor: pointer;
+		padding: 4px;
+		opacity: 0.6;
+		transition: opacity 0.2s;
+		color: rgb(239, 68, 68);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+	}
+
+	.file-item-delete-btn:hover {
+		opacity: 1;
+	}
+
+	/* Error banner */
+	.file-error-banner {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 8px 12px;
+		background: rgba(239, 68, 68, 0.1);
+		border-bottom: 1px solid rgb(239, 68, 68);
+		color: rgb(239, 68, 68);
+		font-size: 0.85em;
+		gap: 8px;
+	}
+
+	.error-close-btn {
+		background: transparent;
+		border: none;
+		color: rgb(239, 68, 68);
+		cursor: pointer;
+		font-size: 1.2em;
+		padding: 0 4px;
+		opacity: 0.7;
+		transition: opacity 0.2s;
+	}
+
+	.error-close-btn:hover {
+		opacity: 1;
+	}
+
+	/* Delete confirmation modal - add to existing modal styles */
+	.modal-btn-confirm {
+		background: var(--boss-accent);
+		color: hsl(var(--background));
+		border: 1px solid var(--boss-accent);
+	}
+
+	.modal-btn-confirm:hover {
+		background: rgb(217, 133, 107);
+		border-color: rgb(217, 133, 107);
+	}
+
+	/* Scrollbar styling for file list */
+	.file-list-container::-webkit-scrollbar {
+		width: 6px;
+	}
+
+	.file-list-container::-webkit-scrollbar-track {
+		background: transparent;
+	}
+
+	.file-list-container::-webkit-scrollbar-thumb {
+		background: hsl(var(--border));
+		border-radius: 3px;
+	}
+
+	.file-list-container::-webkit-scrollbar-thumb:hover {
+		background: hsl(var(--muted-foreground));
+	}
+
+	/* Responsive adjustments */
+	@media (max-width: 600px) {
+		.file-list-container {
+			bottom: 110px;
+			width: calc(100% - 16px);
+			max-height: 300px;
+		}
 	}
 </style>
