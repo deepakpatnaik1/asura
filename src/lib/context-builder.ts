@@ -296,8 +296,31 @@ export async function buildContextForCalls1A1B(
 		}
 	}
 
-	// Priority 6: File uploads (artisan cut compressed) - TODO: Implement when file upload is ready
-	// components.files = await fetchFileUploads(userId);
+	// Priority 6: File uploads (Artisan Cut compressed descriptions from user's ready files)
+	const readyFiles = await fetchReadyFiles(userId);
+
+	if (readyFiles.length > 0) {
+		// Greedily pack files into remaining budget
+		const includedFiles = [];
+		let filesTokens = 0;
+
+		for (const file of readyFiles) {
+			const formattedFile = formatFileForContext(file);
+			const fileSize = estimateTokens(formattedFile);
+
+			if (totalTokens + filesTokens + fileSize <= contextBudget) {
+				includedFiles.push(file);
+				filesTokens += fileSize;
+			} else {
+				break; // Budget exhausted
+			}
+		}
+
+		if (includedFiles.length > 0) {
+			components.files = formatFilesForContext(includedFiles);
+			totalTokens += filesTokens;
+		}
+	}
 
 	// Assemble final context
 	const finalContext = assembleContext(components);
@@ -500,6 +523,79 @@ function truncateArcsToFit(
 	return includedArcs.length > 0
 		? `--- OTHER DECISION ARCS (Salience 1-7) ---\n${accumulatedText}\n`
 		: '';
+}
+
+/**
+ * Fetch ready files for a user, ordered by newest first
+ */
+async function fetchReadyFiles(userId: string | null): Promise<
+	Array<{
+		filename: string;
+		file_type: string;
+		description: string | null;
+	}>
+> {
+	let query = supabase
+		.from('files')
+		.select('filename, file_type, description')
+		.eq('status', 'ready')
+		.order('uploaded_at', { ascending: false });
+
+	if (userId === null) {
+		query = query.is('user_id', null);
+	} else {
+		query = query.eq('user_id', userId);
+	}
+
+	const { data, error } = await query;
+
+	if (error) {
+		console.warn('[Context Builder] Failed to fetch ready files:', error);
+		return [];
+	}
+
+	return data || [];
+}
+
+/**
+ * Format a single file for context injection
+ * Assumes: files with status='ready' always have descriptions
+ * (null descriptions are skipped as safety measure against incomplete processing)
+ * Format: ## [filename] (file_type)
+ * [description]
+ *
+ */
+function formatFileForContext(file: {
+	filename: string;
+	file_type: string;
+	description: string | null;
+}): string {
+	if (!file.description) {
+		// Skip files with no description (shouldn't happen with ready status, but safe)
+		return '';
+	}
+
+	return `## ${file.filename} (${file.file_type})\n${file.description}\n\n`;
+}
+
+/**
+ * Format multiple files for context injection
+ * Includes header and count summary
+ */
+function formatFilesForContext(
+	files: Array<{
+		filename: string;
+		file_type: string;
+		description: string | null;
+	}>
+): string {
+	if (files.length === 0) {
+		return '';
+	}
+
+	const filesText = files.map((f) => formatFileForContext(f)).join('');
+
+	return `--- UPLOADED FILES (${files.length} file${files.length === 1 ? '' : 's'} in context) ---\n${filesText}`;
 }
 
 // Assemble all context components into final string
