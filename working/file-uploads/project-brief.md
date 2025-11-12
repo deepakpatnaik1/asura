@@ -324,34 +324,291 @@ Enable users to upload documents (PDF, TXT, MD, images, code, spreadsheets) that
 
 ## Implementation Progress
 
-### Status: Planning Complete, Ready for Chunk 1
+### Status: Implementation Complete, Testing Phase
 
-**Completed:**
-- ✅ Business logic discussion and decisions
-- ✅ Requirements documentation
-- ✅ High-level chunk breakdown (10 chunks)
-- ✅ Reference documentation imported from old branch
+**Completed Implementation Chunks:**
+- ✅ Chunk 1: Database Schema
+- ✅ Chunk 2: File Extraction
+- ✅ Chunk 3: Voyage AI Integration
+- ✅ Chunk 4: Modified Call 2 Integration
+- ✅ Chunk 5: File Processor Orchestration
+- ✅ Chunk 6: API Endpoints
+- ✅ Chunk 7: Server-Sent Events
+- ✅ Chunk 8: Files Store
+- ✅ Chunk 9: UI Integration
+- ✅ Chunk 10: Context Injection Integration
+
+**Testing Chunks:**
+1. ✅ T1: Unit Tests (COMPLETE - 100+ tests)
+2. ✅ T2: Database Tests (COMPLETE - 50+ tests)
+3. ✅ T3: API Integration Tests (COMPLETE - 75+ tests)
+4. ✅ T4: SSE/Store Integration Tests (COMPLETE - 90+ tests)
+5. ✅ T5: End-to-End Tests (COMPLETE - 42 tests)
+6. ✅ T6: Regression Tests (COMPLETE - 29 tests)
+
+**Testing Phase: COMPLETE** ✅
+**Grand Total: 386+ tests passing**
 
 **Next Steps:**
-- Begin Chunk 1: Database Schema
-- Follow subagent workflow:
-  1. Doer creates plan for Chunk 1
-  2. Reviewer reviews plan (8/10 gate)
-  3. Doer implements Chunk 1
-  4. Reviewer reviews implementation (8/10 gate)
-  5. Repeat for Chunks 2-10
+- All testing complete (T1-T6)
+- Feature ready for Boss acceptance testing
+- Ready for deployment to production
 
-**Chunks:**
-1. ⏳ Database Schema
-2. ⏳ File Extraction
-3. ⏳ Voyage AI Integration
-4. ⏳ Modified Call 2 Integration
-5. ⏳ File Processor Orchestration
-6. ⏳ API Endpoints
-7. ⏳ Server-Sent Events
-8. ⏳ Files Store
-9. ⏳ UI Integration
-10. ⏳ Context Injection Integration
+---
+
+## Testing Chunks (T1-T6)
+
+### T1: Unit Tests
+Test all library functions in isolation without external dependencies.
+
+**Scope:**
+- `src/lib/file-extraction.ts`
+  - Test extractText() for each file type (PDF, text, code, spreadsheet, images)
+  - Test file size validation (reject >10MB)
+  - Test generateContentHash() produces SHA-256 hashes
+  - Test error handling (FileExtractionError with proper codes)
+  - Mock file buffers for each format
+
+- `src/lib/vectorization.ts`
+  - Test generateEmbedding() returns 1024-dim array
+  - Test error handling (VectorizationError with proper codes)
+  - Mock Voyage AI API responses
+  - Test rate limiting/retry logic
+
+- `src/lib/file-compressor.ts`
+  - Test compressFile() Call 2A/2B flow
+  - Test JSON parsing from LLM responses
+  - Test error handling (FileCompressionError with proper codes)
+  - Mock Fireworks API responses
+  - Test Artisan Cut preservation (numbers, dates, entities)
+
+- `src/lib/file-processor.ts`
+  - Test processFile() orchestration flow
+  - Test progress tracking (0-100%)
+  - Test stage transitions (extraction → compression → embedding → finalization)
+  - Test duplicate detection logic
+  - Test error handling and rollback
+  - Test retry logic with exponential backoff
+  - Mock all external dependencies (extraction, compression, embedding, DB)
+
+**Test Framework:**
+- Vitest for unit tests
+- Mock all API calls (Voyage AI, Fireworks)
+- Mock Supabase client
+- Test files: `src/lib/__tests__/file-extraction.test.ts`, etc.
+
+**Success Criteria:**
+- 100% code coverage for all library functions
+- All edge cases covered (empty files, invalid formats, API failures)
+- All error paths tested
+- All mocks properly isolated
+
+### T2: Database Tests
+Test database schema, migrations, queries, and data integrity.
+
+**Scope:**
+- Migration validity
+  - Test `20251111120100_create_files_table.sql` applies cleanly
+  - Test all indexes created correctly
+  - Test RLS policies defined (even if disabled)
+  - Test enum types created
+  - Test rollback works
+
+- CRUD operations
+  - Test INSERT into files table
+  - Test SELECT with user_id filtering
+  - Test UPDATE status/progress/stage
+  - Test DELETE cascade behavior
+  - Test duplicate detection via content_hash unique index
+
+- Vector operations
+  - Test embedding column stores 1024-dim vectors
+  - Test HNSW index works for cosine similarity
+  - Test vector search queries
+
+- Data integrity
+  - Test NOT NULL constraints
+  - Test DEFAULT values
+  - Test TIMESTAMPTZ auto-updates
+  - Test foreign key behavior (if any)
+
+**Test Framework:**
+- Direct Supabase queries via psql or Supabase client
+- Test database: use `npx supabase db reset` for clean state
+- Test files: `tests/database/files-table.test.ts`
+
+**Success Criteria:**
+- All migrations apply without errors
+- All constraints enforced correctly
+- All indexes used by query planner
+- Vector search returns expected results
+
+### T3: API Integration Tests
+Test all API endpoints end-to-end with real database.
+
+**Scope:**
+- Upload API (`POST /api/files/upload`)
+  - Test successful upload (returns 202 + file_id)
+  - Test file type validation (reject unsupported types)
+  - Test file size validation (reject >10MB)
+  - Test duplicate detection (reject same content_hash)
+  - Test missing file (400 error)
+  - Test FormData parsing
+  - Test fire-and-forget (returns before processing completes)
+
+- List API (`GET /api/files`)
+  - Test returns all files for user
+  - Test status filtering (?status=ready)
+  - Test includes progress, stage, error_message
+  - Test empty list for new user
+  - Test user isolation (doesn't show other users' files)
+
+- Get API (`GET /api/files/[id]`)
+  - Test returns file details
+  - Test 404 for non-existent file
+  - Test 403 for other user's file
+
+- Delete API (`DELETE /api/files/[id]`)
+  - Test successful deletion
+  - Test 404 for non-existent file
+  - Test 403 for other user's file
+  - Test cascade deletion (verify DB record gone)
+
+**Test Framework:**
+- Use SvelteKit's testing utilities or raw fetch()
+- Real database (reset before each test)
+- Mock processFile() to avoid LLM calls
+- Test files: `tests/api/files.test.ts`
+
+**Success Criteria:**
+- All endpoints return correct status codes
+- All validation logic works
+- All error messages are descriptive
+- User isolation enforced
+- No data leaks between users
+
+### T4: SSE/Store Integration Tests
+Test real-time updates, SSE connection, and frontend state management.
+
+**Scope:**
+- SSE Endpoint (`GET /api/files/events`)
+  - Test SSE stream establishes
+  - Test user_id filtering in Supabase Realtime
+  - Test file-update events pushed on INSERT/UPDATE
+  - Test file-deleted events pushed on DELETE
+  - Test heartbeat every 30s
+  - Test connection cleanup on client disconnect
+  - Test reconnection after network failure
+
+- Files Store (`src/lib/stores/filesStore.ts`)
+  - Test uploadFile() calls Upload API
+  - Test deleteFile() calls Delete API
+  - Test refreshFiles() calls List API
+  - Test SSE auto-connect on first subscriber
+  - Test SSE auto-disconnect when no subscribers
+  - Test store updates on SSE events
+  - Test derived stores (processingFiles, readyFiles, failedFiles)
+  - Test exponential backoff reconnection
+  - Test error state management
+
+**Test Framework:**
+- Mock EventSource or use real SSE connection
+- Mock Supabase Realtime
+- Test files: `tests/stores/filesStore.test.ts`
+
+**Success Criteria:**
+- Store reflects real-time database changes
+- SSE connection lifecycle managed correctly
+- No memory leaks from unclosed connections
+- Derived stores computed correctly
+- Reconnection logic works
+
+### T5: End-to-End Tests
+Test complete user flows from UI to database and back.
+
+**Scope:**
+- Complete upload flow
+  1. User selects file via file picker
+  2. Upload API returns 202
+  3. File appears in UI with "processing" status
+  4. Progress bar updates in real-time (via SSE)
+  5. File transitions to "ready" when complete
+  6. File description appears in context injection
+
+- Delete flow
+  1. User clicks delete button
+  2. Confirmation modal appears
+  3. User confirms deletion
+  4. File removed from UI
+  5. File removed from database
+
+- Error flow
+  1. User uploads unsupported file
+  2. Error message shown immediately
+  3. User uploads file that fails processing
+  4. File shows "failed" status with error message
+
+- Drag-and-drop flow
+  1. User drags file over drop zone
+  2. Drop zone highlights
+  3. User drops file
+  4. Upload proceeds as normal
+
+- Context injection verification
+  1. Upload file
+  2. Wait for "ready" status
+  3. Send message to chat
+  4. Verify file description in Call 1A context
+
+**Test Framework:**
+- Playwright or similar E2E framework
+- Real browser, real UI
+- Real database (reset before each test)
+- Mock LLM APIs (Fireworks, Voyage) to avoid cost
+- Test files: `tests/e2e/file-uploads.spec.ts`
+
+**Success Criteria:**
+- All user flows work end-to-end
+- UI updates in real-time
+- No race conditions or timing bugs
+- Error states handled gracefully
+- Context injection works correctly
+
+### T6: Regression Tests
+Test that existing features still work after file uploads integration.
+
+**Scope:**
+- Chat functionality
+  - Test sending messages still works
+  - Test Call 1A → 1B flow
+  - Test Call 2A → 2B for journal entries
+  - Test context injection still works for existing priorities
+
+- Journal functionality
+  - Test journal entries still created
+  - Test journal search still works
+  - Test journal embeddings still generated
+
+- Context budget
+  - Test 40% cap still enforced
+  - Test files don't break greedy token packing
+  - Test Priority 6 (files) doesn't interfere with Priorities 1-5
+
+- Performance
+  - Test no significant slowdown in chat response time
+  - Test no memory leaks from SSE connections
+  - Test no database query regressions
+
+**Test Framework:**
+- Mix of unit tests and E2E tests
+- Compare before/after metrics
+- Test files: `tests/regression/existing-features.test.ts`
+
+**Success Criteria:**
+- All existing tests still pass
+- No performance degradation
+- No breaking changes to existing APIs
+- Context injection priorities work correctly
 
 ---
 

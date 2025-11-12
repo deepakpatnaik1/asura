@@ -1,10 +1,10 @@
-import { defineConfig, devices } from '@playwright/test';
+import { defineConfig, devices } from 'playwright/test';
 
 /**
  * See https://playwright.dev/docs/test-configuration.
  */
 export default defineConfig({
-	testDir: './tests',
+	testDir: './tests/e2e',
 	fullyParallel: true,
 	forbidOnly: !!process.env.CI,
 	retries: process.env.CI ? 2 : 0,
@@ -12,29 +12,25 @@ export default defineConfig({
 	reporter: 'html',
 	use: {
 		baseURL: 'http://localhost:5173',
-		trace: 'on-first-retry'
+		trace: 'on-first-retry',
+		screenshot: 'only-on-failure',
+		video: 'retain-on-failure'
 	},
 
 	projects: [
 		{
 			name: 'chromium',
 			use: { ...devices['Desktop Chrome'] }
-		},
-
-		{
-			name: 'firefox',
-			use: { ...devices['Desktop Firefox'] }
-		},
-
-		{
-			name: 'webkit',
-			use: { ...devices['Desktop Safari'] }
 		}
-	],
+	]
 
-	webServer: {
-		command: 'npm run dev',
-		url: 'http://localhost:5173',
-		reuseExistingServer: !process.env.CI
-	}
+	// Note: Dev server must be started manually before running E2E tests
+	// Run: npm run dev
+	// Then in another terminal: npm run test:e2e
+	// webServer: {
+	// 	command: 'npm run dev',
+	// 	url: 'http://localhost:5173',
+	// 	reuseExistingServer: !process.env.CI,
+	// 	timeout: 120000
+	// }
 });

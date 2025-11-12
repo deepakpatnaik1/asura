@@ -12,8 +12,15 @@
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"mcp:supabase": "npx @supabase/mcp-server-supabase@latest --project-ref hsxjcowijclwdxcmhbhs",
 		"mcp:playwright": "npx @playwright/mcp@latest",
+		"test": "vitest run",
+		"test:unit": "vitest run tests/unit",
+		"test:integration": "vitest run tests/integration",
+		"test:watch": "vitest",
+		"test:ui": "vitest --ui",
+		"test:coverage": "vitest run --coverage",
 		"test:e2e": "playwright test",
-		"test:e2e:ui": "playwright test --ui"
+		"test:e2e:ui": "playwright test --ui",
+		"test:all": "npm run test && npm run test:e2e"
 	},
 	"devDependencies": {
 		"@playwright/mcp": "^0.0.45",
@@ -23,7 +30,12 @@
 		"@sveltejs/vite-plugin-svelte": "^6.2.1",
 		"@tailwindcss/forms": "^0.5.10",
 		"@tailwindcss/typography": "^0.5.19",
+		"@testing-library/jest-dom": "^6.9.1",
+		"@testing-library/svelte": "^5.2.8",
+		"@vitest/ui": "^4.0.8",
 		"autoprefixer": "^10.4.21",
+		"happy-dom": "^20.0.10",
+		"jsdom": "^27.1.0",
 		"playwright": "^1.57.0-alpha-1761929702000",
 		"postcss": "^8.5.6",
 		"svelte": "^5.41.0",
@@ -31,7 +43,8 @@
 		"tailwindcss": "^4.1.17",
 		"tsx": "^4.20.6",
 		"typescript": "^5.9.3",
-		"vite": "^7.1.10"
+		"vite": "^7.1.10",
+		"vitest": "^4.0.8"
 	},
 	"dependencies": {
 		"@supabase/supabase-js": "^2.80.0",
