@@ -35,6 +35,181 @@ interface SSEEvent {
   };
 }
 
+// ==========================================
+// GLOBAL STATE (Module-level, shared across all SSE connections)
+// ==========================================
+
+// Global Realtime subscription (one per server process)
+let globalRealtimeSubscription: any = null;
+let isSubscriptionActive = false;
+
+// Track all active SSE client connections
+const activeConnections = new Set<ReadableStreamDefaultController>();
+
+// Supabase admin client (reused across connections)
+let supabaseAdmin: any = null;
+
+// Cleanup timer (debounced to avoid rapid subscribe/unsubscribe)
+let cleanupTimer: NodeJS.Timeout | null = null;
+const CLEANUP_DELAY_MS = 5000; // Wait 5s before cleaning up subscription
+
+// ==========================================
+// INITIALIZATION FUNCTION
+// ==========================================
+
+/**
+ * Initialize the global Realtime subscription (called by first connection)
+ * This creates ONE subscription shared by all SSE clients
+ */
+async function initializeGlobalSubscription() {
+  // Guard: Don't create duplicate subscriptions
+  if (isSubscriptionActive) {
+    console.log('[SSE Global] Subscription already active, skipping initialization');
+    return;
+  }
+
+  console.log('[SSE Global] Initializing global Realtime subscription');
+
+  // Create admin client if needed (reused across all connections)
+  if (!supabaseAdmin) {
+    supabaseAdmin = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    console.log('[SSE Global] Created Supabase admin client with SERVICE_ROLE key');
+  }
+
+  // Subscribe to ALL changes on files table
+  // This ONE subscription will receive events and broadcast to all clients
+  globalRealtimeSubscription = supabaseAdmin
+    .channel('files-global')
+    .on('postgres_changes', {
+      event: '*',  // INSERT, UPDATE, DELETE
+      schema: 'public',
+      table: 'files'
+    }, handleRealtimeEvent)
+    .subscribe((status: string) => {
+      console.log('[SSE Global] Subscription status:', status);
+      if (status === 'SUBSCRIBED') {
+        isSubscriptionActive = true;
+        console.log('[SSE Global] Global subscription is now active');
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+        console.error('[SSE Global] Subscription error, status:', status);
+        isSubscriptionActive = false;
+      }
+    });
+}
+
+// ==========================================
+// BROADCAST HANDLER
+// ==========================================
+
+/**
+ * Handle Realtime events and broadcast to ALL active SSE clients
+ * This is the callback for the global Realtime subscription
+ */
+function handleRealtimeEvent(payload: any) {
+  console.log('[SSE Global] Realtime event received:', payload.eventType, payload.new?.id || payload.old?.id || '(no id)');
+
+  // Transform Supabase Realtime payload to SSE format
+  const event = transformPayload(payload);
+
+  // Prepare SSE message
+  const encoder = new TextEncoder();
+  const data = JSON.stringify(event);
+  const message = `data: ${data}\n\n`;
+  const encoded = encoder.encode(message);
+
+  // Broadcast to ALL active connections
+  const deadConnections: ReadableStreamDefaultController[] = [];
+  let successCount = 0;
+
+  for (const controller of activeConnections) {
+    try {
+      controller.enqueue(encoded);
+      successCount++;
+    } catch (error) {
+      console.warn('[SSE Global] Dead connection detected, marking for removal');
+      deadConnections.push(controller);
+    }
+  }
+
+  console.log(`[SSE Global] Broadcasted to ${successCount} clients, ${deadConnections.length} dead connections`);
+
+  // Cleanup dead connections
+  deadConnections.forEach(conn => activeConnections.delete(conn));
+}
+
+/**
+ * Transform Supabase Realtime payload to SSE event format
+ */
+function transformPayload(payload: any): SSEEvent {
+  if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+    return {
+      eventType: 'file-update',
+      timestamp: new Date().toISOString(),
+      file: {
+        id: payload.new.id,
+        filename: payload.new.filename,
+        file_type: payload.new.file_type,
+        status: payload.new.status,
+        progress: payload.new.progress,
+        processing_stage: payload.new.processing_stage,
+        error_message: payload.new.error_message
+      }
+    };
+  } else if (payload.eventType === 'DELETE') {
+    return {
+      eventType: 'file-deleted',
+      timestamp: new Date().toISOString(),
+      file: { id: payload.old.id }
+    };
+  }
+
+  // Fallback (should not happen)
+  console.warn('[SSE Global] Unknown event type:', payload.eventType);
+  return {
+    eventType: 'heartbeat',
+    timestamp: new Date().toISOString()
+  };
+}
+
+// ==========================================
+// CLEANUP FUNCTIONS
+// ==========================================
+
+/**
+ * Schedule cleanup of global subscription (debounced)
+ * Called when a client disconnects - waits 5s before cleanup
+ */
+function scheduleCleanup() {
+  // Cancel any existing cleanup timer
+  if (cleanupTimer) {
+    clearTimeout(cleanupTimer);
+  }
+
+  // Schedule cleanup if no connections remain
+  cleanupTimer = setTimeout(() => {
+    if (activeConnections.size === 0 && globalRealtimeSubscription) {
+      console.log('[SSE Global] No active connections, cleaning up subscription');
+      globalRealtimeSubscription.unsubscribe();
+      globalRealtimeSubscription = null;
+      isSubscriptionActive = false;
+      supabaseAdmin = null;
+      console.log('[SSE Global] Cleanup complete');
+    }
+  }, CLEANUP_DELAY_MS);
+}
+
+/**
+ * Cancel scheduled cleanup
+ * Called when a new client connects within the cleanup window
+ */
+function cancelCleanup() {
+  if (cleanupTimer) {
+    console.log('[SSE Global] Canceling scheduled cleanup');
+    clearTimeout(cleanupTimer);
+    cleanupTimer = null;
+  }
+}
+
 export const GET: RequestHandler = async ({ request }) => {
   try {
     // 1. AUTHENTICATION CHECK
@@ -43,161 +218,71 @@ export const GET: RequestHandler = async ({ request }) => {
 
     // Variables shared between start() and cancel() callbacks
     let heartbeatInterval: NodeJS.Timeout | null = null;
-    let isClosed = false;
-    let subscription: any;
 
     // 2. CREATE READABLE STREAM FOR SSE
     const stream = new ReadableStream({
       async start(controller) {
         const encoder = new TextEncoder();
 
-        // Helper: Send SSE event
-        const sendEvent = (event: SSEEvent) => {
-          if (isClosed) return;
+        // Add this connection to the global set
+        activeConnections.add(controller);
+        console.log('[SSE] Client connected, total connections:', activeConnections.size);
 
-          const data = JSON.stringify(event);
-          const message = `data: ${data}\n\n`;
+        // Cancel any pending cleanup (in case of reconnection within 5s window)
+        cancelCleanup();
 
-          try {
-            controller.enqueue(encoder.encode(message));
-          } catch (error) {
-            console.error('[SSE] Failed to enqueue event:', error);
-            isClosed = true;
-            if (heartbeatInterval) {
-              clearInterval(heartbeatInterval);
-              heartbeatInterval = null;
-            }
-            try {
-              controller.close();
-            } catch {
-              // Controller already closed - ignore
-            }
-          }
-        };
+        // Initialize global subscription if not already active
+        if (!isSubscriptionActive) {
+          await initializeGlobalSubscription();
+        }
 
-        // Helper: Send heartbeat
-        const sendHeartbeat = () => {
-          if (isClosed) return;
-          sendEvent({
-            eventType: 'heartbeat',
-            timestamp: new Date().toISOString()
-          });
-        };
+        // Send initial heartbeat
+        const heartbeat = encoder.encode(`data: ${JSON.stringify({
+          eventType: 'heartbeat',
+          timestamp: new Date().toISOString()
+        })}\n\n`);
 
         try {
-          // 3. SET UP SUPABASE REALTIME SUBSCRIPTION
-          console.log('[SSE] Setting up Realtime subscription for channel:', `files-${userId}`);
-
-          // Create a SERVICE_ROLE client for server-side Realtime subscriptions
-          // ANON key doesn't have sufficient permissions for server-side Realtime
-          const supabaseAdmin = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-          console.log('[SSE] Using SERVICE_ROLE key for Realtime subscription');
-
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          subscription = (supabaseAdmin as any)
-            .channel(`files-${userId}`)
-            .on(
-              'postgres_changes',
-              {
-                event: '*',  // Listen to INSERT, UPDATE, DELETE
-                schema: 'public',
-                table: 'files'
-                // TEMP: Removed filter to test if it's blocking events
-                // filter: userId === null ? 'user_id=is.null' : `user_id=eq.${userId}`
-              },
-              (payload: { eventType: string; new?: FilesTablePayload['new']; old?: FilesTablePayload['old'] }) => {
-                if (isClosed) return;
-
-                // DEBUG: Log all incoming payloads
-                console.log('[SSE] Realtime payload received:', JSON.stringify(payload, null, 2));
-
-                // Handle different event types
-                if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-                  if (payload.new) {
-                    sendEvent({
-                      eventType: 'file-update',
-                      timestamp: new Date().toISOString(),
-                      file: {
-                        id: payload.new.id,
-                        filename: payload.new.filename,
-                        file_type: payload.new.file_type,
-                        status: payload.new.status,
-                        progress: payload.new.progress,
-                        processing_stage: payload.new.processing_stage,
-                        error_message: payload.new.error_message
-                      }
-                    });
-                  }
-                } else if (payload.eventType === 'DELETE') {
-                  if (payload.old) {
-                    sendEvent({
-                      eventType: 'file-deleted',
-                      timestamp: new Date().toISOString(),
-                      file: {
-                        id: payload.old.id
-                      }
-                    });
-                  }
-                }
-              }
-            )
-            .subscribe((status: string) => {
-              console.log('[SSE] Realtime subscription status:', status);
-            });
-
-          // 4. SET UP HEARTBEAT (every 30 seconds)
-          heartbeatInterval = setInterval(sendHeartbeat, 30000);
-
-          // 5. HANDLE STREAM CLOSURE
-          // Note: ReadableStream controller is cancelled when client disconnects
-          // We don't have direct access to the close event, but we can handle errors
-          const originalClose = controller.close.bind(controller);
-          controller.close = () => {
-            isClosed = true;
-            if (heartbeatInterval) {
-              clearInterval(heartbeatInterval);
-            }
-            subscription.unsubscribe();
-            try {
-              originalClose();
-            } catch (error) {
-              // Ignore - stream may already be closed
-              console.debug('[SSE] Stream already closed:', error);
-            }
-          };
-
+          controller.enqueue(heartbeat);
+          console.log('[SSE] Initial heartbeat sent');
         } catch (error) {
-          console.error('[SSE] Subscription setup error:', error);
-          isClosed = true;
+          console.error('[SSE] Failed to send initial heartbeat:', error);
+        }
 
-          // Send error event before closing
-          sendEvent({
-            eventType: 'heartbeat',  // Fallback event type
-            timestamp: new Date().toISOString()
-          });
-
-          if (heartbeatInterval) {
-            clearInterval(heartbeatInterval);
+        // Set up heartbeat interval (every 30s)
+        heartbeatInterval = setInterval(() => {
+          try {
+            controller.enqueue(heartbeat);
+          } catch (error) {
+            console.warn('[SSE] Heartbeat failed, connection likely dead');
+            clearInterval(heartbeatInterval!);
             heartbeatInterval = null;
           }
-
-          controller.close();
-        }
+        }, 30000);
       },
 
-      cancel() {
+      cancel(controller) {
         // Called when client disconnects (browser closes connection, network loss, etc.)
-        console.log(`[SSE] Stream cancelled for user: ${userId}`);
-        isClosed = true;
+        console.log('[SSE] Client disconnected');
+
+        // Remove this connection from the global set
+        activeConnections.delete(controller);
+        console.log('[SSE] Remaining connections:', activeConnections.size);
+
+        // Clear heartbeat interval
         if (heartbeatInterval) {
           clearInterval(heartbeatInterval);
           heartbeatInterval = null;
         }
-        subscription.unsubscribe();
+
+        // Schedule cleanup if this was the last connection
+        if (activeConnections.size === 0) {
+          scheduleCleanup();
+        }
       }
     });
 
-    // 6. RETURN RESPONSE WITH PROPER SSE HEADERS
+    // 3. RETURN RESPONSE WITH PROPER SSE HEADERS
     return new Response(stream, {
       status: 200,
       headers: {
