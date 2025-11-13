@@ -58,7 +58,15 @@ export const GET: RequestHandler = async ({ request }) => {
           } catch (error) {
             console.error('[SSE] Failed to enqueue event:', error);
             isClosed = true;
-            controller.close();
+            if (heartbeatInterval) {
+              clearInterval(heartbeatInterval);
+              heartbeatInterval = null;
+            }
+            try {
+              controller.close();
+            } catch {
+              // Controller already closed - ignore
+            }
           }
         };
 
@@ -131,7 +139,12 @@ export const GET: RequestHandler = async ({ request }) => {
               clearInterval(heartbeatInterval);
             }
             subscription.unsubscribe();
-            originalClose();
+            try {
+              originalClose();
+            } catch (error) {
+              // Ignore - stream may already be closed
+              console.debug('[SSE] Stream already closed:', error);
+            }
           };
 
         } catch (error) {
@@ -146,6 +159,7 @@ export const GET: RequestHandler = async ({ request }) => {
 
           if (heartbeatInterval) {
             clearInterval(heartbeatInterval);
+            heartbeatInterval = null;
           }
 
           controller.close();
@@ -155,6 +169,12 @@ export const GET: RequestHandler = async ({ request }) => {
       cancel() {
         // Called when client disconnects (browser closes connection, network loss, etc.)
         console.log(`[SSE] Stream cancelled for user: ${userId}`);
+        isClosed = true;
+        if (heartbeatInterval) {
+          clearInterval(heartbeatInterval);
+          heartbeatInterval = null;
+        }
+        subscription.unsubscribe();
       }
     });
 
