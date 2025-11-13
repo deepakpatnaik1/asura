@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Icon } from 'svelte-icons-pack';
-	import { LuStar, LuCopy, LuTrash2, LuArchive, LuRefreshCw, LuPaperclip, LuFolder, LuChevronDown, LuSettings, LuLogOut, LuCloudDownload, LuEllipsisVertical, LuArrowDown, LuArrowUp, LuMessageSquare, LuFlame } from 'svelte-icons-pack/lu';
+	import { LuStar, LuCopy, LuTrash2, LuArchive, LuRefreshCw, LuPaperclip, LuFolder, LuChevronDown, LuSettings, LuLogOut, LuCloudDownload, LuEllipsisVertical, LuArrowDown, LuArrowUp, LuMessageSquare, LuFlame, LuX } from 'svelte-icons-pack/lu';
 	import { currentMessage, isLoading, sendMessage } from '$lib/stores/chat';
 	import {
 		files,
@@ -257,6 +257,36 @@
 			console.error('Nuke error:', error);
 		}
 	}
+
+	// Close file dropdown on Escape key or click outside
+	$effect(() => {
+		if (!showFileList) return;
+
+		const handleEscape = (e: KeyboardEvent) => {
+			if (e.key === 'Escape') {
+				showFileList = false;
+			}
+		};
+
+		const handleClickOutside = (e: MouseEvent) => {
+			const target = e.target as HTMLElement;
+			// Close if clicking outside both the dropdown and the folder button
+			if (
+				!target.closest('.file-list-container') &&
+				!target.closest('.file-list-btn')
+			) {
+				showFileList = false;
+			}
+		};
+
+		document.addEventListener('keydown', handleEscape);
+		document.addEventListener('click', handleClickOutside);
+
+		return () => {
+			document.removeEventListener('keydown', handleEscape);
+			document.removeEventListener('click', handleClickOutside);
+		};
+	});
 </script>
 
 <div class="chat-container">
@@ -369,19 +399,18 @@
 					/>
 
 					<!-- File list toggle button (show file count) -->
-					{#if $files.length > 0}
-						<button
-							class="control-btn file-list-btn"
-							title={`Files (${$files.length})`}
-							onclick={() => (showFileList = !showFileList)}
-						>
-							<Icon src={LuFolder} size="11" />
+					<button
+						class="control-btn file-list-btn"
+						title={`Files (${$files.length})`}
+						onclick={() => (showFileList = !showFileList)}
+					>
+						<Icon src={LuFolder} size="11" />
+						{#if $files.length > 0}
 							<span class="file-count">{$files.length}</span>
-						</button>
-					{/if}
+						{/if}
+					</button>
 
 					<button class="control-btn" title="Download from cloud"><Icon src={LuCloudDownload} size="11" /></button>
-					<button class="control-btn" title="Browse folder"><Icon src={LuFolder} size="11" /></button>
 
 					<div class="model-dropdown">
 						<span class="model-name">Qwen 2.5 32B</span>
@@ -423,7 +452,7 @@
 	</div>
 
 	<!-- File List Dropdown -->
-	{#if showFileList && $files.length > 0}
+	{#if showFileList}
 		<div class="file-list-container">
 			<!-- Error message -->
 			{#if $error}
@@ -445,9 +474,17 @@
 					class="file-list-close-btn"
 					onclick={() => (showFileList = false)}
 				>
-					<Icon src={LuChevronDown} size="11" />
+					<Icon src={LuX} size="11" />
 				</button>
 			</div>
+
+			<!-- Empty state -->
+			{#if $files.length === 0}
+				<div class="file-list-empty">
+					<p>No files uploaded yet</p>
+					<p class="file-list-empty-hint">Click the paperclip to upload a file</p>
+				</div>
+			{/if}
 
 			<!-- Processing files section -->
 			{#if $processingFiles.length > 0}
@@ -1344,6 +1381,23 @@
 	.modal-btn-confirm:hover {
 		background: rgb(217, 133, 107);
 		border-color: rgb(217, 133, 107);
+	}
+
+	/* Empty state styling */
+	.file-list-empty {
+		padding: 32px 16px;
+		text-align: center;
+		color: hsl(var(--muted-foreground));
+	}
+
+	.file-list-empty p {
+		margin: 0 0 8px 0;
+		font-size: 0.95em;
+	}
+
+	.file-list-empty-hint {
+		font-size: 0.85em;
+		opacity: 0.7;
 	}
 
 	/* Scrollbar styling for file list */
