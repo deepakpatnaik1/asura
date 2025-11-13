@@ -271,10 +271,11 @@
 
 		const handleClickOutside = (e: MouseEvent) => {
 			const target = e.target as HTMLElement;
-			// Close if clicking outside both the dropdown and the folder button
+			// Close if clicking outside the dropdown, folder button, and delete modal
 			if (
-				!target.closest('.file-list-container') &&
-				!target.closest('.file-list-btn')
+				!target.closest('.files-dropdown') &&
+				!target.closest('.file-list-btn') &&
+				!target.closest('.modal-overlay')
 			) {
 				showFileList = false;
 			}
