@@ -1,5 +1,7 @@
 import type { RequestHandler } from './$types';
-import { supabase } from '$lib/supabase';
+import { createClient } from '@supabase/supabase-js';
+import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
+import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 
 // Types for Supabase Realtime payload
 interface FilesTablePayload {
@@ -84,19 +86,30 @@ export const GET: RequestHandler = async ({ request }) => {
 
         try {
           // 3. SET UP SUPABASE REALTIME SUBSCRIPTION
+          console.log('[SSE] Setting up Realtime subscription for channel:', `files-${userId}`);
+
+          // Create a SERVICE_ROLE client for server-side Realtime subscriptions
+          // ANON key doesn't have sufficient permissions for server-side Realtime
+          const supabaseAdmin = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+          console.log('[SSE] Using SERVICE_ROLE key for Realtime subscription');
+
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          subscription = (supabase as any)
+          subscription = (supabaseAdmin as any)
             .channel(`files-${userId}`)
             .on(
               'postgres_changes',
               {
                 event: '*',  // Listen to INSERT, UPDATE, DELETE
                 schema: 'public',
-                table: 'files',
-                filter: userId === null ? 'user_id=is.null' : `user_id=eq.${userId}`
+                table: 'files'
+                // TEMP: Removed filter to test if it's blocking events
+                // filter: userId === null ? 'user_id=is.null' : `user_id=eq.${userId}`
               },
               (payload: { eventType: string; new?: FilesTablePayload['new']; old?: FilesTablePayload['old'] }) => {
                 if (isClosed) return;
+
+                // DEBUG: Log all incoming payloads
+                console.log('[SSE] Realtime payload received:', JSON.stringify(payload, null, 2));
 
                 // Handle different event types
                 if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
@@ -128,7 +141,9 @@ export const GET: RequestHandler = async ({ request }) => {
                 }
               }
             )
-            .subscribe();
+            .subscribe((status: string) => {
+              console.log('[SSE] Realtime subscription status:', status);
+            });
 
           // 4. SET UP HEARTBEAT (every 30 seconds)
           heartbeatInterval = setInterval(sendHeartbeat, 30000);

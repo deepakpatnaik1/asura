@@ -112,7 +112,7 @@ export const DELETE: RequestHandler = async ({ params }) => {
       .from('files')
       .select('id')
       .eq('id', id)
-      .eq('user_id', userId)
+      .is('user_id', null)
       .single();
 
     if (queryError) {
@@ -147,7 +147,7 @@ export const DELETE: RequestHandler = async ({ params }) => {
       .from('files')
       .delete()
       .eq('id', id)
-      .eq('user_id', userId);
+      .is('user_id', null);
 
     if (deleteError) {
       console.error('[Delete File API] Delete error:', deleteError);
