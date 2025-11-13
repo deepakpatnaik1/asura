@@ -116,7 +116,7 @@ export function createMockStorageObject(name: string, size: number = 1024) {
 		name,
 		id: 'mock-id',
 		updated_at: new Date().toISOString(),
-		created_at: new Date().toISOString(),
+		uploaded_at: new Date().toISOString(),
 		last_accessed_at: new Date().toISOString(),
 		metadata: {
 			size,

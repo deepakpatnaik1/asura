@@ -1,4 +1,5 @@
 import { writable, derived, type Writable, type Derived } from 'svelte/store';
+import { browser } from '$app/environment';
 
 // ============================================================================
 // TYPES
@@ -16,7 +17,7 @@ export interface FileItem {
 	progress: number;
 	processing_stage: ProcessingStage | null;
 	error_message: string | null;
-	created_at: string;
+	uploaded_at: string;
 	updated_at: string;
 }
 
@@ -111,7 +112,7 @@ export async function uploadFile(file: File): Promise<string> {
 			progress: 0,
 			processing_stage: null,
 			error_message: null,
-			created_at: new Date().toISOString(),
+			uploaded_at: new Date().toISOString(),
 			updated_at: new Date().toISOString()
 		};
 
@@ -158,6 +159,12 @@ export async function deleteFile(id: string): Promise<void> {
  * Useful for: manual sync, after network recovery, etc.
  */
 export async function refreshFiles(): Promise<void> {
+	// Guard: Only run in browser
+	if (!browser) {
+		console.log('[Files Store] Skipping refreshFiles() - not in browser');
+		return;
+	}
+
 	try {
 		clearError();
 
@@ -236,6 +243,12 @@ export function isProcessing(id: string): boolean {
  * Set up SSE connection (call once on first subscriber)
  */
 function connectSSE(): void {
+	// Guard: Only run in browser
+	if (!browser) {
+		console.log('[Files Store] Skipping connectSSE() - not in browser');
+		return;
+	}
+
 	if (eventSource) return; // Already connected
 
 	console.log('[Files Store] Connecting to SSE...');
@@ -358,6 +371,12 @@ function handleSSEEvent(data: any): void {
  * Fetch files from server
  */
 async function fetchFiles(): Promise<FileItem[]> {
+	// Guard: Only run in browser
+	if (!browser) {
+		console.log('[Files Store] Skipping fetchFiles() - not in browser');
+		return [];
+	}
+
 	const response = await fetch('/api/files');
 	const json = await response.json();
 
@@ -433,7 +452,8 @@ const originalFilesSubscribe = files.subscribe.bind(files);
 files.subscribe = function (this: typeof files, fn) {
 	subscriberCount++;
 
-	if (subscriberCount === 1) {
+	// Guard: Only initialize on first subscriber in browser
+	if (subscriberCount === 1 && browser) {
 		// First subscriber - initialize data and connect to SSE
 		(async () => {
 			try {
@@ -454,7 +474,8 @@ files.subscribe = function (this: typeof files, fn) {
 	return () => {
 		subscriberCount--;
 
-		if (subscriberCount === 0) {
+		// Guard: Only disconnect in browser
+		if (subscriberCount === 0 && browser) {
 			// Last subscriber unsubscribed - disconnect SSE
 			disconnectSSE();
 		}

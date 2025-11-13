@@ -625,8 +625,564 @@ Added `$effect` hook with:
 - ✅ Escape key closes dropdown
 - ✅ Clicking outside dropdown closes it
 - ✅ Clicking on folder button still toggles dropdown
-- 🔧 Close button icon needs update: Currently shows chevron-down, should be X icon
+- ✅ Close button icon updated to X (LuX icon)
 
-**Next**: Fix close button icon from chevron to X
+**Commit Created**: `6112b3d` - "Fix file dropdown UX: Always visible, escape/click-outside close, X icon"
 
 ---
+
+## Test 5: File Upload - End to End Test
+
+**Objective**: Test the complete file upload flow after all bug fixes (BUG-014 through BUG-018)
+
+**Setup**:
+- All previous bugs fixed and committed
+- BUG-015: Authentication checks removed from all file endpoints
+- BUG-018: Database schema mismatches fixed (uploaded_at, NULL handling)
+- BUG-016/017: Duplicate button removed, ID mismatch fixed
+- Dropdown UX improvements complete
+
+**Test Plan**:
+1. Click paperclip icon
+2. Select a small text file from native file picker
+3. Observe file upload progress
+4. Verify file appears in dropdown with correct status
+5. Monitor progress updates via SSE
+6. Verify final status is "ready"
+
+**Expected Behavior**:
+- File picker opens successfully
+- File uploads without 401 Unauthorized error
+- File appears in dropdown immediately with "pending" status
+- Progress updates show: extraction → compression → embedding → finalization
+- Final status: "ready" with 100% progress
+- No errors in console
+- SSE updates work correctly
+
+**Test Result**: ❌ FAILED - Server crashed
+
+**Issue**: Dev server crashed with multiple critical errors
+
+---
+
+## Test 5 Investigation: Server Crash Analysis
+
+### Error Log Analysis
+
+**Critical Errors Found**:
+
+1. **SSR Fetch Error** (filesStore.ts:186):
+```
+Error: Cannot call `fetch` eagerly during server-side rendering with relative URL (/api/files)
+— put your `fetch` calls inside `onMount` or a `load` function instead
+```
+- **Location**: `src/lib/stores/filesStore.ts:186` (`fetchFiles()`)
+- **Cause**: Store subscription triggers fetch during SSR
+- **Impact**: Initial file list cannot load
+
+2. **EventSource Undefined** (filesStore.ts:243):
+```
+ReferenceError: EventSource is not defined
+```
+- **Location**: `src/lib/stores/filesStore.ts:243` (`connectSSE()`)
+- **Cause**: EventSource API not available during server-side rendering
+- **Impact**: SSE connection fails on server
+
+3. **Controller Already Closed** (events/+server.ts:21):
+```
+TypeError [ERR_INVALID_STATE]: Invalid state: Controller is already closed
+```
+- **Location**: `src/routes/api/files/events/+server.ts:21` (`sendEvent()`)
+- **Cause**: Attempting to enqueue events after controller closed
+- **Impact**: Server crashes completely
+
+### Root Cause
+
+The `filesStore.ts` is trying to run browser-only code (fetch with relative URLs, EventSource) during server-side rendering. This is a **critical architecture issue**.
+
+**Pattern Violation**: Svelte stores that use browser APIs must guard against SSR execution.
+
+### Required Fix
+
+Need to add browser environment checks to filesStore.ts:
+1. Guard `fetchFiles()` with browser check
+2. Guard `connectSSE()` with EventSource availability check
+3. Only run subscription logic in browser context
+
+**Status**: BUG-019 identified - SSR execution of browser-only store code
+
+---
+
+## BUG-019: Fix Implementation
+
+**Issue**: filesStore.ts executes browser-only code during SSR, crashing server
+
+**Fix Applied**: Added browser guards using SvelteKit's `browser` constant
+
+**Subagent Workflow**:
+1. ✅ Plan created by Doer (9.5/10 - APPROVED)
+2. ✅ Implementation by Doer (all 5 changes)
+3. ✅ Code review by Reviewer (10/10 - APPROVED)
+
+**Changes Made** to `src/lib/stores/filesStore.ts`:
+- Line 2: Import `browser` from `$app/environment`
+- Lines 162-166: Guard `refreshFiles()`
+- Lines 240-243: Guard `connectSSE()`
+- Lines 362-365: Guard `fetchFiles()`
+- Lines 437 & 458: Guard subscription logic
+
+**Verification**: Server restarted successfully with NO crashes ✅
+
+---
+
+## Test 6: File Upload - After BUG-019 Fix
+
+**Objective**: Test complete file upload flow after SSR fix
+
+**Setup**:
+- BUG-019 fix applied and server running
+- All previous bugs fixed (BUG-014 through BUG-018)
+- Server no longer crashes on page load
+
+**Test Plan**:
+1. User clicks paperclip icon
+2. Selects small text file from native picker
+3. Observe complete upload progress:
+   - File appears in dropdown with "pending" status
+   - Progress updates via SSE
+   - Stages: extraction → compression → embedding → finalization
+   - Final status: "ready" with 100% progress
+
+**Expected Behavior**:
+- No server crash ✅
+- File picker opens
+- Upload succeeds without 401 error
+- Progress updates work
+- SSE connection active
+- Final status: ready
+
+**Test Result**: ❌ FAILED - File stuck at 0% progress
+
+**Observed Behavior**:
+1. ✅ User clicked paperclip icon
+2. ✅ User selected small text file
+3. ✅ Folder icon dropdown menu appeared
+4. ✅ Badge appeared next to folder icon (showing file count)
+5. ❌ **File stuck at 0% processing** - NO PROGRESS UPDATES
+6. ❌ File does not advance through processing stages
+
+**Critical Issue**: File upload appears to work (UI updates) but processing pipeline is completely stalled.
+
+---
+
+## BUG-020: File Processing Stuck at 0%
+
+**Severity**: CRITICAL - File upload feature completely non-functional
+
+**Symptoms**:
+- File appears in dropdown immediately with "pending" status
+- Progress shows 0%
+- No stage updates (extraction, compression, embedding, finalization)
+- File never reaches "ready" state
+- Badge count increments (UI reactive)
+
+**Investigation Required**: Following bug investigation checklist
+
+---
+
+## BUG-020 Investigation
+
+### Step 1: Check Server Logs
+
+**Server Log Analysis**:
+
+```
+[Vectorization] Generating embedding for text: U.S. Civil War speech. 3 paragraphs, 272 words. Co...
+[Vectorization] Successfully generated 1024-dim embedding
+[FileProcessor] File 9a36240c-5c44-4573-a392-1d68f14e38d1 marked complete on attempt 1
+```
+
+**KEY FINDING**: ✅ Backend processing SUCCESS! File was processed completely.
+
+**Diagnosis**: This is NOT a backend issue. The problem is that **SSE updates are not reaching the frontend**.
+
+### Step 2: Hypothesis - SSE Connection Issue
+
+**Root Cause Theory**: The SSE connection is not established because of our BUG-019 fix.
+
+**Evidence**:
+1. Backend logs show successful processing
+2. Frontend UI shows file stuck at 0%
+3. BUG-019 fix added browser guards to `connectSSE()`
+4. Guard at line 437: `if (subscriberCount === 1 && browser)`
+
+**Suspected Issue**: SSE connection may not be establishing in browser context after BUG-019 guards were added.
+
+### Step 3: Code Investigation - SSE Filter Issue
+
+**Checked**: `/api/files/events/+server.ts` (SSE endpoint)
+
+**CRITICAL DISCOVERY** at line 84:
+```typescript
+filter: `user_id=eq.${userId}`
+```
+
+With `userId = null`, this creates: `user_id=eq.null`
+
+**Problem**: Supabase Realtime filter syntax is different from query syntax:
+- ❌ `user_id=eq.null` → Looks for rows where `user_id = 'null'` (string) → **MATCHES NOTHING**
+- ✅ `user_id=is.null` → Looks for rows where `user_id IS NULL` → **MATCHES UPLOADED FILES**
+
+**Root Cause**: Same null handling issue from BUG-018, but in Realtime subscription filter.
+
+**Evidence**:
+1. SSE connection is established (no browser console errors reported)
+2. Backend processing completes successfully
+3. BUT Realtime filter `user_id=eq.null` doesn't match `user_id IS NULL` rows
+4. Frontend never receives UPDATE events for the file
+
+**This is BUG-020: SSE Realtime Filter Doesn't Match NULL user_id**
+
+---
+
+## BUG-020: SSE Realtime Filter Doesn't Match NULL user_id
+
+### Status
+- **Discovered**: 2025-11-12 (Test 6 - File stuck at 0%)
+- **Severity**: HIGH (Blocks all file progress updates)
+- **Status**: 🔍 DIAGNOSED - Root cause identified
+
+### Description
+Files remain stuck at 0% progress despite successful backend processing. The SSE Realtime subscription uses an incorrect filter that doesn't match rows where `user_id IS NULL`.
+
+### Root Cause
+**File**: `src/routes/api/files/events/+server.ts`
+**Line 84**: `filter: \`user_id=eq.${userId}\``
+
+**Problem**: With `userId = null`, this creates filter `user_id=eq.null` which doesn't match database rows.
+
+**Supabase Realtime Filter Syntax**:
+- Query syntax: `.is('user_id', null)` or `.eq('user_id', value)`
+- Realtime filter syntax: `user_id=is.null` or `user_id=eq.value`
+
+**Current (BROKEN)**:
+```typescript
+filter: `user_id=eq.${userId}`  // With userId=null → "user_id=eq.null" → No matches
+```
+
+**Required (FIX)**:
+```typescript
+// Conditional filter based on userId
+filter: userId === null ? 'user_id=is.null' : `user_id=eq.${userId}`
+```
+
+### Impact
+1. ✅ SSE connection established successfully
+2. ✅ Backend processes files to completion
+3. ❌ Realtime subscription doesn't receive UPDATE events
+4. ❌ Frontend never sees progress updates (stuck at 0%)
+5. ❌ User doesn't see "ready" status or 100% completion
+
+### Evidence
+- Server log: `[FileProcessor] File 9a36240c-5c44-4573-a392-1d68f14e38d1 marked complete`
+- Browser UI: File shows 0% progress, "pending" status
+- SSE filter: `user_id=eq.null` (doesn't match `user_id IS NULL` rows)
+
+### Fix Required
+Update line 84 in `/api/files/events/+server.ts`:
+
+```typescript
+// Current (BROKEN):
+.on(
+  'postgres_changes',
+  {
+    event: '*',
+    schema: 'public',
+    table: 'files',
+    filter: `user_id=eq.${userId}`  // ❌ Breaks with userId=null
+  },
+  // ...
+)
+
+// Fixed:
+.on(
+  'postgres_changes',
+  {
+    event: '*',
+    schema: 'public',
+    table: 'files',
+    filter: userId === null ? 'user_id=is.null' : `user_id=eq.${userId}`  // ✅ Works with null
+  },
+  // ...
+)
+```
+
+### Testing Requirements
+After fix:
+1. Upload small text file
+2. Verify progress updates from 0% → 25% → 50% → 75% → 100%
+3. Verify status updates: pending → processing → ready
+4. Verify stage updates: extraction → compression → embedding → finalization
+5. Verify final file shows "ready" status in dropdown
+
+### Related Bugs
+- **BUG-018**: Database schema mismatches (null handling in queries) - ✅ RESOLVED
+- **BUG-019**: SSR execution of browser-only code - ✅ RESOLVED
+- **BUG-020**: SSE Realtime filter doesn't match NULL user_id - 🔍 DIAGNOSED
+
+### Fix Implementation
+**Date**: 2025-11-12
+**File**: `src/routes/api/files/events/+server.ts`
+**Line 84**: Changed from `filter: \`user_id=eq.${userId}\`` to:
+```typescript
+filter: userId === null ? 'user_id=is.null' : `user_id=eq.${userId}`
+```
+
+**Status**: ✅ IMPLEMENTED - Ready for testing
+
+---
+
+## Test 7: File Upload After BUG-020 Fix (SSE Realtime Filter)
+
+### Setup
+- **Date**: 2025-11-12
+- **Dev Server**: Restarted on port 5174 with BUG-020 fix
+- **URL**: http://localhost:5174/
+- **Fix Applied**: SSE Realtime filter now uses `user_id=is.null` for null userId
+
+### Expected Behavior
+1. Click paperclip icon
+2. Select small text file
+3. File appears in dropdown with "pending" status
+4. **Progress updates**: 0% → 25% → 50% → 75% → 100%
+5. **Status updates**: pending → processing → ready
+6. **Stage updates**: extraction → compression → embedding → finalization
+7. Final state: File shows "ready" status with 100% progress
+
+### Test Execution
+**Status**: ❌ FAILED - Duplicate file check blocked upload
+
+**Error Message**: "File already exists"
+
+**User Requirement Discovered**:
+> "Even if a file already exists, I do not want deduplication. I want the file upload to proceed as though it is a new file."
+
+**Root Cause**: Upload endpoint at line 108 calls `createFilePending` with `skipDuplicateCheck: false`
+
+**This is BUG-021: Unwanted Duplicate File Blocking**
+
+---
+
+## BUG-021: Duplicate File Check Blocks Uploads
+
+### Status
+- **Discovered**: 2025-11-12 (Test 7 - File upload after BUG-020 fix)
+- **Severity**: HIGH (Blocks re-upload of same file)
+- **Status**: 🔍 DIAGNOSED
+
+### Description
+Upload endpoint enforces duplicate file checking, preventing users from uploading the same file multiple times. User requirement is to **always allow uploads**, even for duplicate files.
+
+### User Requirement
+**Direct Quote**:
+> "Even if a file already exists, I do not want deduplication. I want the file upload to proceed as though it is a new file."
+
+### Root Cause
+**File**: `src/routes/api/files/upload/+server.ts`
+**Line 108**: `{ skipDuplicateCheck: false } // Check for duplicates`
+
+This passes `false` to the `skipDuplicateCheck` option, which causes `createFilePending()` to check if a file with the same content hash already exists and reject the upload with a DUPLICATE_FILE error.
+
+### Current (BROKEN) Behavior
+```typescript
+const result = await createFilePending(
+  {
+    fileBuffer,
+    filename,
+    userId,
+    contentType
+  },
+  { skipDuplicateCheck: false } // ❌ Blocks duplicate uploads
+);
+```
+
+**Result**:
+- First upload: ✅ Success
+- Second upload (same file): ❌ Error "File already exists"
+
+### Required (FIX) Behavior
+```typescript
+const result = await createFilePending(
+  {
+    fileBuffer,
+    filename,
+    userId,
+    contentType
+  },
+  { skipDuplicateCheck: true } // ✅ Always allow uploads
+);
+```
+
+**Result**:
+- First upload: ✅ Success
+- Second upload (same file): ✅ Success (creates new database record)
+- Nth upload (same file): ✅ Success (always creates new record)
+
+### Impact
+- ❌ Users cannot re-upload the same file for testing
+- ❌ Users cannot upload multiple versions of the same content
+- ❌ System enforces deduplication when user explicitly doesn't want it
+
+### Fix Required
+Change line 108 in `src/routes/api/files/upload/+server.ts`:
+```typescript
+{ skipDuplicateCheck: false } // ❌ Current
+{ skipDuplicateCheck: true }  // ✅ Fixed
+```
+
+### Testing Requirements
+After fix:
+1. Upload test file → Success
+2. Upload same test file again → Success (should create second record)
+3. Upload same test file third time → Success (should create third record)
+4. Verify each upload gets unique database ID
+5. Verify all files appear in dropdown
+
+### Related Context
+- **BUG-016**: Duplicate button issue (resolved) - Related to same `checkDuplicate()` function
+- **Upload endpoint**: Initially designed with deduplication to save storage
+- **User preference**: Explicitly wants NO deduplication - every upload creates new record
+
+### Fix Implementation
+**Date**: 2025-11-12
+**File**: `src/routes/api/files/upload/+server.ts`
+**Line 108**: Changed from:
+```typescript
+{ skipDuplicateCheck: false } // Check for duplicates
+```
+To:
+```typescript
+{ skipDuplicateCheck: true } // Always allow uploads, even for duplicates
+```
+
+**Status**: ✅ IMPLEMENTED - Ready for testing
+
+---
+
+
+## Test 8: File Upload After All Bug Fixes (BUG-014 through BUG-021)
+
+### Setup
+- **Date**: 2025-11-13 (Morning session)
+- **Branch**: file-megafeature
+- **Dev Server**: Running on http://localhost:5173
+- **Playwright Browser**: Open with app loaded
+- **All Previous Bugs**: BUG-014 through BUG-021 fixes implemented (uncommitted)
+
+### Test Objective
+End-to-end file upload test after all 8 bug fixes to verify complete functionality.
+
+### Test Execution
+
+**Pre-Test State**:
+- Dev server restarted with all bug fixes
+- Playwright browser open
+- Database state: Unknown (may contain files from previous test attempts)
+
+**Steps Performed**:
+1. User clicked paperclip icon (file selector button)
+2. Native macOS file picker window opened ✅
+3. User selected file: `gettysburg.txt` (Abraham Lincoln's Gettysburg Address speech)
+4. File picker closed ✅
+5. Folder icon dropdown menu opened ✅
+6. File name appeared in dropdown ✅
+
+**Expected Result**:
+- File shows "Pending 0%" initially
+- Progress updates via SSE: 0% → 25% → 75% → 90% → 100%
+- Status changes: pending → processing → ready
+- Stage updates: extraction → compression → embedding → finalization
+- Final state: File shows "Ready 100%"
+
+**Actual Result**: ❌ PARTIAL SUCCESS - Backend works, UI broken
+
+**What Worked**:
+- ✅ File upload succeeded (no 401 errors, no 500 errors, no duplicate blocking)
+- ✅ File appeared in dropdown menu immediately
+- ✅ File name displayed correctly: `gettysburg.txt`
+
+**What Failed**:
+- ❌ Progress bar stuck at 0% (never moved)
+- ❌ No visible progress updates
+- ❌ Status remained at initial state (likely "Pending")
+
+**User Frustration**:
+> "I ran the test several times, each time asking you to document it."
+
+Multiple upload attempts were made due to frustration with stuck progress bar.
+
+### Critical Discovery: Backend Actually Works
+
+**User Investigation**:
+User asked the AI (in chat interface):
+1. **Question 1**: "Can you see the file that I uploaded?"
+   - **AI Response**: YES
+
+2. **Question 2**: "Can you read the actual contents of the file or are you just assuming the contents from the file name?"
+   - **AI Response**: "No, I can actually read the contents of the file."
+
+**Implication**:
+The AI successfully received and processed the file contents, proving:
+- ✅ File upload endpoint works
+- ✅ File processing pipeline works (extraction, compression, embedding, finalization)
+- ✅ File stored in database successfully
+- ✅ File contents indexed and available for context injection
+- ✅ **Core feature is fully functional**
+
+### Root Cause Isolated: UI Display Bug
+
+**Discovery**:
+> "This is huge. This is a very big win. This means that the AI is actually receiving the file. This means that the file upload is actually being successful. So we can isolate the issue to being entirely a UI issue."
+
+**Diagnosis**:
+- Backend processing: ✅ WORKING PERFECTLY
+- Database storage: ✅ WORKING PERFECTLY
+- Context injection: ✅ WORKING PERFECTLY
+- Frontend progress display: ❌ BROKEN
+
+**The Real Bug**: Progress bar UI not updating despite successful backend processing.
+
+### Possible Causes (To Investigate)
+
+1. **SSE Connection Issue**:
+   - SSE endpoint not sending events
+   - SSE connection not established
+   - SSE events being sent but not received by client
+
+2. **SSE Event Matching Issue**:
+   - File ID mismatch between client and server
+   - SSE events received but not applied to correct file in store
+
+3. **UI Reactivity Issue**:
+   - Files store receiving updates but UI not re-rendering
+   - Svelte reactivity not triggering
+   - Progress bar component not bound correctly
+
+4. **BUG-019 Browser Guards**:
+   - SSE connection guards preventing connection in browser context
+   - Browser check logic incorrect
+
+### Status
+- **Severity**: MEDIUM (Core feature works, but no user feedback)
+- **Impact**: Users don't see progress, think upload failed
+- **Status**: 🔍 NEEDS INVESTIGATION
+
+### Next Steps
+1. Check browser console for SSE errors or JavaScript errors
+2. Check server logs for SSE event broadcasting
+3. Check Network tab for EventSource connection
+4. Verify filesStore is receiving SSE messages
+5. Create BUG-022 documentation after investigation
+
+---
+

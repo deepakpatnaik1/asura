@@ -213,7 +213,7 @@ describe('List Files API Endpoint', () => {
 			// Verify only ready files returned
 		});
 
-		it.skip('should return files in descending order by created_at', async () => {
+		it.skip('should return files in descending order by uploaded_at', async () => {
 			// Create multiple files
 			// Verify returned in newest-first order
 		});
@@ -232,7 +232,7 @@ describe('List Files API Endpoint', () => {
 			// - progress
 			// - processing_stage
 			// - error_message
-			// - created_at
+			// - uploaded_at
 			// - updated_at
 		});
 

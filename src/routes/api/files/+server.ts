@@ -8,18 +8,6 @@ export const GET: RequestHandler = async ({ url }) => {
     // TODO: Replace with actual auth extraction after Chunk 11
     const userId = null;
 
-    if (!userId) {
-      return json(
-        {
-          error: {
-            message: 'Authentication required',
-            code: 'AUTH_REQUIRED'
-          }
-        },
-        { status: 401 }
-      );
-    }
-
     // 2. PARSE QUERY PARAMETERS
     const statusFilter = url.searchParams.get('status');
 
@@ -40,9 +28,16 @@ export const GET: RequestHandler = async ({ url }) => {
     // 3. QUERY DATABASE
     let query = supabase
       .from('files')
-      .select('id, filename, file_type, status, progress, processing_stage, error_message, created_at, updated_at')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
+      .select('id, filename, file_type, status, progress, processing_stage, error_message, uploaded_at, updated_at');
+
+    // Handle null/undefined userId properly (PostgreSQL requires IS NULL, not = 'null')
+    if (userId === null || userId === undefined) {
+      query = query.is('user_id', null);
+    } else {
+      query = query.eq('user_id', userId);
+    }
+
+    query = query.order('uploaded_at', { ascending: false });
 
     // Apply status filter if provided
     if (statusFilter) {

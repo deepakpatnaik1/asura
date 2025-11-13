@@ -39,20 +39,6 @@ export const GET: RequestHandler = async ({ request }) => {
     // TODO: Extract from request headers after Chunk 11 (Google Auth)
     const userId = null;
 
-    if (!userId) {
-      return new Response(
-        'data: {"error":"Authentication required","code":"AUTH_REQUIRED"}\n\n',
-        {
-          status: 401,
-          headers: {
-            'Content-Type': 'text/event-stream',
-            'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive'
-          }
-        }
-      );
-    }
-
     // 2. CREATE READABLE STREAM FOR SSE
     const stream = new ReadableStream({
       async start(controller) {
@@ -95,7 +81,7 @@ export const GET: RequestHandler = async ({ request }) => {
                 event: '*',  // Listen to INSERT, UPDATE, DELETE
                 schema: 'public',
                 table: 'files',
-                filter: `user_id=eq.${userId}`
+                filter: userId === null ? 'user_id=is.null' : `user_id=eq.${userId}`
               },
               (payload: { eventType: string; new?: FilesTablePayload['new']; old?: FilesTablePayload['old'] }) => {
                 if (isClosed) return;

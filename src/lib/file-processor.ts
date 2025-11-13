@@ -76,7 +76,7 @@ export type ProgressCallback = (update: ProgressUpdate) => void | Promise<void>;
 export interface ProcessFileInput {
 	fileBuffer: Buffer;
 	filename: string;
-	userId: string;
+	userId: string | null;
 	contentType: string;
 }
 
@@ -147,16 +147,8 @@ const RETRY_CONFIG = {
 /**
  * Process an uploaded file through the complete pipeline
  *
- * Flow:
- * 1. Validate input (size, type, user_id)
- * 2. Extract text (Chunk 2)
- * 3. Check for duplicates (optional, per-user)
- * 4. Create database record with status=pending
- * 5. Compress content (Chunk 4)
- * 6. Update database with compression results
- * 7. Generate embedding (Chunk 3)
- * 8. Update database with embedding and status=ready
- * 9. Return final ProcessFileOutput
+ * Convenience wrapper that combines createFilePending() + processFileBackground().
+ * For production use, prefer calling these functions separately to return ID quickly.
  *
  * @param input - File data and metadata
  * @param options - Optional processing options
@@ -170,99 +162,143 @@ export async function processFile(
 		skipDuplicateCheck?: boolean;
 	}
 ): Promise<ProcessFileOutput> {
+	// 1. Create pending file (fast)
+	const { fileId, extraction } = await createFilePending(input, {
+		skipDuplicateCheck: options?.skipDuplicateCheck
+	});
+
+	// 2. Process in background (slow) - AWAIT since this is all-in-one function
+	return await processFileBackground(fileId, extraction, input.filename, {
+		onProgress: options?.onProgress
+	});
+}
+
+/**
+ * Create pending file record with initial extraction
+ *
+ * This is the "fast path" - returns real file ID quickly (~1 second)
+ * so client can receive it and match subsequent SSE updates.
+ *
+ * Flow:
+ * 1. Extract text from file
+ * 2. Generate content hash
+ * 3. Check for duplicates (optional)
+ * 4. Create DB record with status='pending', progress=0
+ * 5. Return file ID
+ *
+ * @param input - File data and metadata
+ * @param options - Optional processing options
+ * @returns File ID and extraction data
+ * @throws FileProcessorError for validation or critical failures
+ */
+export async function createFilePending(
+	input: ProcessFileInput,
+	options?: {
+		skipDuplicateCheck?: boolean;
+	}
+): Promise<{
+	fileId: string;
+	extraction: ExtractionResult;
+}> {
 	// 1. Validate input
 	validateProcessFileInput(input);
 
-	let fileId: string | null = null;
-
+	// 2. Extract text from file
+	let extraction: ExtractionResult;
 	try {
-		// Report: Validation started
-		await reportProgress(
-			options?.onProgress,
-			'',
-			'extraction',
-			PROGRESS_MAP.extraction_start,
-			'Validating file...'
-		);
-
-		// 2. Extract text from file
-		let extraction: ExtractionResult;
-		try {
-			extraction = await extractText(input.fileBuffer, input.filename);
-		} catch (error) {
-			if (error instanceof FileExtractionError) {
-				throw new FileProcessorError(
-					`File extraction failed: ${error.message}`,
-					'EXTRACTION_ERROR',
-					'extraction',
-					error
-				);
-			}
-			throw error;
-		}
-
-		// Report: Extraction complete
-		await reportProgress(
-			options?.onProgress,
-			'',
-			'extraction',
-			PROGRESS_MAP.extraction_end,
-			`Extracted text (${extraction.wordCount} words)`
-		);
-
-		// 3. Check for duplicates (per-user scope) - FIX 1 from reviewer
-		if (!options?.skipDuplicateCheck) {
-			try {
-				const duplicate = await checkDuplicate(extraction.contentHash, input.userId);
-				if (duplicate.isDuplicate) {
-					throw new FileProcessorError(
-						`File already exists (duplicate content hash: ${extraction.contentHash.substring(0, 8)}...)`,
-						'DUPLICATE_FILE',
-						'extraction',
-						{ existingFileId: duplicate.existingFileId, contentHash: extraction.contentHash }
-					);
-				}
-			} catch (error) {
-				if (error instanceof FileProcessorError) {
-					throw error;
-				}
-				throw new FileProcessorError(
-					`Duplicate check failed: ${error instanceof Error ? error.message : String(error)}`,
-					'DATABASE_ERROR',
-					'extraction',
-					error
-				);
-			}
-		}
-
-		// 4. Create database record with status=pending
-		try {
-			const createResult = await createFileRecord(
-				input.userId,
-				input.filename,
-				extraction.contentHash,
-				extraction.fileType
-			);
-			fileId = createResult.id;
-		} catch (error) {
+		extraction = await extractText(input.fileBuffer, input.filename);
+	} catch (error) {
+		if (error instanceof FileExtractionError) {
 			throw new FileProcessorError(
-				`Failed to create database record: ${error instanceof Error ? error.message : String(error)}`,
+				`File extraction failed: ${error.message}`,
+				'EXTRACTION_ERROR',
+				'extraction',
+				error
+			);
+		}
+		throw error;
+	}
+
+	// 3. Check for duplicates (per-user scope)
+	if (!options?.skipDuplicateCheck) {
+		try {
+			const duplicate = await checkDuplicate(extraction.contentHash, input.userId);
+			if (duplicate.isDuplicate) {
+				throw new FileProcessorError(
+					`File already exists (duplicate content hash: ${extraction.contentHash.substring(0, 8)}...)`,
+					'DUPLICATE_FILE',
+					'extraction',
+					{ existingFileId: duplicate.existingFileId, contentHash: extraction.contentHash }
+				);
+			}
+		} catch (error) {
+			if (error instanceof FileProcessorError) {
+				throw error;
+			}
+			throw new FileProcessorError(
+				`Duplicate check failed: ${error instanceof Error ? error.message : String(error)}`,
 				'DATABASE_ERROR',
 				'extraction',
 				error
 			);
 		}
+	}
 
-		// Report: Database record created
-		await reportProgress(
-			options?.onProgress,
-			fileId,
-			'extraction',
-			PROGRESS_MAP.extraction_end,
-			'File record created'
+	// 4. Create database record with status=pending
+	let fileId: string;
+	try {
+		const createResult = await createFileRecord(
+			input.userId,
+			input.filename,
+			extraction.contentHash,
+			extraction.fileType
 		);
+		fileId = createResult.id;
+	} catch (error) {
+		throw new FileProcessorError(
+			`Failed to create database record: ${error instanceof Error ? error.message : String(error)}`,
+			'DATABASE_ERROR',
+			'extraction',
+			error
+		);
+	}
 
-		// 5. Compress content (Chunk 4)
+	// 5. Return file ID and extraction
+	return {
+		fileId,
+		extraction
+	};
+}
+
+/**
+ * Complete file processing in background
+ *
+ * This is the "slow path" - compression, embedding, and finalization.
+ * Should be called without awaiting (fire-and-forget) after createFilePending().
+ *
+ * Flow:
+ * 1. Compress extracted text
+ * 2. Update DB with compression progress (25% → 75%)
+ * 3. Generate embedding
+ * 4. Update DB with embedding progress (75% → 90%)
+ * 5. Finalize with status='ready' and progress=100%
+ *
+ * @param fileId - File ID from createFilePending()
+ * @param extraction - Extraction result from createFilePending()
+ * @param filename - Original filename
+ * @param options - Optional processing options
+ * @returns Processing result
+ */
+export async function processFileBackground(
+	fileId: string,
+	extraction: ExtractionResult,
+	filename: string,
+	options?: {
+		onProgress?: ProgressCallback;
+	}
+): Promise<ProcessFileOutput> {
+	try {
+		// 1. Compress content
 		let compression: CompressionResult;
 		try {
 			await reportProgress(
@@ -275,7 +311,7 @@ export async function processFile(
 
 			compression = await compressFile({
 				extractedText: extraction.text,
-				filename: input.filename,
+				filename: filename,
 				fileType: extraction.fileType
 			});
 
@@ -298,7 +334,7 @@ export async function processFile(
 
 				return {
 					id: fileId,
-					filename: input.filename,
+					filename: filename,
 					fileType: extraction.fileType,
 					status: 'failed',
 					error: {
@@ -309,7 +345,7 @@ export async function processFile(
 				};
 			}
 
-			// Unexpected error - update DB and throw
+			// Unexpected error - update DB and return
 			await markFileFailed(
 				fileId,
 				'UNKNOWN_ERROR',
@@ -317,15 +353,20 @@ export async function processFile(
 				'compression'
 			);
 
-			throw new FileProcessorError(
-				`Compression failed: ${error instanceof Error ? error.message : String(error)}`,
-				'COMPRESSION_ERROR',
-				'compression',
-				error
-			);
+			return {
+				id: fileId,
+				filename: filename,
+				fileType: extraction.fileType,
+				status: 'failed',
+				error: {
+					code: 'COMPRESSION_ERROR',
+					message: error instanceof Error ? error.message : String(error),
+					stage: 'compression'
+				}
+			};
 		}
 
-		// 6. Update database with compression results
+		// 2. Update database with compression results
 		try {
 			await updateFileProgress(fileId, {
 				progress: PROGRESS_MAP.compression_end,
@@ -336,7 +377,7 @@ export async function processFile(
 			// Don't throw - continue with embedding
 		}
 
-		// 7. Generate embedding (Chunk 3)
+		// 3. Generate embedding
 		let embedding: number[];
 		try {
 			await reportProgress(
@@ -368,7 +409,7 @@ export async function processFile(
 
 				return {
 					id: fileId,
-					filename: input.filename,
+					filename: filename,
 					fileType: extraction.fileType,
 					status: 'failed',
 					error: {
@@ -379,7 +420,7 @@ export async function processFile(
 				};
 			}
 
-			// Unexpected error - update DB and throw
+			// Unexpected error - update DB and return
 			await markFileFailed(
 				fileId,
 				'UNKNOWN_ERROR',
@@ -387,15 +428,20 @@ export async function processFile(
 				'embedding'
 			);
 
-			throw new FileProcessorError(
-				`Embedding generation failed: ${error instanceof Error ? error.message : String(error)}`,
-				'EMBEDDING_ERROR',
-				'embedding',
-				error
-			);
+			return {
+				id: fileId,
+				filename: filename,
+				fileType: extraction.fileType,
+				status: 'failed',
+				error: {
+					code: 'EMBEDDING_ERROR',
+					message: error instanceof Error ? error.message : String(error),
+					stage: 'embedding'
+				}
+			};
 		}
 
-		// 8. Mark file complete with final results - FIX 2: retry logic
+		// 4. Mark file complete with final results
 		try {
 			await reportProgress(
 				options?.onProgress,
@@ -419,51 +465,33 @@ export async function processFile(
 			// Don't throw - file data is already saved
 		}
 
-		// 9. Return success
+		// 5. Return success
 		return {
 			id: fileId,
-			filename: input.filename,
+			filename: filename,
 			fileType: extraction.fileType,
 			status: 'ready'
 		};
 	} catch (error) {
-		if (error instanceof FileProcessorError) {
-			// If we already have a DB record, update it with the error
-			if (fileId) {
-				try {
-					await markFileFailed(
-						fileId,
-						error.code,
-						error.message,
-						error.stage
-					);
-				} catch (dbError) {
-					console.error('[FileProcessor] Failed to update error status in DB:', dbError);
-				}
-			}
-			throw error;
-		}
-
-		// Unexpected error
-		if (fileId) {
-			try {
-				await markFileFailed(
-					fileId,
-					'UNKNOWN_ERROR',
-					error instanceof Error ? error.message : String(error),
-					'extraction'
-				);
-			} catch (dbError) {
-				console.error('[FileProcessor] Failed to update error status in DB:', dbError);
-			}
-		}
-
-		throw new FileProcessorError(
-			`Unexpected error during file processing: ${error instanceof Error ? error.message : String(error)}`,
+		// Unexpected error - update DB and return
+		await markFileFailed(
+			fileId,
 			'UNKNOWN_ERROR',
-			'extraction',
-			error
+			error instanceof Error ? error.message : String(error),
+			'extraction'
 		);
+
+		return {
+			id: fileId,
+			filename: filename,
+			fileType: extraction.fileType,
+			status: 'failed',
+			error: {
+				code: 'UNKNOWN_ERROR',
+				message: error instanceof Error ? error.message : String(error),
+				stage: 'extraction'
+			}
+		};
 	}
 }
 
@@ -475,7 +503,7 @@ export async function processFile(
  * Create file record in database with initial status=pending
  */
 async function createFileRecord(
-	userId: string,
+	userId: string | null,
 	filename: string,
 	contentHash: string,
 	fileType: FileType
@@ -649,12 +677,20 @@ async function markFileFailed(
  */
 async function checkDuplicate(
 	contentHash: string,
-	userId: string
+	userId: string | null
 ): Promise<{ isDuplicate: boolean; existingFileId?: string }> {
-	const { data, error } = await supabase
+	// Handle null/undefined userId properly (PostgreSQL requires IS NULL, not = 'null')
+	let query = supabase
 		.from('files')
-		.select('id')
-		.eq('user_id', userId)
+		.select('id');
+
+	if (userId === null || userId === undefined) {
+		query = query.is('user_id', null);
+	} else {
+		query = query.eq('user_id', userId);
+	}
+
+	const { data, error } = await query
 		.eq('content_hash', contentHash)
 		.limit(1);
 
@@ -698,24 +734,30 @@ function validateProcessFileInput(input: ProcessFileInput): void {
 		);
 	}
 
-	// Check userId (simple UUID v4 validation)
-	if (!input.userId || typeof input.userId !== 'string') {
+	// Check userId (allow null for single-user mode before Chunk 11 auth)
+	if (!input.userId) {
+		// userId is null or undefined - OK for single-user mode
+		// This will be replaced with real Google Auth UUID in Chunk 11
+		// For now, we allow null to support pre-auth implementation
+	} else if (typeof input.userId !== 'string') {
+		// userId provided but not a string - error
 		throw new FileProcessorError(
-			'User ID is required and must be a string',
+			'User ID must be a string or null',
 			'VALIDATION_ERROR',
 			'extraction',
-			{ received: input.userId }
+			{ received: typeof input.userId }
 		);
-	}
-
-	const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-	if (!uuidRegex.test(input.userId)) {
-		throw new FileProcessorError(
-			'User ID must be a valid UUID',
-			'VALIDATION_ERROR',
-			'extraction',
-			{ received: input.userId }
-		);
+	} else {
+		// userId is a string - validate it's a UUID
+		const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+		if (!uuidRegex.test(input.userId)) {
+			throw new FileProcessorError(
+				'User ID must be a valid UUID',
+				'VALIDATION_ERROR',
+				'extraction',
+				{ received: input.userId }
+			);
+		}
 	}
 
 	// Check contentType

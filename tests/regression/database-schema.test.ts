@@ -81,7 +81,8 @@ describe('Regression: Database Schema', () => {
 
 	describe('no schema conflicts', () => {
 		it('should not have column name conflicts between tables', async () => {
-			// Files table has user_id, id, created_at - same as other tables
+			// Files table has user_id, id, uploaded_at
+			// Journal table has user_id, id, created_at
 			// This test verifies they don't conflict in queries
 
 			const filesQuery = await supabase

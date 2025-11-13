@@ -200,7 +200,7 @@ describe('filesStore', () => {
 										progress: 100,
 										processing_stage: null,
 										error_message: null,
-										created_at: '2024-01-01T00:00:00Z',
+										uploaded_at: '2024-01-01T00:00:00Z',
 										updated_at: '2024-01-01T00:00:00Z'
 									}
 								]
@@ -283,7 +283,7 @@ describe('filesStore', () => {
 					progress: 0,
 					processing_stage: 'extraction',
 					error_message: null,
-					created_at: '2024-01-01T00:00:00Z',
+					uploaded_at: '2024-01-01T00:00:00Z',
 					updated_at: '2024-01-01T00:00:00Z'
 				},
 				{
@@ -294,7 +294,7 @@ describe('filesStore', () => {
 					progress: 50,
 					processing_stage: 'compression',
 					error_message: null,
-					created_at: '2024-01-01T00:00:00Z',
+					uploaded_at: '2024-01-01T00:00:00Z',
 					updated_at: '2024-01-01T00:00:00Z'
 				},
 				{
@@ -305,7 +305,7 @@ describe('filesStore', () => {
 					progress: 100,
 					processing_stage: null,
 					error_message: null,
-					created_at: '2024-01-01T00:00:00Z',
+					uploaded_at: '2024-01-01T00:00:00Z',
 					updated_at: '2024-01-01T00:00:00Z'
 				}
 			]);
@@ -327,7 +327,7 @@ describe('filesStore', () => {
 					progress: 0,
 					processing_stage: 'extraction',
 					error_message: null,
-					created_at: '2024-01-01T00:00:00Z',
+					uploaded_at: '2024-01-01T00:00:00Z',
 					updated_at: '2024-01-01T00:00:00Z'
 				},
 				{
@@ -338,7 +338,7 @@ describe('filesStore', () => {
 					progress: 100,
 					processing_stage: null,
 					error_message: null,
-					created_at: '2024-01-01T00:00:00Z',
+					uploaded_at: '2024-01-01T00:00:00Z',
 					updated_at: '2024-01-01T00:00:00Z'
 				},
 				{
@@ -349,7 +349,7 @@ describe('filesStore', () => {
 					progress: 100,
 					processing_stage: null,
 					error_message: null,
-					created_at: '2024-01-01T00:00:00Z',
+					uploaded_at: '2024-01-01T00:00:00Z',
 					updated_at: '2024-01-01T00:00:00Z'
 				}
 			]);
@@ -371,7 +371,7 @@ describe('filesStore', () => {
 					progress: 50,
 					processing_stage: 'compression',
 					error_message: 'API error',
-					created_at: '2024-01-01T00:00:00Z',
+					uploaded_at: '2024-01-01T00:00:00Z',
 					updated_at: '2024-01-01T00:00:00Z'
 				},
 				{
@@ -382,7 +382,7 @@ describe('filesStore', () => {
 					progress: 100,
 					processing_stage: null,
 					error_message: null,
-					created_at: '2024-01-01T00:00:00Z',
+					uploaded_at: '2024-01-01T00:00:00Z',
 					updated_at: '2024-01-01T00:00:00Z'
 				}
 			]);
@@ -406,7 +406,7 @@ describe('filesStore', () => {
 					progress: 50,
 					processing_stage: 'compression',
 					error_message: null,
-					created_at: '2024-01-01T00:00:00Z',
+					uploaded_at: '2024-01-01T00:00:00Z',
 					updated_at: '2024-01-01T00:00:00Z'
 				}
 			]);
@@ -523,7 +523,7 @@ describe('filesStore', () => {
 					progress: 100,
 					processing_stage: null,
 					error_message: null,
-					created_at: '2024-01-01T00:00:00Z',
+					uploaded_at: '2024-01-01T00:00:00Z',
 					updated_at: '2024-01-01T00:00:00Z'
 				}
 			]);
@@ -580,7 +580,7 @@ describe('filesStore', () => {
 									progress: 100,
 									processing_stage: null,
 									error_message: null,
-									created_at: '2024-01-01T00:00:00Z',
+									uploaded_at: '2024-01-01T00:00:00Z',
 									updated_at: '2024-01-01T00:00:00Z'
 								}
 							]
@@ -672,7 +672,7 @@ describe('filesStore', () => {
 					progress: 25,
 					processing_stage: 'extraction',
 					error_message: null,
-					created_at: '2024-01-01T00:00:00Z',
+					uploaded_at: '2024-01-01T00:00:00Z',
 					updated_at: '2024-01-01T00:00:00Z'
 				}
 			]);
@@ -715,7 +715,7 @@ describe('filesStore', () => {
 					progress: 100,
 					processing_stage: null,
 					error_message: null,
-					created_at: '2024-01-01T00:00:00Z',
+					uploaded_at: '2024-01-01T00:00:00Z',
 					updated_at: '2024-01-01T00:00:00Z'
 				}
 			]);
@@ -752,7 +752,7 @@ describe('filesStore', () => {
 					progress: 100,
 					processing_stage: null,
 					error_message: null,
-					created_at: '2024-01-01T00:00:00Z',
+					uploaded_at: '2024-01-01T00:00:00Z',
 					updated_at: '2024-01-01T00:00:00Z'
 				}
 			]);
@@ -925,7 +925,7 @@ describe('filesStore', () => {
 					progress: 100,
 					processing_stage: null,
 					error_message: null,
-					created_at: '2024-01-01T00:00:00Z',
+					uploaded_at: '2024-01-01T00:00:00Z',
 					updated_at: '2024-01-01T00:00:00Z'
 				}
 			]);
@@ -950,7 +950,7 @@ describe('filesStore', () => {
 					progress: 100,
 					processing_stage: null,
 					error_message: null,
-					created_at: '2024-01-01T00:00:00Z',
+					uploaded_at: '2024-01-01T00:00:00Z',
 					updated_at: '2024-01-01T00:00:00Z'
 				}
 			]);
@@ -975,7 +975,7 @@ describe('filesStore', () => {
 					progress: 50,
 					processing_stage: 'compression',
 					error_message: null,
-					created_at: '2024-01-01T00:00:00Z',
+					uploaded_at: '2024-01-01T00:00:00Z',
 					updated_at: '2024-01-01T00:00:00Z'
 				},
 				{
@@ -986,7 +986,7 @@ describe('filesStore', () => {
 					progress: 100,
 					processing_stage: null,
 					error_message: null,
-					created_at: '2024-01-01T00:00:00Z',
+					uploaded_at: '2024-01-01T00:00:00Z',
 					updated_at: '2024-01-01T00:00:00Z'
 				}
 			]);

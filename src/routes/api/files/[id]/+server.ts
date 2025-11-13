@@ -15,18 +15,6 @@ export const GET: RequestHandler = async ({ params }) => {
     // TODO: Replace with actual auth extraction after Chunk 11
     const userId = null;
 
-    if (!userId) {
-      return json(
-        {
-          error: {
-            message: 'Authentication required',
-            code: 'AUTH_REQUIRED'
-          }
-        },
-        { status: 401 }
-      );
-    }
-
     // 2. VALIDATE FILE ID
     const { id } = params;
     if (!isValidUUID(id)) {
@@ -103,18 +91,6 @@ export const DELETE: RequestHandler = async ({ params }) => {
     // 1. AUTHENTICATION CHECK
     // TODO: Replace with actual auth extraction after Chunk 11
     const userId = null;
-
-    if (!userId) {
-      return json(
-        {
-          error: {
-            message: 'Authentication required',
-            code: 'AUTH_REQUIRED'
-          }
-        },
-        { status: 401 }
-      );
-    }
 
     // 2. VALIDATE FILE ID
     const { id } = params;
