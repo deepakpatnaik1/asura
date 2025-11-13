@@ -1284,3 +1284,803 @@ Before deploying file chunking implementation:
 Files are first-class entities in Asura's perpetual memory. Chunk 0 makes them discoverable, referenceable, and contextually aware. Without it, files are just invisible containers of disconnected content chunks.
 
 **Never forget Chunk 0 again.**
+
+---
+
+## Implementation Plan: 10 Chunks
+
+This section breaks down the implementation into 10 manageable chunks, organized into 4 phases.
+
+**Total Estimated Effort**: ~18 hours
+
+**Critical Path Dependencies**:
+- Chunk 1 (database) must complete before Chunk 7 (save chunks)
+- Chunk 2 (prompts) must complete before Chunks 3 & 5 (compression)
+- Chunks 3-5 (core logic) must complete before Chunk 6 (orchestration)
+- Chunk 6 must complete before Chunk 7
+- Chunks 1-7 must complete before Chunks 9-10 (testing)
+
+**Parallelizable Work**:
+- Chunks 1 & 2 can be done in parallel (no dependencies)
+- Chunks 3, 4, 5 can be done in parallel after Chunk 2
+- Chunks 8, 9 have no dependencies on each other
+
+**Recommended Order**:
+1. Start with Chunks 1 & 2 (foundation)
+2. Then Chunks 3, 4, 5 in parallel (core logic)
+3. Then Chunk 6 (orchestration part 1)
+4. Then Chunk 7 (orchestration part 2)
+5. Then Chunk 8 (progress bar fix)
+6. Finally Chunks 9 & 10 (testing)
+
+---
+
+### Phase 1 - Foundation (1.25 hours)
+
+#### Chunk 1: Database Migration (30 minutes)
+
+**Files to Create**:
+- `supabase/migrations/YYYYMMDDHHMMSS_create_file_chunks_table.sql`
+
+**Schema**:
+```sql
+CREATE TABLE file_chunks (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  file_id UUID NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  chunk_index INTEGER NOT NULL,
+  chunk_text TEXT NOT NULL,
+  description TEXT NOT NULL,
+  embedding vector(1024) NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+
+  CONSTRAINT unique_file_chunk UNIQUE(file_id, chunk_index)
+);
+
+-- HNSW index for fast vector similarity search
+CREATE INDEX file_chunks_embedding_idx
+ON file_chunks
+USING hnsw (embedding vector_cosine_ops)
+WITH (m = 16, ef_construction = 64);
+
+-- Index for file lookups
+CREATE INDEX file_chunks_file_id_idx ON file_chunks(file_id);
+
+-- Index for user queries
+CREATE INDEX file_chunks_user_id_idx ON file_chunks(user_id);
+
+-- RLS policies
+ALTER TABLE file_chunks ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view their own file chunks"
+  ON file_chunks FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert their own file chunks"
+  ON file_chunks FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete their own file chunks"
+  ON file_chunks FOR DELETE
+  USING (auth.uid() = user_id);
+
+-- Vector search function
+CREATE OR REPLACE FUNCTION search_file_chunks(
+  query_embedding vector(1024),
+  match_threshold float DEFAULT 0.7,
+  match_count int DEFAULT 5,
+  filter_user_id uuid DEFAULT NULL
+)
+RETURNS TABLE (
+  id uuid,
+  file_id uuid,
+  chunk_index int,
+  description text,
+  similarity float
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    fc.id,
+    fc.file_id,
+    fc.chunk_index,
+    fc.description,
+    1 - (fc.embedding <=> query_embedding) AS similarity
+  FROM file_chunks fc
+  WHERE
+    (filter_user_id IS NULL OR fc.user_id = filter_user_id)
+    AND 1 - (fc.embedding <=> query_embedding) > match_threshold
+  ORDER BY fc.embedding <=> query_embedding
+  LIMIT match_count;
+END;
+$$;
+```
+
+**Testing**:
+```bash
+# Run migration
+npx supabase db reset
+
+# Verify table exists
+psql postgresql://postgres:postgres@127.0.0.1:54322/postgres -c "\d file_chunks"
+
+# Verify index exists
+psql postgresql://postgres:postgres@127.0.0.1:54322/postgres -c "\di file_chunks_embedding_idx"
+```
+
+**Acceptance Criteria**:
+- [ ] Migration file created in `supabase/migrations/`
+- [ ] `file_chunks` table created with all columns
+- [ ] HNSW vector index created on `embedding` column
+- [ ] Foreign key constraint to `files` table with CASCADE delete
+- [ ] RLS policies enable user isolation
+- [ ] `search_file_chunks` function created
+- [ ] Migration runs successfully
+
+---
+
+#### Chunk 2: Create Compression Prompts (45 minutes)
+
+**Files to Modify**:
+- `/Users/d.patnaik/code/asura/src/lib/system-prompts.ts`
+
+**Prompts to Add**:
+
+**CHUNK_0_COMPRESSION_PROMPT** (metadata-focused):
+```typescript
+export const CHUNK_0_COMPRESSION_PROMPT = `You are compressing the file-level overview of an uploaded document.
+
+**CRITICAL**: This chunk represents the ENTIRE FILE as an entity. Users will search for files by saying things like "that interview transcript" or "the business plan I shared". Your description must enable this discovery.
+
+**Input**: Full file text OR first 2000 words (if file is large)
+
+**Your Task**: Extract file-level metadata and overview that makes this file discoverable.
+
+**What to Capture**:
+1. Document type (interview, business plan, research paper, meeting notes, etc.)
+2. Participants (if any): names, roles, organizations
+3. Main themes and topics (high-level)
+4. Date/time context (if mentioned)
+5. Purpose or context (why this document exists)
+
+**What NOT to Include**:
+- Detailed content from specific sections
+- Granular tactical details
+- Specific quotes or passages
+- Information better suited for detail chunks
+
+**Compression Target**: 200-400 characters
+
+**Output Format**: Plain text description, no JSON
+
+**Example Input** (first 2000 words of 10K word interview):
+"Interview with three cybersecurity experts about AI-powered IT compliance startup...
+[discusses regulatory landscape, technical challenges, market opportunities]"
+
+**Example Output**:
+"Interview: 3 cybersecurity experts on AI compliance startup; regulatory landscape, technical feasibility, market sizing; participants: Dr. Sarah Chen (CISO), Mark Rodriguez (GRC consultant), Prof. James Liu (AI ethics researcher)"
+
+**Remember**: This chunk makes the file discoverable as an entity. Focus on WHO, WHAT (type), WHEN, WHERE context, not detailed content.`;
+```
+
+**MODIFIED_CALL2A_PROMPT** (detail-focused):
+```typescript
+export const MODIFIED_CALL2A_PROMPT = `You are compressing a semantic chunk from a larger document that has already been split at logical topic boundaries.
+
+**Context**: This is chunk {chunk_index} of {total_chunks} from the file "{filename}". The file has already been chunked at natural topic boundaries using semantic similarity.
+
+**Your Task**: Compress this chunk's content while preserving all specific, non-regenerable information.
+
+**What to Preserve**:
+- Specific numbers, dates, names, percentages, dollar amounts
+- Technical details and specifications
+- Unique insights or strategic recommendations
+- Key decisions or action items
+- Exact terminology or definitions
+- Non-obvious facts or data points
+
+**What to Compress Heavily**:
+- Background explanations
+- Step-by-step methodologies (keep decision, compress steps)
+- Examples and analogies
+- Derivable calculations
+- Obvious implications
+- Filler and politeness
+
+**Compression Target**: 300-600 characters per chunk
+
+**Output Format**: Plain text description, no JSON
+
+**Example Input** (chunk about compliance automation):
+"The compliance automation challenge breaks down into three key technical components: 1) Policy ingestion and parsing - we need to handle unstructured regulatory text from multiple sources (GDPR, HIPAA, SOC2)... 2) Control mapping - automatically map regulations to technical controls... 3) Evidence collection - continuously gather proof of compliance..."
+
+**Example Output**:
+"Compliance automation: 3 components - policy parsing (GDPR/HIPAA/SOC2 unstructured text), control mapping (regs→technical controls), evidence collection (continuous proof); key challenge: semantic understanding of regulatory language vs technical implementation"
+
+**Remember**: Future retrieval will search these chunks by semantic similarity. Include enough context that this chunk is discoverable when relevant to user queries.`;
+```
+
+**Testing**:
+```typescript
+// Verify exports
+import { CHUNK_0_COMPRESSION_PROMPT, MODIFIED_CALL2A_PROMPT } from '$lib/system-prompts';
+console.log(CHUNK_0_COMPRESSION_PROMPT.length); // Should be > 1000 chars
+console.log(MODIFIED_CALL2A_PROMPT.length); // Should be > 1000 chars
+```
+
+**Acceptance Criteria**:
+- [ ] `CHUNK_0_COMPRESSION_PROMPT` added to `system-prompts.ts`
+- [ ] `MODIFIED_CALL2A_PROMPT` added to `system-prompts.ts`
+- [ ] Both prompts exported from module
+- [ ] Prompts include clear examples
+- [ ] Prompts specify compression targets (char counts)
+
+---
+
+### Phase 2 - Core Logic (6.5 hours)
+
+#### Chunk 3: Implement File Overview Generation (2 hours)
+
+**Files to Create**:
+- `/Users/d.patnaik/code/asura/src/lib/file-chunker.ts` (new file)
+
+**Implementation**: See API Specifications section above for complete `generateFileOverview()` function.
+
+**Key Functions**:
+- `generateFileOverview(text, filename): Promise<string>`
+- `generateOverviewHeuristic(text, filename): string` (for files < 2000 words)
+- `generateOverviewLLM(firstWords, filename, wordCount): Promise<string>` (for files ≥ 2000 words)
+- `detectDocumentType(filename): string`
+- `extractParticipants(text): string`
+- `countWords(text): number`
+
+**Testing**:
+```typescript
+// Test with small file (< 2000 words)
+const smallText = 'Interview with Bob Smith about startup ideas...'.repeat(100);
+const overview1 = await generateFileOverview(smallText, 'interview.md');
+console.log(overview1.length); // Should be 200-400
+
+// Test with large file (≥ 2000 words)
+const largeText = 'Business plan for AI startup...'.repeat(500);
+const overview2 = await generateFileOverview(largeText, 'plan.md');
+console.log(overview2.length); // Should be 200-400
+```
+
+**Acceptance Criteria**:
+- [ ] `generateFileOverview()` function created
+- [ ] Heuristic path for files < 2000 words
+- [ ] LLM path for files ≥ 2000 words
+- [ ] Overview length 200-400 characters
+- [ ] Helper functions implemented
+- [ ] Proper error handling
+
+**Dependencies**: Chunk 2 (CHUNK_0_COMPRESSION_PROMPT)
+
+---
+
+#### Chunk 4: Implement Semantic Chunking (3 hours)
+
+**Files to Modify**:
+- `/Users/d.patnaik/code/asura/src/lib/file-chunker.ts`
+
+**Implementation**: See API Specifications section above for complete `chunkTextBySemantic()` function.
+
+**Key Functions**:
+- `chunkTextBySemantic(text, targetChunkSize, similarityThreshold): Promise<string[]>`
+- `splitIntoSentences(text): string[]`
+- `generateSentenceEmbeddings(sentences): Promise<number[][]>`
+- `detectTopicBoundaries(embeddings, threshold): Set<number>`
+- `cosineSimilarity(vec1, vec2): number`
+- `groupSentencesIntoChunks(sentences, boundaries, targetSize): string[]`
+- `estimateTokens(text): number`
+
+**Testing**:
+```typescript
+const text = `
+Dr. Sarah Chen is a CISO with 15 years experience. She specializes in compliance automation.
+The regulatory landscape is complex. GDPR and HIPAA have different requirements.
+AI can help automate policy parsing. Machine learning models can extract requirements.
+Technical controls must map to regulations. This is a manual process today.
+`.trim();
+
+const chunks = await chunkTextBySemantic(text, 768, 0.5);
+console.log(`Created ${chunks.length} chunks`);
+chunks.forEach((chunk, i) => console.log(`Chunk ${i}: ${chunk.slice(0, 100)}...`));
+```
+
+**Acceptance Criteria**:
+- [ ] `chunkTextBySemantic()` function created
+- [ ] Sentence splitting with abbreviation handling
+- [ ] Batch embedding generation with rate limiting
+- [ ] Cosine similarity calculation
+- [ ] Topic boundary detection (similarity < threshold)
+- [ ] Chunk grouping respects target size
+- [ ] Returns array of text chunks
+
+**Dependencies**: `generateEmbedding()` from `vectorization.ts`
+
+---
+
+#### Chunk 5: Modify File Compressor for Chunk Support (1.5 hours)
+
+**Files to Modify**:
+- `/Users/d.patnaik/code/asura/src/lib/file-compressor.ts`
+
+**Implementation**: See API Specifications section above for complete `compressChunk()` function.
+
+**Key Changes**:
+- Replace `compressFile()` with `compressChunk()`
+- Accept `chunkIndex` parameter
+- Select prompt based on `chunkIndex === 0` (Chunk 0) vs `> 0` (detail chunks)
+- Maintain Call 2A → Call 2B pattern
+- Different max tokens for Chunk 0 (150) vs detail chunks (250)
+
+**Testing**:
+```typescript
+// Test Chunk 0 compression
+const overview = await compressChunk(
+  'Interview with Dr. Sarah Chen about AI compliance...',
+  'interview.md',
+  0, // Chunk 0
+  5  // Total chunks
+);
+console.log('Chunk 0:', overview);
+
+// Test detail chunk compression
+const detail = await compressChunk(
+  'The regulatory landscape includes GDPR, HIPAA, SOC2...',
+  'interview.md',
+  1, // Chunk 1
+  5
+);
+console.log('Chunk 1:', detail);
+```
+
+**Acceptance Criteria**:
+- [ ] `compressChunk()` function created (replaces `compressFile()`)
+- [ ] Chunk 0 uses `CHUNK_0_COMPRESSION_PROMPT`
+- [ ] Chunks 1+ use `MODIFIED_CALL2A_PROMPT` with interpolated variables
+- [ ] Call 2A → Call 2B pattern maintained
+- [ ] Different max tokens for Chunk 0 (150) vs detail chunks (250)
+- [ ] Proper logging for debugging
+
+**Dependencies**: Chunk 2 (compression prompts)
+
+---
+
+### Phase 3 - Integration (4.5 hours)
+
+#### Chunk 6: Update File Processor - Orchestration Part 1 (2 hours)
+
+**Files to Modify**:
+- `/Users/d.patnaik/code/asura/src/lib/file-processor.ts`
+
+**Changes to PROGRESS_MAP**:
+```typescript
+const PROGRESS_MAP = {
+  extraction_start: 0,
+  extraction_end: 10,      // Updated: Was 25, now 10
+  chunking_start: 10,      // New
+  chunking_end: 20,        // New
+  compression_start: 20,   // Updated: Was 25
+  compression_end: 75,
+  embedding_start: 75,
+  embedding_end: 90,
+  finalization_start: 90,
+  finalization_end: 100
+} as const;
+```
+
+**Implementation**:
+```typescript
+export async function processFileBackground(fileId: string, text: string, filename: string) {
+  try {
+    // PHASE 0: Generate Chunk 0 (file-level overview)
+    await reportProgress(fileId, 'chunking', 10, 'Generating file overview...');
+    const overviewText = await generateFileOverview(text, filename);
+
+    // PHASE 1: Semantic chunking (detail chunks)
+    await reportProgress(fileId, 'chunking', 15, 'Analyzing document structure...');
+    const detailChunks = await chunkTextBySemantic(text, 768, 0.5);
+
+    const totalChunks = 1 + detailChunks.length; // Chunk 0 + detail chunks
+    console.log(`[Processor] File chunked into ${totalChunks} chunks (1 overview + ${detailChunks.length} detail)`);
+
+    await reportProgress(fileId, 'chunking', 20, `Created ${totalChunks} chunks`);
+
+    // Update files table with chunk count
+    await updateFileChunkCount(fileId, totalChunks);
+
+    // Continue to Phase 2 in Chunk 7...
+
+  } catch (error) {
+    await markFileFailed(fileId, 'CHUNKING_ERROR', error.message, 'chunking');
+  }
+}
+
+async function updateFileChunkCount(fileId: string, chunkCount: number): Promise<void> {
+  const { error } = await supabase
+    .from('files')
+    .update({ chunk_count: chunkCount })
+    .eq('id', fileId);
+
+  if (error) {
+    throw new Error(`Failed to update chunk count: ${error.message}`);
+  }
+}
+```
+
+**Testing**:
+```typescript
+// Test with 10K word file
+const fileId = '123e4567-e89b-12d3-a456-426614174000';
+const text = fs.readFileSync('docs/working/AI-powered IT Compliance.md', 'utf-8');
+const filename = 'AI-powered IT Compliance.md';
+
+await processFileBackground(fileId, text, filename);
+
+// Verify chunk_count updated
+const { data } = await supabase
+  .from('files')
+  .select('chunk_count')
+  .eq('id', fileId)
+  .single();
+
+console.log(`File chunked into ${data.chunk_count} chunks`);
+```
+
+**Acceptance Criteria**:
+- [ ] `processFileBackground()` calls `generateFileOverview()`
+- [ ] Calls `chunkTextBySemantic()` for detail chunks
+- [ ] Updates `files.chunk_count` column
+- [ ] Progress reporting at 10%, 15%, 20%
+- [ ] Error handling for chunking phase
+- [ ] PROGRESS_MAP updated with chunking phase
+
+**Dependencies**: Chunks 3, 4 (chunking functions)
+
+---
+
+#### Chunk 7: Update File Processor - Orchestration Part 2 (2.5 hours)
+
+**Files to Modify**:
+- `/Users/d.patnaik/code/asura/src/lib/file-processor.ts`
+
+**Implementation** (continuation of `processFileBackground()`):
+```typescript
+export async function processFileBackground(fileId: string, text: string, filename: string) {
+  try {
+    // ... PHASE 0 & 1 from Chunk 6 ...
+
+    // PHASE 2: Compress and embed all chunks
+    const allChunks = [overviewText, ...detailChunks];
+
+    for (let i = 0; i < allChunks.length; i++) {
+      const chunkText = allChunks[i];
+      const chunkIndex = i;
+
+      // Calculate progress (20% to 75% spread across all chunks)
+      const progressStart = 20;
+      const progressEnd = 75;
+      const progressRange = progressEnd - progressStart;
+      const progressPerChunk = progressRange / totalChunks;
+      const currentProgress = Math.round(progressStart + (i * progressPerChunk));
+
+      // Step 1: Compress chunk (Call 2A + 2B)
+      await reportProgress(
+        fileId,
+        'compression',
+        currentProgress,
+        `Compressing chunk ${i + 1}/${totalChunks}...`
+      );
+
+      const description = await compressChunk(chunkText, filename, chunkIndex, totalChunks);
+
+      // Step 2: Generate embedding
+      const embeddingProgress = Math.round(currentProgress + (progressPerChunk * 0.7));
+      await reportProgress(
+        fileId,
+        'embedding',
+        embeddingProgress,
+        `Generating embedding for chunk ${i + 1}/${totalChunks}...`
+      );
+
+      const embedding = await generateEmbedding(description);
+
+      // Step 3: Save to file_chunks table
+      await saveFileChunk({
+        fileId,
+        userId: getUserIdFromFile(fileId),
+        chunkIndex,
+        chunkText,
+        description,
+        embedding
+      });
+
+      console.log(`[Processor] Saved chunk ${i}/${totalChunks - 1} to database`);
+    }
+
+    // PHASE 3: Finalization
+    await reportProgress(fileId, 'finalization', 90, 'Finalizing...');
+
+    await markFileComplete(fileId, {
+      status: 'ready',
+      progress: 100
+    });
+
+    console.log(`[Processor] File ${fileId} processing complete`);
+
+  } catch (error) {
+    const stage = determineErrorStage(error);
+    await markFileFailed(fileId, error.code, error.message, stage);
+  }
+}
+
+async function saveFileChunk(params: {
+  fileId: string;
+  userId: string;
+  chunkIndex: number;
+  chunkText: string;
+  description: string;
+  embedding: number[];
+}): Promise<void> {
+  const { error } = await supabase
+    .from('file_chunks')
+    .insert({
+      file_id: params.fileId,
+      user_id: params.userId,
+      chunk_index: params.chunkIndex,
+      chunk_text: params.chunkText,
+      description: params.description,
+      embedding: params.embedding
+    });
+
+  if (error) {
+    throw new FileProcessorError(
+      `Failed to save chunk ${params.chunkIndex}: ${error.message}`,
+      'DATABASE_ERROR',
+      'embedding',
+      error
+    );
+  }
+}
+```
+
+**Testing**:
+```typescript
+// Test full pipeline with 10K word file
+const fileId = '123e4567-e89b-12d3-a456-426614174000';
+const text = fs.readFileSync('docs/working/AI-powered IT Compliance.md', 'utf-8');
+const filename = 'AI-powered IT Compliance.md';
+
+await processFileBackground(fileId, text, filename);
+
+// Verify all chunks saved
+const { data: chunks } = await supabase
+  .from('file_chunks')
+  .select('*')
+  .eq('file_id', fileId)
+  .order('chunk_index', { ascending: true });
+
+console.log(`Saved ${chunks.length} chunks`);
+chunks.forEach(chunk => {
+  console.log(`Chunk ${chunk.chunk_index}: ${chunk.description.slice(0, 100)}...`);
+});
+
+// Verify file marked complete
+const { data: file } = await supabase
+  .from('files')
+  .select('status, progress')
+  .eq('id', fileId)
+  .single();
+
+console.log(`File status: ${file.status}, progress: ${file.progress}%`);
+```
+
+**Acceptance Criteria**:
+- [ ] Loops over all chunks (Chunk 0 + detail chunks)
+- [ ] Calls `compressChunk()` for each chunk
+- [ ] Calls `generateEmbedding()` for each chunk
+- [ ] Saves each chunk to `file_chunks` table
+- [ ] Progress interpolates linearly from 20% to 75% across chunks
+- [ ] Proper error handling with stage detection
+- [ ] Marks file complete at 100%
+
+**Dependencies**: Chunks 5, 6 (compression + orchestration part 1)
+
+---
+
+### Phase 4 - Polish & Test (5 hours)
+
+#### Chunk 8: Fix Progress Bar Stuck at 0% (1 hour)
+
+**Files to Modify**:
+- `/Users/d.patnaik/code/asura/src/lib/file-processor.ts`
+
+**Modification to `createFilePending()`**:
+```typescript
+export async function createFilePending(
+  buffer: ArrayBuffer,
+  filename: string,
+  userId: string | null,
+  options?: CreateFileOptions
+): Promise<string> {
+  try {
+    // Validate input (instant)
+    validateProcessFileInput(buffer, filename);
+
+    // Extract text (~500ms for 10K words)
+    const extractionResult = await extractText(buffer, filename);
+    const { text, fileType, wordCount, charCount } = extractionResult;
+
+    // Generate content hash (~500ms)
+    const contentHash = await generateContentHash(buffer);
+
+    // Check for duplicate (optional, ~200ms)
+    if (options?.checkDuplicate) {
+      const duplicate = await checkDuplicate(contentHash, userId);
+      if (duplicate) {
+        throw new FileProcessorError(
+          `File already exists: ${duplicate.filename}`,
+          'DUPLICATE_FILE',
+          'extraction',
+          { existingFileId: duplicate.id }
+        );
+      }
+    }
+
+    // Create database record with progress: 0
+    const fileId = await createFileRecord({
+      userId,
+      filename,
+      fileType,
+      contentHash,
+      wordCount,
+      charCount,
+      status: 'pending',
+      progress: 0
+    });
+
+    // Immediately update to 10% to indicate extraction complete
+    await updateFileProgress(fileId, 10, 'extraction', 'Text extracted');
+
+    return fileId;
+
+  } catch (error) {
+    throw new FileProcessorError(
+      `Failed to create file record: ${error.message}`,
+      'EXTRACTION_ERROR',
+      'extraction',
+      error
+    );
+  }
+}
+```
+
+**Testing**:
+```bash
+# Upload 10K word file and monitor progress
+# Expected output:
+# Progress: 10% (extraction)
+# Progress: 15% (chunking)
+# Progress: 20% (chunking)
+# ...
+```
+
+**Acceptance Criteria**:
+- [ ] Initial DB record created with progress: 0
+- [ ] Immediately updated to progress: 10 after extraction
+- [ ] No more 0% stuck for 1-2 seconds
+- [ ] User sees progress bar animate from 0% → 10% during extraction
+
+**Dependencies**: None (uses existing functions)
+
+---
+
+#### Chunk 9: Integration Testing (2 hours)
+
+**Files to Create**:
+- `/Users/d.patnaik/code/asura/tests/integration/file-upload.test.ts`
+
+**Test Cases**:
+1. Upload and process 10K word file successfully
+2. Verify file status = 'ready', progress = 100%
+3. Verify chunk_count matches actual chunks
+4. Verify Chunk 0 exists with correct format (200-400 chars)
+5. Verify all detail chunks have embeddings (1024 dimensions)
+6. Verify progress updates from 0% → 100%
+7. Test cleanup (delete test data)
+
+**Testing**:
+```bash
+# Run integration tests
+npm run test:integration
+
+# Expected output:
+# ✅ File processed successfully with 12 chunks
+# ✅ Progress updates: 10% → 15% → 20% → 25% → ... → 100%
+```
+
+**Acceptance Criteria**:
+- [ ] Integration test file created
+- [ ] Test uploads 10K word file successfully
+- [ ] Verifies file status = 'ready', progress = 100%
+- [ ] Verifies chunk_count matches actual chunks
+- [ ] Verifies Chunk 0 exists with correct format
+- [ ] Verifies all detail chunks have embeddings
+- [ ] Verifies progress updates from 0% → 100%
+- [ ] Test cleanup (deletes test data)
+
+**Dependencies**: All previous chunks (full pipeline)
+
+---
+
+#### Chunk 10: Retrieval Testing & Verification (2 hours)
+
+**Files to Create**:
+- `/Users/d.patnaik/code/asura/tests/integration/file-retrieval.test.ts`
+
+**Test Cases**:
+1. Retrieve Chunk 0 for file-level query ("that interview transcript")
+2. Retrieve relevant detail chunks for specific topic ("regulatory compliance challenges")
+3. Retrieve mixed results (Chunk 0 + details) for hybrid query ("What did the experts say about technical implementation?")
+
+**Testing**:
+```bash
+# Run retrieval tests
+npm run test:integration
+
+# Expected output:
+# ✅ Chunk 0 retrieved with similarity: 0.82
+# ✅ Hybrid query returned 7 chunks (Chunk 0 + details)
+```
+
+**Acceptance Criteria**:
+- [ ] Retrieval test file created
+- [ ] Database function `search_file_chunks` created (in Chunk 1)
+- [ ] Test verifies Chunk 0 retrieval for file-level queries
+- [ ] Test verifies detail chunk retrieval for specific topics
+- [ ] Test verifies hybrid queries return mixed results
+- [ ] All similarity scores above threshold (0.7+)
+
+**Dependencies**: All previous chunks (full pipeline + data)
+
+---
+
+## Summary of Implementation Plan
+
+**Total Implementation Chunks**: 10
+
+**Total Estimated Effort**: ~18 hours
+
+**Phases**:
+1. Foundation (Chunks 1-2): 1.25 hours
+2. Core Logic (Chunks 3-5): 6.5 hours
+3. Integration (Chunks 6-7): 4.5 hours
+4. Polish & Test (Chunks 8-10): 5 hours
+
+**Success Criteria**:
+
+**Functional Requirements**:
+- [ ] Files chunked into Chunk 0 + detail chunks
+- [ ] All chunks compressed with appropriate prompts
+- [ ] All chunks have 1024-dim embeddings
+- [ ] Vector search retrieves Chunk 0 for broad file queries
+- [ ] Progress bar animates 0% → 100% without getting stuck
+- [ ] Total processing time < 20 seconds for 10K word file
+
+**Non-Functional Requirements**:
+- [ ] Cost per 10K word file < $0.004
+- [ ] No memory leaks during chunking
+- [ ] Database queries use vector index (check EXPLAIN)
+- [ ] Error handling covers all failure modes
+- [ ] SSE events broadcast to all clients
+
+**Documentation Requirements**:
+- [ ] All code commented with clear explanations
+- [ ] API specifications documented (in this file)
+- [ ] Test cases cover happy path + edge cases
+- [ ] Architecture decisions documented (in this file)
