@@ -1188,14 +1188,15 @@ Enterprise custom (large orgs). All use tiered model except two (usage-based).
 ## Implementation Status
 
 - [x] Database schema designed
-- [ ] `file-chunker.ts` implementation
-- [ ] `file-compressor.ts` modifications (chunk-level processing)
-- [ ] `file-processor.ts` modifications (orchestration)
-- [ ] `file_chunks` table migration
-- [ ] Vector search query implementation
-- [ ] Progress bar granular updates (0-25% extraction phase)
-- [ ] Integration testing with 10K word file
-- [ ] End-to-end retrieval testing
+- [x] `file_chunks` table migration created (Chunk 1 ✅)
+- [ ] `file-chunker.ts` implementation (Chunks 3-4)
+- [ ] `file-compressor.ts` modifications (Chunk 5)
+- [ ] `file-processor.ts` modifications (Chunks 6-7)
+- [ ] Compression prompts created (Chunk 2)
+- [ ] Vector search query implementation (Chunk 9)
+- [ ] Progress bar granular updates (Chunk 8)
+- [ ] Integration testing with 10K word file (Chunk 10)
+- [ ] End-to-end retrieval testing (Chunk 10)
 
 ## Next Steps
 
@@ -1411,13 +1412,14 @@ psql postgresql://postgres:postgres@127.0.0.1:54322/postgres -c "\di file_chunks
 ```
 
 **Acceptance Criteria**:
-- [ ] Migration file created in `supabase/migrations/`
-- [ ] `file_chunks` table created with all columns
-- [ ] HNSW vector index created on `embedding` column
-- [ ] Foreign key constraint to `files` table with CASCADE delete
-- [ ] RLS policies enable user isolation
-- [ ] `search_file_chunks` function created
-- [ ] Migration runs successfully
+- [x] Migration file created in `supabase/migrations/` → `20251113000000_create_file_chunks_table.sql`
+- [x] `file_chunks` table created with all columns
+- [x] HNSW vector index created on `embedding` column
+- [x] Foreign key constraint to `files` table with CASCADE delete
+- [x] RLS policies enable user isolation (disabled for development like files table)
+- [x] `search_file_chunks` function created
+- [x] `get_file_chunks` helper function created
+- [ ] Migration tested (requires Docker/Supabase running)
 
 ---
 
