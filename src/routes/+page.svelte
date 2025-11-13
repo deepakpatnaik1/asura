@@ -4,9 +4,6 @@
 	import { currentMessage, isLoading, sendMessage } from '$lib/stores/chat';
 	import {
 		files,
-		processingFiles,
-		readyFiles,
-		failedFiles,
 		error,
 		uploadFile,
 		deleteFile,
@@ -457,104 +454,40 @@
 
 	<!-- File List Dropdown -->
 	{#if showFileList}
-		<div class="file-list-container">
-			<!-- Error message -->
-			{#if $error}
-				<div class="file-error-banner">
-					<span>{$error}</span>
-					<button
-						class="error-close-btn"
-						onclick={() => error.set(null)}
-					>
-						×
-					</button>
-				</div>
-			{/if}
-
-			<!-- File list header -->
-			<div class="file-list-header">
-				<span class="file-list-title">Files ({$files.length})</span>
-				<button
-					class="file-list-close-btn"
-					onclick={() => (showFileList = false)}
-				>
-					<Icon src={LuX} size="11" />
+		<div class="files-dropdown">
+			<!-- Header -->
+			<div class="files-header">
+				<span>Files ({$files.length})</span>
+				<button class="close-btn" onclick={() => (showFileList = false)}>
+					<Icon src={LuX} size="12" />
 				</button>
 			</div>
 
-			<!-- Empty state -->
-			{#if $files.length === 0}
-				<div class="file-list-empty">
-					<p>No files uploaded yet</p>
-					<p class="file-list-empty-hint">Click the paperclip to upload a file</p>
-				</div>
-			{/if}
-
-			<!-- Processing files section -->
-			{#if $processingFiles.length > 0}
-				<div class="file-list-section">
-					<div class="file-list-section-label">Processing ({$processingFiles.length})</div>
-					{#each $processingFiles as file (file.id)}
-						<div class="file-item file-item-processing">
-							<div class="file-item-info">
-								<div class="file-item-name" title={file.filename}>{file.filename}</div>
-								<div class="file-item-stage">{file.processing_stage || 'pending'}</div>
-							</div>
-							<div class="file-item-progress">
-								<div class="progress-bar-container">
-									<div class="progress-bar" style="width: {file.progress}%"></div>
-								</div>
-								<span class="file-item-percent">{file.progress}%</span>
-							</div>
-						</div>
-					{/each}
-				</div>
-			{/if}
-
-			<!-- Ready files section -->
-			{#if $readyFiles.length > 0}
-				<div class="file-list-section">
-					<div class="file-list-section-label">Ready ({$readyFiles.length})</div>
-					{#each $readyFiles as file (file.id)}
-						<div class="file-item file-item-ready">
-							<div class="file-item-info">
-								<div class="file-item-status-icon">✓</div>
-								<div class="file-item-name" title={file.filename}>{file.filename}</div>
-							</div>
-							<button
-								class="file-item-delete-btn"
-								onclick={() => (deleteConfirmId = file.id)}
-								title="Delete file"
-							>
+			<!-- File List -->
+			<div class="files-list">
+				{#if $files.length === 0}
+					<div class="empty-state">No files uploaded</div>
+				{:else}
+					{#each $files as file (file.id)}
+						<div class="file-row">
+							<button class="delete-btn" onclick={() => (deleteConfirmId = file.id)}>
 								<Icon src={LuTrash2} size="10" />
 							</button>
-						</div>
-					{/each}
-				</div>
-			{/if}
-
-			<!-- Failed files section -->
-			{#if $failedFiles.length > 0}
-				<div class="file-list-section">
-					<div class="file-list-section-label">Failed ({$failedFiles.length})</div>
-					{#each $failedFiles as file (file.id)}
-						<div class="file-item file-item-failed">
-							<div class="file-item-info">
-								<div class="file-item-status-icon">✕</div>
-								<div class="file-item-details">
-									<div class="file-item-name" title={file.filename}>{file.filename}</div>
-									<div class="file-item-error">{file.error_message || 'Unknown error'}</div>
-								</div>
+							<span class="filename">{file.filename.substring(0, 30)}{file.filename.length > 30 ? '...' : ''}</span>
+							<div class="progress-bar">
+								<div class="progress-fill {file.status}" style="width: {file.status === 'ready' ? 100 : file.progress}%"></div>
 							</div>
-							<button
-								class="file-item-delete-btn"
-								onclick={() => (deleteConfirmId = file.id)}
-								title="Delete file"
-							>
-								<Icon src={LuTrash2} size="10" />
-							</button>
+							<span class="percent">{file.status === 'ready' ? 100 : file.progress}%</span>
 						</div>
 					{/each}
+				{/if}
+			</div>
+
+			<!-- Error Banner -->
+			{#if $error}
+				<div class="error-banner">
+					{$error}
+					<button onclick={() => error.set(null)}>×</button>
 				</div>
 			{/if}
 		</div>
@@ -1151,231 +1084,160 @@
 		border-color: var(--boss-accent);
 	}
 
-	/* File List Container */
-	.file-list-container {
+	/* Files Dropdown */
+	.files-dropdown {
 		position: fixed;
 		bottom: 120px;
 		left: 50%;
 		transform: translateX(-50%);
-		width: min(calc(100% - 32px), 600px);
-		max-width: 600px;
+		width: min(420px, calc(100% - 32px));
 		max-height: 400px;
 		background: hsl(var(--card));
 		border: 1px solid hsl(var(--border));
 		border-radius: 8px;
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-		overflow-y: auto;
 		z-index: 100;
+		display: flex;
+		flex-direction: column;
 	}
 
-	/* File list header */
-	.file-list-header {
+	/* Header */
+	.files-header {
 		display: flex;
-		align-items: center;
 		justify-content: space-between;
+		align-items: center;
 		padding: 12px 16px;
 		border-bottom: 1px solid hsl(var(--border));
-		background: hsl(var(--background));
-		position: sticky;
-		top: 0;
-		z-index: 1;
-	}
-
-	.file-list-title {
 		font-weight: 600;
-		color: hsl(var(--foreground));
 		font-size: 0.9em;
 	}
 
-	.file-list-close-btn {
-		background: transparent;
+	.close-btn {
+		background: none;
 		border: none;
 		cursor: pointer;
-		padding: 4px;
 		opacity: 0.7;
-		transition: opacity 0.2s;
+		padding: 4px;
 		display: flex;
-		align-items: center;
-		transform: rotate(180deg);
 	}
 
-	.file-list-close-btn:hover {
+	.close-btn:hover {
 		opacity: 1;
 	}
 
-	/* File list sections */
-	.file-list-section {
-		padding: 12px 8px;
-		border-bottom: 1px solid hsl(var(--border));
-	}
-
-	.file-list-section:last-child {
-		border-bottom: none;
-	}
-
-	.file-list-section-label {
-		font-size: 0.8em;
-		color: hsl(var(--muted-foreground));
-		text-transform: uppercase;
-		letter-spacing: 0.5px;
-		margin-bottom: 8px;
-		padding: 0 8px;
-		font-weight: 500;
-	}
-
-	/* File item - base styles */
-	.file-item {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
+	/* Files List */
+	.files-list {
+		overflow-y: auto;
 		padding: 8px;
-		border-radius: 4px;
-		gap: 8px;
-		margin-bottom: 4px;
-		transition: background-color 0.2s;
 	}
 
-	.file-item:hover {
-		background-color: hsl(var(--muted) / 0.1);
-	}
-
-	/* File item info container */
-	.file-item-info {
-		flex: 1;
-		min-width: 0;
-		display: flex;
-		align-items: center;
-		gap: 8px;
-	}
-
-	.file-item-details {
-		flex: 1;
-		min-width: 0;
-	}
-
-	.file-item-name {
-		font-size: 0.85em;
-		color: hsl(var(--foreground));
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-
-	.file-item-stage {
-		font-size: 0.75em;
+	.empty-state {
+		padding: 32px;
+		text-align: center;
 		color: hsl(var(--muted-foreground));
-		text-transform: capitalize;
-	}
-
-	.file-item-error {
-		font-size: 0.75em;
-		color: rgb(239, 68, 68);
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-
-	/* File item status icon */
-	.file-item-status-icon {
-		font-weight: bold;
 		font-size: 0.9em;
-		width: 20px;
+	}
+
+	/* File Row */
+	.file-row {
 		display: flex;
 		align-items: center;
-		justify-content: center;
+		gap: 8px;
+		padding: 6px 16px;
+		border-radius: 4px;
+		margin-bottom: 2px;
+	}
+
+	.file-row:hover {
+		background: hsl(var(--muted) / 0.1);
+	}
+
+	.delete-btn {
+		background: none;
+		border: none;
+		cursor: pointer;
+		color: rgb(239, 68, 68);
+		opacity: 0.6;
+		padding: 4px;
+		display: flex;
 		flex-shrink: 0;
 	}
 
-	.file-item-ready .file-item-status-icon {
-		color: hsl(var(--foreground));
+	.delete-btn:hover {
+		opacity: 1;
 	}
 
-	.file-item-failed .file-item-status-icon {
-		color: rgb(239, 68, 68);
-	}
-
-	/* Processing specific styles */
-	.file-item-processing {
-		flex-direction: column;
-		align-items: flex-start;
-	}
-
-	.file-item-progress {
-		width: 100%;
-		display: flex;
-		align-items: center;
-		gap: 8px;
-	}
-
-	.progress-bar-container {
-		flex: 1;
-		height: 4px;
-		background: hsl(var(--border));
-		border-radius: 2px;
+	.filename {
+		font-size: 0.85em;
+		width: 180px;
+		flex-shrink: 0;
 		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.progress-bar {
-		height: 100%;
-		background: var(--boss-accent);
-		transition: width 150ms linear;
-	}
-
-	.file-item-percent {
-		font-size: 0.75em;
-		color: hsl(var(--muted-foreground));
-		min-width: 28px;
-		text-align: right;
-	}
-
-	/* Delete button */
-	.file-item-delete-btn {
-		background: transparent;
-		border: none;
-		cursor: pointer;
-		padding: 4px;
-		opacity: 0.6;
-		transition: opacity 0.2s;
-		color: rgb(239, 68, 68);
-		display: flex;
-		align-items: center;
-		justify-content: center;
+		width: 100px;
+		height: 6px;
+		background: hsl(var(--muted) / 0.3);
+		border-radius: 3px;
+		overflow: hidden;
 		flex-shrink: 0;
 	}
 
-	.file-item-delete-btn:hover {
-		opacity: 1;
+	.progress-fill {
+		height: 100%;
+		transition: width 150ms linear;
 	}
 
-	/* Error banner */
-	.file-error-banner {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
+	.progress-fill.processing,
+	.progress-fill.pending {
+		background: var(--boss-accent);
+	}
+
+	.progress-fill.ready {
+		background: rgb(34, 197, 94);
+	}
+
+	.progress-fill.failed {
+		background: rgb(239, 68, 68);
+	}
+
+	.percent {
+		font-size: 0.75em;
+		color: hsl(var(--muted-foreground));
+		width: 35px;
+		text-align: right;
+		flex-shrink: 0;
+	}
+
+	/* Error Banner */
+	.error-banner {
 		padding: 8px 12px;
 		background: rgba(239, 68, 68, 0.1);
-		border-bottom: 1px solid rgb(239, 68, 68);
+		border-top: 1px solid rgb(239, 68, 68);
 		color: rgb(239, 68, 68);
 		font-size: 0.85em;
-		gap: 8px;
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
 	}
 
-	.error-close-btn {
-		background: transparent;
+	.error-banner button {
+		background: none;
 		border: none;
-		color: rgb(239, 68, 68);
+		color: inherit;
 		cursor: pointer;
 		font-size: 1.2em;
 		padding: 0 4px;
 		opacity: 0.7;
-		transition: opacity 0.2s;
 	}
 
-	.error-close-btn:hover {
+	.error-banner button:hover {
 		opacity: 1;
 	}
 
-	/* Delete confirmation modal - add to existing modal styles */
+	/* Delete confirmation modal */
 	.modal-btn-confirm {
 		background: var(--boss-accent);
 		color: hsl(var(--background));
@@ -1385,49 +1247,5 @@
 	.modal-btn-confirm:hover {
 		background: rgb(217, 133, 107);
 		border-color: rgb(217, 133, 107);
-	}
-
-	/* Empty state styling */
-	.file-list-empty {
-		padding: 32px 16px;
-		text-align: center;
-		color: hsl(var(--muted-foreground));
-	}
-
-	.file-list-empty p {
-		margin: 0 0 8px 0;
-		font-size: 0.95em;
-	}
-
-	.file-list-empty-hint {
-		font-size: 0.85em;
-		opacity: 0.7;
-	}
-
-	/* Scrollbar styling for file list */
-	.file-list-container::-webkit-scrollbar {
-		width: 6px;
-	}
-
-	.file-list-container::-webkit-scrollbar-track {
-		background: transparent;
-	}
-
-	.file-list-container::-webkit-scrollbar-thumb {
-		background: hsl(var(--border));
-		border-radius: 3px;
-	}
-
-	.file-list-container::-webkit-scrollbar-thumb:hover {
-		background: hsl(var(--muted-foreground));
-	}
-
-	/* Responsive adjustments */
-	@media (max-width: 600px) {
-		.file-list-container {
-			bottom: 110px;
-			width: calc(100% - 16px);
-			max-height: 300px;
-		}
 	}
 </style>
