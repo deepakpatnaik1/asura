@@ -9,7 +9,8 @@
 		failedFiles,
 		error,
 		uploadFile,
-		deleteFile
+		deleteFile,
+		refreshFiles
 	} from '$lib/stores/filesStore';
 	import { tick } from 'svelte';
 
@@ -253,6 +254,9 @@
 			// Clear local messages
 			allMessages = [];
 			currentMessage.set(null);
+
+			// Refresh files list to clear UI
+			await refreshFiles();
 		} catch (error) {
 			console.error('Nuke error:', error);
 		}
