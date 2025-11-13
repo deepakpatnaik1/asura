@@ -39,12 +39,15 @@ export const GET: RequestHandler = async ({ request }) => {
     // TODO: Extract from request headers after Chunk 11 (Google Auth)
     const userId = null;
 
+    // Variables shared between start() and cancel() callbacks
+    let heartbeatInterval: NodeJS.Timeout | null = null;
+    let isClosed = false;
+    let subscription: any;
+
     // 2. CREATE READABLE STREAM FOR SSE
     const stream = new ReadableStream({
       async start(controller) {
         const encoder = new TextEncoder();
-        let heartbeatInterval: NodeJS.Timeout | null = null;
-        let isClosed = false;
 
         // Helper: Send SSE event
         const sendEvent = (event: SSEEvent) => {
@@ -72,6 +75,7 @@ export const GET: RequestHandler = async ({ request }) => {
 
         // Helper: Send heartbeat
         const sendHeartbeat = () => {
+          if (isClosed) return;
           sendEvent({
             eventType: 'heartbeat',
             timestamp: new Date().toISOString()
@@ -81,7 +85,7 @@ export const GET: RequestHandler = async ({ request }) => {
         try {
           // 3. SET UP SUPABASE REALTIME SUBSCRIPTION
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const subscription = (supabase as any)
+          subscription = (supabase as any)
             .channel(`files-${userId}`)
             .on(
               'postgres_changes',
