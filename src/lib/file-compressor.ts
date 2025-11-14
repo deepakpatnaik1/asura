@@ -96,7 +96,9 @@ const MAX_CONTENT_LENGTH = 100000;
  * Modified Call 2A Prompt - Artisan Cut for Files
  * From system-prompts.md lines 310-424
  */
-const MODIFIED_CALL_2A_PROMPT = `ARTISAN CUT FOR FILES
+const MODIFIED_CALL_2A_PROMPT = `/nothink
+
+ARTISAN CUT FOR FILES
 
 You will receive a file (PDF, image, text, code, spreadsheet, etc.) that I uploaded.
 
@@ -237,7 +239,9 @@ CRITICAL RULES:
  * Chunk 0 Compression Prompt - Metadata-focused for file-level overview
  * Used for the first chunk (chunk_index = 0) which makes files discoverable as entities
  */
-const CHUNK_0_COMPRESSION_PROMPT = `ARTISAN CUT FOR FILE OVERVIEW (CHUNK 0)
+const CHUNK_0_COMPRESSION_PROMPT = `/nothink
+
+ARTISAN CUT FOR FILE OVERVIEW (CHUNK 0)
 
 You will receive the overview text for an uploaded file. This is Chunk 0 - the file-level overview that makes this file discoverable as an entity.
 
@@ -328,7 +332,9 @@ Remember: Chunk 0 makes files discoverable as ENTITIES. Detail chunks (1+) captu
  * Chunk 0 Call 2B Prompt - Verification of Chunk 0 compression
  * Ensures metadata and discoverability are preserved
  */
-const CHUNK_0_CALL_2B_PROMPT = `Review the previous JSON output for Chunk 0 (file-level overview):
+const CHUNK_0_CALL_2B_PROMPT = `/nothink
+
+Review the previous JSON output for Chunk 0 (file-level overview):
 
 - Verify filename is exact and matches the input
 - Verify file_type is one of: image|pdf|text|code|spreadsheet|other
@@ -352,7 +358,9 @@ Return the improved JSON object with this exact structure:
  * Modified Call 2B Prompt - Verification of Call 2A output (for detail chunks)
  * Adapted from standard Call 2B pattern for file verification
  */
-const MODIFIED_CALL_2B_PROMPT = `Review the previous JSON output for accuracy and quality:
+const MODIFIED_CALL_2B_PROMPT = `/nothink
+
+Review the previous JSON output for accuracy and quality:
 
 - Verify filename is exact and matches the input
 - Verify file_type is one of: image|pdf|text|code|spreadsheet|other
