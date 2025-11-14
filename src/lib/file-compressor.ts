@@ -82,11 +82,11 @@ const MODEL_NAME = 'accounts/fireworks/models/qwen3-235b-a22b' as const;
 
 /** API Call Configuration */
 const TEMPERATURE = 0.7;
-const MAX_TOKENS = 2000; // Default fallback
+const MAX_TOKENS = 4000; // Sufficient tokens for Qwen3 thinking mode to complete before outputting JSON
 
 /** Max tokens for chunk compression */
-const MAX_TOKENS_CHUNK_0 = MAX_TOKENS;  // Chunk 0: No limit - let model think freely, prompt enforces 200-400 char output
-const MAX_TOKENS_DETAIL = MAX_TOKENS;    // Detail chunks: No limit - let model think freely, prompt enforces content preservation
+const MAX_TOKENS_CHUNK_0 = MAX_TOKENS;  // Chunk 0: Allow full thinking process, prompt enforces 200-400 char output
+const MAX_TOKENS_DETAIL = MAX_TOKENS;    // Detail chunks: Allow full thinking process, prompt enforces content preservation
 
 /** Validation constants */
 const MAX_CONTENT_LENGTH = 100000;
@@ -220,8 +220,6 @@ You MUST return a JSON object with this EXACT structure:
 }
 
 CRITICAL RULES:
-– Output ONLY the JSON object above.
-– No additional text, analysis, or commentary.
 – description must use artisan cut compression.
 – filename must be exact.
 
@@ -285,8 +283,6 @@ You MUST return a JSON object with this EXACT structure:
 }
 
 CRITICAL RULES:
-- Output ONLY the JSON object above
-- No additional text, analysis, or commentary
 - description must focus on metadata and document-level information
 - Description makes the file discoverable by its nature, not its detailed content
 - Use heavy punctuation (: ; , -) for compression
@@ -343,15 +339,13 @@ const CHUNK_0_CALL_2B_PROMPT = `Review the previous JSON output for Chunk 0 (fil
 - Verify description does NOT include detailed content (that belongs in detail chunks)
 - Refine if needed to better match Chunk 0 goals
 
-Return ONLY the improved JSON object with this exact structure:
+Return the improved JSON object with this exact structure:
 
 {
   "filename": "[exact filename including extension]",
   "file_type": "[image|pdf|text|code|spreadsheet|other]",
   "description": "[refined Chunk 0 overview - 200-400 chars]"
-}
-
-No additional text, analysis, or commentary.`;
+}`;
 
 /**
  * Modified Call 2B Prompt - Verification of Call 2A output (for detail chunks)
@@ -366,15 +360,13 @@ const MODIFIED_CALL_2B_PROMPT = `Review the previous JSON output for accuracy an
 - Verify description does not over-compress critical information
 - Refine if needed to better match artisan cut principles
 
-Return ONLY the improved JSON object with this exact structure:
+Return the improved JSON object with this exact structure:
 
 {
   "filename": "[exact filename including extension]",
   "file_type": "[image|pdf|text|code|spreadsheet|other]",
   "description": "[refined artisan cut compressed description]"
-}
-
-No additional text, analysis, or commentary.`;
+}`;
 
 // ============================================================================
 // HELPER FUNCTIONS

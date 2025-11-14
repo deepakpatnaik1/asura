@@ -314,6 +314,89 @@ SELECT description FROM file_chunks WHERE file_id = '<file-id>' AND chunk_index 
 
 **Status**: ❌ PARTIAL IMPLEMENTATION - Phase 6 still needs parallelization
 
+15. **Complete Phase 6 Parallelization (Attempt 8 preparation)**: Used doer agent to complete optimization
+   - Modified [file-processor.ts:652-718](src/lib/file-processor.ts#L652-L718) - Phase 6 to use Promise.all()
+   - Replaced sequential for-loop with parallel embedding generation
+   - Progress reporting simplified: start → end (matches Phase 5 pattern)
+   - Error handling preserved (Promise.all() fails fast)
+   - Dev server restarted with Node 22.21.1 (learned from Attempt 4 about hot reload)
+   - Implementation document: [working/PERF-001-phase6-parallel-implementation.md](working/PERF-001-phase6-parallel-implementation.md)
+
+**Expected Phase 6 improvements:**
+- Small files (2 chunks): 2s faster (2x speedup for Phase 6)
+- Medium files (8 chunks): 14s faster (8x speedup for Phase 6)
+- Large files (25 chunks): 48s faster (25x speedup for Phase 6)
+
+**All three phases now optimized:**
+✅ Phase 3 (Semantic Chunking): Parallel embeddings
+✅ Phase 5 (Detail Compression): Parallel compression
+✅ Phase 6 (Final Embeddings): Parallel embeddings ← **JUST COMPLETED**
+
+16. **Performance Test (Attempt 8)**: Testing complete parallel processing implementation
+   - File: gettysburg-speech.txt (~500 words)
+   - ❌ FAIL - Progress stuck at 30%
+   - Processing stopped at Phase 4 (Chunk 0 compression)
+   - Same failure pattern as Attempts 1-4
+   - Dev server was freshly restarted, all parallel processing code loaded
+   - **Root cause identified**: MAX_TOKENS = 2000 still insufficient for Qwen3 thinking mode
+   - Server logs showed truncated API response at 2000 tokens during Chunk 0 Call 2B
+   - Thinking process exceeded token limit, preventing JSON output
+
+17. **Qwen3 Thinking Mode Fix (Attempt 9 preparation)**: Addressed token truncation issue
+   - **Problem**: Qwen3-235b-a22b is a "Thinking" variant that automatically engages thinking mode
+   - Thinking process with `<think>` tags consumes significant tokens before outputting JSON
+   - 2000 token limit was truncating responses mid-generation
+   - Prompts contained anti-thinking language ("Output ONLY the JSON", "No additional text, analysis, or commentary") that fought the model's nature
+
+   **Fix applied**:
+   - Increased MAX_TOKENS from 2000 to 4000 in [file-compressor.ts:85](src/lib/file-compressor.ts#L85)
+   - Removed anti-thinking language from all 4 compression prompts:
+     - MODIFIED_CALL_2A_PROMPT: Removed "Output ONLY" and "No additional text" lines
+     - CHUNK_0_COMPRESSION_PROMPT: Removed "Output ONLY" and "No additional text" lines
+     - CHUNK_0_CALL_2B_PROMPT: Changed "Return ONLY" to "Return", removed "No additional text"
+     - MODIFIED_CALL_2B_PROMPT: Changed "Return ONLY" to "Return", removed "No additional text"
+   - Dev server restarted with Node 22.21.1
+   - Changes verified loaded via fresh Node.js process
+
+18. **Performance Test (Attempt 9)**: Testing Qwen3 thinking mode fix
+   - File: gettysburg-speech.txt (~500 words)
+   - ✅ File processed to 100% completion
+   - ❌ Processing time: Very long (~45-60 seconds for 500-word file)
+   - **Issue**: Despite all parallel optimizations, processing remains slow
+   - Expected: ~8-12 seconds for small file with parallel processing
+   - Actual: ~45-60 seconds (5-7x slower than expected)
+   - **Hypothesis**: Qwen3 thinking mode adds significant latency per API call
+     - 4000 tokens allows thinking to complete, but thinking itself takes time
+     - Each API call (Call 2A + Call 2B) for compression may take 5-10 seconds instead of 1-2 seconds
+     - Parallel processing helps, but baseline per-call latency remains high
+
+**Status**: ✅ FUNCTIONAL - File processing works correctly
+❌ PERFORMANCE - Processing time unacceptably slow for production use
+
+### Next Steps for Investigation
+
+**Test Plan - Thinking Mode Performance Analysis**:
+
+1. **Attempt 10**: Upload 10,000-word AI compliance file with thinking mode enabled
+   - File: Large strategic document (~10,000 words)
+   - Current config: MAX_TOKENS = 4000, Qwen3-235b-a22b (thinking variant)
+   - Goal: Verify processing completes to 100% without failures
+   - Measure: Total processing time
+
+2. **Attempt 11**: Upload same file with thinking mode disabled
+   - Switch to non-thinking model variant: `qwen3-235b` (without `-a22b` suffix)
+   - Keep MAX_TOKENS = 4000 for consistency
+   - Goal: Measure performance difference between thinking vs non-thinking mode
+   - Compare: Processing time and output quality
+
+3. **Quality Comparison**:
+   - Compare Chunk 0 descriptions from both attempts
+   - Compare detail chunk descriptions for same content
+   - Evaluate: Does thinking mode produce noticeably better compression quality?
+   - Decision: Is 5-7x slower processing time worth the quality improvement?
+
+**Hypothesis**: Thinking mode provides 11% quality improvement for complex reasoning tasks, but may not be necessary for pattern-matching compression tasks. Non-thinking mode may offer comparable quality at much faster speed.
+
 ---
 
 ## Test 2: Medium File Upload (5,000 words)
