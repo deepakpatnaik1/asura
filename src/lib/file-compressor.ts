@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import type { FileType } from './file-extraction';
+import { FILE_MODEL, MAX_TOKENS } from '$lib/config/models';
 
 // ============================================================================
 // ERROR CLASSES
@@ -78,15 +79,15 @@ export interface Call2Response {
 // ============================================================================
 
 /** API Model Configuration */
-const MODEL_NAME = 'accounts/fireworks/models/qwen3-235b-a22b' as const;
+const MODEL_NAME = FILE_MODEL;
 
 /** API Call Configuration */
 const TEMPERATURE = 0.7;
-const MAX_TOKENS = 4000; // Sufficient tokens for Qwen3 thinking mode to complete before outputting JSON
+const MAX_TOKENS_CONFIG = MAX_TOKENS.file; // 1000 tokens - no thinking needed for file compression
 
 /** Max tokens for chunk compression */
-const MAX_TOKENS_CHUNK_0 = MAX_TOKENS;  // Chunk 0: Allow full thinking process, prompt enforces 200-400 char output
-const MAX_TOKENS_DETAIL = MAX_TOKENS;    // Detail chunks: Allow full thinking process, prompt enforces content preservation
+const MAX_TOKENS_CHUNK_0 = MAX_TOKENS_CONFIG;  // Chunk 0: No thinking needed, prompt enforces 200-400 char output
+const MAX_TOKENS_DETAIL = MAX_TOKENS_CONFIG;    // Detail chunks: No thinking needed, prompt enforces content preservation
 
 /** Validation constants */
 const MAX_CONTENT_LENGTH = 100000;
@@ -528,7 +529,7 @@ async function callFireworksAPI(
 				}
 			],
 			temperature: TEMPERATURE,
-			max_tokens: maxTokens || MAX_TOKENS
+			max_tokens: maxTokens || MAX_TOKENS_CONFIG
 		});
 
 		const content = response.choices[0]?.message?.content;

@@ -6,6 +6,7 @@ import { FIREWORKS_API_KEY, VOYAGE_API_KEY } from '$env/static/private';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
 import { createClient } from '@supabase/supabase-js';
 import { buildContextForCalls1A1B } from '$lib/context-builder';
+import { CHAT_MODEL } from '$lib/config/models';
 
 const fireworks = new OpenAI({
 	baseURL: 'https://api.fireworks.ai/inference/v1',
@@ -239,7 +240,7 @@ async function compressToJournal(
 
 		// Call 2A: Initial Artisan Cut compression
 		const call2A = await fireworks.chat.completions.create({
-			model: 'accounts/fireworks/models/qwen3-235b-a22b',
+			model: CHAT_MODEL,
 			messages: [
 				{
 					role: 'system',
@@ -269,7 +270,7 @@ async function compressToJournal(
 
 		// Call 2B: Verification and refinement
 		const call2B = await fireworks.chat.completions.create({
-			model: 'accounts/fireworks/models/qwen3-235b-a22b',
+			model: CHAT_MODEL,
 			messages: [
 				{
 					role: 'system',
@@ -372,7 +373,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		const { context, stats } = await buildContextForCalls1A1B(
 			null, // user_id (null for development, no auth yet)
 			persona, // current persona for instruction filtering
-			'accounts/fireworks/models/qwen3-235b-a22b',
+			CHAT_MODEL,
 			message // user query for vector search (Priority 5)
 		);
 
@@ -385,7 +386,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		// Call 1A: Initial response (hidden from user) with memory context
 		const call1A = await fireworks.chat.completions.create({
-			model: 'accounts/fireworks/models/qwen3-235b-a22b',
+			model: CHAT_MODEL,
 			messages: [{ role: 'user', content: fullUserPrompt }],
 			max_tokens: 4096,
 			temperature: 0.7
@@ -396,7 +397,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		// Call 1B: Refine response with critique prompt - STREAMING
 		// Note: Call 1B receives the SAME context as Call 1A (for informed critique)
 		const call1B = await fireworks.chat.completions.create({
-			model: 'accounts/fireworks/models/qwen3-235b-a22b',
+			model: CHAT_MODEL,
 			messages: [
 				{ role: 'user', content: fullUserPrompt }, // Same context as Call 1A
 				{ role: 'assistant', content: call1AResponse },

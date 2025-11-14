@@ -1,13 +1,14 @@
 import OpenAI from 'openai';
 import type { FileType } from './file-extraction';
 import { generateEmbedding } from './vectorization';
+import { FILE_MODEL, MAX_TOKENS } from '$lib/config/models';
 
 // ============================================================================
 // CONSTANTS
 // ============================================================================
 
 /** API Model Configuration */
-const MODEL_NAME = 'accounts/fireworks/models/qwen3-235b-a22b' as const;
+const MODEL_NAME = FILE_MODEL;
 
 /** API Call Configuration */
 const TEMPERATURE = 0.7;

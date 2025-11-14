@@ -8,6 +8,7 @@ import { FileExtractionError } from './file-extraction';
 import { FileChunkerError } from './file-chunker';
 import { FileCompressionError } from './file-compressor';
 import { VectorizationError } from './vectorization';
+import { processBatched } from './batch-processor';
 
 // ============================================================================
 // ERROR CLASSES
@@ -579,20 +580,34 @@ export async function processFileBackground(
 				`Compressing ${detailChunks.length} detail chunks in parallel...`
 			);
 
-			// Compress all detail chunks in parallel
-			const compressionPromises = detailChunks.map((chunkText, i) => {
-				const chunkIndex = i + 1; // Start at 1 (Chunk 0 already done)
-				return compressChunk({
-					chunkText: chunkText,
-					chunkIndex: chunkIndex,
-					totalChunks: totalChunks,
-					filename: filename,
-					fileType: fileType
-				});
-			});
-
-			// Wait for all compressions to complete
-			const compressedResults = await Promise.all(compressionPromises);
+			// Compress all detail chunks in batches of 10
+			const compressedResults = await processBatched(
+				detailChunks,
+				async (chunkText, i) => {
+					const chunkIndex = i + 1; // Start at 1 (Chunk 0 already done)
+					return compressChunk({
+						chunkText: chunkText,
+						chunkIndex: chunkIndex,
+						totalChunks: totalChunks,
+						filename: filename,
+						fileType: fileType
+					});
+				},
+				{
+					batchSize: 10,
+					onProgress: async (completed, total) => {
+						// Calculate progress: 40% → 70% (30% range)
+						const progress = Math.round(40 + (30 * completed / total));
+						await reportProgress(
+							options?.onProgress,
+							fileId,
+							'compression',
+							progress,
+							`Compressed ${completed}/${total} chunks`
+						);
+					}
+				}
+			);
 			detailChunksCompressed.push(...compressedResults);
 
 			// Report completion
@@ -664,11 +679,25 @@ export async function processFileBackground(
 				`Generating ${allCompressed.length} embeddings in parallel...`
 			);
 
-			// Generate all embeddings in parallel
-			const embeddingPromises = allCompressed.map(compressed =>
-				generateEmbedding(compressed.description)
+			// Generate all embeddings in batches of 10
+			const generatedEmbeddings = await processBatched(
+				allCompressed,
+				async (compressed) => generateEmbedding(compressed.description),
+				{
+					batchSize: 10,
+					onProgress: async (completed, total) => {
+						// Calculate progress: 70% → 90% (20% range)
+						const progress = Math.round(70 + (20 * completed / total));
+						await reportProgress(
+							options?.onProgress,
+							fileId,
+							'embedding',
+							progress,
+							`Generated ${completed}/${total} embeddings`
+						);
+					}
+				}
 			);
-			const generatedEmbeddings = await Promise.all(embeddingPromises);
 			embeddings.push(...generatedEmbeddings);
 
 			// Report completion
