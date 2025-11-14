@@ -100,8 +100,8 @@ export async function buildContextForCalls1A1B(
 
 	// Priority 2: Starred messages (user-curated memory)
 	let starredQuery = supabase
-		.from('superjournal')
-		.select('user_message, ai_response, persona_name, created_at')
+		.from('journal')
+		.select('boss_essence, persona_essence, persona_name, created_at')
 		.eq('is_starred', true);
 
 	if (userId === null) {
@@ -296,29 +296,40 @@ export async function buildContextForCalls1A1B(
 		}
 	}
 
-	// Priority 6: File uploads (Artisan Cut compressed descriptions from user's ready files)
-	const readyFiles = await fetchReadyFiles(userId);
+	// Priority 6: File chunks vector search (only if userQuery provided)
+	if (userQuery) {
+		try {
+			// Reuse query embedding from Priority 5
+			console.log('[Context Builder] Generating query embedding for file chunks');
+			const queryEmbedding = await voyage.embed({
+				input: userQuery,
+				model: 'voyage-3' // 1024 dimensions
+			});
 
-	if (readyFiles.length > 0) {
-		// Greedily pack files into remaining budget
-		const includedFiles = [];
-		let filesTokens = 0;
+			const queryVector = queryEmbedding.data[0].embedding;
 
-		for (const file of readyFiles) {
-			const formattedFile = formatFileForContext(file);
-			const fileSize = estimateTokens(formattedFile);
+			// Perform vector search on file chunks
+			const { data: fileChunkResults } = await supabase.rpc('search_file_chunks', {
+				query_embedding: queryVector,
+				match_threshold: 0.7,
+				match_count: 20,
+				filter_user_id: userId
+			});
 
-			if (totalTokens + filesTokens + fileSize <= contextBudget) {
-				includedFiles.push(file);
-				filesTokens += fileSize;
-			} else {
-				break; // Budget exhausted
+			if (fileChunkResults && fileChunkResults.length > 0) {
+				// Format file chunk results
+				const fileChunksText = formatFileChunks(fileChunkResults);
+				const fileChunksTokens = estimateTokens(fileChunksText);
+
+				if (totalTokens + fileChunksTokens <= contextBudget) {
+					components.files = fileChunksText;
+					totalTokens += fileChunksTokens;
+				}
+
+				console.log('[Context Builder] File chunks loaded', fileChunkResults.length, 'results');
 			}
-		}
-
-		if (includedFiles.length > 0) {
-			components.files = formatFilesForContext(includedFiles);
-			totalTokens += filesTokens;
+		} catch (fileChunkError) {
+			console.error('[Context Builder] File chunk search error:', fileChunkError);
 		}
 	}
 
@@ -389,8 +400,7 @@ function formatJournalHistory(
 			(entry) =>
 				`[Recent Memory - ${new Date(entry.created_at).toLocaleDateString()}]
 User: ${entry.boss_essence}
-${entry.persona_name}: ${entry.persona_essence}
-Arc: ${entry.decision_arc_summary}`
+${entry.persona_name}: ${entry.persona_essence}`
 		)
 		.join('\n\n');
 
@@ -400,8 +410,8 @@ Arc: ${entry.decision_arc_summary}`
 // Format starred messages
 function formatStarredMessages(
 	entries: Array<{
-		user_message: string;
-		ai_response: string;
+		boss_essence: string;
+		persona_essence: string;
 		persona_name: string;
 		created_at: string;
 	}>
@@ -412,8 +422,8 @@ function formatStarredMessages(
 		.map(
 			(entry) =>
 				`[Starred - ${new Date(entry.created_at).toLocaleDateString()}]
-User: ${entry.user_message}
-${entry.persona_name}: ${entry.ai_response}`
+User: ${entry.boss_essence}
+${entry.persona_name}: ${entry.persona_essence}`
 		)
 		.join('\n\n');
 
@@ -437,8 +447,7 @@ function formatInstructions(
 			(entry) =>
 				`[Instruction - ${new Date(entry.created_at).toLocaleDateString()}]
 User: ${entry.boss_essence}
-${entry.persona_name}: ${entry.persona_essence}
-Arc: ${entry.decision_arc_summary}`
+${entry.persona_name}: ${entry.persona_essence}`
 		)
 		.join('\n\n');
 
@@ -461,14 +470,35 @@ function formatVectorSearchResults(
 	const formatted = entries
 		.map(
 			(entry) =>
-				`[Relevant Memory - ${new Date(entry.created_at).toLocaleDateString()} - Salience: ${entry.salience_score}]
+				`[Relevant Memory - ${new Date(entry.created_at).toLocaleDateString()}]
 User: ${entry.boss_essence}
-AI: ${entry.persona_essence}
-Arc: ${entry.decision_arc_summary}`
+AI: ${entry.persona_essence}`
 		)
 		.join('\n\n');
 
 	return `--- SEMANTICALLY RELEVANT MEMORIES (Vector Search Results) ---\n${formatted}\n\n`;
+}
+
+// Format file chunks
+function formatFileChunks(
+	entries: Array<{
+		filename: string;
+		chunk_index: number;
+		description: string;
+		similarity: number;
+	}>
+): string {
+	if (entries.length === 0) return '';
+
+	const formatted = entries
+		.map(
+			(entry) =>
+				`[File - ${entry.filename} - Chunk ${entry.chunk_index}]
+${entry.description}`
+		)
+		.join('\n\n');
+
+	return `--- UPLOADED FILE CONTENTS (Semantically Relevant) ---\n${formatted}\n\n`;
 }
 
 // Format decision arcs
@@ -525,78 +555,6 @@ function truncateArcsToFit(
 		: '';
 }
 
-/**
- * Fetch ready files for a user, ordered by newest first
- */
-async function fetchReadyFiles(userId: string | null): Promise<
-	Array<{
-		filename: string;
-		file_type: string;
-		description: string | null;
-	}>
-> {
-	let query = supabase
-		.from('files')
-		.select('filename, file_type, description')
-		.eq('status', 'ready')
-		.order('uploaded_at', { ascending: false });
-
-	if (userId === null) {
-		query = query.is('user_id', null);
-	} else {
-		query = query.eq('user_id', userId);
-	}
-
-	const { data, error } = await query;
-
-	if (error) {
-		console.warn('[Context Builder] Failed to fetch ready files:', error);
-		return [];
-	}
-
-	return data || [];
-}
-
-/**
- * Format a single file for context injection
- * Assumes: files with status='ready' always have descriptions
- * (null descriptions are skipped as safety measure against incomplete processing)
- * Format: ## [filename] (file_type)
- * [description]
- *
- */
-function formatFileForContext(file: {
-	filename: string;
-	file_type: string;
-	description: string | null;
-}): string {
-	if (!file.description) {
-		// Skip files with no description (shouldn't happen with ready status, but safe)
-		return '';
-	}
-
-	return `## ${file.filename} (${file.file_type})\n${file.description}\n\n`;
-}
-
-/**
- * Format multiple files for context injection
- * Includes header and count summary
- */
-function formatFilesForContext(
-	files: Array<{
-		filename: string;
-		file_type: string;
-		description: string | null;
-	}>
-): string {
-	if (files.length === 0) {
-		return '';
-	}
-
-	const filesText = files.map((f) => formatFileForContext(f)).join('');
-
-	return `--- UPLOADED FILES (${files.length} file${files.length === 1 ? '' : 's'} in context) ---\n${filesText}`;
-}
 
 // Assemble all context components into final string
 function assembleContext(components: ContextComponents): string {

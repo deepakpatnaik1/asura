@@ -18,7 +18,7 @@
   - Last 5 full message turns (working memory: complete messages from me and your responses)
   - Starred messages (conversations I pinned as important)
   - Behavioral instructions (persistent directives I've given - global or persona-specific)
-  - Last 100 compressed message turns (recent memory: compressed versions of our conversations with decision arcs)
+  - Last 100 compressed message turns (recent memory: compressed versions of our conversations)
   - Vector-based semantic search for earlier message turns (automatic when my query is semantically relevant to past conversations, re-ranked by similarity × salience)
 - You have access to uploaded file contents through Artisan Cut compressed descriptions.
 
