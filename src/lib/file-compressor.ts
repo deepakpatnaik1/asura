@@ -31,31 +31,37 @@ export class FileCompressionError extends Error {
 // ============================================================================
 
 /**
- * Input to compression function
+ * Input for chunk compression
  */
-export interface CompressionInput {
-	/** Extracted text content from file */
-	extractedText: string;
-	/** Original filename including extension */
+export interface ChunkCompressionInput {
+	/** Single chunk text (not full file) */
+	chunkText: string;
+	/** Chunk position: 0 = overview, 1+ = detail */
+	chunkIndex: number;
+	/** Total number of chunks in file */
+	totalChunks: number;
+	/** Original filename */
 	filename: string;
-	/** Classified file type */
+	/** File type classification */
 	fileType: FileType;
 }
 
 /**
- * Output from compression function (final result)
+ * Output from chunk compression
  */
-export interface CompressionResult {
+export interface ChunkCompressionResult {
 	/** Exact filename from input */
 	filename: string;
 	/** File type from input */
 	fileType: FileType;
-	/** Artisan Cut compressed description */
+	/** Compressed description for this chunk */
 	description: string;
+	/** Which chunk this is */
+	chunkIndex: number;
 	/** Raw Call 2A response for debugging */
-	call2aResponse: any;
+	call2aResponse: Call2Response;
 	/** Raw Call 2B response for debugging */
-	call2bResponse: any;
+	call2bResponse: Call2Response;
 }
 
 /**
@@ -76,7 +82,11 @@ const MODEL_NAME = 'accounts/fireworks/models/qwen3-235b-a22b' as const;
 
 /** API Call Configuration */
 const TEMPERATURE = 0.7;
-const MAX_TOKENS = 2000;
+const MAX_TOKENS = 2000; // Default fallback
+
+/** Max tokens for chunk compression */
+const MAX_TOKENS_CHUNK_0 = 150;  // Chunk 0: concise metadata
+const MAX_TOKENS_DETAIL = 250;    // Detail chunks: preserve content
 
 /** Validation constants */
 const MAX_CONTENT_LENGTH = 100000;
@@ -371,21 +381,37 @@ No additional text, analysis, or commentary.`;
 // ============================================================================
 
 /**
- * Validate compression input
+ * Validate chunk compression input
  */
-function validateInput(input: CompressionInput): void {
-	if (!input.extractedText || input.extractedText.trim().length === 0) {
+function validateChunkInput(input: ChunkCompressionInput): void {
+	if (!input.chunkText || input.chunkText.trim().length === 0) {
 		throw new FileCompressionError(
-			'Extracted text cannot be empty',
+			'Chunk text cannot be empty',
 			'EMPTY_CONTENT'
 		);
 	}
 
-	if (input.extractedText.length > MAX_CONTENT_LENGTH) {
+	if (input.chunkIndex < 0) {
 		throw new FileCompressionError(
-			`Content exceeds maximum length of ${MAX_CONTENT_LENGTH} characters`,
+			'Chunk index must be non-negative',
 			'VALIDATION_ERROR',
-			{ actualLength: input.extractedText.length }
+			{ providedIndex: input.chunkIndex }
+		);
+	}
+
+	if (input.totalChunks < 1) {
+		throw new FileCompressionError(
+			'Total chunks must be at least 1',
+			'VALIDATION_ERROR',
+			{ providedTotal: input.totalChunks }
+		);
+	}
+
+	if (input.chunkIndex >= input.totalChunks) {
+		throw new FileCompressionError(
+			'Chunk index must be less than total chunks',
+			'VALIDATION_ERROR',
+			{ chunkIndex: input.chunkIndex, totalChunks: input.totalChunks }
 		);
 	}
 
@@ -480,7 +506,8 @@ function parseJsonResponse(text: string): Call2Response {
  */
 async function callFireworksAPI(
 	systemPrompt: string,
-	userContent: string
+	userContent: string,
+	maxTokens?: number
 ): Promise<string> {
 	const apiKey = process.env.FIREWORKS_API_KEY || '';
 
@@ -503,7 +530,7 @@ async function callFireworksAPI(
 				}
 			],
 			temperature: TEMPERATURE,
-			max_tokens: MAX_TOKENS
+			max_tokens: maxTokens || MAX_TOKENS
 		});
 
 		const content = response.choices[0]?.message?.content;
@@ -549,48 +576,67 @@ async function callFireworksAPI(
 // ============================================================================
 
 /**
- * Compress file content using Artisan Cut technique via Fireworks AI
+ * Compress a single file chunk using Artisan Cut technique via Fireworks AI
+ *
+ * This function handles both Chunk 0 (file overview) and detail chunks (1+) by
+ * routing to different prompts and token limits based on chunk index.
+ *
+ * Chunk 0 (Overview):
+ * - Uses CHUNK_0_COMPRESSION_PROMPT (metadata-focused)
+ * - Uses CHUNK_0_CALL_2B_PROMPT for verification
+ * - Max tokens: 150 (concise metadata)
+ * - Purpose: Make file discoverable as entity
+ *
+ * Detail Chunks (1+):
+ * - Uses MODIFIED_CALL_2A_PROMPT (detail-focused)
+ * - Uses MODIFIED_CALL_2B_PROMPT for verification
+ * - Max tokens: 250 (preserve content)
+ * - Purpose: Capture specific content
  *
  * Flow:
- * 1. Validate input (non-empty text, valid file type)
- * 2. Call Fireworks with Modified Call 2A prompt
- * 3. Parse Call 2A response as JSON, validate structure
- * 4. Call Fireworks with Modified Call 2B prompt using Call 2A output
- * 5. Parse Call 2B response as JSON, validate structure
- * 6. Return final CompressionResult
+ * 1. Validate environment and input
+ * 2. Select prompts based on chunk index (0 vs 1+)
+ * 3. Call 2A: Initial compression
+ * 4. Call 2B: Verification and refinement
+ * 5. Return ChunkCompressionResult with chunk index
  *
- * @param input - Compression input with extracted text, filename, and file type
- * @returns Compression result with filename, file type, and compressed description
+ * @param input - Chunk compression input with chunk text, index, total chunks, filename, and file type
+ * @returns Chunk compression result with filename, file type, description, and chunk index
  * @throws FileCompressionError - For validation, API, or parsing errors
  */
-export async function compressFile(input: CompressionInput): Promise<CompressionResult> {
+export async function compressChunk(input: ChunkCompressionInput): Promise<ChunkCompressionResult> {
 	// Validate environment first
-	try {
-		validateEnvironment();
-	} catch (error) {
-		throw error;
-	}
+	validateEnvironment();
 
 	// Validate input
+	validateChunkInput(input);
+
+	// Select prompts based on chunk index
+	const call2aPrompt = input.chunkIndex === 0
+		? CHUNK_0_COMPRESSION_PROMPT      // Metadata-focused
+		: MODIFIED_CALL_2A_PROMPT;        // Detail-focused
+
+	const call2bPrompt = input.chunkIndex === 0
+		? CHUNK_0_CALL_2B_PROMPT
+		: MODIFIED_CALL_2B_PROMPT;
+
+	// Select max tokens based on chunk index
+	const maxTokens = input.chunkIndex === 0
+		? MAX_TOKENS_CHUNK_0  // 150: concise metadata
+		: MAX_TOKENS_DETAIL;  // 250: preserve content
+
+	let call2aResponse: Call2Response;
+	let call2bResponse: Call2Response;
+
+	// Call 2A: Initial compression
 	try {
-		validateInput(input);
-	} catch (error) {
-		throw error;
-	}
+		const userContent = `File: ${input.filename} (Chunk ${input.chunkIndex + 1}/${input.totalChunks})
+File Type: ${input.fileType}
 
-	let call2aResponse: any;
-	let call2bResponse: any;
+${input.chunkText}`;
 
-	// Step 1: Call Fireworks with Modified Call 2A prompt
-	try {
-		const userContent = `File: ${input.filename}\nFile Type: ${input.fileType}\n\n${input.extractedText}`;
-
-		const call2aRawResponse = await callFireworksAPI(
-			MODIFIED_CALL_2A_PROMPT,
-			userContent
-		);
-
-		call2aResponse = parseJsonResponse(call2aRawResponse);
+		const call2aRaw = await callFireworksAPI(call2aPrompt, userContent, maxTokens);
+		call2aResponse = parseJsonResponse(call2aRaw);
 	} catch (error) {
 		if (error instanceof FileCompressionError) {
 			throw error;
@@ -602,16 +648,11 @@ export async function compressFile(input: CompressionInput): Promise<Compression
 		);
 	}
 
-	// Step 2: Call Fireworks with Modified Call 2B prompt
+	// Call 2B: Verification
 	try {
 		const userContent = JSON.stringify(call2aResponse);
-
-		const call2bRawResponse = await callFireworksAPI(
-			MODIFIED_CALL_2B_PROMPT,
-			userContent
-		);
-
-		call2bResponse = parseJsonResponse(call2bRawResponse);
+		const call2bRaw = await callFireworksAPI(call2bPrompt, userContent, maxTokens);
+		call2bResponse = parseJsonResponse(call2bRaw);
 	} catch (error) {
 		if (error instanceof FileCompressionError) {
 			throw error;
@@ -623,11 +664,12 @@ export async function compressFile(input: CompressionInput): Promise<Compression
 		);
 	}
 
-	// Return final result
+	// Return result with chunk index
 	return {
 		filename: call2bResponse.filename,
 		fileType: call2bResponse.file_type,
 		description: call2bResponse.description,
+		chunkIndex: input.chunkIndex,
 		call2aResponse: call2aResponse,
 		call2bResponse: call2bResponse
 	};
@@ -638,11 +680,16 @@ export async function compressFile(input: CompressionInput): Promise<Compression
 // ============================================================================
 
 // Export prompts for use in file-chunker.ts and other modules
-export { CHUNK_0_COMPRESSION_PROMPT, CHUNK_0_CALL_2B_PROMPT, MODIFIED_CALL_2A_PROMPT, MODIFIED_CALL_2B_PROMPT };
+export {
+	CHUNK_0_COMPRESSION_PROMPT,
+	CHUNK_0_CALL_2B_PROMPT,
+	MODIFIED_CALL_2A_PROMPT,
+	MODIFIED_CALL_2B_PROMPT
+};
 
 // Already exported above:
 // - FileCompressionError (class)
-// - CompressionInput (interface)
-// - CompressionResult (interface)
+// - ChunkCompressionInput (interface)
+// - ChunkCompressionResult (interface)
 // - Call2Response (interface)
-// - compressFile (function)
+// - compressChunk (function)
