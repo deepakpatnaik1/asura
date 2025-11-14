@@ -151,8 +151,8 @@ export const POST: RequestHandler = async ({ request }) => {
     }
 
     // 6. PROCESS FILE IN BACKGROUND (fire-and-forget)
-    // Slow path: Compress, embed, finalize
-    processFileBackground(fileId, extraction, filename).catch(error => {
+    // Slow path: Chunking, compression, embedding, finalization
+    processFileBackground(fileId, extraction, filename, userId).catch(error => {
       // Log but don't throw - processing failures are captured in DB via markFileFailed()
       console.error('[Upload API] Background processing error:', error);
     });

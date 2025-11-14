@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import type { CompressionInput, CompressionResult } from '$lib/file-compressor';
+import type { ChunkCompressionInput, ChunkCompressionResult } from '$lib/file-compressor';
 
 // Mock OpenAI using vi.hoisted() BEFORE imports
 const mockFireworksClient = vi.hoisted(() => ({
@@ -27,7 +27,7 @@ vi.mock('openai', () => ({
 }));
 
 // NOW import the module that uses OpenAI
-import { compressFile, FileCompressionError } from '$lib/file-compressor';
+import { compressChunk, FileCompressionError } from '$lib/file-compressor';
 
 describe('file-compressor', () => {
 	beforeEach(() => {

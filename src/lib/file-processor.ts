@@ -1,10 +1,11 @@
 import { supabase } from './supabase';
 import { extractText, validateFileSize, generateContentHash } from './file-extraction';
-import { compressFile } from './file-compressor';
+import { generateFileOverview, chunkTextBySemantic } from './file-chunker';
+import { compressChunk, type ChunkCompressionResult } from './file-compressor';
 import { generateEmbedding } from './vectorization';
-import type { ExtractionResult, FileType } from './file-extraction';
-import type { CompressionResult } from './file-compressor';
+import type { FileType } from './file-extraction';
 import { FileExtractionError } from './file-extraction';
+import { FileChunkerError } from './file-chunker';
 import { FileCompressionError } from './file-compressor';
 import { VectorizationError } from './vectorization';
 
@@ -44,6 +45,7 @@ export class FileProcessorError extends Error {
 export type FileProcessorErrorCode =
 	| 'VALIDATION_ERROR'
 	| 'EXTRACTION_ERROR'
+	| 'CHUNKING_ERROR'
 	| 'COMPRESSION_ERROR'
 	| 'EMBEDDING_ERROR'
 	| 'DUPLICATE_FILE'
@@ -51,9 +53,15 @@ export type FileProcessorErrorCode =
 	| 'UNKNOWN_ERROR';
 
 /**
- * Processing stages in order
+ * Processing stages in order (updated for chunking pipeline)
  */
-export type ProcessingStage = 'extraction' | 'compression' | 'embedding' | 'finalization';
+export type ProcessingStage =
+	| 'extraction'
+	| 'chunking'
+	| 'compression'
+	| 'embedding'
+	| 'finalization'
+	| 'completed';
 
 /**
  * Progress update event
@@ -103,6 +111,7 @@ interface FileRecord {
 	user_id: string;
 	filename: string;
 	file_type: FileType;
+	file_path: string | null;
 	content_hash: string;
 	description: string | null;
 	embedding: number[] | null;
@@ -119,18 +128,24 @@ interface FileRecord {
 // ============================================================================
 
 /**
- * Progress milestones for each stage
+ * Chunking parameters
  */
-const PROGRESS_MAP = {
-	extraction_start: 0,
-	extraction_end: 25,
-	compression_start: 25,
-	compression_end: 75,
-	embedding_start: 75,
-	embedding_end: 90,
-	finalization_start: 90,
-	finalization_end: 100
-} as const;
+const TARGET_CHUNK_TOKENS = 768;
+const SIMILARITY_THRESHOLD = 0.5;
+
+/**
+ * Progress phase boundaries (percentages)
+ */
+const PROGRESS_EXTRACTION = 10;
+const PROGRESS_OVERVIEW = 20;
+const PROGRESS_CHUNKING = 30;
+const PROGRESS_CHUNK0_COMPRESSION = 40;
+const PROGRESS_DETAIL_COMPRESSION_START = 40;
+const PROGRESS_DETAIL_COMPRESSION_END = 70;
+const PROGRESS_EMBEDDING_START = 70;
+const PROGRESS_EMBEDDING_END = 90;
+const PROGRESS_SAVE_START = 90;
+const PROGRESS_COMPLETE = 100;
 
 /**
  * Retry configuration for database updates
@@ -145,10 +160,16 @@ const RETRY_CONFIG = {
 // ============================================================================
 
 /**
- * Process an uploaded file through the complete pipeline
+ * Process an uploaded file through the complete chunking pipeline
  *
- * Convenience wrapper that combines createFilePending() + processFileBackground().
- * For production use, prefer calling these functions separately to return ID quickly.
+ * NEW CHUNKING FLOW (Tasks 6-7):
+ * 1. Extract text (0-10%)
+ * 2. Generate Chunk 0 overview (10-20%)
+ * 3. Semantic chunking (20-30%)
+ * 4. Compress Chunk 0 (30-40%)
+ * 5. Compress detail chunks (40-70%, granular progress)
+ * 6. Generate embeddings for all chunks (70-90%, granular progress)
+ * 7. Save all chunks to file_chunks table (90-100%)
  *
  * @param input - File data and metadata
  * @param options - Optional processing options
@@ -168,7 +189,7 @@ export async function processFile(
 	});
 
 	// 2. Process in background (slow) - AWAIT since this is all-in-one function
-	return await processFileBackground(fileId, extraction, input.filename, {
+	return await processFileBackground(fileId, extraction, input.filename, input.userId, {
 		onProgress: options?.onProgress
 	});
 }
@@ -198,15 +219,21 @@ export async function createFilePending(
 	}
 ): Promise<{
 	fileId: string;
-	extraction: ExtractionResult;
+	extraction: { text: string; fileType: FileType; contentHash: string };
 }> {
 	// 1. Validate input
 	validateProcessFileInput(input);
 
 	// 2. Extract text from file
-	let extraction: ExtractionResult;
+	let text: string;
+	let fileType: FileType;
+	let contentHash: string;
+
 	try {
-		extraction = await extractText(input.fileBuffer, input.filename);
+		const extraction = await extractText(input.fileBuffer, input.filename);
+		text = extraction.text;
+		fileType = extraction.fileType;
+		contentHash = extraction.contentHash;
 	} catch (error) {
 		if (error instanceof FileExtractionError) {
 			throw new FileProcessorError(
@@ -222,13 +249,13 @@ export async function createFilePending(
 	// 3. Check for duplicates (per-user scope)
 	if (!options?.skipDuplicateCheck) {
 		try {
-			const duplicate = await checkDuplicate(extraction.contentHash, input.userId);
+			const duplicate = await checkDuplicate(contentHash, input.userId);
 			if (duplicate.isDuplicate) {
 				throw new FileProcessorError(
-					`File already exists (duplicate content hash: ${extraction.contentHash.substring(0, 8)}...)`,
+					`File already exists (duplicate content hash: ${contentHash.substring(0, 8)}...)`,
 					'DUPLICATE_FILE',
 					'extraction',
-					{ existingFileId: duplicate.existingFileId, contentHash: extraction.contentHash }
+					{ existingFileId: duplicate.existingFileId, contentHash: contentHash }
 				);
 			}
 		} catch (error) {
@@ -250,8 +277,8 @@ export async function createFilePending(
 		const createResult = await createFileRecord(
 			input.userId,
 			input.filename,
-			extraction.contentHash,
-			extraction.fileType
+			contentHash,
+			fileType
 		);
 		fileId = createResult.id;
 	} catch (error) {
@@ -266,76 +293,242 @@ export async function createFilePending(
 	// 5. Return file ID and extraction
 	return {
 		fileId,
-		extraction
+		extraction: {
+			text,
+			fileType,
+			contentHash
+		}
 	};
 }
 
 /**
- * Complete file processing in background
+ * Complete file processing in background with chunking pipeline
  *
- * This is the "slow path" - compression, embedding, and finalization.
+ * This is the "slow path" - chunking, compression, embedding, and finalization.
  * Should be called without awaiting (fire-and-forget) after createFilePending().
  *
- * Flow:
- * 1. Compress extracted text
- * 2. Update DB with compression progress (25% → 75%)
- * 3. Generate embedding
- * 4. Update DB with embedding progress (75% → 90%)
- * 5. Finalize with status='ready' and progress=100%
+ * NEW CHUNKING FLOW:
+ * Phase 1: Extraction (0-10%) - ALREADY DONE
+ * Phase 2: Generate Chunk 0 overview (10-20%)
+ * Phase 3: Semantic chunking (20-30%)
+ * Phase 4: Compress Chunk 0 (30-40%)
+ * Phase 5: Compress detail chunks (40-70%, granular progress)
+ * Phase 6: Generate embeddings for all chunks (70-90%, granular progress)
+ * Phase 7: Save all chunks to file_chunks table (90-100%)
  *
  * @param fileId - File ID from createFilePending()
  * @param extraction - Extraction result from createFilePending()
  * @param filename - Original filename
+ * @param userId - User ID for chunk ownership
  * @param options - Optional processing options
  * @returns Processing result
  */
 export async function processFileBackground(
 	fileId: string,
-	extraction: ExtractionResult,
+	extraction: { text: string; fileType: FileType; contentHash: string },
 	filename: string,
+	userId: string | null,
 	options?: {
 		onProgress?: ProgressCallback;
 	}
 ): Promise<ProcessFileOutput> {
 	try {
-		// 1. Compress content
-		let compression: CompressionResult;
+		const fullText = extraction.text;
+		const fileType = extraction.fileType;
+
+		// Update to extraction complete (10%)
+		await updateProgress(fileId, PROGRESS_EXTRACTION, 'extraction');
+		await reportProgress(
+			options?.onProgress,
+			fileId,
+			'extraction',
+			PROGRESS_EXTRACTION,
+			'Text extraction complete'
+		);
+
+		// ========================================================================
+		// PHASE 2: Generate Chunk 0 Overview (10-20%)
+		// ========================================================================
+
+		let chunk0Text: string;
+		try {
+			await reportProgress(
+				options?.onProgress,
+				fileId,
+				'chunking',
+				PROGRESS_EXTRACTION,
+				'Generating file overview...'
+			);
+
+			chunk0Text = await generateFileOverview(fullText, filename, fileType);
+
+			await updateProgress(fileId, PROGRESS_OVERVIEW, 'chunking');
+			await reportProgress(
+				options?.onProgress,
+				fileId,
+				'chunking',
+				PROGRESS_OVERVIEW,
+				'File overview generated'
+			);
+		} catch (error) {
+			if (error instanceof FileChunkerError) {
+				await markFileFailed(
+					fileId,
+					'CHUNKING_ERROR',
+					`Overview generation failed: ${error.message}`,
+					'chunking'
+				);
+
+				return {
+					id: fileId,
+					filename: filename,
+					fileType: fileType,
+					status: 'failed',
+					error: {
+						code: 'CHUNKING_ERROR',
+						message: error.message,
+						stage: 'chunking'
+					}
+				};
+			}
+
+			await markFileFailed(
+				fileId,
+				'UNKNOWN_ERROR',
+				`Overview generation error: ${error instanceof Error ? error.message : String(error)}`,
+				'chunking'
+			);
+
+			return {
+				id: fileId,
+				filename: filename,
+				fileType: fileType,
+				status: 'failed',
+				error: {
+					code: 'CHUNKING_ERROR',
+					message: error instanceof Error ? error.message : String(error),
+					stage: 'chunking'
+				}
+			};
+		}
+
+		// ========================================================================
+		// PHASE 3: Semantic Chunking (20-30%)
+		// ========================================================================
+
+		let detailChunks: string[];
+		try {
+			await reportProgress(
+				options?.onProgress,
+				fileId,
+				'chunking',
+				PROGRESS_OVERVIEW,
+				'Creating semantic chunks...'
+			);
+
+			const chunkingResult = await chunkTextBySemantic({
+				text: fullText,
+				targetChunkTokens: TARGET_CHUNK_TOKENS,
+				similarityThreshold: SIMILARITY_THRESHOLD
+			});
+
+			detailChunks = chunkingResult.chunks;
+
+			await updateProgress(fileId, PROGRESS_CHUNKING, 'chunking');
+			await reportProgress(
+				options?.onProgress,
+				fileId,
+				'chunking',
+				PROGRESS_CHUNKING,
+				`Created ${detailChunks.length} detail chunks`
+			);
+		} catch (error) {
+			if (error instanceof FileChunkerError) {
+				await markFileFailed(
+					fileId,
+					'CHUNKING_ERROR',
+					`Semantic chunking failed: ${error.message}`,
+					'chunking'
+				);
+
+				return {
+					id: fileId,
+					filename: filename,
+					fileType: fileType,
+					status: 'failed',
+					error: {
+						code: 'CHUNKING_ERROR',
+						message: error.message,
+						stage: 'chunking'
+					}
+				};
+			}
+
+			await markFileFailed(
+				fileId,
+				'UNKNOWN_ERROR',
+				`Chunking error: ${error instanceof Error ? error.message : String(error)}`,
+				'chunking'
+			);
+
+			return {
+				id: fileId,
+				filename: filename,
+				fileType: fileType,
+				status: 'failed',
+				error: {
+					code: 'CHUNKING_ERROR',
+					message: error instanceof Error ? error.message : String(error),
+					stage: 'chunking'
+				}
+			};
+		}
+
+		// ========================================================================
+		// PHASE 4: Compress Chunk 0 (30-40%)
+		// ========================================================================
+
+		let chunk0Compressed: ChunkCompressionResult;
+		const totalChunks = detailChunks.length + 1; // +1 for Chunk 0
+
 		try {
 			await reportProgress(
 				options?.onProgress,
 				fileId,
 				'compression',
-				PROGRESS_MAP.compression_start,
-				'Starting compression...'
+				PROGRESS_CHUNKING,
+				'Compressing file overview...'
 			);
 
-			compression = await compressFile({
-				extractedText: extraction.text,
+			chunk0Compressed = await compressChunk({
+				chunkText: chunk0Text,
+				chunkIndex: 0,
+				totalChunks: totalChunks,
 				filename: filename,
-				fileType: extraction.fileType
+				fileType: fileType
 			});
 
+			await updateProgress(fileId, PROGRESS_CHUNK0_COMPRESSION, 'compression');
 			await reportProgress(
 				options?.onProgress,
 				fileId,
 				'compression',
-				PROGRESS_MAP.compression_end,
-				'Compression complete'
+				PROGRESS_CHUNK0_COMPRESSION,
+				'Chunk 0 compressed'
 			);
 		} catch (error) {
 			if (error instanceof FileCompressionError) {
-				// Update database with error
 				await markFileFailed(
 					fileId,
 					'COMPRESSION_ERROR',
-					`Compression failed: ${error.message}`,
+					`Chunk 0 compression failed: ${error.message}`,
 					'compression'
 				);
 
 				return {
 					id: fileId,
 					filename: filename,
-					fileType: extraction.fileType,
+					fileType: fileType,
 					status: 'failed',
 					error: {
 						code: 'COMPRESSION_ERROR',
@@ -345,18 +538,17 @@ export async function processFileBackground(
 				};
 			}
 
-			// Unexpected error - update DB and return
 			await markFileFailed(
 				fileId,
 				'UNKNOWN_ERROR',
-				`Compression error: ${error instanceof Error ? error.message : String(error)}`,
+				`Chunk 0 compression error: ${error instanceof Error ? error.message : String(error)}`,
 				'compression'
 			);
 
 			return {
 				id: fileId,
 				filename: filename,
-				fileType: extraction.fileType,
+				fileType: fileType,
 				status: 'failed',
 				error: {
 					code: 'COMPRESSION_ERROR',
@@ -366,110 +558,228 @@ export async function processFileBackground(
 			};
 		}
 
-		// 2. Update database with compression results
-		try {
-			await updateFileProgress(fileId, {
-				progress: PROGRESS_MAP.compression_end,
-				stage: 'compression'
-			});
-		} catch (error) {
-			console.error('[FileProcessor] Failed to update progress after compression:', error);
-			// Don't throw - continue with embedding
-		}
+		// ========================================================================
+		// PHASE 5: Compress Detail Chunks (40-70%)
+		// ========================================================================
 
-		// 3. Generate embedding
-		let embedding: number[];
-		try {
-			await reportProgress(
-				options?.onProgress,
-				fileId,
-				'embedding',
-				PROGRESS_MAP.embedding_start,
-				'Generating embedding...'
-			);
+		const detailChunksCompressed: ChunkCompressionResult[] = [];
 
-			embedding = await generateEmbedding(compression.description);
+		for (let i = 0; i < detailChunks.length; i++) {
+			try {
+				const chunkIndex = i + 1; // Start at 1 (Chunk 0 already done)
 
-			await reportProgress(
-				options?.onProgress,
-				fileId,
-				'embedding',
-				PROGRESS_MAP.embedding_end,
-				'Embedding complete'
-			);
-		} catch (error) {
-			if (error instanceof VectorizationError) {
-				// Update database with error
+				await reportProgress(
+					options?.onProgress,
+					fileId,
+					'compression',
+					PROGRESS_DETAIL_COMPRESSION_START + (i / detailChunks.length) *
+						(PROGRESS_DETAIL_COMPRESSION_END - PROGRESS_DETAIL_COMPRESSION_START),
+					`Compressing chunk ${chunkIndex}/${totalChunks}...`
+				);
+
+				const compressed = await compressChunk({
+					chunkText: detailChunks[i],
+					chunkIndex: chunkIndex,
+					totalChunks: totalChunks,
+					filename: filename,
+					fileType: fileType
+				});
+
+				detailChunksCompressed.push(compressed);
+
+				// Granular progress: 40% to 70% = 30% range
+				const currentProgress = PROGRESS_DETAIL_COMPRESSION_START +
+					((i + 1) / detailChunks.length) *
+					(PROGRESS_DETAIL_COMPRESSION_END - PROGRESS_DETAIL_COMPRESSION_START);
+
+				await updateProgress(fileId, Math.round(currentProgress), 'compression');
+				await reportProgress(
+					options?.onProgress,
+					fileId,
+					'compression',
+					Math.round(currentProgress),
+					`Compressed ${i + 1}/${detailChunks.length} detail chunks`
+				);
+			} catch (error) {
+				if (error instanceof FileCompressionError) {
+					await markFileFailed(
+						fileId,
+						'COMPRESSION_ERROR',
+						`Detail chunk ${i + 1} compression failed: ${error.message}`,
+						'compression'
+					);
+
+					return {
+						id: fileId,
+						filename: filename,
+						fileType: fileType,
+						status: 'failed',
+						error: {
+							code: 'COMPRESSION_ERROR',
+							message: error.message,
+							stage: 'compression'
+						}
+					};
+				}
+
 				await markFileFailed(
 					fileId,
-					'EMBEDDING_ERROR',
-					`Embedding generation failed: ${error.message}`,
+					'UNKNOWN_ERROR',
+					`Detail chunk ${i + 1} compression error: ${error instanceof Error ? error.message : String(error)}`,
+					'compression'
+				);
+
+				return {
+					id: fileId,
+					filename: filename,
+					fileType: fileType,
+					status: 'failed',
+					error: {
+						code: 'COMPRESSION_ERROR',
+						message: error instanceof Error ? error.message : String(error),
+						stage: 'compression'
+					}
+				};
+			}
+		}
+
+		// ========================================================================
+		// PHASE 6: Generate Embeddings (70-90%)
+		// ========================================================================
+
+		const allCompressed = [chunk0Compressed, ...detailChunksCompressed];
+		const embeddings: number[][] = [];
+
+		for (let i = 0; i < allCompressed.length; i++) {
+			try {
+				await reportProgress(
+					options?.onProgress,
+					fileId,
+					'embedding',
+					PROGRESS_EMBEDDING_START + (i / allCompressed.length) *
+						(PROGRESS_EMBEDDING_END - PROGRESS_EMBEDDING_START),
+					`Generating embedding ${i + 1}/${allCompressed.length}...`
+				);
+
+				const embedding = await generateEmbedding(allCompressed[i].description);
+				embeddings.push(embedding);
+
+				// Granular progress: 70% to 90% = 20% range
+				const currentProgress = PROGRESS_EMBEDDING_START +
+					((i + 1) / allCompressed.length) *
+					(PROGRESS_EMBEDDING_END - PROGRESS_EMBEDDING_START);
+
+				await updateProgress(fileId, Math.round(currentProgress), 'embedding');
+				await reportProgress(
+					options?.onProgress,
+					fileId,
+					'embedding',
+					Math.round(currentProgress),
+					`Generated ${i + 1}/${allCompressed.length} embeddings`
+				);
+			} catch (error) {
+				if (error instanceof VectorizationError) {
+					await markFileFailed(
+						fileId,
+						'EMBEDDING_ERROR',
+						`Embedding generation failed for chunk ${i}: ${error.message}`,
+						'embedding'
+					);
+
+					return {
+						id: fileId,
+						filename: filename,
+						fileType: fileType,
+						status: 'failed',
+						error: {
+							code: 'EMBEDDING_ERROR',
+							message: error.message,
+							stage: 'embedding'
+						}
+					};
+				}
+
+				await markFileFailed(
+					fileId,
+					'UNKNOWN_ERROR',
+					`Embedding error for chunk ${i}: ${error instanceof Error ? error.message : String(error)}`,
 					'embedding'
 				);
 
 				return {
 					id: fileId,
 					filename: filename,
-					fileType: extraction.fileType,
+					fileType: fileType,
 					status: 'failed',
 					error: {
 						code: 'EMBEDDING_ERROR',
-						message: error.message,
+						message: error instanceof Error ? error.message : String(error),
 						stage: 'embedding'
 					}
 				};
 			}
-
-			// Unexpected error - update DB and return
-			await markFileFailed(
-				fileId,
-				'UNKNOWN_ERROR',
-				`Embedding error: ${error instanceof Error ? error.message : String(error)}`,
-				'embedding'
-			);
-
-			return {
-				id: fileId,
-				filename: filename,
-				fileType: extraction.fileType,
-				status: 'failed',
-				error: {
-					code: 'EMBEDDING_ERROR',
-					message: error instanceof Error ? error.message : String(error),
-					stage: 'embedding'
-				}
-			};
 		}
 
-		// 4. Mark file complete with final results
+		// ========================================================================
+		// PHASE 7: Save to Database (90-100%)
+		// ========================================================================
+
 		try {
 			await reportProgress(
 				options?.onProgress,
 				fileId,
 				'finalization',
-				PROGRESS_MAP.finalization_start,
-				'Finalizing...'
+				PROGRESS_SAVE_START,
+				'Saving chunks to database...'
 			);
 
-			await markFileComplete(fileId, compression.description, embedding);
+			await saveAllChunksToDatabase(
+				fileId,
+				userId,
+				chunk0Text,
+				detailChunks,
+				allCompressed,
+				embeddings,
+				filename
+			);
 
+			await updateProgress(fileId, PROGRESS_COMPLETE, 'completed');
 			await reportProgress(
 				options?.onProgress,
 				fileId,
-				'finalization',
-				PROGRESS_MAP.finalization_end,
+				'completed',
+				PROGRESS_COMPLETE,
 				'Processing complete'
 			);
 		} catch (error) {
-			console.error('[FileProcessor] Failed to mark file complete:', error);
-			// Don't throw - file data is already saved
+			await markFileFailed(
+				fileId,
+				'DATABASE_ERROR',
+				`Failed to save chunks: ${error instanceof Error ? error.message : String(error)}`,
+				'finalization'
+			);
+
+			return {
+				id: fileId,
+				filename: filename,
+				fileType: fileType,
+				status: 'failed',
+				error: {
+					code: 'DATABASE_ERROR',
+					message: error instanceof Error ? error.message : String(error),
+					stage: 'finalization'
+				}
+			};
 		}
 
-		// 5. Return success
+		// ========================================================================
+		// SUCCESS
+		// ========================================================================
+
 		return {
 			id: fileId,
 			filename: filename,
-			fileType: extraction.fileType,
+			fileType: fileType,
 			status: 'ready'
 		};
 	} catch (error) {
@@ -500,6 +810,93 @@ export async function processFileBackground(
 // ============================================================================
 
 /**
+ * Save all chunks to database in one transaction
+ *
+ * Inserts all chunks into file_chunks table and updates files table status.
+ *
+ * @param fileId - File ID
+ * @param userId - User ID
+ * @param chunk0Text - Original Chunk 0 text
+ * @param detailChunkTexts - Array of detail chunk texts
+ * @param compressed - Array of compressed chunk results
+ * @param embeddings - Array of embeddings
+ * @param filename - Original filename
+ */
+async function saveAllChunksToDatabase(
+	fileId: string,
+	userId: string | null,
+	chunk0Text: string,
+	detailChunkTexts: string[],
+	compressed: ChunkCompressionResult[],
+	embeddings: number[][],
+	filename: string
+): Promise<void> {
+	// Build chunk records for insertion
+	const chunkRecords = compressed.map((chunk, index) => {
+		const chunkText = index === 0 ? chunk0Text : detailChunkTexts[index - 1];
+
+		return {
+			file_id: fileId,
+			user_id: userId,
+			chunk_index: chunk.chunkIndex,
+			chunk_text: chunkText, // Original chunk text
+			description: chunk.description, // Compressed description
+			embedding: embeddings[index], // 1024-dim vector
+			created_at: new Date().toISOString()
+		};
+	});
+
+	// Insert all chunks in one transaction
+	const { error: chunksError } = await supabase.from('file_chunks').insert(chunkRecords);
+
+	if (chunksError) {
+		throw new Error(`Failed to save chunks: ${chunksError.message}`);
+	}
+
+	// Update files table with completion status
+	const { error: filesError } = await supabase
+		.from('files')
+		.update({
+			status: 'ready',
+			progress: 100,
+			processing_stage: 'completed',
+			description: compressed[0].description, // Chunk 0 description
+			updated_at: new Date().toISOString()
+		})
+		.eq('id', fileId);
+
+	if (filesError) {
+		throw new Error(`Failed to update file: ${filesError.message}`);
+	}
+}
+
+/**
+ * Update file progress and processing stage
+ *
+ * @param fileId - File ID
+ * @param progress - Progress percentage (0-100)
+ * @param stage - Processing stage
+ */
+async function updateProgress(
+	fileId: string,
+	progress: number,
+	stage: ProcessingStage
+): Promise<void> {
+	const { error } = await supabase
+		.from('files')
+		.update({
+			progress: Math.round(progress),
+			processing_stage: stage,
+			updated_at: new Date().toISOString()
+		})
+		.eq('id', fileId);
+
+	if (error) {
+		console.error(`Failed to update progress: ${error.message}`);
+	}
+}
+
+/**
  * Create file record in database with initial status=pending
  */
 async function createFileRecord(
@@ -518,10 +915,7 @@ async function createFileRecord(
 		progress: 0
 	};
 
-	const { data, error } = await supabase
-		.from('files')
-		.insert([record])
-		.select('id');
+	const { data, error } = await supabase.from('files').insert([record]).select('id');
 
 	if (error) {
 		throw new Error(`Database insert failed: ${error.message}`);
@@ -535,92 +929,8 @@ async function createFileRecord(
 }
 
 /**
- * Update file progress and processing stage
- */
-async function updateFileProgress(
-	fileId: string,
-	update: {
-		progress: number;
-		stage?: ProcessingStage;
-		message?: string;
-	}
-): Promise<void> {
-	const updateData: any = {
-		progress: update.progress,
-		updated_at: new Date().toISOString()
-	};
-
-	if (update.stage) {
-		updateData.processing_stage = update.stage;
-	}
-
-	const { error } = await supabase
-		.from('files')
-		.update(updateData)
-		.eq('id', fileId);
-
-	if (error) {
-		throw new Error(`Failed to update progress: ${error.message}`);
-	}
-}
-
-/**
- * Mark file as complete with final results
- * Includes retry logic with exponential backoff (FIX 2 from reviewer)
- */
-async function markFileComplete(
-	fileId: string,
-	description: string,
-	embedding: number[]
-): Promise<void> {
-	const maxAttempts = RETRY_CONFIG.maxAttempts;
-	let lastError: Error | null = null;
-
-	for (let attempt = 0; attempt < maxAttempts; attempt++) {
-		try {
-			const { error } = await supabase
-				.from('files')
-				.update({
-					status: 'ready',
-					description: description,
-					embedding: embedding,
-					progress: 100,
-					processing_stage: 'finalization',
-					updated_at: new Date().toISOString()
-				})
-				.eq('id', fileId);
-
-			if (error) {
-				throw new Error(`Database update failed: ${error.message}`);
-			}
-
-			// Success
-			console.log(`[FileProcessor] File ${fileId} marked complete on attempt ${attempt + 1}`);
-			return;
-		} catch (error) {
-			lastError = error instanceof Error ? error : new Error(String(error));
-			console.warn(
-				`[FileProcessor] Attempt ${attempt + 1}/${maxAttempts} to mark file complete failed:`,
-				lastError.message
-			);
-
-			// Wait before retry (exponential backoff: 1s, 2s, 4s)
-			if (attempt < maxAttempts - 1) {
-				const delayMs = RETRY_CONFIG.baseDelayMs * Math.pow(2, attempt);
-				await new Promise((resolve) => setTimeout(resolve, delayMs));
-			}
-		}
-	}
-
-	// All attempts failed
-	throw new Error(
-		`Failed to mark file complete after ${maxAttempts} attempts: ${lastError?.message || 'Unknown error'}`
-	);
-}
-
-/**
  * Mark file as failed with error details
- * Includes retry logic with exponential backoff (FIX 2 from reviewer)
+ * Includes retry logic with exponential backoff
  */
 async function markFileFailed(
 	fileId: string,
@@ -672,7 +982,7 @@ async function markFileFailed(
 }
 
 /**
- * Check for duplicate file by content hash (user-scoped - FIX 1 from reviewer)
+ * Check for duplicate file by content hash (user-scoped)
  * Only checks within the same user's files
  */
 async function checkDuplicate(
@@ -680,9 +990,7 @@ async function checkDuplicate(
 	userId: string | null
 ): Promise<{ isDuplicate: boolean; existingFileId?: string }> {
 	// Handle null/undefined userId properly (PostgreSQL requires IS NULL, not = 'null')
-	let query = supabase
-		.from('files')
-		.select('id');
+	let query = supabase.from('files').select('id');
 
 	if (userId === null || userId === undefined) {
 		query = query.is('user_id', null);
@@ -690,9 +998,7 @@ async function checkDuplicate(
 		query = query.eq('user_id', userId);
 	}
 
-	const { data, error } = await query
-		.eq('content_hash', contentHash)
-		.limit(1);
+	const { data, error } = await query.eq('content_hash', contentHash).limit(1);
 
 	if (error) {
 		throw new Error(`Duplicate check failed: ${error.message}`);
