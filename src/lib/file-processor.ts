@@ -654,59 +654,38 @@ export async function processFileBackground(
 		const allCompressed = [chunk0Compressed, ...detailChunksCompressed];
 		const embeddings: number[][] = [];
 
-		for (let i = 0; i < allCompressed.length; i++) {
-			try {
-				await reportProgress(
-					options?.onProgress,
-					fileId,
-					'embedding',
-					PROGRESS_EMBEDDING_START + (i / allCompressed.length) *
-						(PROGRESS_EMBEDDING_END - PROGRESS_EMBEDDING_START),
-					`Generating embedding ${i + 1}/${allCompressed.length}...`
-				);
+		try {
+			// Report start of parallel embedding generation
+			await reportProgress(
+				options?.onProgress,
+				fileId,
+				'embedding',
+				PROGRESS_EMBEDDING_START,
+				`Generating ${allCompressed.length} embeddings in parallel...`
+			);
 
-				const embedding = await generateEmbedding(allCompressed[i].description);
-				embeddings.push(embedding);
+			// Generate all embeddings in parallel
+			const embeddingPromises = allCompressed.map(compressed =>
+				generateEmbedding(compressed.description)
+			);
+			const generatedEmbeddings = await Promise.all(embeddingPromises);
+			embeddings.push(...generatedEmbeddings);
 
-				// Granular progress: 70% to 90% = 20% range
-				const currentProgress = PROGRESS_EMBEDDING_START +
-					((i + 1) / allCompressed.length) *
-					(PROGRESS_EMBEDDING_END - PROGRESS_EMBEDDING_START);
-
-				await updateProgress(fileId, Math.round(currentProgress), 'embedding');
-				await reportProgress(
-					options?.onProgress,
-					fileId,
-					'embedding',
-					Math.round(currentProgress),
-					`Generated ${i + 1}/${allCompressed.length} embeddings`
-				);
-			} catch (error) {
-				if (error instanceof VectorizationError) {
-					await markFileFailed(
-						fileId,
-						'EMBEDDING_ERROR',
-						`Embedding generation failed for chunk ${i}: ${error.message}`,
-						'embedding'
-					);
-
-					return {
-						id: fileId,
-						filename: filename,
-						fileType: fileType,
-						status: 'failed',
-						error: {
-							code: 'EMBEDDING_ERROR',
-							message: error.message,
-							stage: 'embedding'
-						}
-					};
-				}
-
+			// Report completion
+			await updateProgress(fileId, PROGRESS_EMBEDDING_END, 'embedding');
+			await reportProgress(
+				options?.onProgress,
+				fileId,
+				'embedding',
+				PROGRESS_EMBEDDING_END,
+				`Generated ${allCompressed.length} embeddings`
+			);
+		} catch (error) {
+			if (error instanceof VectorizationError) {
 				await markFileFailed(
 					fileId,
-					'UNKNOWN_ERROR',
-					`Embedding error for chunk ${i}: ${error instanceof Error ? error.message : String(error)}`,
+					'EMBEDDING_ERROR',
+					`Embedding generation failed: ${error.message}`,
 					'embedding'
 				);
 
@@ -717,11 +696,30 @@ export async function processFileBackground(
 					status: 'failed',
 					error: {
 						code: 'EMBEDDING_ERROR',
-						message: error instanceof Error ? error.message : String(error),
+						message: error.message,
 						stage: 'embedding'
 					}
 				};
 			}
+
+			await markFileFailed(
+				fileId,
+				'UNKNOWN_ERROR',
+				`Embedding generation error: ${error instanceof Error ? error.message : String(error)}`,
+				'embedding'
+			);
+
+			return {
+				id: fileId,
+				filename: filename,
+				fileType: fileType,
+				status: 'failed',
+				error: {
+					code: 'EMBEDDING_ERROR',
+					message: error instanceof Error ? error.message : String(error),
+					stage: 'embedding'
+				}
+			};
 		}
 
 		// ========================================================================
