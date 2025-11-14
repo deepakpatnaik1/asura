@@ -513,36 +513,28 @@ function isAbbreviation(sentence: string): boolean {
 /**
  * Generate embeddings for an array of sentences
  *
- * Calls Voyage AI API for each sentence with rate limiting.
- * Uses EMBEDDING_DELAY_MS between requests to respect API limits.
+ * Generates all embeddings in parallel using Promise.all() for maximum performance.
+ * Voyage AI API can handle 500 req/min, so 8-10 parallel requests are well within limits.
  *
  * @param sentences - Array of sentences
  * @returns Array of 1024-dimensional embeddings
  * @throws FileChunkerError if embedding generation fails
  */
 async function generateSentenceEmbeddings(sentences: string[]): Promise<number[][]> {
-	const embeddings: number[][] = [];
-
-	for (let i = 0; i < sentences.length; i++) {
-		try {
-			// Generate embedding for this sentence
-			const embedding = await generateEmbedding(sentences[i]);
-			embeddings.push(embedding);
-
-			// Add delay between requests (except for last request)
-			if (i < sentences.length - 1) {
-				await new Promise((resolve) => setTimeout(resolve, EMBEDDING_DELAY_MS));
-			}
-		} catch (error) {
-			throw new FileChunkerError(
-				`Failed to generate embedding for sentence ${i}: ${error instanceof Error ? error.message : String(error)}`,
-				'EMBEDDING_ERROR',
-				{ sentenceIndex: i, sentence: sentences[i], originalError: error }
-			);
-		}
+	try {
+		// Generate all embeddings in parallel
+		const embeddingPromises = sentences.map(sentence => generateEmbedding(sentence));
+		const embeddings = await Promise.all(embeddingPromises);
+		return embeddings;
+	} catch (error) {
+		// Note: Promise.all() fails fast - if any embedding fails, all fail
+		// This matches current behavior (fail on first error)
+		throw new FileChunkerError(
+			`Failed to generate embeddings: ${error instanceof Error ? error.message : String(error)}`,
+			'EMBEDDING_ERROR',
+			{ originalError: error }
+		);
 	}
-
-	return embeddings;
 }
 
 /**

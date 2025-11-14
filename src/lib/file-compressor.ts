@@ -85,8 +85,8 @@ const TEMPERATURE = 0.7;
 const MAX_TOKENS = 2000; // Default fallback
 
 /** Max tokens for chunk compression */
-const MAX_TOKENS_CHUNK_0 = 150;  // Chunk 0: concise metadata
-const MAX_TOKENS_DETAIL = 250;    // Detail chunks: preserve content
+const MAX_TOKENS_CHUNK_0 = MAX_TOKENS;  // Chunk 0: No limit - let model think freely, prompt enforces 200-400 char output
+const MAX_TOKENS_DETAIL = MAX_TOKENS;    // Detail chunks: No limit - let model think freely, prompt enforces content preservation
 
 /** Validation constants */
 const MAX_CONTENT_LENGTH = 100000;
@@ -468,6 +468,12 @@ function parseJsonResponse(text: string): Call2Response {
 	try {
 		parsed = JSON.parse(jsonText);
 	} catch (error) {
+		// Log full details for debugging
+		console.error('[parseJsonResponse] JSON parsing failed:');
+		console.error('Raw API response:', text);
+		console.error('After thinking tag removal:', jsonText);
+		console.error('Parse error:', (error as Error).message);
+
 		throw new FileCompressionError(
 			'Failed to parse API response as JSON',
 			'JSON_PARSE_ERROR',
@@ -635,9 +641,13 @@ File Type: ${input.fileType}
 
 ${input.chunkText}`;
 
+		console.log(`[compressChunk] Starting Call 2A for chunk ${input.chunkIndex} (${input.chunkIndex === 0 ? 'Chunk 0 overview' : 'detail chunk'})`);
 		const call2aRaw = await callFireworksAPI(call2aPrompt, userContent, maxTokens);
+		console.log(`[compressChunk] Call 2A completed for chunk ${input.chunkIndex}, parsing response...`);
 		call2aResponse = parseJsonResponse(call2aRaw);
+		console.log(`[compressChunk] Call 2A parsed successfully for chunk ${input.chunkIndex}`);
 	} catch (error) {
+		console.error(`[compressChunk] Call 2A failed for chunk ${input.chunkIndex}:`, error);
 		if (error instanceof FileCompressionError) {
 			throw error;
 		}

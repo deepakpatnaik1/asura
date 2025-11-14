@@ -86,8 +86,12 @@ SELECT COUNT(*) FROM files;
 **Expected Result**: Both tables return COUNT(*) = 0
 
 **Actual Result**:
+✅ Data cleared successfully via Nuke button
+- file_chunks: 0 rows
+- files: 0 rows
+- **UI Bug Found**: Nuke dialog box has display issue (progress bar did not fill), but data deletion worked correctly
 
-**Status**:
+**Status**: PASS (with UI bug noted)
 
 ---
 
@@ -159,10 +163,156 @@ SELECT description FROM file_chunks WHERE file_id = '<file-id>' AND chunk_index 
 ```
 
 **Actual Result**:
+❌ FAIL - Processing stuck at 30%
+- File: gettysburg-speech.txt
+- Progress bar stopped at 30% (semantic chunking phase)
+- Did not complete processing
+- File stuck in "pending" status
 
-**Status**:
+**Status**: FAIL
 
 **Issues Found**:
+- **BUG-030**: Chunk 0 compression fails with JSON parsing error
+  - Root cause: `[COMPRESSION_ERROR] Chunk 0 compression failed: Failed to parse API response as JSON`
+  - File ID: `92c139c1-8eb7-4bba-8641-900e76c504a0`
+  - Progress stuck at 30% (semantic chunking phase completed, Chunk 0 compression failed)
+  - File marked as 'failed' in database
+  - Error message NOT displayed in UI (should show error to user)
+  - Fireworks API returned malformed JSON for Chunk 0 compression
+  - 11 embeddings generated successfully before failure (semantic chunking worked)
+  - Failure occurred at Phase 4: Compress Chunk 0 (30-40% progress range)
+
+**Investigation Progress**:
+1. Added enhanced error logging to capture raw API responses:
+   - file-compressor.ts:parseJsonResponse() - logs raw response, attempted JSON extraction, parse errors
+   - file-compressor.ts:compressChunk() - logs Call 2A/2B lifecycle for each chunk
+   - file-processor.ts:Phase 4 - logs Chunk 0 compression start/success/failure with error details
+2. Enhanced logging deployed via hot reload (dev server running)
+3. **Retry Test 1**: User re-uploaded gettysburg-speech.txt
+4. **Root cause identified**: Fireworks API response truncated mid-sentence due to 150-token limit
+   - Raw response: `<think>...the key phrases such as "` (cut off mid-sentence)
+   - Never closed `<think>` tag or output JSON object
+   - MAX_TOKENS_CHUNK_0 = 150 too restrictive for Qwen3 model's thinking process
+5. **Fix applied**: Removed MAX_TOKENS_CHUNK_0 limit entirely (now uses MAX_TOKENS = 2000)
+   - Model can think freely without arbitrary token restrictions
+   - Prompt still enforces 200-400 character output target
+   - Rationale: Token limit should not constrain model reasoning; output constraint is in prompt
+6. **Retry Test 1 (Attempt 3)**: User re-uploaded gettysburg-speech.txt with unlimited token fix
+   - ❌ FAIL - Progress stuck at 40%
+   - Different failure point than previous attempts (was 30%, now 40%)
+   - Chunk 0 compression succeeded (moved past 30-40% range)
+   - New failure at Phase 5: Detail chunk compression (40-70% range)
+   - Root cause: Same truncation issue - MAX_TOKENS_DETAIL = 250 too restrictive
+   - Raw response: `<think>...So the filename` (cut off mid-sentence)
+   - File ID: `ff6f3a02-049b-45c7-8ba1-7bb4c030cadb`
+7. **Fix applied**: Removed MAX_TOKENS_DETAIL limit entirely (now uses MAX_TOKENS = 2000)
+   - Same solution pattern as Chunk 0 fix that resolved 30% hurdle
+   - Model can complete thinking process before outputting JSON
+   - Prompt still enforces content preservation requirements
+   - Rationale: Model reasoning quality improves with unrestricted thinking space
+8. **Retry Test 1 (Attempt 4)**: User re-uploaded gettysburg-speech.txt with both token limits removed
+   - Both MAX_TOKENS_CHUNK_0 and MAX_TOKENS_DETAIL now set to MAX_TOKENS (2000)
+   - Dev server running with hot reload
+   - ❌ FAIL - Progress stuck at 30% again
+   - Root cause identified: **Hot reload did NOT apply changes for server-side files**
+   - File ID: `519ea15d-56ea-4b0c-90f9-78b13e981fe0`
+   - Logs show: Chunk 0 Call 2A succeeded, but Call 2B failed with truncation
+   - API response still truncated: `<think>...So the filename` (cut off mid-sentence)
+   - Evidence: Vite logged `[vite] (ssr) page reload src/lib/file-compressor.ts` but Node.js cached old version
+   - Solution: Restart dev server completely to force reload of server-side modules
+9. **Dev server restarted**: Fresh Node.js process with token limit changes loaded
+   - Both MAX_TOKENS_CHUNK_0 and MAX_TOKENS_DETAIL confirmed as MAX_TOKENS (2000)
+   - Hot reload unreliable for server-side TypeScript - full restart required
+   - Ready for Attempt 5
+10. **Retry Test 1 (Attempt 5)**: User re-uploaded gettysburg-speech.txt with fresh dev server
+   - ✅ SUCCESS - Progress reached 100%!
+   - File processed completely through all 7 phases
+   - Progress bar moved smoothly: 0% → 10% → 20% → 30% → 40% → 70% → 90% → 100%
+   - Token limit fix resolved truncation issues
+   - **New issue discovered**: Different problem emerged after successful completion
+11. **Retry Test 1 (Attempt 6)**: User hit Nuke button to clear data, re-uploaded gettysburg-speech.txt
+   - ✅ SUCCESS - Progress reached 100% again
+   - File ID: `e6b891df-887e-4888-8f75-96c760e2fc7e`
+   - Processing completed successfully through all 7 phases
+   - 11 embeddings generated during semantic chunking
+   - Chunk 0 and detail chunk compression both succeeded
+   - 2 final embeddings generated for compressed chunks
+   - **Confirmation**: Successful processing from Attempt 5 is repeatable, not a fluke
+   - Token limit fix (MAX_TOKENS = 2000) is working consistently
+
+12. **Performance Issue Discovery (Attempt 7)**: User uploaded same file again, reported slow processing
+   - User: "I uploaded a very small file text file, a really small one. I'm getting from 0 to 100 took a really long time. I'm scared about what's going to happen when I upload a 10,000 word file. It will take hours."
+   - File: gettysburg-speech.txt (~500 words)
+   - Processing time: ~25-30 seconds
+   - Expected time for small file: ~5-8 seconds
+   - **Root cause identified**: Sequential API calls in multiple phases
+     - Phase 3: Semantic chunking (11 embeddings × 1-2 sec + 120ms delays = ~15-20 sec)
+     - Phase 5: Detail chunk compression (N compressions × 3-5 sec each)
+     - Phase 6: Final embeddings (N embeddings × 1-2 sec each)
+   - **Solution designed**: Parallelize API calls using Promise.all()
+     - Phase 3: Remove 120ms delays, generate all embeddings in parallel
+     - Phase 5: Compress all detail chunks in parallel
+     - Phase 6: Generate all final embeddings in parallel
+   - **Expected improvement**: 6-8x speedup for small files, more dramatic for larger files
+   - **Complexity assessment**: LOW-MEDIUM - straightforward refactor
+
+13. **Parallel Processing Implementation**: Used doer agent via sub-agent workflow
+   - Modified [file-chunker.ts:523-538](src/lib/file-chunker.ts#L523-L538) - `generateSentenceEmbeddings()` to use Promise.all()
+   - Modified [file-processor.ts:567-642](src/lib/file-processor.ts#L567-L642) - Phase 5 detail chunk compression to use Promise.all()
+   - Phase 6 was NOT modified by doer agent (oversight)
+   - Dev server restarted per user's request (learned from Attempt 4 that hot reload doesn't work for .ts files)
+   - Implementation document: [working/BUG-025-parallel-processing-implementation.md](working/BUG-025-parallel-processing-implementation.md)
+
+14. **Performance Test (Attempt 7)**: User re-uploaded gettysburg-speech.txt to test parallel processing
+   - File ID: `8a941a01-4a64-47d2-9dc7-88fc59d8fed4`
+   - ✅ File progressed to 100% successfully
+   - ❌ User reports: "I don't feel there was any noticeable difference in the time taken"
+   - **Investigation**: Analyzed server logs to understand execution patterns
+
+**Server Log Analysis**:
+```
+[Vectorization] Generating embedding for text: Four score and seven years ago our fathers brought...
+[Vectorization] Generating embedding for text: Now we are engaged in a great civil war, testing w...
+... (11 total "Generating" messages fire almost simultaneously)
+[Vectorization] Successfully generated 1024-dim embedding
+[Vectorization] Successfully generated 1024-dim embedding
+... (11 total "Successfully generated" messages appear together)
+```
+
+✅ **Phase 3 (Semantic Chunking) IS parallel** - All 11 embeddings start at once, complete around same time
+
+```
+[compressChunk] Starting Call 2A for chunk 0 (Chunk 0 overview)
+[compressChunk] Call 2A completed for chunk 0, parsing response...
+[compressChunk] Starting Call 2A for chunk 1 (detail chunk)
+[compressChunk] Call 2A completed for chunk 1, parsing response...
+```
+
+✅ **Phase 5 code shows parallel implementation** - Lines 582-595 use Promise.all()
+⚠️ **Phase 5 logs show sequential execution** - Only 1 detail chunk for this file, can't confirm parallelism
+
+```
+[Vectorization] Generating embedding for text: Transcript of Abraham Lincoln's Gettysburg Address...
+[Vectorization] Successfully generated 1024-dim embedding
+[Vectorization] Generating embedding for text: Abraham Lincoln's Gettysburg Address conclusion...
+[Vectorization] Successfully generated 1024-dim embedding
+```
+
+❌ **Phase 6 (Final Embeddings) IS STILL SEQUENTIAL** - 2 embeddings generated one at a time
+- Code inspection confirms: [file-processor.ts:657-683](src/lib/file-processor.ts#L657-L683) uses for-loop, NOT Promise.all()
+- Doer agent did NOT modify Phase 6
+- For small files: 2 embeddings × 1-2 sec = 2-4 seconds overhead
+- For medium files (8 chunks): 8 embeddings × 1-2 sec = 8-16 seconds overhead
+- For large files (25 chunks): 25 embeddings × 1-2 sec = 25-50 seconds overhead
+
+**Root Cause of No Performance Improvement**:
+- Phase 3 parallel optimization worked (semantic chunking embeddings)
+- Phase 5 code is parallel but file too small to show benefit (only 1 detail chunk)
+- **Phase 6 is still sequential and blocks the entire pipeline**
+- For this 500-word file with 2 final chunks, Phase 6 takes ~2-4 seconds sequentially
+- Combined with other overheads, total time remains ~25-30 seconds
+
+**Status**: ❌ PARTIAL IMPLEMENTATION - Phase 6 still needs parallelization
 
 ---
 
@@ -480,6 +630,26 @@ ORDER BY chunk_index;
 1. (Actions based on test results)
 2.
 3.
+
+---
+
+## Learnings
+
+### Vite Hot Reload Limitation
+**Issue**: Vite's hot module reload (HMR) does not work reliably for server-side TypeScript files in SvelteKit.
+
+**Evidence**:
+- Modified `src/lib/file-compressor.ts` to change `MAX_TOKENS_CHUNK_0` and `MAX_TOKENS_DETAIL` from 150/250 to 2000
+- Vite logged: `[vite] (ssr) page reload src/lib/file-compressor.ts`
+- File upload still used old token limits (150/250), causing truncation failures
+- Node.js process cached the old module version despite Vite's reload attempt
+
+**Solution**:
+- Restart dev server completely (`pkill -f "npm run dev" && npm run dev`) when changing server-side files
+- Hot reload only reliable for client-side Svelte components
+- Server-side modules (`+server.ts`, `lib/*.ts`) require full restart to pick up changes
+
+**Impact**: During debugging, this caused 4 failed test attempts before identifying that code changes weren't being applied.
 
 ---
 

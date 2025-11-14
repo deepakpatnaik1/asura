@@ -497,6 +497,7 @@ export async function processFileBackground(
 				'Compressing file overview...'
 			);
 
+			console.log(`[FileProcessor] Compressing Chunk 0 for file ${fileId} (${filename})`);
 			chunk0Compressed = await compressChunk({
 				chunkText: chunk0Text,
 				chunkIndex: 0,
@@ -504,6 +505,7 @@ export async function processFileBackground(
 				filename: filename,
 				fileType: fileType
 			});
+			console.log(`[FileProcessor] Chunk 0 compression successful for file ${fileId}`);
 
 			await updateProgress(fileId, PROGRESS_CHUNK0_COMPRESSION, 'compression');
 			await reportProgress(
@@ -514,7 +516,13 @@ export async function processFileBackground(
 				'Chunk 0 compressed'
 			);
 		} catch (error) {
+			console.error(`[FileProcessor] Chunk 0 compression failed for file ${fileId}:`, error);
 			if (error instanceof FileCompressionError) {
+				console.error(`[FileProcessor] Compression error details:`, {
+					code: error.code,
+					message: error.message,
+					details: error.details
+				});
 				await markFileFailed(
 					fileId,
 					'COMPRESSION_ERROR',
@@ -561,68 +569,47 @@ export async function processFileBackground(
 
 		const detailChunksCompressed: ChunkCompressionResult[] = [];
 
-		for (let i = 0; i < detailChunks.length; i++) {
-			try {
+		try {
+			// Report start of parallel compression
+			await reportProgress(
+				options?.onProgress,
+				fileId,
+				'compression',
+				PROGRESS_DETAIL_COMPRESSION_START,
+				`Compressing ${detailChunks.length} detail chunks in parallel...`
+			);
+
+			// Compress all detail chunks in parallel
+			const compressionPromises = detailChunks.map((chunkText, i) => {
 				const chunkIndex = i + 1; // Start at 1 (Chunk 0 already done)
-
-				await reportProgress(
-					options?.onProgress,
-					fileId,
-					'compression',
-					PROGRESS_DETAIL_COMPRESSION_START + (i / detailChunks.length) *
-						(PROGRESS_DETAIL_COMPRESSION_END - PROGRESS_DETAIL_COMPRESSION_START),
-					`Compressing chunk ${chunkIndex}/${totalChunks}...`
-				);
-
-				const compressed = await compressChunk({
-					chunkText: detailChunks[i],
+				return compressChunk({
+					chunkText: chunkText,
 					chunkIndex: chunkIndex,
 					totalChunks: totalChunks,
 					filename: filename,
 					fileType: fileType
 				});
+			});
 
-				detailChunksCompressed.push(compressed);
+			// Wait for all compressions to complete
+			const compressedResults = await Promise.all(compressionPromises);
+			detailChunksCompressed.push(...compressedResults);
 
-				// Granular progress: 40% to 70% = 30% range
-				const currentProgress = PROGRESS_DETAIL_COMPRESSION_START +
-					((i + 1) / detailChunks.length) *
-					(PROGRESS_DETAIL_COMPRESSION_END - PROGRESS_DETAIL_COMPRESSION_START);
-
-				await updateProgress(fileId, Math.round(currentProgress), 'compression');
-				await reportProgress(
-					options?.onProgress,
-					fileId,
-					'compression',
-					Math.round(currentProgress),
-					`Compressed ${i + 1}/${detailChunks.length} detail chunks`
-				);
-			} catch (error) {
-				if (error instanceof FileCompressionError) {
-					await markFileFailed(
-						fileId,
-						'COMPRESSION_ERROR',
-						`Detail chunk ${i + 1} compression failed: ${error.message}`,
-						'compression'
-					);
-
-					return {
-						id: fileId,
-						filename: filename,
-						fileType: fileType,
-						status: 'failed',
-						error: {
-							code: 'COMPRESSION_ERROR',
-							message: error.message,
-							stage: 'compression'
-						}
-					};
-				}
-
+			// Report completion
+			await updateProgress(fileId, PROGRESS_DETAIL_COMPRESSION_END, 'compression');
+			await reportProgress(
+				options?.onProgress,
+				fileId,
+				'compression',
+				PROGRESS_DETAIL_COMPRESSION_END,
+				`Compressed ${detailChunks.length} detail chunks`
+			);
+		} catch (error) {
+			if (error instanceof FileCompressionError) {
 				await markFileFailed(
 					fileId,
-					'UNKNOWN_ERROR',
-					`Detail chunk ${i + 1} compression error: ${error instanceof Error ? error.message : String(error)}`,
+					'COMPRESSION_ERROR',
+					`Detail chunk compression failed: ${error.message}`,
 					'compression'
 				);
 
@@ -633,12 +620,32 @@ export async function processFileBackground(
 					status: 'failed',
 					error: {
 						code: 'COMPRESSION_ERROR',
-						message: error instanceof Error ? error.message : String(error),
+						message: error.message,
 						stage: 'compression'
 					}
 				};
 			}
+
+			await markFileFailed(
+				fileId,
+				'UNKNOWN_ERROR',
+				`Detail chunk compression error: ${error instanceof Error ? error.message : String(error)}`,
+				'compression'
+			);
+
+			return {
+				id: fileId,
+				filename: filename,
+				fileType: fileType,
+				status: 'failed',
+				error: {
+					code: 'COMPRESSION_ERROR',
+					message: error instanceof Error ? error.message : String(error),
+					stage: 'compression'
+				}
+			};
 		}
+
 
 		// ========================================================================
 		// PHASE 6: Generate Embeddings (70-90%)
