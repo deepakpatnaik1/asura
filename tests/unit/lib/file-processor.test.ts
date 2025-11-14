@@ -145,7 +145,6 @@ describe('file-processor', () => {
 			const input: ProcessFileInput = {
 				fileBuffer: Buffer.from('test content'),
 				filename: 'test.txt',
-				userId: '123e4567-e89b-12d3-a456-426614174000',
 				contentType: 'text/plain'
 			};
 
@@ -176,7 +175,6 @@ describe('file-processor', () => {
 			const input: ProcessFileInput = {
 				fileBuffer: Buffer.from('test content'),
 				filename: 'test.txt',
-				userId: '123e4567-e89b-12d3-a456-426614174000',
 				contentType: 'text/plain'
 			};
 
@@ -206,7 +204,6 @@ describe('file-processor', () => {
 			const input: ProcessFileInput = {
 				fileBuffer: Buffer.from('test content'),
 				filename: 'test.txt',
-				userId: '123e4567-e89b-12d3-a456-426614174000',
 				contentType: 'text/plain'
 			};
 
@@ -219,7 +216,6 @@ describe('file-processor', () => {
 			const input: ProcessFileInput = {
 				fileBuffer: Buffer.from('test content'),
 				filename: 'document.pdf',
-				userId: '123e4567-e89b-12d3-a456-426614174000',
 				contentType: 'application/pdf'
 			};
 
@@ -239,7 +235,7 @@ describe('file-processor', () => {
 
 			// Verify insert was called with correct data
 			const insertCall = mockSupabase.from().insert.mock.calls[0][0][0];
-			expect(insertCall.user_id).toBe('123e4567-e89b-12d3-a456-426614174000');
+			expect(insertCall.user_id).toBe(null); // Single-user mode
 			expect(insertCall.filename).toBe('document.pdf');
 			expect(insertCall.file_type).toBe('pdf');
 			expect(insertCall.content_hash).toBe('pdfhash123');
@@ -251,7 +247,6 @@ describe('file-processor', () => {
 			const input: ProcessFileInput = {
 				fileBuffer: Buffer.from('test content'),
 				filename: 'test.txt',
-				userId: '123e4567-e89b-12d3-a456-426614174000',
 				contentType: 'text/plain'
 			};
 
@@ -297,7 +292,6 @@ describe('file-processor', () => {
 			const input: ProcessFileInput = {
 				fileBuffer: Buffer.from('duplicate content'),
 				filename: 'duplicate.txt',
-				userId: '123e4567-e89b-12d3-a456-426614174000',
 				contentType: 'text/plain'
 			};
 
@@ -339,7 +333,6 @@ describe('file-processor', () => {
 			const input: ProcessFileInput = {
 				fileBuffer: Buffer.from('content'),
 				filename: 'test.txt',
-				userId: '123e4567-e89b-12d3-a456-426614174000',
 				contentType: 'text/plain'
 			};
 
@@ -358,7 +351,6 @@ describe('file-processor', () => {
 			const input: ProcessFileInput = {
 				fileBuffer: Buffer.from('content'),
 				filename: 'test.pdf',
-				userId: '123e4567-e89b-12d3-a456-426614174000',
 				contentType: 'application/pdf'
 			};
 
@@ -383,7 +375,6 @@ describe('file-processor', () => {
 			const input: ProcessFileInput = {
 				fileBuffer: Buffer.from('content'),
 				filename: 'test.txt',
-				userId: '123e4567-e89b-12d3-a456-426614174000',
 				contentType: 'text/plain'
 			};
 
@@ -410,7 +401,6 @@ describe('file-processor', () => {
 			const input: ProcessFileInput = {
 				fileBuffer: Buffer.from('content'),
 				filename: 'test.txt',
-				userId: '123e4567-e89b-12d3-a456-426614174000',
 				contentType: 'text/plain'
 			};
 
@@ -428,7 +418,6 @@ describe('file-processor', () => {
 			const input = {
 				fileBuffer: null as any,
 				filename: 'test.txt',
-				userId: '123e4567-e89b-12d3-a456-426614174000',
 				contentType: 'text/plain'
 			};
 
@@ -446,7 +435,6 @@ describe('file-processor', () => {
 			const input: ProcessFileInput = {
 				fileBuffer: Buffer.from('content'),
 				filename: '',
-				userId: '123e4567-e89b-12d3-a456-426614174000',
 				contentType: 'text/plain'
 			};
 
@@ -464,7 +452,6 @@ describe('file-processor', () => {
 			const input: ProcessFileInput = {
 				fileBuffer: Buffer.from('content'),
 				filename: 'test.txt',
-				userId: 'not-a-uuid',
 				contentType: 'text/plain'
 			};
 
@@ -482,7 +469,6 @@ describe('file-processor', () => {
 			const input = {
 				fileBuffer: Buffer.from('content'),
 				filename: 'test.txt',
-				userId: '123e4567-e89b-12d3-a456-426614174000',
 				contentType: null as any
 			};
 
@@ -507,7 +493,6 @@ describe('file-processor', () => {
 				const input: ProcessFileInput = {
 					fileBuffer: Buffer.from('content'),
 					filename: 'test.txt',
-					userId: uuid,
 					contentType: 'text/plain'
 				};
 

@@ -11,7 +11,8 @@ CREATE TABLE IF NOT EXISTS public.file_chunks (
     file_id UUID NOT NULL REFERENCES public.files(id) ON DELETE CASCADE,
 
     -- User relationship (denormalized for RLS and faster queries)
-    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    -- Nullable, no FK constraint (auth doesn't exist yet; will be added in multi-user branch)
+    user_id UUID,
 
     -- Chunk identification
     chunk_index INTEGER NOT NULL,

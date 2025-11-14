@@ -84,7 +84,6 @@ export type ProgressCallback = (update: ProgressUpdate) => void | Promise<void>;
 export interface ProcessFileInput {
 	fileBuffer: Buffer;
 	filename: string;
-	userId: string | null;
 	contentType: string;
 }
 
@@ -189,7 +188,7 @@ export async function processFile(
 	});
 
 	// 2. Process in background (slow) - AWAIT since this is all-in-one function
-	return await processFileBackground(fileId, extraction, input.filename, input.userId, {
+	return await processFileBackground(fileId, extraction, input.filename, {
 		onProgress: options?.onProgress
 	});
 }
@@ -246,10 +245,10 @@ export async function createFilePending(
 		throw error;
 	}
 
-	// 3. Check for duplicates (per-user scope)
+	// 3. Check for duplicates (single-user scope - userId always null)
 	if (!options?.skipDuplicateCheck) {
 		try {
-			const duplicate = await checkDuplicate(contentHash, input.userId);
+			const duplicate = await checkDuplicate(contentHash, null);
 			if (duplicate.isDuplicate) {
 				throw new FileProcessorError(
 					`File already exists (duplicate content hash: ${contentHash.substring(0, 8)}...)`,
@@ -275,7 +274,7 @@ export async function createFilePending(
 	let fileId: string;
 	try {
 		const createResult = await createFileRecord(
-			input.userId,
+			null, // userId: Single-user mode, always null
 			input.filename,
 			contentHash,
 			fileType
@@ -319,7 +318,6 @@ export async function createFilePending(
  * @param fileId - File ID from createFilePending()
  * @param extraction - Extraction result from createFilePending()
  * @param filename - Original filename
- * @param userId - User ID for chunk ownership
  * @param options - Optional processing options
  * @returns Processing result
  */
@@ -327,7 +325,6 @@ export async function processFileBackground(
 	fileId: string,
 	extraction: { text: string; fileType: FileType; contentHash: string },
 	filename: string,
-	userId: string | null,
 	options?: {
 		onProgress?: ProgressCallback;
 	}
@@ -735,7 +732,7 @@ export async function processFileBackground(
 
 			await saveAllChunksToDatabase(
 				fileId,
-				userId,
+				null, // userId: Single-user mode, always null
 				chunk0Text,
 				detailChunks,
 				allCompressed,
@@ -1040,31 +1037,8 @@ function validateProcessFileInput(input: ProcessFileInput): void {
 		);
 	}
 
-	// Check userId (allow null for single-user mode before Chunk 11 auth)
-	if (!input.userId) {
-		// userId is null or undefined - OK for single-user mode
-		// This will be replaced with real Google Auth UUID in Chunk 11
-		// For now, we allow null to support pre-auth implementation
-	} else if (typeof input.userId !== 'string') {
-		// userId provided but not a string - error
-		throw new FileProcessorError(
-			'User ID must be a string or null',
-			'VALIDATION_ERROR',
-			'extraction',
-			{ received: typeof input.userId }
-		);
-	} else {
-		// userId is a string - validate it's a UUID
-		const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-		if (!uuidRegex.test(input.userId)) {
-			throw new FileProcessorError(
-				'User ID must be a valid UUID',
-				'VALIDATION_ERROR',
-				'extraction',
-				{ received: input.userId }
-			);
-		}
-	}
+	// NOTE: userId validation removed - single-user app
+	// Multi-user support will be added in subsequent branch with Google Auth
 
 	// Check contentType
 	if (!input.contentType || typeof input.contentType !== 'string') {

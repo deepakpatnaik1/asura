@@ -8,11 +8,9 @@ const MAX_FILE_SIZE_MB = 10;
 
 export const POST: RequestHandler = async ({ request }) => {
   try {
-    // 1. AUTHENTICATION CHECK
-    // TODO: Replace with actual auth extraction after Chunk 11
-    const userId = null;
-
-    // 2. PARSE FORM DATA
+    // 1. PARSE FORM DATA
+    // NOTE: No authentication check - single-user app
+    // Multi-user support will be added in subsequent branch
     let file: File;
     try {
       const formData = await request.formData();
@@ -92,7 +90,7 @@ export const POST: RequestHandler = async ({ request }) => {
       );
     }
 
-    // 5. CREATE PENDING FILE (await ~1 second)
+    // 4. CREATE PENDING FILE (await ~1 second)
     // Fast path: Extract text, check duplicates, create DB record, return ID
     let fileId: string;
     let extraction: any;
@@ -102,7 +100,6 @@ export const POST: RequestHandler = async ({ request }) => {
         {
           fileBuffer,
           filename,
-          userId,
           contentType
         },
         { skipDuplicateCheck: true } // Always allow uploads, even for duplicates
@@ -150,14 +147,14 @@ export const POST: RequestHandler = async ({ request }) => {
       );
     }
 
-    // 6. PROCESS FILE IN BACKGROUND (fire-and-forget)
+    // 5. PROCESS FILE IN BACKGROUND (fire-and-forget)
     // Slow path: Chunking, compression, embedding, finalization
-    processFileBackground(fileId, extraction, filename, userId).catch(error => {
+    processFileBackground(fileId, extraction, filename).catch(error => {
       // Log but don't throw - processing failures are captured in DB via markFileFailed()
       console.error('[Upload API] Background processing error:', error);
     });
 
-    // 7. RETURN SUCCESS WITH REAL FILE ID
+    // 6. RETURN SUCCESS WITH REAL FILE ID
     return json(
       {
         success: true,
