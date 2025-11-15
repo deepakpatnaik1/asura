@@ -10,6 +10,7 @@
 		refreshFiles
 	} from '$lib/stores/filesStore';
 	import { tick, onMount } from 'svelte';
+	import TextCleaner from '$lib/components/TextCleaner.svelte';
 
 	// Receive loaded messages from server
 	let { data } = $props();
@@ -474,7 +475,9 @@
 						<div class="message-header">
 							<span class="message-label ai-label">{msg.persona_name.charAt(0).toUpperCase() + msg.persona_name.slice(1)}</span>
 						</div>
-						<div class="message-text">{msg.ai_response}</div>
+						<div class="message-text">
+							<TextCleaner content={msg.ai_response} />
+						</div>
 					</div>
 				</div>
 			{/each}
