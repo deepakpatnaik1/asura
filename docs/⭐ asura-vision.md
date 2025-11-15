@@ -44,18 +44,33 @@ All context (base instructions, persona prompt, memory tiers, decision arcs) fit
 
 ## Multi-Call Architecture
 
-Every user message triggers a sophisticated **four-call sequence** with built-in quality verification:
+Every user message triggers a sophisticated **four-call sequence** with built-in quality verification.
 
-### Call 1A: Hidden Reasoning Call
+### A-B Prompt Pattern
+
+All calls follow an **A-B verification pattern** where:
+- **A call:** Generates response using specific rules
+- **B call:** Verifies A's output against A's rules
+
+**Critical Implementation Detail:** B calls receive four inputs:
+1. Original input (user query or file content)
+2. A prompt (the rules that were applied)
+3. A's output (what needs verification)
+4. B prompt (verification instructions)
+
+This architecture ensures the B call can verify whether A properly followed its own rules.
+
+### Call 1A: Initial Response Generation
 
 **Input:**
-- User query
+- CALL1A_PROMPT (explains what the model is receiving)
 - Base instructions (see system-prompts.md)
 - Persona-specific prompt (see system-prompts.md)
 - Last 5 Superjournal turns (full)
 - Last 100 Journal turns (compressed)
 - Starred/pinned messages (salience 10)
 - Decision Arcs from vector search (as many as fit)
+- User query
 
 **Output:**
 - Full LLM response (NOT shown to user)
@@ -63,12 +78,13 @@ Every user message triggers a sophisticated **four-call sequence** with built-in
 
 **Purpose:** First-pass reasoning to generate informed response
 
-### Call 1B: Critique & Refinement Call
+### Call 1B: Response Refinement & Quality Verification
 
 **Input:**
+- CALL1A_PROMPT (so it knows what rules were applied)
 - Everything from Call 1A (base instructions + persona profile + memory context + user query)
-- Call 1A's response
-- CALL1B_PROMPT: "Critique the previous response and present a higher quality one. Present your response as the official response without mentioning that it is a critique."
+- Call 1A's response (what to refine)
+- CALL1B_PROMPT (refinement instructions)
 
 **Output:**
 - Refined LLM response (streamed to user)
@@ -76,12 +92,12 @@ Every user message triggers a sophisticated **four-call sequence** with built-in
 
 **Purpose:** Self-critique produces polished, user-visible response with higher quality than single-pass generation
 
-**Key Innovation:** Call 1B receives the original Call 1A prompt context, enabling informed critique rather than blind refinement.
+**Key Innovation:** Call 1B receives the original Call 1A context, enabling informed critique rather than blind refinement.
 
 ### Call 2A: Initial Artisan Cut Compression
 
 **Input:**
-- System prompt: `CALL2A_PROMPT` (Artisan Cut instructions - see system-prompts.md)
+- CALL2A_PROMPT (Artisan Cut compression rules - see system-prompts.md)
 - Call 1B user query
 - Call 1B LLM response
 
@@ -101,9 +117,10 @@ Every user message triggers a sophisticated **four-call sequence** with built-in
 ### Call 2B: Compression Verification & Refinement
 
 **Input:**
-- CALL2A_PROMPT (Artisan Cut instructions)
-- Call 2A's compressed JSON output
-- CALL2B_PROMPT: "Critique the previous response and present a higher quality one. Present your response as the official response without mentioning that it is a critique."
+- CALL2A_PROMPT (the Artisan Cut rules that were applied)
+- Call 1B user query + response (original input)
+- Call 2A's compressed JSON output (what to verify)
+- CALL2B_PROMPT (verification instructions with evaluation dimensions)
 
 **Output:**
 - Verified/refined compressed JSON
@@ -111,7 +128,7 @@ Every user message triggers a sophisticated **four-call sequence** with built-in
 
 **Purpose:** Self-verification ensures compression quality and adherence to Artisan Cut principles
 
-**Key Innovation:** Call 2B receives the original Artisan Cut instructions, allowing it to verify:
+**Key Innovation:** Call 2B receives the original Artisan Cut instructions from Call 2A, allowing it to verify:
 - Were specific numbers/dates/names preserved in boss_essence?
 - Does persona_essence capture key strategic insights?
 - Is the decision_arc reflective of actual behavior?
@@ -204,17 +221,26 @@ Users can manually star message turns, which overrides salience to 10 (highest t
 
 Large files (10,000+ word documents, PDFs) would overload context windows, but contain strategically important information requiring high-quality compression.
 
-### Solution: LLM-Based Logical Chunking
+### Solution: Two-Track File Processing
 
-**Step 1: Intelligent Chunking**
-- File sent to LLM with chunking prompt
-- LLM breaks file into logical semantic chunks (not arbitrary size-based splits)
-- Only LLM can understand content structure for proper boundaries
+Files are processed using two separate A-B call pairs:
 
-**Step 2: Modified Call 2 Per Chunk**
-- Each logical chunk sent as separate Modified Call 2
-- Uses `MODIFIED_CALL2_PROMPT` (specialized for file content)
-- Focuses on behavioral directives, strategic content, exact data
+**Track 1: Chunk 0 (File Overview) - Call 3A/3B**
+- **Call 3A:** Creates high-level file overview for discoverability
+  - Input: CALL_3A_PROMPT + file overview text
+  - Focus: Document type, participants, themes, metadata
+  - Purpose: Enable "find that interview transcript" queries
+- **Call 3B:** Verifies Chunk 0 compression quality
+  - Input: CALL_3A_PROMPT + file content + Call 3A output + CALL_3B_PROMPT
+  - Evaluation: Discoverability, metadata quality, removal quality
+
+**Track 2: Detail Chunks (Chunk 1+) - Modified Call 2A/2B**
+- **Modified Call 2A:** Artisan cut compression per detail chunk
+  - Input: MODIFIED_CALL_2A_PROMPT + chunk content
+  - Focus: Behavioral directives, strategic content, exact data
+- **Modified Call 2B:** Verifies detail chunk compression
+  - Input: MODIFIED_CALL_2A_PROMPT + chunk content + Call 2A output + MODIFIED_CALL_2B_PROMPT
+  - Evaluation: Preservation, compression, and removal quality
 
 **Output JSON per chunk:**
 ```json
@@ -225,13 +251,11 @@ Large files (10,000+ word documents, PDFs) would overload context windows, but c
 }
 ```
 
-**Step 3: Concatenation**
-- All chunk responses concatenated
-- Saved as single row in Journal table
-- Becomes part of perpetual memory
-
-**Step 4: Deduplication**
-- Re-uploading same file updates existing Journal row (doesn't create new one)
+**Storage:**
+- All chunks (0, 1, 2...) saved to `file_chunks` table
+- Each chunk gets its own embedding for semantic search
+- Chunk 0 optimized for file discovery
+- Chunks 1+ optimized for detailed content retrieval
 
 ### File + Query Edge Case
 

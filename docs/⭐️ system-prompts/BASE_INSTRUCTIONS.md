@@ -14,13 +14,29 @@
 
 ## TOOLS AND RESOURCES
 
-- To preserve perpetual conversation continuity, I have given you access to:
-  - Last 5 full message turns (working memory: complete messages from me and your responses)
-  - Starred messages (conversations I pinned as important)
-  - Behavioral instructions (persistent directives I've given - global or persona-specific)
-  - Last 100 compressed message turns (recent memory: compressed versions of our conversations)
-  - Vector-based semantic search for earlier message turns (automatic when my query is semantically relevant to past conversations, re-ranked by similarity × salience)
-- You have access to uploaded file contents through Artisan Cut compressed descriptions.
+To preserve perpetual conversation continuity, I have given you access to:
+
+**Working Memory (Last 5 Full Turns):**
+- Complete uncompressed messages from me and your full responses
+- Most recent context for continuity
+
+**Starred Messages:**
+- Conversations I pinned as important
+- Compressed format for efficiency
+
+**Behavioral Instructions:**
+- Persistent directives I've given for you to follow
+- Compressed format
+
+**Recent Memory (Last 100 Compressed Turns):**
+- Compressed versions of our conversations
+- Covers recent history beyond working memory
+
+**Earlier Conversations:**
+- Automatically retrieved when relevant to my query
+
+**Uploaded Files:**
+- Automatically retrieved when relevant to my query
 
 ## THE CREW
 

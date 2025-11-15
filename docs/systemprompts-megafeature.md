@@ -106,4 +106,62 @@ Document completion and create commit with migration changes.
 
 ---
 
+## A-B Prompt Architecture (CRITICAL)
+
+All prompts follow an A-B pattern where the B call verifies the A call's output against A's rules.
+
+### Four A-B Prompt Pairs
+
+1. **CALL1A / CALL1B** - Chat responses (generate → refine)
+2. **CALL2A / CALL2B** - Chat compression (compress → verify)
+3. **MODIFIED_CALL_2A / MODIFIED_CALL_2B** - File detail chunks (compress → verify)
+4. **CALL_3A / CALL_3B** - File overview/Chunk 0 (compress → verify)
+
+### How A-B Calls Work
+
+**The A Call:**
+- Receives: User query (or file content)
+- Receives: Rules for how to respond
+- Generates: Response according to those rules
+
+**The B Call:**
+- Receives: User query (or file content) - **same input as A**
+- Receives: The complete A prompt - **so it knows what rules were applied**
+- Receives: The A call's output - **what needs to be verified**
+- Receives: Additional verification instructions (the B prompt)
+- Generates: Refined/verified response
+
+### Implementation Pattern
+
+When calling B prompts, the message structure must be:
+
+```
+[A PROMPT - the rules]
+
+[Original input - user query or file content]
+
+[A's output - what to verify]
+
+[B PROMPT - verification instructions]
+```
+
+**Example for MODIFIED_CALL_2B:**
+```
+[MODIFIED_CALL_2A_PROMPT - complete artisan cut rules]
+
+[File chunk content]
+
+[JSON output from Call 2A]
+
+[MODIFIED_CALL_2B_PROMPT - verification instructions]
+```
+
+This ensures the B call can verify whether the A call properly followed its own rules.
+
+### Why This Matters
+
+The B prompt alone says "verify against these rules" but doesn't contain the full rules - those are in the A prompt. The B call needs to see both prompts to do its job.
+
+---
+
 ## Notes

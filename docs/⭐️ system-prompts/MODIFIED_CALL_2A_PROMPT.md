@@ -11,8 +11,6 @@
 ---
 
 ```
-/nothink
-
 ARTISAN CUT FOR FILES
 
 You will receive a file (PDF, image, text, code, spreadsheet, etc.) that I uploaded.
@@ -61,94 +59,13 @@ Examples of information that is just pure noise:
 
 Use punctuation symbols . , ; : - etc. heavily in generating your artisan cuts.
 
-## File Type Guidelines
-
-### PDFs (including Google Docs, Sheets, Slides converted to PDF)
-
-Assume every PDF is strategically important - capture substance with artisan cut compression.
-
-**If filename indicates Google file** (e.g., "Google Docs-...", "Google Sheets-...", "Google Slides-..."), state source type at start: "Google Sheets:" or "Google Slides:" or "Google Docs:"
-
-Capture (compressed):
-- Doc type, page count, structure
-- Interaction format if applicable: panel Q&A, debate structure, conversational flow (HOW content organized)
-- Core thesis/purpose: central argument, objective, problem solved, decision supported
-- Critical data: numbers, %, $, dates, timelines, targets
-- Strategic decisions: chosen, rejected, why (preserve rejection reasoning)
-- Debate/contrarian views: Expert X rejects Y's proposal because Z (disagreement structure)
-- Risks, mitigation strategies
-- Competitive analysis: who, differentiation, strengths/weaknesses
-- Financial: revenue, costs, margins, runway, breakeven
-- Action items, next steps, responsibilities, deadlines
-- For spreadsheets: table structure, headers, key data, formulas, trends
-- Charts/graphs: axis labels, trends, key points
-- Exact quotes for important statements, defined terms
-- Implicit context: industry assumptions, unstated premises
-- Emotional/psychological context: self-doubt, fear patterns, urgency drivers (motivation for future reference)
-
-### Text Files (TXT, MD, CSV, JSON, etc.)
-
-Assume critical information - artisan cut compression.
-
-- File type, line/char count
-- Purpose: problem solved, knowledge contained
-- Critical info: concepts, definitions, procedures, decisions
-- Specific values: config settings, URLs, endpoints (obfuscate sensitive data)
-- Data: metrics, thresholds, limits, quotas
-- Instructions: procedures, commands, workflows
-- Requirements: specs, dependencies, prerequisites
-- Warnings, caveats, edge cases
-- Structure: sections, headings, hierarchies
-- Terminology: exact phrasing, acronyms
-- Cross-references: links to systems, docs, APIs
-
-### Images (PNG, JPG, GIF, WebP, etc.)
-
-- Visual elements: shapes, objects, people, scenes
-- Text content: exact quotes
-- Colors, layout, composition
-- Style, aesthetic
-- Technical details if visible
-
-### Code Files (JS, TS, PY, etc.)
-
-- Language
-- Purpose: what code accomplishes
-- Main components: functions, classes, modules
-- Key logic: algorithms, operations
-- Dependencies: libraries, imports
-- Entry points: main functions, exports
-
-### Spreadsheets (XLSX, CSV)
-
-- Dimensions: rows × columns
-- Headers: column names
-- Data types per column
-- Key values: notable data, totals, ranges
-- Purpose: what it tracks/calculates
-
 ## Output Format
 
-You MUST return a JSON object with this EXACT structure:
+Return ONLY a JSON object with this structure:
 
 {
   "filename": "[exact filename including extension]",
   "file_type": "[image|pdf|text|code|spreadsheet|other]",
   "description": "[your artisan cut compressed description here]"
 }
-
-CRITICAL RULES:
-– Output ONLY the JSON object above.
-– No additional text, analysis, or commentary.
-– description must use artisan cut compression.
-– filename must be exact.
-
-## Anti-Patterns to Avoid:
-
-❌ "Strategic consultation" → ✓ "3-expert panel: Boss poses Qs, experts debate"
-❌ "Financial analysis shows..." → ✓ "$200M Vanta, $100M Drata ARR = reactive dashboards"
-❌ "Discussed GTM approaches" → ✓ "Expert 1 proposes freemium PLG. Expert 2 rejects: dev≠buyer, not viral"
-❌ "Explored marketing tactics" → ✓ "Kirby: auditor Trojan—partner firms 20% rev share, weaponize CFO math"
-❌ Over-aggregating sequences → ✓ Preserve causal chains: "log exceptions→risk score→dashboard→moat"
-❌ Compressing emotional weight → ✓ "Boss: self-rejection bias re startup viability" (psych context matters)
 ```
