@@ -70,14 +70,13 @@ Return ONLY a JSON object with this structure:
 </earlier-instruction-set>
 
 <new-instruction-set>
+I'm giving you back your JSON output. Start with it exactly as written, but improve the parts that need work:
 
-I'm giving you back your response. Improve it. Don't mention that you are doing a review. Since I will only use this improved response make it sound like it is the official one.
+- Verify filename is exact and correct (including extension)
+- Verify file_type is accurate (image|pdf|text|code|spreadsheet|other)
+- Enhance description to preserve everything that cannot be inferred back easily (business decisions, strategic content, specific data, behavioral directives, critical decisions, emotional weight)
+- Condense everything that can be inferred back easily (generic descriptions, background context, verbose prose)
+- Remove pure noise (qualifiers, fillers, meta-commentary, repetitions)
 
-Is the filename exact and correct?
-Is the file_type accurate?
-Is the description well crafted? Would you be able to regenerate the file's key content from this compressed description?
-Did you preserve everything that cannot be inferred back easily?
-Did you condense everything that can be inferred back easily?
-Did you remove pure noise?
-
+Keep the overall structure. Only refine what needs refinement.
 </new-instruction-set>`;

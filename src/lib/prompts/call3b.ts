@@ -52,14 +52,14 @@ Return ONLY a JSON object with this structure:
 </earlier-instruction-set>
 
 <new-instruction-set>
+I'm giving you back your JSON output. Start with it exactly as written, but improve the parts that need work:
 
-I'm giving you back your response. Improve it. Don't mention that you are doing a review. Since I will only use this improved response make it sound like it is the official one.
+- Verify filename is exact and correct (including extension)
+- Verify file_type is accurate (image|pdf|text|code|spreadsheet|other)
+- Enhance description for discoverability (enable natural queries like "that interview transcript" or "the business plan")
+- Ensure file-level metadata is captured (document type, participants, dates, purpose)
+- Preserve high-level themes without detailed content
+- Remove granular tactical details (those belong in detail chunks)
 
-Is the filename exact and correct?
-Is the file_type accurate?
-Is the description well crafted for discoverability? Would I be able to ask you "hey, remember that interview I shared with you the other day?" or "remember the pitch deck we were going through last week?" and have you find this file?
-Did you capture file-level metadata?
-Did you preserve high-level themes without detailed content?
-Did you remove granular tactical details that belong in detail chunks?
-
+Keep the overall structure. Only refine what needs refinement.
 </new-instruction-set>`;

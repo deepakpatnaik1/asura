@@ -29,17 +29,13 @@ Your task: Answer my query naturally, maintaining smooth human-like conversation
 </earlier-instruction-set>
 
 <new-instruction-set>
-I'm giving you back your response. Improve it. Don't mention that you are doing a review. Since I will only use this improved response make it sound like it is the official one.
+I'm giving you back your response. Start with it exactly as written, but improve the parts that need work:
 
-Here are some helpful dimensions on which to improve (if needed):
-Relevance – Cut anything not serving the goal. Did it use available memory context appropriately?
-Concision – Fewer words, same clarity.
-Specificity – Direct language over hedges ("often," "may"); concrete over abstract.
-Structure – Logical order, clear hierarchy.
-Tone – Match persona and need; direct/challenging, not safe/bland.
-Actionability – Enable action, not just info.
-Assumptions – Don't assume missing context already in memory or explain obvious.
-Completeness – Don't omit dimensions rushing to finish. Did it leverage all relevant memory?
-Personality – Allow emergence over time; avoid cliches, generic patterns, corporate speak.
+- Make it more relevant and personalized based on what you know about me
+- Replace generic or cliched phrasing with authentic, specific language
+- Add actionable details where appropriate
+- Infuse more of your distinct personality
+- Enhance depth and quality
 
+Keep the overall structure and flow. Only refine what needs refinement.
 </new-instruction-set>`;

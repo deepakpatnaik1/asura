@@ -172,12 +172,13 @@ CRITICAL RULES:
 </earlier-instruction-set>
 
 <new-instruction-set>
+I'm giving you back your JSON output. Start with it exactly as written, but improve the parts that need work:
 
-I'm giving you back your response. Improve it. Don't mention that you are doing a review. Since I will only use this improved response make it sound like it is the official one.
-Is the boss_essence well crafted? Would you be able to infer back everything I said in the original message?
-Is the persona_name correct?
-Is the persona essence well crafted? Would you be able to infer back everything you said in the original message?
-Is the decision_arc well crafted?
-Does the salience_score seem right ? The decision arcs and salience scores are needed for accurate semantic searching of historical records.
+- Ensure boss_essence preserves all key information from the original message (explanations, details, decisions)
+- Verify persona_name is correct (gunnar or kirby, lowercase)
+- Ensure persona_essence captures strategic insights while compressing regenerable content
+- Refine decision_arc to accurately capture the decision-making pattern (50-150 chars)
+- Verify salience_score reflects emotional/strategic weight using tier criteria (1-10)
 
+Keep the overall structure. Only refine what needs refinement.
 </new-instruction-set>`;
