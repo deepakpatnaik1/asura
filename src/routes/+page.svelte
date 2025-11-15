@@ -30,6 +30,11 @@
 	let fileInputRef: HTMLInputElement;
 	let showFileList = $state(false);
 	let deleteConfirmId = $state<string | null>(null);
+	let deleteProgress = $state(0);
+	let deleteTimer: number | null = null;
+	let deleteMessageId = $state<string | null>(null);
+	let deleteMessageProgress = $state(0);
+	let deleteMessageTimer: number | null = null;
 	let dragOverActive = $state(false);
 
 	// Load user settings on mount
@@ -196,15 +201,111 @@
 		target.value = '';
 	}
 
-	async function handleDeleteFile(fileId: string) {
-		try {
-			await deleteFile(fileId);
-			console.log('[Chunk 9 UI] File deleted:', fileId);
-		} catch (err) {
-			console.error('[Chunk 9 UI] Delete failed:', err);
-			error.set(`Delete failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+	function handleDeleteClick(fileId: string) {
+		deleteConfirmId = fileId;
+		deleteProgress = 0;
+
+		// Auto-confirm after 3 seconds
+		const duration = 3000;
+		const interval = 50;
+		const increment = (interval / duration) * 100;
+
+		deleteTimer = window.setInterval(() => {
+			deleteProgress += increment;
+			if (deleteProgress >= 100) {
+				if (deleteTimer) clearInterval(deleteTimer);
+				handleDeleteConfirm();
+			}
+		}, interval);
+	}
+
+	function handleDeleteCancel() {
+		if (deleteTimer) {
+			clearInterval(deleteTimer);
+			deleteTimer = null;
 		}
 		deleteConfirmId = null;
+		deleteProgress = 0;
+	}
+
+	async function handleDeleteConfirm() {
+		if (deleteTimer) {
+			clearInterval(deleteTimer);
+			deleteTimer = null;
+		}
+		const fileId = deleteConfirmId;
+		deleteConfirmId = null;
+		deleteProgress = 0;
+
+		if (fileId) {
+			try {
+				await deleteFile(fileId);
+				console.log('[Chunk 9 UI] File deleted:', fileId);
+			} catch (err) {
+				console.error('[Chunk 9 UI] Delete failed:', err);
+				error.set(`Delete failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+			}
+		}
+	}
+
+	function handleMessageDeleteClick(messageId: string) {
+		deleteMessageId = messageId;
+		deleteMessageProgress = 0;
+
+		// Auto-confirm after 3 seconds
+		const duration = 3000;
+		const interval = 50;
+		const increment = (interval / duration) * 100;
+
+		deleteMessageTimer = window.setInterval(() => {
+			deleteMessageProgress += increment;
+			if (deleteMessageProgress >= 100) {
+				if (deleteMessageTimer) clearInterval(deleteMessageTimer);
+				handleMessageDeleteConfirm();
+			}
+		}, interval);
+	}
+
+	function handleMessageDeleteCancel() {
+		if (deleteMessageTimer) {
+			clearInterval(deleteMessageTimer);
+			deleteMessageTimer = null;
+		}
+		deleteMessageId = null;
+		deleteMessageProgress = 0;
+	}
+
+	async function handleMessageDeleteConfirm() {
+		if (deleteMessageTimer) {
+			clearInterval(deleteMessageTimer);
+			deleteMessageTimer = null;
+		}
+		const messageId = deleteMessageId;
+		deleteMessageId = null;
+		deleteMessageProgress = 0;
+
+		if (messageId) {
+			try {
+				const response = await fetch(`/api/superjournal/${messageId}`, {
+					method: 'DELETE'
+				});
+				if (!response.ok) throw new Error('Delete failed');
+				console.log('[Message] Deleted superjournal entry:', messageId);
+				// SSE will handle UI update automatically
+			} catch (err) {
+				console.error('[Message] Delete failed:', err);
+				error.set(`Delete failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+			}
+		}
+	}
+
+	function handleAbortCurrentMessage() {
+		// Stop the streaming immediately
+		if ($isLoading) {
+			isLoading.set(false);
+			currentMessage.set(null);
+			console.log('[Abort] Current message aborted');
+		}
 	}
 
 	function triggerFileInput() {
@@ -356,7 +457,7 @@
 								<div class="action-icons">
 									<button class="action-btn" title="Star"><Icon src={LuStar} size="11" /></button>
 									<button class="action-btn" title="Copy"><Icon src={LuCopy} size="11" /></button>
-									<button class="action-btn" title="Delete"><Icon src={LuTrash2} size="11" /></button>
+									<button class="action-btn" title="Delete" onclick={() => handleMessageDeleteClick(msg.id)}><Icon src={LuTrash2} size="11" /></button>
 									<button class="action-btn" title="Archive"><Icon src={LuArchive} size="11" /></button>
 									<button class="action-btn" title="Refresh"><Icon src={LuRefreshCw} size="11" /></button>
 								</div>
@@ -391,7 +492,7 @@
 								<div class="action-icons">
 									<button class="action-btn" title="Star"><Icon src={LuStar} size="11" /></button>
 									<button class="action-btn" title="Copy"><Icon src={LuCopy} size="11" /></button>
-									<button class="action-btn" title="Delete"><Icon src={LuTrash2} size="11" /></button>
+									<button class="action-btn" title="Abort" onclick={handleAbortCurrentMessage}><Icon src={LuTrash2} size="11" /></button>
 									<button class="action-btn" title="Archive"><Icon src={LuArchive} size="11" /></button>
 									<button class="action-btn" title="Refresh"><Icon src={LuRefreshCw} size="11" /></button>
 								</div>
@@ -519,7 +620,7 @@
 				{:else}
 					{#each $files as file (file.id)}
 						<div class="file-row">
-							<button class="delete-btn" onclick={() => (deleteConfirmId = file.id)}>
+							<button class="delete-btn" onclick={() => handleDeleteClick(file.id)}>
 								<Icon src={LuTrash2} size="10" />
 							</button>
 							<span class="filename">{file.filename.substring(0, 30)}{file.filename.length > 30 ? '...' : ''}</span>
@@ -544,22 +645,29 @@
 
 	<!-- Delete Confirmation Modal -->
 	{#if deleteConfirmId}
-		<div class="modal-overlay" onclick={() => (deleteConfirmId = null)}>
+		<div class="modal-overlay" onclick={handleDeleteCancel}>
 			<div class="modal-content" onclick={(e) => e.stopPropagation()}>
-				<p class="modal-text">Delete file permanently?</p>
-				<div class="modal-actions">
-					<button
-						class="modal-btn modal-btn-cancel"
-						onclick={() => (deleteConfirmId = null)}
-					>
-						Cancel
-					</button>
-					<button
-						class="modal-btn modal-btn-confirm"
-						onclick={() => deleteConfirmId && handleDeleteFile(deleteConfirmId)}
-					>
-						Delete
-					</button>
+				<p class="modal-text">Hush... it'll all be over soon.</p>
+				<div class="nuke-progress-container">
+					<div class="nuke-progress-bar" style="width: {deleteProgress}%"></div>
+				</div>
+				<div class="nuke-actions">
+					<button class="nuke-cancel-btn" onclick={handleDeleteCancel}>Cancel</button>
+				</div>
+			</div>
+		</div>
+	{/if}
+
+	<!-- Message Delete Confirmation Modal -->
+	{#if deleteMessageId}
+		<div class="modal-overlay" onclick={handleMessageDeleteCancel}>
+			<div class="modal-content" onclick={(e) => e.stopPropagation()}>
+				<p class="modal-text">Hush... it'll all be over soon.</p>
+				<div class="nuke-progress-container">
+					<div class="nuke-progress-bar" style="width: {deleteMessageProgress}%"></div>
+				</div>
+				<div class="nuke-actions">
+					<button class="nuke-cancel-btn" onclick={handleMessageDeleteCancel}>Cancel</button>
 				</div>
 			</div>
 		</div>
