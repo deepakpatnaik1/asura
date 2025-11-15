@@ -222,26 +222,49 @@ SELECT COUNT(*) FROM file_chunks WHERE file_id = '<file-id-from-above>';
 - File chunks integrated into conversation context
 - Responses are accurate to file content
 
-**Actual Result**:
-❌ AI failed to retrieve file content
-- User asked: "What are the main topics in the file I just uploaded?"
-- AI responded with a shortened/truncated version of previous response instead of answering the file question
+**Actual Result (Retest after database fix)**:
+❌ AI still failed to retrieve file content - DIFFERENT FAILURE MODE
+- User asked: "Tell me something about the file I just uploaded."
+- AI responded: "I can't access files for security reasons. If you have questions about its content, feel free to describe it and I'll help!"
+- This is a bizarre hallucination - the AI is claiming it can't access files for "security reasons"
 - No file content was referenced in the response
-- Vector search did not appear to work
-- File chunks were not integrated into conversation context
+- Server logs show: "[Context Builder] Generating query embedding for file chunks" (7 times)
+- But NO logs showing "File chunks loaded" - meaning search returned 0 results
+- Vector search is being attempted but returning nothing
+- Database fix (adding filename column) may not have been applied correctly
 
 **Status**:
-❌ FAIL
+❌ FAIL (Critical regression - worse than before)
 
 **Issues Found**:
-1. **CRITICAL**: Vector search/file retrieval completely failed - AI did not access file content at all
-2. **CRITICAL**: Call 1B prompt is being misinterpreted by the persona
-   - AI thinks it's being asked to "shorten my previous response"
+1. **CRITICAL - ARCHITECTURAL FLAW**: File chunking strategy is fundamentally broken
+   - Chunks are too small to be useful (often single sentences)
+   - Example actual chunk: "Asserts the space is defined, not owned."
+   - This has ZERO context and cannot be meaningfully retrieved or understood
+   - Semantic chunking creates tiny, context-free fragments
+   - Artisan Cut compression removes too much information
+   - Even if vector search worked perfectly, these chunks are useless
+   - **ROOT CAUSE**: No minimum chunk size enforcement, overly aggressive topic boundary detection
+   - **REQUIRED FIX**: Complete rethink of chunking strategy:
+     * Enforce minimum 200-300 words per chunk
+     * Use overlapping windows to preserve context
+     * Keep hierarchical structure (both detailed and overview chunks)
+     * Less aggressive compression to preserve context
+     * This affects file-megafeature branch, not just systemprompts branch
+2. **CRITICAL**: Vector search returns 0 results even though file chunks exist in database
+   - search_file_chunks function is being called
+   - Query embedding is being generated
+   - But no results are returned
+   - Either: SQL function update didn't apply, or similarity threshold too high, or query error
+3. **CRITICAL**: AI hallucinates "security reasons" for not accessing files
+   - This is completely wrong - files SHOULD be accessible via vector search
+   - AI invents false excuses instead of saying it can't find relevant content
+   - This is worse than simply not finding files - it's actively misleading
+4. **CRITICAL**: Call 1B prompt still being misinterpreted
+   - Thinking content shows: "the user wants me to shorten my previous response"
    - This is NOT what Call 1B should do
-   - Call 1B should produce a HIGHER QUALITY response, not a shortened one
-   - The prompt needs to be rewritten to make this clear
-   - Current behavior: AI shortens/truncates instead of enhancing quality
-3. Same thinking content visibility issues from Test 2 (still present)
+   - Call 1B should enhance quality, not shorten
+5. Thinking content still visible in UI (same issue from Test 2)
 
 ---
 
