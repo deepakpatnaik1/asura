@@ -8,7 +8,7 @@
 
 ## Overview
 
-Consolidate all system prompts across entire app into single `system-prompts.ts` file with precise wording.
+Consolidate all system prompts across entire app into modular TypeScript files with precise wording.
 
 ---
 
@@ -17,10 +17,11 @@ Consolidate all system prompts across entire app into single `system-prompts.ts`
 **Primary:** Single source of truth for all system prompts used in app.
 
 **Requirements:**
-1. All prompts in one file: `src/lib/system-prompts.ts`
+1. All prompts in separate files under `src/lib/prompts/` directory
 2. Precise, unambiguous wording for each prompt
 3. Replace hardcoded prompts scattered across codebase
 4. Maintain existing functionality (no behavior changes)
+5. Central index file (`index.ts`) for convenient imports
 
 ---
 
@@ -54,42 +55,81 @@ There are broadly two kinds of system prompts used in this project: one for conv
 
 ## Implementation Plan
 
-**Source:** `docs/⭐ system-prompts.md` contains all prompts in markdown format.
-**Target:** `src/lib/system-prompts.ts` - centralized TypeScript exports.
+**Source:** `docs/⭐️ system-prompts/` contains all prompts in markdown format.
+**Target:** `src/lib/prompts/` - modular TypeScript files.
 
-### Phase 1: Create System Prompts File
+### Phase 1: Create System Prompts Directory Structure ✅
 
-Create `src/lib/system-prompts.ts` with all prompts exported as named constants:
-- Base Instructions (1)
-- Persona Profiles (6): Gunnar, Vlad, Kirby, Stefan, Ananya, Samara
-- Call 1B Prompt (1)
-- Chat Compression: Call 2A, Call 2B (2)
-- File Compression: Modified Call 2A, Modified Call 2B, Call 3A, Call 3B (4)
+Created `src/lib/prompts/` with separate files:
 
-All prompts extracted verbatim from `docs/⭐ system-prompts.md` - zero wording changes.
+**Base & Personas:**
+- `base-instructions.ts` - Core behavioral instructions
+- `persona-gunnar.ts` - Complete thinking partner
+- `persona-kirby.ts` - Guerrilla marketer
+
+**Call 1A/1B (Chat):**
+- `call1a.ts` - Initial response generation
+- `call1b.ts` - Response refinement & verification
+
+**Call 2A/2B (Chat Compression):**
+- `call2a.ts` - Artisan cut compression
+- `call2b.ts` - Compression verification
+
+**Call 3A/3B (File Overview):**
+- `call3a.ts` - File overview compression (Chunk 0)
+- `call3b.ts` - Overview verification
+
+**Modified Call 2A/2B (File Details):**
+- `modified-call2a.ts` - Detail chunk compression (Chunk 1+)
+- `modified-call2b.ts` - Detail verification
+
+**Index:**
+- `index.ts` - Central exports for convenient imports
+
+**Persona Consolidation:**
+Originally had 6 personas (Gunnar, Vlad, Kirby, Stefan, Ananya, Samara). After implementing A-B prompting architecture, reduced to 2 personas:
+- Vlad (first principles) → merged into Gunnar
+- Stefan (finance) → merged into Gunnar
+- Samara (emotional processing) → merged into Gunnar
+- Ananya (intellectual companion) → merged into Gunnar
+- Kirby retained as specialized guerrilla marketing persona
+
+All prompts extracted verbatim from `docs/⭐️ system-prompts/` markdown files.
 
 ### Phase 2: Migrate File Compression Prompts
 
 **File:** `src/lib/file-compressor.ts`
 
-1. Add import: `import { MODIFIED_CALL_2A_PROMPT, MODIFIED_CALL_2B_PROMPT, CALL_3A_PROMPT, CALL_3B_PROMPT } from '$lib/system-prompts';`
-2. Delete local prompt definitions
+1. Add import: `import { MODIFIED_CALL2A_PROMPT, MODIFIED_CALL2B_PROMPT, CALL3A_PROMPT, CALL3B_PROMPT } from '$lib/prompts';`
+2. Delete local prompt definitions (currently named: DETAIL_CHUNK_COMPRESSION_PROMPT, DETAIL_CHUNK_CALL_2B_PROMPT, CHUNK_0_COMPRESSION_PROMPT, CHUNK_0_CALL_2B_PROMPT)
 3. Update references to use imported constants
 
-### Phase 3: Migrate Chat Compression Prompts
+### Phase 3: Migrate Chat System Prompts
 
 **File:** `src/routes/api/chat/+server.ts`
 
-1. Add import: `import { CALL2A_PROMPT, CALL2B_PROMPT } from '$lib/system-prompts';`
-2. Delete local CALL2A_PROMPT and CALL2B_PROMPT definitions
+1. Add imports:
+   ```typescript
+   import {
+     BASE_INSTRUCTIONS,
+     PERSONA_GUNNAR,
+     PERSONA_KIRBY,
+     CALL1A_PROMPT,
+     CALL1B_PROMPT,
+     CALL2A_PROMPT,
+     CALL2B_PROMPT
+   } from '$lib/prompts';
+   ```
+2. Delete hardcoded prompt definitions
 3. Update references to use imported constants
+4. Remove obsolete persona references (Vlad, Stefan, Samara, Ananya)
 
 ### Phase 4: Verification
 
 1. Restart dev server (server-side changes require full restart)
 2. Test file upload functionality
-3. Test chat functionality
-4. Verify zero behavior changes
+3. Test chat functionality with both personas
+4. Verify zero behavior changes (compression quality, response quality)
 
 ### Phase 5: Commit
 
@@ -161,6 +201,58 @@ This ensures the B call can verify whether the A call properly followed its own 
 ### Why This Matters
 
 The B prompt alone says "verify against these rules" but doesn't contain the full rules - those are in the A prompt. The B call needs to see both prompts to do its job.
+
+---
+
+## Progress
+
+### Completed ✅
+
+**Phase 1: System Prompts Directory Structure** (2025-11-15)
+- Created `src/lib/prompts/` directory
+- Extracted all 11 prompt files from markdown docs:
+  - Base instructions and 2 personas (was 6, consolidated to 2)
+  - 4 A-B prompt pairs (8 total call prompts)
+  - Central index.ts for exports
+- Prompts are now modular, version-controlled TypeScript constants
+- Documented persona consolidation rationale in commit history
+
+### In Progress
+
+**Phase 2: Migrate File Compression Prompts**
+- Next: Update `src/lib/file-compressor.ts` to import from `$lib/prompts`
+
+**Phase 3: Migrate Chat System Prompts**
+- Next: Update `src/routes/api/chat/+server.ts` to import from `$lib/prompts`
+
+---
+
+## File Structure
+
+```
+src/lib/prompts/
+├── index.ts                    # Central exports
+├── base-instructions.ts        # Core behavioral rules
+├── persona-gunnar.ts          # Complete thinking partner
+├── persona-kirby.ts           # Guerrilla marketer
+├── call1a.ts                  # Initial chat response
+├── call1b.ts                  # Chat response verification
+├── call2a.ts                  # Chat compression
+├── call2b.ts                  # Chat compression verification
+├── call3a.ts                  # File overview compression (Chunk 0)
+├── call3b.ts                  # File overview verification
+├── modified-call2a.ts         # File detail compression (Chunk 1+)
+└── modified-call2b.ts         # File detail verification
+```
+
+**Import Usage:**
+```typescript
+// Option 1: Import from index (recommended)
+import { CALL2A_PROMPT, CALL2B_PROMPT } from '$lib/prompts';
+
+// Option 2: Import from specific file
+import { CALL2A_PROMPT } from '$lib/prompts/call2a';
+```
 
 ---
 
