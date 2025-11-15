@@ -56,7 +56,7 @@ interface ContextStats {
  */
 export async function buildContextForCalls1A1B(
 	userId: string | null,
-	personaName: string = 'ananya',
+	personaName: string = 'gunnar',
 	modelIdentifier: string = 'accounts/fireworks/models/qwen3-235b-a22b',
 	userQuery?: string // Optional: enables vector search (Priority 5)
 ): Promise<{ context: string; stats: ContextStats }> {

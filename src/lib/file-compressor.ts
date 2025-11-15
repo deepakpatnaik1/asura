@@ -1,7 +1,11 @@
 import OpenAI from 'openai';
 import type { FileType } from './file-extraction';
-import { FILE_MODEL, MAX_TOKENS } from '$lib/config/models';
+import { MAX_TOKENS } from '$lib/config/models';
 import { MODIFIED_CALL2A_PROMPT, MODIFIED_CALL2B_PROMPT, CALL3A_PROMPT, CALL3B_PROMPT } from '$lib/prompts';
+import { createClient } from '@supabase/supabase-js';
+import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
+
+const supabase = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY);
 
 // ============================================================================
 // ERROR CLASSES
@@ -79,8 +83,7 @@ export interface Call2Response {
 // CONSTANTS
 // ============================================================================
 
-/** API Model Configuration */
-const MODEL_NAME = FILE_MODEL;
+/** API Model Configuration - Read from user_settings in compressChunk function */
 
 /** API Call Configuration */
 const TEMPERATURE = 0.7;
@@ -230,6 +233,7 @@ function parseJsonResponse(text: string): Call2Response {
 async function callFireworksAPI(
 	systemPrompt: string,
 	userContent: string,
+	model: string,
 	maxTokens?: number
 ): Promise<string> {
 	const apiKey = process.env.FIREWORKS_API_KEY || '';
@@ -241,7 +245,7 @@ async function callFireworksAPI(
 
 	try {
 		const response = await fireworks.chat.completions.create({
-			model: MODEL_NAME,
+			model: model,
 			messages: [
 				{
 					role: 'system',
@@ -335,6 +339,14 @@ export async function compressChunk(input: ChunkCompressionInput): Promise<Chunk
 	// Validate input
 	validateChunkInput(input);
 
+	// Read selected model from user_settings table
+	const { data: settings } = await supabase
+		.from('user_settings')
+		.select('selected_model')
+		.single();
+
+	const selectedModel = settings?.selected_model || 'accounts/fireworks/models/qwen3-235b-a22b';
+
 	// Select prompts based on chunk index
 	const call2aPrompt = input.chunkIndex === 0
 		? CALL3A_PROMPT           // Metadata-focused (Chunk 0 overview)
@@ -360,7 +372,7 @@ File Type: ${input.fileType}
 ${input.chunkText}`;
 
 		console.log(`[compressChunk] Starting Call 2A for chunk ${input.chunkIndex} (${input.chunkIndex === 0 ? 'Chunk 0 overview' : 'detail chunk'})`);
-		const call2aRaw = await callFireworksAPI(call2aPrompt, userContent, maxTokens);
+		const call2aRaw = await callFireworksAPI(call2aPrompt, userContent, selectedModel, maxTokens);
 		console.log(`[compressChunk] Call 2A completed for chunk ${input.chunkIndex}, parsing response...`);
 		call2aResponse = parseJsonResponse(call2aRaw);
 		console.log(`[compressChunk] Call 2A parsed successfully for chunk ${input.chunkIndex}`);
@@ -379,7 +391,7 @@ ${input.chunkText}`;
 	// Call 2B: Verification
 	try {
 		const userContent = JSON.stringify(call2aResponse);
-		const call2bRaw = await callFireworksAPI(call2bPrompt, userContent, maxTokens);
+		const call2bRaw = await callFireworksAPI(call2bPrompt, userContent, selectedModel, maxTokens);
 		call2bResponse = parseJsonResponse(call2bRaw);
 	} catch (error) {
 		if (error instanceof FileCompressionError) {
