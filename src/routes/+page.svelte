@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Icon } from 'svelte-icons-pack';
-	import { LuStar, LuCopy, LuTrash2, LuArchive, LuRefreshCw, LuPaperclip, LuFolder, LuChevronDown, LuSettings, LuLogOut, LuCloudDownload, LuEllipsisVertical, LuArrowDown, LuArrowUp, LuMessageSquare, LuFlame, LuX } from 'svelte-icons-pack/lu';
+	import { LuStar, LuCopy, LuTrash2, LuArchive, LuRefreshCw, LuPaperclip, LuFolder, LuChevronDown, LuSettings, LuLogOut, LuCloudDownload, LuEllipsisVertical, LuArrowDown, LuArrowUp, LuMessageSquare, LuFlame, LuX, LuCircle } from 'svelte-icons-pack/lu';
 	import { currentMessage, isLoading, sendMessage } from '$lib/stores/chat';
 	import {
 		files,
@@ -37,6 +37,11 @@
 	let deleteMessageProgress = $state(0);
 	let deleteMessageTimer: number | null = null;
 	let dragOverActive = $state(false);
+
+	// Auto-scroll state
+	let isAutoScrolling = $state(false);
+	let scrollSpeed = $state(0.5); // pixels per frame - pattern: scroll 5s, pause 10s, repeat
+	let pauseProgress = $state(0); // 0-100, percentage of pause completed
 
 	// Load user settings on mount
 	onMount(async () => {
@@ -99,6 +104,74 @@
 	async function scrollToBottom() {
 		await tick();
 		messagesEndRef?.scrollIntoView({ behavior: 'smooth' });
+	}
+
+	// Custom auto-scroll with adjustable speed and pause pattern
+	function handleAutoScroll() {
+		if (isAutoScrolling) {
+			// Stop scrolling
+			isAutoScrolling = false;
+			pauseProgress = 0;
+			return;
+		}
+
+		// Start scrolling
+		isAutoScrolling = true;
+		pauseProgress = 0;
+		const container = document.querySelector('.chat-container');
+		if (!container) return;
+
+		let scrollStartTime = Date.now();
+		let isPaused = false;
+		let pauseStartTime = 0;
+
+		function smoothScroll() {
+			if (!isAutoScrolling) return;
+
+			const maxScroll = container.scrollHeight - container.clientHeight;
+			const currentScroll = container.scrollTop;
+
+			if (currentScroll >= maxScroll) {
+				// Reached bottom, stop scrolling
+				isAutoScrolling = false;
+				pauseProgress = 0;
+				return;
+			}
+
+			const now = Date.now();
+
+			if (!isPaused) {
+				// Scrolling phase: scroll for 5 seconds
+				pauseProgress = 0;
+				const scrollElapsed = now - scrollStartTime;
+				if (scrollElapsed < 5000) {
+					// Scroll down by scrollSpeed pixels
+					container.scrollTop = currentScroll + scrollSpeed;
+				} else {
+					// Switch to pause phase
+					isPaused = true;
+					pauseStartTime = now;
+				}
+			} else {
+				// Pause phase: pause for 1 minute
+				// During pause, user can manually scroll - we'll resume from their position
+				const pauseElapsed = now - pauseStartTime;
+				pauseProgress = Math.min(100, (pauseElapsed / 60000) * 100);
+
+				if (pauseElapsed >= 60000) {
+					// Switch back to scrolling phase from current scroll position
+					isPaused = false;
+					scrollStartTime = now;
+					pauseProgress = 0;
+				}
+				// Don't auto-scroll during pause, but keep checking
+			}
+
+			// Continue the cycle
+			requestAnimationFrame(smoothScroll);
+		}
+
+		smoothScroll();
 	}
 
 	// Watch for new messages and scroll
@@ -577,7 +650,23 @@
 					</div>
 
 					<div class="icon-group">
-						<button class="control-btn" title="Auto-scroll"><Icon src={LuEllipsisVertical} size="11" /></button>
+						<button class="control-btn auto-scroll-btn" class:active={isAutoScrolling} title="Auto-scroll" onclick={handleAutoScroll}>
+							<svg width="11" height="11" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+								<!-- Outer circle stroke -->
+								<circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none"/>
+								<!-- Filled portion (Harvey ball) -->
+								{#if pauseProgress > 0}
+									{@const angle = (pauseProgress / 100) * 2 * Math.PI}
+									{@const x = 12 + 10 * Math.sin(angle)}
+									{@const y = 12 - 10 * Math.cos(angle)}
+									{@const largeArc = pauseProgress > 50 ? 1 : 0}
+									<path
+										d="M12 2 A10 10 0 {largeArc} 1 {x} {y} L12 12 Z"
+										fill="var(--boss-accent)"
+									/>
+								{/if}
+							</svg>
+						</button>
 						<button class="control-btn" title="Scroll down"><Icon src={LuArrowDown} size="11" /></button>
 						<button class="control-btn" title="Scroll up"><Icon src={LuArrowUp} size="11" /></button>
 						<button class="control-btn" title="Messages"><Icon src={LuMessageSquare} size="11" /></button>
@@ -880,6 +969,15 @@
 		opacity: 1;
 	}
 
+	.control-btn.active {
+		opacity: 1;
+		color: var(--boss-accent);
+	}
+
+	.auto-scroll-btn svg {
+		display: block;
+	}
+
 	.model-dropdown {
 		display: flex;
 		align-items: center;
@@ -1135,6 +1233,55 @@
 	.send-button:hover:not(:disabled) {
 		background: var(--boss-accent);
 		color: hsl(var(--background));
+	}
+
+	/* Speed Control Panel */
+	.speed-control {
+		position: fixed;
+		bottom: 20px;
+		right: 20px;
+		background: hsl(var(--card));
+		border: 1px solid hsl(var(--chat-border));
+		border-radius: 8px;
+		padding: 16px;
+		z-index: var(--z-sticky);
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+		min-width: 250px;
+	}
+
+	.speed-control span {
+		font-size: 9pt;
+		color: var(--boss-accent);
+		font-weight: 500;
+	}
+
+	.speed-control input[type="range"] {
+		width: 100%;
+		cursor: pointer;
+	}
+
+	.speed-presets {
+		display: flex;
+		gap: 8px;
+		flex-wrap: wrap;
+	}
+
+	.speed-presets button {
+		background: transparent;
+		border: 1px solid hsl(var(--chat-border));
+		color: hsl(var(--foreground));
+		border-radius: 4px;
+		padding: 6px 12px;
+		font-size: 8pt;
+		cursor: pointer;
+		transition: all 0.2s;
+	}
+
+	.speed-presets button:hover {
+		border-color: var(--boss-accent);
+		color: var(--boss-accent);
 	}
 
 	/* Nuke Confirmation Modal */
