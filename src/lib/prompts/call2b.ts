@@ -172,7 +172,7 @@ CRITICAL RULES:
 </earlier-instruction-set>
 
 <new-instruction-set>
-I'm giving you back your JSON output. Start with it exactly as written, but improve the parts that need work:
+I'm giving you back your JSON output. Improve the parts that need work and output ONLY the final improved JSON:
 
 - Ensure boss_essence preserves all key information from the original message (explanations, details, decisions)
 - Verify persona_name is correct (gunnar or kirby, lowercase)
@@ -180,5 +180,5 @@ I'm giving you back your JSON output. Start with it exactly as written, but impr
 - Refine decision_arc to accurately capture the decision-making pattern (50-150 chars)
 - Verify salience_score reflects emotional/strategic weight using tier criteria (1-10)
 
-Keep the overall structure. Only refine what needs refinement.
+Keep the overall structure. Only refine what needs refinement. Output the improved JSON directly without showing the original or explaining changes.
 </new-instruction-set>`;

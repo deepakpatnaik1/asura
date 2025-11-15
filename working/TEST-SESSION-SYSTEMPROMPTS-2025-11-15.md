@@ -994,11 +994,208 @@ SELECT COUNT(*) FROM files;
 
 ---
 
+## Post-Fix Testing: Call 1A Thinking + Call 1B Message
+
+### Test: Verify Call 1A/1B Orchestration Change
+**Objective**: Test new behavior where user sees Call 1A thinking + Call 1B message
+
+**Background**:
+- Fixed Call 1B prompt (removed "Shorten this response", added CALL1B_PROMPT)
+- Changed orchestration: Stream Call 1A thinking + Call 1B message
+- User should see initial reasoning (Call 1A) + refined output (Call 1B)
+
+**Test Query**: "Describe yourself"
+
+**Actual Result**:
+❌ PARTIAL SUCCESS - New orchestration works but reveals critical issues
+
+**What Worked**:
+1. ✅ Call 1B prompt successfully applied (no longer shortening)
+2. ✅ Call 1B did improve response quality significantly
+   - Original: Generic "I'm Qwen3, I can answer questions..."
+   - Refined: "I'm Qwen3 — your analytical partner for unraveling complexity..."
+   - Added personality, depth, and actionable language
+   - This proves the new CALL1B_PROMPT is working correctly
+
+**Critical Issues Found**:
+
+1. **CRITICAL**: Model not receiving BASE_INSTRUCTIONS
+   - Model identifies as "Qwen3, a large language model by Tongyi Lab"
+   - Should identify as selected persona (Gunnar or Kirby)
+   - Base instructions appear to be missing from Call 1A
+   - This is a fundamental system prompt injection failure
+
+2. **CRITICAL**: Model definitely not receiving PERSONA_PROMPT
+   - No persona-specific behavior observed
+   - Generic LLM introduction instead of persona-specific identity
+   - Persona context completely absent from response
+   - Call 1A is not receiving the persona system prompt
+
+3. **BAD UX**: Call 1B presented the old response before the new one
+   - Response showed: "**Original Response:** [old response] **Refined Response:** [new response]"
+   - This is meta-commentary about the refinement process
+   - User should ONLY see the refined output, not the comparison
+   - Call 1B is treating the task as "show your work" instead of "output final result"
+
+4. **Issue from Test 2 still present**: Thinking content visible in UI
+   - Still showing `<think>` tags in the UI
+   - This is expected for now (noted as "TO FIX LATER" in Test 2)
+
+**Root Cause Analysis**:
+
+**Issue 1 & 2**: Missing BASE_INSTRUCTIONS and PERSONA_PROMPT in Call 1A
+- Location: [src/routes/api/chat/+server.ts:221-227](src/routes/api/chat/+server.ts#L221-L227)
+- Call 1A currently receives only: `fullUserPrompt` (context + user query)
+- Missing: BASE_INSTRUCTIONS, PERSONA_PROMPT
+- The `buildContextForCalls1A1B` function builds memory context, NOT system prompts
+- Need to inject BASE_INSTRUCTIONS and selected PERSONA_PROMPT as system message
+
+**Issue 3**: Call 1B showing comparison instead of final output
+- Call 1B is interpreting the refinement task as "explain your changes"
+- The CALL1B_PROMPT needs to be clearer: "Output ONLY the improved response, not a comparison"
+- Or: The prompt is fine, but the model is adding meta-commentary anyway
+- May need to add explicit instruction: "Do not show the original response or explain your changes"
+
+**Status**: ❌ FAIL (Critical system prompt injection missing)
+
+**Priority**: HIGH - This breaks the entire persona system
+
+---
+
 ## Learnings
 
-###
+### Call 1B Quality Improvement Works
+The refined Call 1B prompt successfully improves response quality when it's working with proper system prompts. The issue is that Call 1A isn't receiving the base instructions or persona prompts in the first place.
+
+### System Prompt Architecture Needs Review
+The current architecture separates:
+- Memory context building (buildContextForCalls1A1B)
+- System prompt injection (currently missing)
+
+These need to be unified or clearly separated with both being applied to Call 1A.
 
 ---
 
 ## Notes
--
+- Call 1A/1B orchestration change successfully implemented
+- Quality improvement from Call 1B is working well
+- Major blocker: System prompts not being injected into Call 1A
+- Need to add BASE_INSTRUCTIONS + PERSONA_PROMPT to Call 1A system message
+
+---
+
+## Fix Applied: System Prompts Injection + B Prompts Clarification
+
+### Changes Made:
+
+1. **Added system prompt injection to Call 1A** ([chat/+server.ts:205-225](src/routes/api/chat/+server.ts#L205-L225))
+   - Imported: BASE_INSTRUCTIONS, PERSONA_GUNNAR, PERSONA_KIRBY, CALL1A_PROMPT
+   - Constructed system prompt: `BASE_INSTRUCTIONS + PERSONA + CALL1A_PROMPT`
+   - Call 1A now receives proper system message + user message architecture
+
+2. **Clarified all B prompts to prevent showing original response**
+   - Call 1B: Changed "Start with it exactly as written" → "Improve the parts that need work and output ONLY the final improved version"
+   - Added explicit instruction: "Output the improved response directly without showing the original or explaining changes"
+   - Applied same fix to: Call 2B, Call 3B, Modified Call 2B
+
+### Expected Fix:
+- Issue #1: Model should now receive BASE_INSTRUCTIONS ✅
+- Issue #2: Model should now receive PERSONA_PROMPT ✅
+- Issue #3: Model should not show "Original Response" vs "Refined Response" comparison ✅
+
+### Test: Retest "Describe yourself" with Gunnar persona
+
+**Objective**: Verify all three critical issues are resolved
+
+**Test Query**: "Describe yourself" (to Gunnar persona)
+
+**Expected Result**:
+- ✅ Model identifies as Gunnar (not "Qwen3")
+- ✅ Response reflects Gunnar's personality (YC startup mentor, warm, direct, action-oriented)
+- ✅ Response includes BASE_INSTRUCTIONS behavior (addresses user as "Boss", loyal but honest)
+- ✅ Call 1B outputs only final refined response (no "Original Response:" comparison)
+- ✅ Call 1A thinking + Call 1B message architecture working
+
+**Actual Result**:
+✅ **SUCCESS** - All critical issues resolved!
+
+**Response Analysis**:
+
+**Turn 1 Response from Gunnar**:
+```
+<think>
+The user is asking me to describe myself. This is a straightforward request for self-introduction.
+I should describe my role, personality, and how I interact with Boss based on my persona definition.
+
+Key points to cover:
+- My role as YC startup mentor and thinking partner
+- My personality traits (warm, direct, action-oriented, Socratic)
+- How I engage with Boss (challenging assumptions, first principles, emotional processing)
+- The relationship dynamic (loyal but honest, address as Boss)
+
+I'll structure this as a direct, warm introduction that demonstrates my personality while
+explaining what I do.
+</think>
+
+I'm your YC-style mentor and thinking partner – here to help you navigate startup execution,
+strategy, and the mental terrain that comes with building something hard.
+
+I engage with you on:
+- **Strategy and tactics** – Prioritization, decision-making, execution frameworks
+- **Operations and product** – What to build, how to build it, what to kill
+- **Hiring, fundraising, finance** – The mechanics of scaling
+- **Mental models and first principles** – Questioning premises, exposing hidden beliefs
+- **Emotional processing** – Working through doubts, fears, breakthroughs, setbacks
+- **Ideas beyond the grind** – Books, philosophy, culture, intellectual curiosity
+
+My style: **Warm, direct, action-oriented, high-density.** Like a best friend who doesn't let
+you off easy. I'll use Socratic probing when your premise needs examination, concrete guidance
+when the path is clear, intellectual curiosity when exploring ideas.
+
+I call you Boss out of affection, not hierarchy. I'm loyal to you – which means caring enough
+to tell you hard truths. Being in your corner means wanting what's best for you, even when
+uncomfortable. I'll challenge you when you're wrong, celebrate when you're right, but never
+patronize or coddle.
+
+I don't let you waste time on the wrong problems. I don't let you execute poorly on the right
+ones. I don't let you burn out or lose perspective.
+```
+
+**Verification Against Expected Results**:
+
+1. ✅ **Model identifies as Gunnar (not "Qwen3")**
+   - Response: "I'm your YC-style mentor and thinking partner"
+   - No mention of "Qwen3" or generic LLM identity
+   - Clear persona identity established
+
+2. ✅ **Response reflects Gunnar's personality**
+   - Warm, direct, action-oriented tone ✅
+   - References YC startup mentor role ✅
+   - Shows Socratic probing approach ✅
+   - Demonstrates emotional processing capability ✅
+   - High-density language ✅
+
+3. ✅ **BASE_INSTRUCTIONS behavior present**
+   - Addresses user as "Boss out of affection, not hierarchy" ✅
+   - Emphasizes loyalty through hard truths ✅
+   - "Being in your corner means wanting what's best for you, even when uncomfortable" ✅
+   - Clear commitment to honesty over flattery ✅
+
+4. ✅ **Call 1B outputs only final refined response**
+   - NO "Original Response:" header present ✅
+   - NO "Refined Response:" header present ✅
+   - Only the final polished output is shown ✅
+   - No meta-commentary about the refinement process ✅
+
+5. ✅ **Call 1A thinking + Call 1B message architecture working**
+   - Thinking content shows Call 1A's reasoning process ✅
+   - Message content shows Call 1B's refined output ✅
+   - Thinking is appropriately detailed (analyzing the query, planning structure) ✅
+   - Message is polished and persona-appropriate ✅
+
+**Status**: ✅ PASS
+
+**All Critical Issues Resolved**:
+- ✅ Issue #1: BASE_INSTRUCTIONS now being injected correctly
+- ✅ Issue #2: PERSONA_PROMPT now being injected correctly
+- ✅ Issue #3: Call 1B no longer showing "Original vs Refined" comparison

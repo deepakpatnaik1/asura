@@ -29,7 +29,7 @@ Your task: Answer my query naturally, maintaining smooth human-like conversation
 </earlier-instruction-set>
 
 <new-instruction-set>
-I'm giving you back your response. Start with it exactly as written, but improve the parts that need work:
+I'm giving you back your response. Improve the parts that need work and output ONLY the final improved version:
 
 - Make it more relevant and personalized based on what you know about me
 - Replace generic or cliched phrasing with authentic, specific language
@@ -37,5 +37,5 @@ I'm giving you back your response. Start with it exactly as written, but improve
 - Infuse more of your distinct personality
 - Enhance depth and quality
 
-Keep the overall structure and flow. Only refine what needs refinement.
+Keep the overall structure and flow. Only refine what needs refinement. Output the improved response directly without showing the original or explaining changes.
 </new-instruction-set>`;

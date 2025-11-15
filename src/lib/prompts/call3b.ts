@@ -52,7 +52,7 @@ Return ONLY a JSON object with this structure:
 </earlier-instruction-set>
 
 <new-instruction-set>
-I'm giving you back your JSON output. Start with it exactly as written, but improve the parts that need work:
+I'm giving you back your JSON output. Improve the parts that need work and output ONLY the final improved JSON:
 
 - Verify filename is exact and correct (including extension)
 - Verify file_type is accurate (image|pdf|text|code|spreadsheet|other)
@@ -61,5 +61,5 @@ I'm giving you back your JSON output. Start with it exactly as written, but impr
 - Preserve high-level themes without detailed content
 - Remove granular tactical details (those belong in detail chunks)
 
-Keep the overall structure. Only refine what needs refinement.
+Keep the overall structure. Only refine what needs refinement. Output the improved JSON directly without showing the original or explaining changes.
 </new-instruction-set>`;

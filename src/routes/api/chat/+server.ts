@@ -7,7 +7,15 @@ import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 import { createClient } from '@supabase/supabase-js';
 import { buildContextForCalls1A1B } from '$lib/context-builder';
 import { CHAT_MODEL } from '$lib/config/models';
-import { CALL2A_PROMPT, CALL2B_PROMPT } from '$lib/prompts';
+import {
+	BASE_INSTRUCTIONS,
+	PERSONA_GUNNAR,
+	PERSONA_KIRBY,
+	CALL1A_PROMPT,
+	CALL1B_PROMPT,
+	CALL2A_PROMPT,
+	CALL2B_PROMPT
+} from '$lib/prompts';
 
 const fireworks = new OpenAI({
 	baseURL: 'https://api.fireworks.ai/inference/v1',
@@ -32,6 +40,17 @@ function extractJSON(text: string): string {
 	}
 
 	return withoutThink;
+}
+
+// Helper function to extract thinking content from <think> tags
+function extractThinking(text: string): string {
+	const thinkMatch = text.match(/<think>([\s\S]*?)<\/think>/);
+	return thinkMatch ? thinkMatch[1].trim() : '';
+}
+
+// Helper function to extract message content (everything outside <think> tags)
+function extractMessage(text: string): string {
+	return text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
 }
 
 // Background compression function
@@ -92,7 +111,7 @@ async function compressToJournal(
 				},
 				{
 					role: 'assistant',
-					content: call2AOutput
+					content: JSON.stringify(call2AJson)
 				},
 				{
 					role: 'user',
@@ -202,29 +221,42 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		console.log('[Chat API] Context stats:', stats);
 
+		// Select persona prompt based on selected persona
+		const personaPrompt = persona === 'kirby' ? PERSONA_KIRBY : PERSONA_GUNNAR;
+
+		// Construct system prompt (BASE_INSTRUCTIONS + PERSONA + CALL1A_PROMPT)
+		const systemPrompt = `${BASE_INSTRUCTIONS}\n\n---\n\n${personaPrompt}\n\n---\n\n${CALL1A_PROMPT}`;
+
 		// Construct full user prompt with memory context
 		const fullUserPrompt = context.length > 0
 			? `${context}--- CURRENT QUERY ---\n${message}`
 			: message;
 
-		// Call 1A: Initial response (hidden from user) with memory context
+		// Call 1A: Initial response with BASE_INSTRUCTIONS + PERSONA + memory context
 		const call1A = await fireworks.chat.completions.create({
 			model: selectedModel,
-			messages: [{ role: 'user', content: fullUserPrompt }],
+			messages: [
+				{ role: 'system', content: systemPrompt },
+				{ role: 'user', content: fullUserPrompt }
+			],
 			max_tokens: 4096,
 			temperature: 0.7
 		});
 
 		const call1AResponse = call1A.choices[0]?.message?.content || 'No response generated';
 
-		// Call 1B: Refine response with critique prompt - STREAMING
+		// Extract thinking and message from Call 1A
+		const call1AThinking = extractThinking(call1AResponse);
+		const call1AMessage = extractMessage(call1AResponse);
+
+		// Call 1B: Refine response with CALL1B_PROMPT - STREAMING
 		// Note: Call 1B receives the SAME context as Call 1A (for informed critique)
 		const call1B = await fireworks.chat.completions.create({
 			model: selectedModel,
 			messages: [
 				{ role: 'user', content: fullUserPrompt }, // Same context as Call 1A
-				{ role: 'assistant', content: call1AResponse },
-				{ role: 'user', content: 'Shorten this response.' }
+				{ role: 'assistant', content: call1AMessage }, // Only the message, not the thinking
+				{ role: 'user', content: CALL1B_PROMPT }
 			],
 			max_tokens: 4096,
 			temperature: 0.7,
@@ -235,14 +267,15 @@ export const POST: RequestHandler = async ({ request }) => {
 		const stream = new ReadableStream({
 			async start(controller) {
 				const encoder = new TextEncoder();
-				let fullResponse = '';
+				let call1BFullResponse = '';
 
 				try {
 					for await (const chunk of call1B) {
 						const content = chunk.choices[0]?.delta?.content || '';
 						if (content) {
-							fullResponse += content;
-							// Send SSE format: data: {json}\n\n
+							call1BFullResponse += content;
+
+							// Stream Call 1B message directly to UI (no thinking)
 							controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content })}\n\n`));
 						}
 					}
@@ -250,14 +283,17 @@ export const POST: RequestHandler = async ({ request }) => {
 					// Send completion event
 					controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true })}\n\n`));
 
-					// Save to Superjournal after streaming completes
+					// Extract only the message part from Call 1B (remove its thinking tags)
+					const call1BMessage = extractMessage(call1BFullResponse);
+
+					// Save to Superjournal after streaming completes (no thinking, just message)
 					const { data: superjournalData, error: dbError } = await supabase
 						.from('superjournal')
 						.insert({
 							user_id: null,
 							persona_name: persona,
 							user_message: message,
-							ai_response: fullResponse
+							ai_response: call1BMessage
 						})
 						.select('id')
 						.single();
@@ -269,7 +305,7 @@ export const POST: RequestHandler = async ({ request }) => {
 					// Trigger background compression
 					if (superjournalData?.id) {
 						setTimeout(() => {
-							compressToJournal(superjournalData.id, message, fullResponse, persona);
+							compressToJournal(superjournalData.id, message, call1BMessage, persona);
 						}, 0);
 					}
 

@@ -500,4 +500,36 @@ Line 361 in loading state:
 
 ---
 
+## Complete Message Flow with Thinking Extraction
+
+### Chat Response Flow (Call 1A → Call 1B)
+
+1. I send the user query.
+2. In Call 1A, the model thinks and generates a response.
+3. You manually strip out the thinking part.
+4. You give the message turn back to the model in Call 1B.
+5. The model thinks again and generates a response.
+6. You manually strip out the thinking part again.
+7. You show me the final message turn in the UI.
+8. This final message turn is saved in the superjournal.
+
+### Chat Compression Flow (Call 2A → Call 2B)
+
+9. In Call 2A, the model receives this final message turn.
+10. The model thinks and generates an artisan cut of the message turn.
+11. You manually strip out the thinking part.
+12. You give the artisan cut of the message turn back to the model in Call 2B.
+13. The model thinks again and generates a better artisan cut of the message turn.
+14. You manually strip out the thinking part again.
+15. This final artisan cut of the message turn is saved in the journal.
+
+### Key Principles
+
+- **Thinking improves quality** at every stage but is never shown to user or saved to database
+- **Each call does its own thinking** independently (Call 1B doesn't see Call 1A's thinking, Call 2B doesn't see Call 2A's thinking)
+- **Manual extraction** happens after every call to separate thinking from content
+- **Only refined content** is passed forward, streamed to UI, or saved to database
+
+---
+
 ## Notes
