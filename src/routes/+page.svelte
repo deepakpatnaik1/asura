@@ -257,13 +257,12 @@
 		nukeProgress = 0;
 
 		// Auto-confirm after 3 seconds
-		const duration = 3000; // 3 seconds
-		const interval = 50; // Update every 50ms
+		const duration = 3000;
+		const interval = 50;
 		const increment = (interval / duration) * 100;
 
 		nukeTimer = window.setInterval(() => {
 			nukeProgress += increment;
-
 			if (nukeProgress >= 100) {
 				if (nukeTimer) clearInterval(nukeTimer);
 				handleNukeConfirm();
@@ -575,12 +574,12 @@
 	{#if showNukeConfirm}
 		<div class="modal-overlay" onclick={handleNukeCancel}>
 			<div class="modal-content" onclick={(e) => e.stopPropagation()}>
-				<p class="modal-text">Do nothing to proceed or hit cancel</p>
-				<div class="progress-bar-container">
-					<div class="progress-bar" style="width: {nukeProgress}%"></div>
+				<p class="modal-text">Hush... it'll all be over soon.</p>
+				<div class="nuke-progress-container">
+					<div class="nuke-progress-bar" style="width: {nukeProgress}%"></div>
 				</div>
-				<div class="modal-actions">
-					<button class="modal-btn modal-btn-cancel" onclick={handleNukeCancel}>Cancel</button>
+				<div class="nuke-actions">
+					<button class="nuke-cancel-btn" onclick={handleNukeCancel}>Cancel</button>
 				</div>
 			</div>
 		</div>
@@ -1048,7 +1047,8 @@
 
 	.modal-text {
 		color: hsl(var(--foreground));
-		font-size: 16px;
+		font-family: "iA Writer Quattro V", system-ui, -apple-system, sans-serif;
+		font-size: 8pt;
 		margin: 0 0 16px 0;
 		text-align: center;
 	}
@@ -1062,16 +1062,60 @@
 		margin-bottom: 24px;
 	}
 
+	.modal-content:has(.nuke-progress-bar) .progress-bar-container {
+		width: 100%;
+		height: 12px;
+	}
+
 	.progress-bar {
 		height: 100%;
 		background: var(--boss-accent);
 		transition: width 50ms linear;
 	}
 
+	.nuke-progress-bar {
+		height: 100%;
+		background: #991b1b;
+	}
+
 	.modal-actions {
 		display: flex;
 		gap: 12px;
 		justify-content: flex-end;
+	}
+
+	.nuke-modal-actions {
+		justify-content: flex-end;
+	}
+
+	.nuke-progress-container {
+		width: 60%;
+		height: 6px;
+		background: hsl(var(--border));
+		border-radius: 2px;
+		overflow: hidden;
+		margin: 0 auto 24px auto;
+	}
+
+	.nuke-actions {
+		display: flex;
+		justify-content: center;
+	}
+
+	.nuke-cancel-btn {
+		background: transparent;
+		color: var(--boss-accent);
+		border: 1px solid var(--boss-accent);
+		border-radius: 6px;
+		padding: 12px 24px;
+		font-weight: 500;
+		cursor: pointer;
+		transition: all 0.2s;
+	}
+
+	.nuke-cancel-btn:hover {
+		background: var(--boss-accent);
+		color: hsl(var(--background));
 	}
 
 	.modal-btn {
