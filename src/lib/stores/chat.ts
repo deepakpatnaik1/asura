@@ -10,7 +10,7 @@ interface Message {
 export const currentMessage = writable<Message | null>(null);
 export const isLoading = writable(false);
 
-export async function sendMessage(userMessage: string): Promise<void> {
+export async function sendMessage(userMessage: string, persona?: string): Promise<void> {
 	const now = new Date();
 	const timestamp = now.toLocaleString('en-US', {
 		month: 'short',
@@ -34,7 +34,7 @@ export async function sendMessage(userMessage: string): Promise<void> {
 		const response = await fetch('/api/chat', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ message: userMessage })
+			body: JSON.stringify({ message: userMessage, persona })
 		});
 
 		if (!response.ok) {

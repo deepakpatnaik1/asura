@@ -9,7 +9,7 @@
 		deleteFile,
 		refreshFiles
 	} from '$lib/stores/filesStore';
-	import { tick } from 'svelte';
+	import { tick, onMount } from 'svelte';
 
 	// Receive loaded messages from server
 	let { data } = $props();
@@ -22,11 +22,30 @@
 	let nukeProgress = $state(0);
 	let nukeTimer: number | null = null;
 
+	// User settings state
+	let selectedPersona = $state<'gunnar' | 'kirby'>('gunnar');
+	let selectedModel = $state<string>('accounts/fireworks/models/qwen3-235b-a22b');
+
 	// File upload state
 	let fileInputRef: HTMLInputElement;
 	let showFileList = $state(false);
 	let deleteConfirmId = $state<string | null>(null);
 	let dragOverActive = $state(false);
+
+	// Load user settings on mount
+	onMount(async () => {
+		try {
+			const response = await fetch('/api/settings');
+			if (response.ok) {
+				const data = await response.json();
+				selectedPersona = data.selected_persona || 'gunnar';
+				selectedModel = data.selected_model || 'accounts/fireworks/models/qwen3-235b-a22b';
+			}
+		} catch (error) {
+			console.error('Failed to load settings:', error);
+			// Fallback to defaults if database read fails
+		}
+	});
 
 	// Helper function to format timestamps
 	function formatTimestamp(dateString: string) {
@@ -38,6 +57,22 @@
 			minute: '2-digit',
 			hour12: true
 		});
+	}
+
+	// Toggle persona dropdown
+	async function togglePersona() {
+		selectedPersona = selectedPersona === 'gunnar' ? 'kirby' : 'gunnar';
+
+		// Write to database
+		try {
+			await fetch('/api/settings', {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ selected_model: selectedModel, selected_persona: selectedPersona })
+			});
+		} catch (error) {
+			console.error('Failed to save persona:', error);
+		}
 	}
 
 	// Auto-scroll to bottom
@@ -67,7 +102,7 @@
 		inputMessage = '';
 
 		// Send message and wait for response
-		await sendMessage(message);
+		await sendMessage(message, selectedPersona);
 
 		// Add the completed message to allMessages
 		if ($currentMessage) {
@@ -78,7 +113,7 @@
 				id: crypto.randomUUID(),
 				user_message: $currentMessage.boss,
 				ai_response: $currentMessage.ai,
-				persona_name: 'ananya',
+				persona_name: selectedPersona,
 				created_at: now,
 				formatted_timestamp: formattedTimestamp
 			}];
@@ -419,8 +454,8 @@
 						<Icon src={LuChevronDown} size="11" />
 					</div>
 
-					<div class="persona-dropdown">
-						<span class="persona-name">Gunnar</span>
+					<div class="persona-dropdown" onclick={() => togglePersona()}>
+						<span class="persona-name">{selectedPersona.charAt(0).toUpperCase() + selectedPersona.slice(1)}</span>
 						<Icon src={LuChevronDown} size="11" />
 					</div>
 
