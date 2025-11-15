@@ -1,9 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
-import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
-import { VOYAGE_API_KEY } from '$env/static/private';
+import { SUPABASE_SERVICE_ROLE_KEY, VOYAGE_API_KEY } from '$env/static/private';
+import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 import { VoyageAIClient } from 'voyageai';
 
-const supabase = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY);
+const supabase = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 const voyage = new VoyageAIClient({ apiKey: VOYAGE_API_KEY });
 
 // Token estimation (rough approximation: 1 token ≈ 4 characters)
