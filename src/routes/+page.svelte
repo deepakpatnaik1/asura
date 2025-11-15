@@ -59,9 +59,23 @@
 		});
 	}
 
-	// Toggle persona dropdown
+	// Behavior 1: Auto-switch dropdown when typing persona name at start
+	$effect(() => {
+		const normalized = inputMessage.trim().toLowerCase();
+		if (normalized.startsWith('gunnar')) {
+			selectedPersona = 'gunnar';
+		} else if (normalized.startsWith('kirby')) {
+			selectedPersona = 'kirby';
+		}
+	});
+
+	// Behavior 2: Toggle persona dropdown and insert name in input
 	async function togglePersona() {
 		selectedPersona = selectedPersona === 'gunnar' ? 'kirby' : 'gunnar';
+
+		// Insert persona name into input field
+		const name = selectedPersona.charAt(0).toUpperCase() + selectedPersona.slice(1);
+		inputMessage = `${name}, ${inputMessage}`;
 
 		// Write to database
 		try {
