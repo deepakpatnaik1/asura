@@ -707,7 +707,7 @@
 			'left-blank messages right-blank'
 			'input input input';
 		height: 100vh;
-		overflow: hidden;
+		overflow-y: auto;
 		background: hsl(var(--background));
 		color: hsl(var(--foreground));
 		position: relative;
@@ -726,7 +726,6 @@
 		grid-area: messages;
 		padding: 24px;
 		position: relative;
-		overflow-y: auto;
 	}
 
 	.messages-content {
@@ -854,7 +853,9 @@
 		background: hsl(var(--card));
 		border-top: 1px solid hsl(var(--chat-border));
 		padding: 16px 24px;
-		position: relative;
+		position: sticky;
+		bottom: 0;
+		z-index: 10;
 	}
 
 	.input-controls {
