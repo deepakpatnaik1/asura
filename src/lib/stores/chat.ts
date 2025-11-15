@@ -45,6 +45,7 @@ export async function sendMessage(userMessage: string, persona?: string): Promis
 		const reader = response.body?.getReader();
 		const decoder = new TextDecoder();
 		let aiResponse = '';
+		let isFirstChunk = true;
 
 		if (!reader) {
 			throw new Error('No response body');
@@ -62,7 +63,9 @@ export async function sendMessage(userMessage: string, persona?: string): Promis
 					const data = JSON.parse(line.slice(6));
 
 					if (data.content) {
-						aiResponse += data.content;
+						const content = isFirstChunk ? data.content.trimStart() : data.content;
+						isFirstChunk = false;
+						aiResponse += content;
 						// Update message with streaming content
 						currentMessage.set({
 							id: crypto.randomUUID(),

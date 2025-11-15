@@ -270,6 +270,7 @@ export const POST: RequestHandler = async ({ request }) => {
 				let call1BFullResponse = '';
 				let buffer = '';
 				let insideThinkTag = false;
+				let justExitedThinkTag = false; // Track when we just exited a think tag
 
 				try {
 					for await (const chunk of call1B) {
@@ -310,8 +311,9 @@ export const POST: RequestHandler = async ({ request }) => {
 										break;
 									} else {
 										// Found closing tag, skip everything up to and including it
-										buffer = buffer.slice(thinkEnd + 8); // Skip '</think>'
+										buffer = buffer.slice(thinkEnd + 8).trimStart(); // Skip '</think>' and trim leading whitespace
 										insideThinkTag = false;
+										justExitedThinkTag = true; // Mark that we just exited
 									}
 								}
 							}
@@ -320,7 +322,11 @@ export const POST: RequestHandler = async ({ request }) => {
 
 					// Stream any remaining buffer content (outside think tags)
 					if (!insideThinkTag && buffer.length > 0) {
-						controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content: buffer })}\n\n`));
+						// Trim leading whitespace only if we just exited a think tag
+						const finalContent = justExitedThinkTag ? buffer.trimStart() : buffer;
+						if (finalContent.length > 0) {
+							controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content: finalContent })}\n\n`));
+						}
 					}
 
 					// Send completion event

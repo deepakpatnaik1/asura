@@ -1199,3 +1199,58 @@ ones. I don't let you burn out or lose perspective.
 - ✅ Issue #1: BASE_INSTRUCTIONS now being injected correctly
 - ✅ Issue #2: PERSONA_PROMPT now being injected correctly
 - ✅ Issue #3: Call 1B no longer showing "Original vs Refined" comparison
+
+---
+
+## Phase 8: Whitespace Fix Attempts (Post-Revert)
+
+**Context**: After reverting to commit 7a1cd1d, attempted to reapply only the thinking extraction fix without UI streaming changes. Whitespace issue returned.
+
+### Fix Attempt #1: Basic thinking extraction (Commit 2bb3d61)
+**Approach**: Applied streaming buffer state machine to strip `<think>` tags
+**Result**: ❌ FAILED - Whitespace appeared in responses
+
+### Fix Attempt #2: Surgical whitespace trim (Option 3)
+**Approach**: Added `justExitedThinkTag` flag to trim leading whitespace only after `</think>` tags
+**Implementation**:
+- Added boolean flag `justExitedThinkTag` (line 273)
+- Set flag to `true` when closing tag found (line 315)
+- Trim only final buffer content if flag is set (lines 324-329):
+  ```typescript
+  const finalContent = justExitedThinkTag ? buffer.trimStart() : buffer;
+  ```
+**Result**: ❌ FAILED - Whitespace persists
+
+**Observation**: The whitespace issue appears to be more fundamental than just trailing content after `</think>` tags. The problem may be occurring during the streaming loop itself, not just in the final buffer.
+
+### Fix Attempt #3: Immediate trim after closing tag
+**Approach**: Trim buffer immediately after detecting `</think>` tag, not just at the end
+**Hypothesis**: Whitespace after `</think>` gets buffered and streamed in earlier chunks before final buffer is processed
+**Implementation**:
+- Modified line 313 to trim immediately:
+  ```typescript
+  buffer = buffer.slice(thinkEnd + 8).trimStart(); // Skip '</think>' and trim leading whitespace
+  ```
+**Result**: ❌ FAILED - Whitespace persists
+
+**Analysis**: The immediate trim approach also failed. This suggests the whitespace is not simply appearing after `</think>` tags in the streaming buffer. The problem must be elsewhere in the data flow.
+
+### Fix Attempt #4: Frontend trim at accumulation point ✅
+**Approach**: Trim leading whitespace in the frontend when accumulating the first chunk
+**Hypothesis**: The backend streaming buffer is letting whitespace through, so fix it where it manifests (frontend accumulation in chat.ts)
+**Implementation**:
+- Added `isFirstChunk` flag in chat.ts (line 48)
+- Trim only the first chunk's leading whitespace (lines 65-67):
+  ```typescript
+  const content = isFirstChunk ? data.content.trimStart() : data.content;
+  isFirstChunk = false;
+  aiResponse += content;
+  ```
+**Result**: ✅ SUCCESS - Whitespace eliminated
+
+**Key Insight**: The whitespace issue was not in the backend streaming buffer logic, but in the frontend accumulation. The backend was correctly stripping `<think>` tags but the whitespace after those tags was being streamed and accumulated in the frontend. By trimming at the point of accumulation (first chunk only), we preserve all intentional whitespace while removing the leading whitespace that appears after thinking tags are stripped.
+
+**Final Solution**:
+- Backend: Streaming buffer strips `<think>` tags (with all previous trim attempts)
+- Frontend: Trim first chunk's leading whitespace in chat.ts
+- This combination successfully eliminates whitespace without affecting legitimate formatting
