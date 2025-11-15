@@ -42,6 +42,8 @@
 	let isAutoScrolling = $state(false);
 	let scrollSpeed = $state(0.5); // pixels per frame - pattern: scroll 5s, pause 10s, repeat
 	let pauseProgress = $state(0); // 0-100, percentage of pause completed
+	let isPaused = $state(false); // Track if currently in pause phase
+	let pauseStartTime = $state(0); // Track when pause started
 
 	// Load user settings on mount
 	onMount(async () => {
@@ -109,21 +111,28 @@
 	// Custom auto-scroll with adjustable speed and pause pattern
 	function handleAutoScroll() {
 		if (isAutoScrolling) {
-			// Stop scrolling
-			isAutoScrolling = false;
-			pauseProgress = 0;
-			return;
+			if (isPaused) {
+				// Snooze: restart the pause timer
+				pauseStartTime = Date.now();
+				pauseProgress = 0;
+				return;
+			} else {
+				// Stop scrolling completely
+				isAutoScrolling = false;
+				isPaused = false;
+				pauseProgress = 0;
+				return;
+			}
 		}
 
 		// Start scrolling
 		isAutoScrolling = true;
+		isPaused = false;
 		pauseProgress = 0;
 		const container = document.querySelector('.chat-container');
 		if (!container) return;
 
 		let scrollStartTime = Date.now();
-		let isPaused = false;
-		let pauseStartTime = 0;
 
 		function smoothScroll() {
 			if (!isAutoScrolling) return;
@@ -134,6 +143,7 @@
 			if (currentScroll >= maxScroll) {
 				// Reached bottom, stop scrolling
 				isAutoScrolling = false;
+				isPaused = false;
 				pauseProgress = 0;
 				return;
 			}
