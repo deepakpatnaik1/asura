@@ -724,9 +724,9 @@
 	/* Messages Area - middle column */
 	.messages-area {
 		grid-area: messages;
-		overflow-y: auto;
 		padding: 24px;
 		position: relative;
+		overflow-y: auto;
 	}
 
 	.messages-content {
@@ -765,7 +765,7 @@
 	/* AI Message - no background */
 	.ai-message {
 		position: relative;
-		padding: var(--message-padding-y) 0;
+		padding: var(--message-padding-y) var(--boss-card-padding-x);
 	}
 
 	/* Message Header */

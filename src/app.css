@@ -47,7 +47,7 @@
 
     --boss-card-padding-x: 16px;
     --boss-card-padding-y: 16px;
-    --boss-card-margin-x: -16px;
+    --boss-card-margin-x: 0px;
     --boss-card-border-radius: 8px;
 
     --action-bar-offset-x: 16px;
