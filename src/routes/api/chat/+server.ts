@@ -268,16 +268,59 @@ export const POST: RequestHandler = async ({ request }) => {
 			async start(controller) {
 				const encoder = new TextEncoder();
 				let call1BFullResponse = '';
+				let buffer = '';
+				let insideThinkTag = false;
 
 				try {
 					for await (const chunk of call1B) {
 						const content = chunk.choices[0]?.delta?.content || '';
 						if (content) {
 							call1BFullResponse += content;
+							buffer += content;
 
-							// Stream Call 1B message directly to UI (no thinking)
-							controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content })}\n\n`));
+							// Process buffer to detect and skip <think> tags
+							while (buffer.length > 0) {
+								if (!insideThinkTag) {
+									// Look for opening <think> tag
+									const thinkStart = buffer.indexOf('<think>');
+									if (thinkStart === -1) {
+										// No think tag found, stream everything except last 7 chars (to catch partial tags)
+										if (buffer.length > 7) {
+											const toStream = buffer.slice(0, -7);
+											controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content: toStream })}\n\n`));
+											buffer = buffer.slice(-7);
+										}
+										break;
+									} else {
+										// Found opening tag, stream content before it
+										if (thinkStart > 0) {
+											controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content: buffer.slice(0, thinkStart) })}\n\n`));
+										}
+										buffer = buffer.slice(thinkStart + 7); // Skip '<think>'
+										insideThinkTag = true;
+									}
+								} else {
+									// Inside think tag, look for closing </think> tag
+									const thinkEnd = buffer.indexOf('</think>');
+									if (thinkEnd === -1) {
+										// No closing tag yet, keep buffering (but skip content)
+										if (buffer.length > 8) {
+											buffer = buffer.slice(-8); // Keep last 8 chars to catch partial closing tag
+										}
+										break;
+									} else {
+										// Found closing tag, skip everything up to and including it
+										buffer = buffer.slice(thinkEnd + 8); // Skip '</think>'
+										insideThinkTag = false;
+									}
+								}
+							}
 						}
+					}
+
+					// Stream any remaining buffer content (outside think tags)
+					if (!insideThinkTag && buffer.length > 0) {
+						controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content: buffer })}\n\n`));
 					}
 
 					// Send completion event
