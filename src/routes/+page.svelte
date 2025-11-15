@@ -407,7 +407,7 @@
 				<div class="message-group">
 					<div class="ai-message">
 						<div class="message-header">
-							<span class="message-label ai-label">Ananya</span>
+							<span class="message-label ai-label">{selectedPersona.charAt(0).toUpperCase() + selectedPersona.slice(1)}</span>
 						</div>
 						<div class="message-text loading-text">
 							Thinking<span class="dots"><span>.</span><span>.</span><span>.</span></span>
