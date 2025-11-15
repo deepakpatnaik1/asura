@@ -256,4 +256,248 @@ import { CALL2A_PROMPT } from '$lib/prompts/call2a';
 
 ---
 
+## User Settings Architecture (Single Source of Truth)
+
+### Overview
+
+Model and persona selection are managed through a `user_settings` table in Supabase, which serves as the single source of truth cascading to all parts of the application.
+
+### Database Schema
+
+**Table: `user_settings`**
+
+```sql
+CREATE TABLE user_settings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  selected_model TEXT NOT NULL REFERENCES models(model_identifier) ON DELETE RESTRICT,
+  selected_persona TEXT NOT NULL DEFAULT 'gunnar' CHECK (selected_persona IN ('gunnar', 'kirby')),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Single-row constraint (global settings, no user_id - single-user app)
+CREATE UNIQUE INDEX idx_user_settings_singleton ON user_settings ((1));
+
+-- Insert default row
+INSERT INTO user_settings (selected_model, selected_persona)
+VALUES ('accounts/fireworks/models/qwen3-235b-a22b', 'gunnar');
+```
+
+**Key Design Decisions:**
+- **No `user_id` column** - Single-row global settings (single-user app, no Google Auth yet)
+- **Foreign key to `models` table** - Prevents invalid model selection
+- **Check constraint** - Only allows 'gunnar' or 'kirby' personas
+- **Singleton pattern** - Unique index on constant `(1)` ensures only one row exists
+- **Default values** - Qwen3-235B model, Gunnar persona
+
+### Cascade Flow
+
+```
+user_settings table (Supabase)
+         ↓
+Frontend dropdowns read/write
+         ↓
+Backend APIs read on every request
+         ↓
+┌────────────────┬─────────────────┬──────────────────┐
+│ Chat API       │ File Compressor │ Context Builder  │
+│ (Call 1A/1B)   │ (Call 2A/2B/3A) │ (Memory)         │
+└────────────────┴─────────────────┴──────────────────┘
+```
+
+**Read Points:**
+1. **Frontend (+page.svelte)** - Reads on mount, updates on dropdown change
+2. **Chat API (+server.ts)** - Reads `selected_model` and `selected_persona` before Call 1A/1B
+3. **File Compressor (file-compressor.ts)** - Reads `selected_model` before compression calls
+4. **Context Builder (context-builder.ts)** - Reads `selected_persona` for instruction filtering
+
+**Write Points:**
+1. **Frontend dropdowns** - Updates table on user selection
+
+### Model Selection Scope
+
+**Universal application:**
+- Chat (Call 1A/1B) uses `selected_model`
+- File compression (Call 2A/2B/3A/3B) uses `selected_model`
+- Same model everywhere, but with different `reasoning_effort` settings:
+  - **Chat:** Default reasoning effort (model decides)
+  - **File compression:** `reasoning_effort: "none"` (no thinking mode)
+
+**Note:** We don't use a separate `FILE_MODEL` constant. The same model is used universally with programmatic thinking control via API parameter.
+
+---
+
+## Thinking Mode Control (Programmatic `/nothink`)
+
+### Problem
+
+Originally attempted to control thinking mode via prompt prefix `/nothink`, but LLMs can ignore prompt instructions.
+
+### Solution: API Parameter
+
+**Use Fireworks AI's `reasoning_effort` parameter:**
+
+```typescript
+const response = await fireworks.chat.completions.create({
+  model: selectedModel,
+  messages: [...],
+  temperature: 0.7,
+  max_tokens: 1000,
+  reasoning_effort: "none"  // Disables thinking mode programmatically
+});
+```
+
+**Values:**
+- `"none"` - Disable thinking (file compression, faster responses)
+- `"low" | "medium" | "high"` - Enable thinking with varying depth
+- Omit - Model decides (default for chat)
+
+**Application:**
+- **Chat (Call 1A/1B):** Omit parameter (let model think naturally)
+- **File compression (Call 2A/2B/3A/3B):** Set `reasoning_effort: "none"` (speed over reasoning)
+
+**Benefits:**
+- API enforces it (LLM cannot ignore)
+- Cleaner prompts (no `/nothink` clutter)
+- Works with OpenAI SDK compatibility
+
+---
+
+## Smart Persona Switching UX
+
+### Behavior 1: Type Persona Name → Auto-Switch Dropdown
+
+When user types "gunnar" or "kirby" at the start of their message:
+- Dropdown instantly switches to that persona
+- Persona name **stays in input field** (not removed)
+- Example: User types "Gunnar, what's the weather?" → Dropdown shows Gunnar, input unchanged
+
+**Implementation:**
+```typescript
+// Watch input for persona names at start (case-insensitive)
+$effect(() => {
+  const normalized = inputMessage.trim().toLowerCase();
+  if (normalized.startsWith('gunnar')) {
+    selectedPersona = 'gunnar';
+  } else if (normalized.startsWith('kirby')) {
+    selectedPersona = 'kirby';
+  }
+});
+```
+
+**Design rationale:** Keeping persona name in message provides natural conversational feel ("Gunnar, help me with...") without forcing removal.
+
+### Behavior 2: Click Dropdown → Insert Name in Input
+
+When user clicks dropdown to switch persona:
+- Dropdown switches to selected persona
+- Persona name gets inserted into input field with comma: `"Gunnar, "`
+- Cursor remains in active focus so user can continue typing immediately
+
+**Implementation:**
+```typescript
+function selectPersona(persona: 'gunnar' | 'kirby') {
+  selectedPersona = persona;
+  const name = persona.charAt(0).toUpperCase() + persona.slice(1);
+  inputMessage = `${name}, ${inputMessage}`;
+  // Input maintains focus automatically in Svelte
+}
+```
+
+**Design rationale:** Reduces friction - user can switch persona and start typing in one fluid motion.
+
+---
+
+## Dynamic Persona Display in Message History
+
+### Current Issue
+
+Message history hardcodes "Ananya" in loading state and uses hardcoded persona in completed messages.
+
+### Solution
+
+**Display actual `persona_name` from message data:**
+
+Line 326 in `+page.svelte`:
+```typescript
+// Current (hardcoded)
+<span class="message-label ai-label">Ananya</span>
+
+// Fixed (dynamic)
+<span class="message-label ai-label">
+  {msg.persona_name.charAt(0).toUpperCase() + msg.persona_name.slice(1)}
+</span>
+```
+
+Line 361 in loading state:
+```typescript
+// Current (hardcoded)
+<span class="message-label ai-label">Ananya</span>
+
+// Fixed (dynamic)
+<span class="message-label ai-label">
+  {selectedPersona.charAt(0).toUpperCase() + selectedPersona.slice(1)}
+</span>
+```
+
+**Data flow:**
+1. User sends message with `selectedPersona` from dropdown
+2. Backend saves to `superjournal` with correct `persona_name`
+3. Frontend displays capitalized persona name from message data
+
+---
+
+## Implementation Checklist
+
+### Phase 0: Database Setup
+- [ ] Create `user_settings` table with singleton constraint
+- [ ] Add foreign key to `models(model_identifier)`
+- [ ] Insert default row (Qwen3-235B, gunnar)
+
+### Phase 1: Remove `/nothink` Prefixes
+- [ ] Update `file-compressor.ts` to use `reasoning_effort: "none"` instead of `/nothink` prefix
+- [ ] Remove `/nothink` from all imported prompts (already done in `src/lib/prompts/`)
+- [ ] Test file compression still works
+
+### Phase 2: Backend - Read from user_settings
+- [ ] Update `chat/+server.ts` to read `selected_model` and `selected_persona` from `user_settings`
+- [ ] Update `file-compressor.ts` to read `selected_model` from `user_settings`
+- [ ] Update `context-builder.ts` default parameter to read from `user_settings`
+- [ ] Remove hardcoded defaults (`'ananya'` → read from DB)
+
+### Phase 3: Frontend - Functional Dropdowns
+- [ ] Add `selectedPersona` state variable in `+page.svelte`
+- [ ] Add `selectedModel` state variable in `+page.svelte`
+- [ ] Make model dropdown functional (read/write `user_settings.selected_model`)
+- [ ] Make persona dropdown functional (read/write `user_settings.selected_persona`)
+- [ ] Update `sendMessage()` in `chat.ts` to accept persona parameter
+- [ ] Pass `selectedPersona` to `sendMessage()` from `+page.svelte`
+
+### Phase 4: Smart Persona Switching UX
+- [ ] Implement auto-switch on typing persona name
+- [ ] Implement name insertion on dropdown click
+- [ ] Test both behaviors work smoothly
+
+### Phase 5: Dynamic Persona Display
+- [ ] Update message history to show actual `persona_name` from data
+- [ ] Update loading state to show `selectedPersona`
+- [ ] Remove all hardcoded "Ananya" references
+
+### Phase 6: Migrate Prompts
+- [ ] Import prompts from `$lib/prompts` in `file-compressor.ts`
+- [ ] Import prompts from `$lib/prompts` in `chat/+server.ts`
+- [ ] Delete local prompt definitions
+- [ ] Update prompt references
+
+### Phase 7: Testing
+- [ ] Test model switching persists across page reloads
+- [ ] Test persona switching persists across page reloads
+- [ ] Test file upload uses correct model with `reasoning_effort: "none"`
+- [ ] Test chat uses correct model and persona
+- [ ] Test smart persona switching (typing + dropdown)
+- [ ] Test message history shows correct persona names
+- [ ] Nuke database and verify defaults work
+
+---
+
 ## Notes
