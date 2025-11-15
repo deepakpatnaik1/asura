@@ -154,7 +154,7 @@ You MUST return a JSON object with this EXACT structure:
 
 {
   "boss_essence": "[My message with minimal compression - preserve explanations and details]",
-  "persona_name": "[Exact name: gunnar, samara, kirby, stefan, vlad, or ananya - lowercase]",
+  "persona_name": "[Exact name: gunnar or kirby - lowercase]",
   "persona_essence": "[Persona's response with intelligent compression]",
   "decision_arc_summary": "[Arc summary - pattern type: specific behavior when condition]",
   "salience_score": [Integer 1-10 based on emotional/strategic weight]
@@ -165,7 +165,7 @@ CRITICAL RULES:
 – No additional text, analysis, or commentary
 – boss_essence: preserve my actual information and explanations
 – persona_essence: compress strategically based on regenerability
-– persona_name must be lowercase and exact (gunnar, samara, kirby, stefan, vlad, or ananya)
+– persona_name must be lowercase and exact (gunnar or kirby)
 – decision_arc_summary: 50-150 chars, artisan cut style, NEVER null
 – salience_score: integer 1-10 based on tier criteria, NEVER null
 – Always provide both arc and score together - both are REQUIRED fields
