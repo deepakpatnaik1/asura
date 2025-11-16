@@ -455,10 +455,21 @@ High-level breakdown of work required for this refactor:
 - This creates the infrastructure without breaking existing code
 - Next chunk will update file-processor.ts to use the new function
 
-### Chunk 3: Update Prompt Constants in file-compressor.ts
-- Replace MODIFIED_CALL2A_PROMPT constant with new version from docs/⭐️ system-prompts/
-- Replace MODIFIED_CALL2B_PROMPT constant with new version from docs/⭐️ system-prompts/
-- Verify prompts are being used correctly in compression flow
+### Chunk 3: Integrate New Combined Function in file-processor.ts
+- Import `generateOverviewAndChunks` from file-chunker.ts
+- Combine Phase 2 (overview generation) and Phase 3 (chunking) into single phase
+- Replace separate calls to `generateFileOverview()` and `chunkTextBySemantic()` with single call to `generateOverviewAndChunks()`
+- Use returned overview for Chunk 0
+- Use returned chunks array for detail chunks (Phase 4 processing)
+- Update phase progress tracking:
+  - Phase 1 (0-10%): Text extraction
+  - Phase 2 (10-30%): Combined overview + chunking (Call 3A → 3B) - NEW COMBINED PHASE
+  - Phase 3 (30-40%): Compress Chunk 0 (overview already generated, just save)
+  - Phase 4 (40-70%): Compress detail chunks
+  - Phase 5 (70-90%): Generate embeddings
+  - Phase 6 (90-100%): Save to database
+- Remove old Phase 3 (semantic chunking) entirely
+- This is where the 5-8 second time savings is realized (one LLM call pair instead of two)
 
 ### Chunk 4: Implement Batch Processing with Delays
 - Update batch processing to use 5 chunks per batch (down from 10)
@@ -467,15 +478,10 @@ High-level breakdown of work required for this refactor:
 - Ensure SSE updates reflect current batch progress
 - Calculate and update progress percentage correctly during delays
 
-### Chunk 5: Update Progress Phase Tracking
-- Adjust phase percentages to reflect new flow (6 phases instead of 7)
-- Phase 1 (0-10%): Text extraction
-- Phase 2 (10-30%): Combined overview + chunking (Call 3A → 3B)
-- Phase 3 (30-40%): Compress Chunk 0 (already done by Call 3B, just save)
-- Phase 4 (40-70%): Compress detail chunks with batch delays
-- Phase 5 (70-90%): Generate embeddings
-- Phase 6 (90-100%): Save to database
-- Update progress calculation logic in file-processor.ts
+### Chunk 5: Update Prompt Constants in file-compressor.ts
+- Replace MODIFIED_CALL2A_PROMPT constant with new version from docs/⭐️ system-prompts/
+- Replace MODIFIED_CALL2B_PROMPT constant with new version from docs/⭐️ system-prompts/
+- Verify prompts are being used correctly in compression flow
 
 ### Chunk 6: Add .md File Support
 - Verify text extraction supports .md files
