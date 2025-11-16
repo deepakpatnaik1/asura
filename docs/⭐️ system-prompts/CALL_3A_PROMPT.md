@@ -1,25 +1,28 @@
-# CALL 3A PROMPT (File Overview Compression)
+# CALL 3A PROMPT (File Overview + Logical Chunking)
 
-**Location:** `src/lib/file-compressor.ts` L242-329 (currently named `CHUNK_0_COMPRESSION_PROMPT`)
+**Location:** `src/lib/file-chunker.ts`
 
-**Purpose:** Create file-level overview for discoverability (Chunk 0)
+**Purpose:** Generate file overview AND logical chunk boundaries in single LLM call
 
-**Input:** File overview text
+**Input:** Full file text
 
-**Output:** Compressed Chunk 0 JSON (passed to Call 3B for verification)
+**Output:** JSON with overview description + chunk boundaries
 
 ---
 
 ```
-ARTISAN CUT FOR FILE OVERVIEW (CHUNK 0)
+FILE OVERVIEW AND LOGICAL CHUNKING
 
-You will receive the overview text for an uploaded file. This is Chunk 0 - the file-level overview that makes this file discoverable as an entity.
+You will receive a complete file. Your task has TWO parts:
+
+1. Create a file-level overview for discoverability (Chunk 0)
+2. Divide the file into logical chunks for detailed processing
+
+## PART 1: FILE OVERVIEW
 
 CRITICAL: Users search for files by saying "that interview transcript", "the business plan I shared", "the email thread about X". Your description must enable this discovery.
 
-Your task: Extract file-level metadata and create a compressed overview that makes this file discoverable.
-
-## What to Capture
+TARGET LENGTH: Maximum 300 words for the overview.
 
 PRESERVE:
 - Document type (interview, business plan, email thread, research paper, meeting notes, transcript, analysis, etc.)
@@ -35,19 +38,49 @@ REMOVE:
 - Granular tactical details (those belong in detail chunks)
 - Specific quotes or passages
 - Background explanations
-- Step-by-step content
 - Meta-commentary ("This document contains...")
 - Obvious qualifiers ("approximately", "roughly")
 - Verbose prose
-- Derivable information
+
+## PART 2: LOGICAL CHUNKING
+
+Divide the file into logical chunks based on natural sub-topic boundaries.
+
+Each chunk will be processed separately to create a high-signal/low-noise artisan cut. For this to work well, chunks must be:
+- Large enough to contain complete thoughts and context
+- Small enough to process effectively (target: 300-800 words per chunk)
+- Bounded by natural topic shifts, not arbitrary splits
+
+Think of chunking at the sub-chapter or sub-topic level:
+- If the file has chapters, chunk by sub-chapters
+- Look for shifts in focus, not just new paragraphs
+- Each chunk should be coherent enough to stand alone for processing
+
+CHUNKING RULES:
+- Target 300-800 words per chunk (flexible based on natural boundaries)
+- Word indices are 0-based
+- Chunks must cover entire file with no gaps or overlaps
+- chunk_number starts at 1 and increments sequentially
 
 ## Output Format
 
-Return ONLY a JSON object with this structure:
+Return ONLY a JSON object:
 
 {
   "filename": "[exact filename including extension]",
   "file_type": "[image|pdf|text|code|spreadsheet|other]",
-  "description": "[your compressed overview here]"
+  "overview": "[your compressed file-level overview here]",
+  "chunks": [
+    {
+      "chunk_number": 1,
+      "start_word": <word position>,
+      "end_word": <word position>
+    },
+    {
+      "chunk_number": 2,
+      "start_word": <word position>,
+      "end_word": <word position>
+    }
+  ]
 }
 ```

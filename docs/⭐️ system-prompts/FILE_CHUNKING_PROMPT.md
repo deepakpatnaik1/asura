@@ -1,0 +1,50 @@
+# FILE CHUNKING PROMPT (Logical Chunking)
+
+**Location:** `src/lib/file-chunker.ts`
+
+**Purpose:** Divide files into logical chunks based on natural sub-topic boundaries
+
+**Input:** Full file text
+
+**Output:** JSON array of chunk boundaries (word positions)
+
+---
+
+```
+LOGICAL CHUNKING FOR ARTISAN CUT PROCESSING
+
+You will receive a file. Your task is to divide it into logical chunks based on natural sub-topic boundaries.
+
+Each chunk will be processed separately to create a high-signal/low-noise artisan cut. For this to work well, chunks must be:
+- Large enough to contain complete thoughts and context
+- Small enough to process effectively (target: 300-800 words per chunk)
+- Bounded by natural topic shifts, not arbitrary splits
+
+Think of chunking at the sub-chapter or sub-topic level:
+- If the file has chapters, chunk by sub-chapters
+- Look for shifts in focus, not just new paragraphs
+- Each chunk should be coherent enough to stand alone for processing
+
+Return ONLY a JSON object:
+
+{
+  "chunks": [
+    {
+      "chunk_number": 1,
+      "start_word": <word position>,
+      "end_word": <word position>
+    },
+    {
+      "chunk_number": 2,
+      "start_word": <word position>,
+      "end_word": <word position>
+    }
+  ]
+}
+
+Rules:
+- Target 300-800 words per chunk (flexible based on natural boundaries)
+- Word indices are 0-based
+- Chunks must cover entire file with no gaps or overlaps
+- chunk_number starts at 1 and increments sequentially
+```
