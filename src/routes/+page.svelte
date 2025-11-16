@@ -108,6 +108,140 @@
 		messagesEndRef?.scrollIntoView({ behavior: 'smooth' });
 	}
 
+	// Scroll to next message turn
+	function scrollToNextTurn() {
+		console.log('scrollToNextTurn called');
+
+		const container = document.querySelector('.chat-container');
+		console.log('container:', container);
+		if (!container) {
+			console.log('No container found');
+			return;
+		}
+
+		// Get all turn indicators
+		const turnIndicators = document.querySelectorAll('.turn-indicator');
+		console.log('Found turn indicators:', turnIndicators.length);
+		if (turnIndicators.length === 0) {
+			console.log('No turn indicators found');
+			return;
+		}
+
+		// Get current scroll position (top of viewport)
+		const currentScrollTop = container.scrollTop;
+		// Look for turns that are below the current visible area
+		// Add 100px buffer to skip turns that are already near the top of viewport
+		const viewportTop = currentScrollTop + 100;
+		console.log('Current scroll top:', currentScrollTop, 'Viewport top threshold:', viewportTop);
+
+		// Find the first turn indicator that's below the viewport threshold
+		let nextTurn: Element | null = null;
+		for (const indicator of turnIndicators) {
+			const rect = indicator.getBoundingClientRect();
+			const containerRect = container.getBoundingClientRect();
+			const indicatorTopRelativeToContainer = rect.top - containerRect.top + container.scrollTop;
+
+			console.log('Checking turn indicator:', indicator.textContent, 'at position:', indicatorTopRelativeToContainer);
+
+			if (indicatorTopRelativeToContainer > viewportTop) {
+				nextTurn = indicator;
+				console.log('Found next turn:', indicator.textContent);
+				break;
+			}
+		}
+
+		// If no next turn found (we're at the end), do nothing
+		if (!nextTurn) {
+			console.log('No next turn found (at end)');
+			return;
+		}
+
+		// Calculate scroll position: position of turn indicator minus space for line above boss card
+		const rect = nextTurn.getBoundingClientRect();
+		const containerRect = container.getBoundingClientRect();
+		const turnTopRelativeToContainer = rect.top - containerRect.top + container.scrollTop;
+
+		// Add enough space to show the line space above the boss card (approximately 40px)
+		const spaceAbove = 40;
+		const targetScrollTop = turnTopRelativeToContainer - spaceAbove;
+
+		console.log('Scrolling to:', targetScrollTop);
+
+		// Scroll to position
+		container.scrollTo({
+			top: targetScrollTop,
+			behavior: 'smooth'
+		});
+	}
+
+	// Scroll to previous message turn
+	function scrollToPreviousTurn() {
+		console.log('scrollToPreviousTurn called');
+
+		const container = document.querySelector('.chat-container');
+		console.log('container:', container);
+		if (!container) {
+			console.log('No container found');
+			return;
+		}
+
+		// Get all turn indicators
+		const turnIndicators = document.querySelectorAll('.turn-indicator');
+		console.log('Found turn indicators:', turnIndicators.length);
+		if (turnIndicators.length === 0) {
+			console.log('No turn indicators found');
+			return;
+		}
+
+		// Get current scroll position (top of viewport)
+		const currentScrollTop = container.scrollTop;
+		// Look for turns that are above the current visible area
+		// Subtract 100px buffer to skip turns that are already near the top of viewport
+		const viewportTop = currentScrollTop - 100;
+		console.log('Current scroll top:', currentScrollTop, 'Viewport top threshold:', viewportTop);
+
+		// Find the last turn indicator that's above the viewport threshold
+		// (iterate backwards to find the previous one)
+		let previousTurn: Element | null = null;
+		for (let i = turnIndicators.length - 1; i >= 0; i--) {
+			const indicator = turnIndicators[i];
+			const rect = indicator.getBoundingClientRect();
+			const containerRect = container.getBoundingClientRect();
+			const indicatorTopRelativeToContainer = rect.top - containerRect.top + container.scrollTop;
+
+			console.log('Checking turn indicator:', indicator.textContent, 'at position:', indicatorTopRelativeToContainer);
+
+			if (indicatorTopRelativeToContainer < viewportTop) {
+				previousTurn = indicator;
+				console.log('Found previous turn:', indicator.textContent);
+				break;
+			}
+		}
+
+		// If no previous turn found (we're at the beginning), do nothing
+		if (!previousTurn) {
+			console.log('No previous turn found (at beginning)');
+			return;
+		}
+
+		// Calculate scroll position: position of turn indicator minus space for line above boss card
+		const rect = previousTurn.getBoundingClientRect();
+		const containerRect = container.getBoundingClientRect();
+		const turnTopRelativeToContainer = rect.top - containerRect.top + container.scrollTop;
+
+		// Add enough space to show the line space above the boss card (approximately 40px)
+		const spaceAbove = 40;
+		const targetScrollTop = turnTopRelativeToContainer - spaceAbove;
+
+		console.log('Scrolling to:', targetScrollTop);
+
+		// Scroll to position
+		container.scrollTo({
+			top: targetScrollTop,
+			behavior: 'smooth'
+		});
+	}
+
 	// Custom auto-scroll with adjustable speed and pause pattern
 	function handleAutoScroll() {
 		if (isAutoScrolling) {
@@ -677,8 +811,8 @@
 								{/if}
 							</svg>
 						</button>
-						<button class="control-btn" title="Scroll down"><Icon src={LuArrowDown} size="11" /></button>
-						<button class="control-btn" title="Scroll up"><Icon src={LuArrowUp} size="11" /></button>
+						<button class="control-btn" title="Next turn" onclick={scrollToNextTurn}><Icon src={LuArrowDown} size="11" /></button>
+						<button class="control-btn" title="Previous turn" onclick={scrollToPreviousTurn}><Icon src={LuArrowUp} size="11" /></button>
 						<button class="control-btn" title="Messages"><Icon src={LuMessageSquare} size="11" /></button>
 					</div>
 
