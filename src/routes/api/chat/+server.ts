@@ -249,7 +249,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		const call1AThinking = extractThinking(call1AResponse);
 		const call1AMessage = extractMessage(call1AResponse);
 
-		// Call 1B: Refine response with CALL1B_PROMPT - STREAMING
+		// Call 1B: Refine response with CALL1B_PROMPT
 		// Note: Call 1B receives the SAME context as Call 1A (for informed critique)
 		const call1B = await fireworks.chat.completions.create({
 			model: selectedModel,
@@ -259,119 +259,40 @@ export const POST: RequestHandler = async ({ request }) => {
 				{ role: 'user', content: CALL1B_PROMPT }
 			],
 			max_tokens: 4096,
-			temperature: 0.7,
-			stream: true
+			temperature: 0.7
 		});
 
-		// Create a ReadableStream for SSE
-		const stream = new ReadableStream({
-			async start(controller) {
-				const encoder = new TextEncoder();
-				let call1BFullResponse = '';
-				let buffer = '';
-				let insideThinkTag = false;
-				let justExitedThinkTag = false; // Track when we just exited a think tag
+		const call1BResponse = call1B.choices[0]?.message?.content || 'No response generated';
+		const call1BMessage = extractMessage(call1BResponse);
 
-				try {
-					for await (const chunk of call1B) {
-						const content = chunk.choices[0]?.delta?.content || '';
-						if (content) {
-							call1BFullResponse += content;
-							buffer += content;
+		// Save to Superjournal
+		const { data: superjournalData, error: dbError } = await supabase
+			.from('superjournal')
+			.insert({
+				user_id: null,
+				persona_name: persona,
+				user_message: message,
+				ai_response: call1BMessage
+			})
+			.select('id')
+			.single();
 
-							// Process buffer to detect and skip <think> tags
-							while (buffer.length > 0) {
-								if (!insideThinkTag) {
-									// Look for opening <think> tag
-									const thinkStart = buffer.indexOf('<think>');
-									if (thinkStart === -1) {
-										// No think tag found, stream everything except last 7 chars (to catch partial tags)
-										if (buffer.length > 7) {
-											const toStream = buffer.slice(0, -7);
-											controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content: toStream })}\n\n`));
-											buffer = buffer.slice(-7);
-										}
-										break;
-									} else {
-										// Found opening tag, stream content before it
-										if (thinkStart > 0) {
-											controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content: buffer.slice(0, thinkStart) })}\n\n`));
-										}
-										buffer = buffer.slice(thinkStart + 7); // Skip '<think>'
-										insideThinkTag = true;
-									}
-								} else {
-									// Inside think tag, look for closing </think> tag
-									const thinkEnd = buffer.indexOf('</think>');
-									if (thinkEnd === -1) {
-										// No closing tag yet, keep buffering (but skip content)
-										if (buffer.length > 8) {
-											buffer = buffer.slice(-8); // Keep last 8 chars to catch partial closing tag
-										}
-										break;
-									} else {
-										// Found closing tag, skip everything up to and including it
-										buffer = buffer.slice(thinkEnd + 8).trimStart(); // Skip '</think>' and trim leading whitespace
-										insideThinkTag = false;
-										justExitedThinkTag = true; // Mark that we just exited
-									}
-								}
-							}
-						}
-					}
+		if (dbError) {
+			console.error('Database error:', dbError);
+			return json({ error: 'Failed to save message' }, { status: 500 });
+		}
 
-					// Stream any remaining buffer content (outside think tags)
-					if (!insideThinkTag && buffer.length > 0) {
-						// Trim leading whitespace only if we just exited a think tag
-						const finalContent = justExitedThinkTag ? buffer.trimStart() : buffer;
-						if (finalContent.length > 0) {
-							controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content: finalContent })}\n\n`));
-						}
-					}
+		// Trigger background compression
+		if (superjournalData?.id) {
+			setTimeout(() => {
+				compressToJournal(superjournalData.id, message, call1BMessage, persona);
+			}, 0);
+		}
 
-					// Send completion event
-					controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true })}\n\n`));
-
-					// Extract only the message part from Call 1B (remove its thinking tags)
-					const call1BMessage = extractMessage(call1BFullResponse);
-
-					// Save to Superjournal after streaming completes (no thinking, just message)
-					const { data: superjournalData, error: dbError } = await supabase
-						.from('superjournal')
-						.insert({
-							user_id: null,
-							persona_name: persona,
-							user_message: message,
-							ai_response: call1BMessage
-						})
-						.select('id')
-						.single();
-
-					if (dbError) {
-						console.error('Database error:', dbError);
-					}
-
-					// Trigger background compression
-					if (superjournalData?.id) {
-						setTimeout(() => {
-							compressToJournal(superjournalData.id, message, call1BMessage, persona);
-						}, 0);
-					}
-
-					controller.close();
-				} catch (error) {
-					console.error('Stream error:', error);
-					controller.error(error);
-				}
-			}
-		});
-
-		return new Response(stream, {
-			headers: {
-				'Content-Type': 'text/event-stream',
-				'Cache-Control': 'no-cache',
-				'Connection': 'keep-alive'
-			}
+		// Return simple JSON response
+		return json({
+			message: call1BMessage,
+			timestamp: new Date().toISOString()
 		});
 	} catch (error) {
 		console.error('Chat API error:', error);
