@@ -128,12 +128,6 @@ interface FileRecord {
 // ============================================================================
 
 /**
- * Chunking parameters
- */
-const TARGET_CHUNK_TOKENS = 768;
-const SIMILARITY_THRESHOLD = 0.5;
-
-/**
  * Progress phase boundaries (percentages)
  * Updated for new combined overview + chunking flow
  */
