@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { extractText, validateFileSize, generateContentHash } from './file-extraction';
-import { generateFileOverview, chunkTextBySemantic } from './file-chunker';
+import { generateOverviewAndChunks } from './file-chunker';
 import { compressChunk, type ChunkCompressionResult } from './file-compressor';
 import { generateEmbedding } from './vectorization';
 import type { FileType } from './file-extraction';
@@ -135,10 +135,10 @@ const SIMILARITY_THRESHOLD = 0.5;
 
 /**
  * Progress phase boundaries (percentages)
+ * Updated for new combined overview + chunking flow
  */
 const PROGRESS_EXTRACTION = 10;
-const PROGRESS_OVERVIEW = 20;
-const PROGRESS_CHUNKING = 30;
+const PROGRESS_OVERVIEW_AND_CHUNKING = 30; // Combined phase (was separate 20% and 30%)
 const PROGRESS_CHUNK0_COMPRESSION = 40;
 const PROGRESS_DETAIL_COMPRESSION_START = 40;
 const PROGRESS_DETAIL_COMPRESSION_END = 70;
@@ -162,14 +162,13 @@ const RETRY_CONFIG = {
 /**
  * Process an uploaded file through the complete chunking pipeline
  *
- * NEW CHUNKING FLOW (Tasks 6-7):
+ * NEW CHUNKING FLOW:
  * 1. Extract text (0-10%)
- * 2. Generate Chunk 0 overview (10-20%)
- * 3. Semantic chunking (20-30%)
- * 4. Compress Chunk 0 (30-40%)
- * 5. Compress detail chunks (40-70%, granular progress)
- * 6. Generate embeddings for all chunks (70-90%, granular progress)
- * 7. Save all chunks to file_chunks table (90-100%)
+ * 2. Generate overview + logical chunks (10-30%) - COMBINED PHASE
+ * 3. Compress Chunk 0 (30-40%)
+ * 4. Compress detail chunks (40-70%, granular progress)
+ * 5. Generate embeddings for all chunks (70-90%, granular progress)
+ * 6. Save all chunks to file_chunks table (90-100%)
  *
  * @param input - File data and metadata
  * @param options - Optional processing options
@@ -309,12 +308,11 @@ export async function createFilePending(
  *
  * NEW CHUNKING FLOW:
  * Phase 1: Extraction (0-10%) - ALREADY DONE
- * Phase 2: Generate Chunk 0 overview (10-20%)
- * Phase 3: Semantic chunking (20-30%)
- * Phase 4: Compress Chunk 0 (30-40%)
- * Phase 5: Compress detail chunks (40-70%, granular progress)
- * Phase 6: Generate embeddings for all chunks (70-90%, granular progress)
- * Phase 7: Save all chunks to file_chunks table (90-100%)
+ * Phase 2: Generate overview + logical chunks (10-30%) - COMBINED PHASE
+ * Phase 3: Compress Chunk 0 (30-40%)
+ * Phase 4: Compress detail chunks (40-70%, granular progress)
+ * Phase 5: Generate embeddings for all chunks (70-90%, granular progress)
+ * Phase 6: Save all chunks to file_chunks table (90-100%)
  *
  * @param fileId - File ID from createFilePending()
  * @param extraction - Extraction result from createFilePending()
@@ -345,35 +343,39 @@ export async function processFileBackground(
 		);
 
 		// ========================================================================
-		// PHASE 2: Generate Chunk 0 Overview (10-20%)
+		// PHASE 2: Generate Overview + Logical Chunks (10-30%) - COMBINED
 		// ========================================================================
 
 		let chunk0Text: string;
+		let detailChunks: string[];
+
 		try {
 			await reportProgress(
 				options?.onProgress,
 				fileId,
 				'chunking',
 				PROGRESS_EXTRACTION,
-				'Generating file overview...'
+				'Generating file overview and logical chunks...'
 			);
 
-			chunk0Text = await generateFileOverview(fullText, filename, fileType);
+			const result = await generateOverviewAndChunks(fullText, filename, fileType);
+			chunk0Text = result.overview;
+			detailChunks = result.chunks;
 
-			await updateProgress(fileId, PROGRESS_OVERVIEW, 'chunking');
+			await updateProgress(fileId, PROGRESS_OVERVIEW_AND_CHUNKING, 'chunking');
 			await reportProgress(
 				options?.onProgress,
 				fileId,
 				'chunking',
-				PROGRESS_OVERVIEW,
-				'File overview generated'
+				PROGRESS_OVERVIEW_AND_CHUNKING,
+				`Generated overview + ${detailChunks.length} logical chunks`
 			);
 		} catch (error) {
 			if (error instanceof FileChunkerError) {
 				await markFileFailed(
 					fileId,
 					'CHUNKING_ERROR',
-					`Overview generation failed: ${error.message}`,
+					`Overview and chunking failed: ${error.message}`,
 					'chunking'
 				);
 
@@ -393,7 +395,7 @@ export async function processFileBackground(
 			await markFileFailed(
 				fileId,
 				'UNKNOWN_ERROR',
-				`Overview generation error: ${error instanceof Error ? error.message : String(error)}`,
+				`Overview and chunking error: ${error instanceof Error ? error.message : String(error)}`,
 				'chunking'
 			);
 
@@ -411,79 +413,7 @@ export async function processFileBackground(
 		}
 
 		// ========================================================================
-		// PHASE 3: Semantic Chunking (20-30%)
-		// ========================================================================
-
-		let detailChunks: string[];
-		try {
-			await reportProgress(
-				options?.onProgress,
-				fileId,
-				'chunking',
-				PROGRESS_OVERVIEW,
-				'Creating semantic chunks...'
-			);
-
-			const chunkingResult = await chunkTextBySemantic({
-				text: fullText,
-				targetChunkTokens: TARGET_CHUNK_TOKENS,
-				similarityThreshold: SIMILARITY_THRESHOLD
-			});
-
-			detailChunks = chunkingResult.chunks;
-
-			await updateProgress(fileId, PROGRESS_CHUNKING, 'chunking');
-			await reportProgress(
-				options?.onProgress,
-				fileId,
-				'chunking',
-				PROGRESS_CHUNKING,
-				`Created ${detailChunks.length} detail chunks`
-			);
-		} catch (error) {
-			if (error instanceof FileChunkerError) {
-				await markFileFailed(
-					fileId,
-					'CHUNKING_ERROR',
-					`Semantic chunking failed: ${error.message}`,
-					'chunking'
-				);
-
-				return {
-					id: fileId,
-					filename: filename,
-					fileType: fileType,
-					status: 'failed',
-					error: {
-						code: 'CHUNKING_ERROR',
-						message: error.message,
-						stage: 'chunking'
-					}
-				};
-			}
-
-			await markFileFailed(
-				fileId,
-				'UNKNOWN_ERROR',
-				`Chunking error: ${error instanceof Error ? error.message : String(error)}`,
-				'chunking'
-			);
-
-			return {
-				id: fileId,
-				filename: filename,
-				fileType: fileType,
-				status: 'failed',
-				error: {
-					code: 'CHUNKING_ERROR',
-					message: error instanceof Error ? error.message : String(error),
-					stage: 'chunking'
-				}
-			};
-		}
-
-		// ========================================================================
-		// PHASE 4: Compress Chunk 0 (30-40%)
+		// PHASE 3: Compress Chunk 0 (30-40%)
 		// ========================================================================
 
 		let chunk0Compressed: ChunkCompressionResult;
@@ -494,7 +424,7 @@ export async function processFileBackground(
 				options?.onProgress,
 				fileId,
 				'compression',
-				PROGRESS_CHUNKING,
+				PROGRESS_OVERVIEW_AND_CHUNKING,
 				'Compressing file overview...'
 			);
 
@@ -565,7 +495,7 @@ export async function processFileBackground(
 		}
 
 		// ========================================================================
-		// PHASE 5: Compress Detail Chunks (40-70%)
+		// PHASE 4: Compress Detail Chunks (40-70%)
 		// ========================================================================
 
 		const detailChunksCompressed: ChunkCompressionResult[] = [];
@@ -663,7 +593,7 @@ export async function processFileBackground(
 
 
 		// ========================================================================
-		// PHASE 6: Generate Embeddings (70-90%)
+		// PHASE 5: Generate Embeddings (70-90%)
 		// ========================================================================
 
 		const allCompressed = [chunk0Compressed, ...detailChunksCompressed];
@@ -752,7 +682,7 @@ export async function processFileBackground(
 		}
 
 		// ========================================================================
-		// PHASE 7: Save to Database (90-100%)
+		// PHASE 6: Save to Database (90-100%)
 		// ========================================================================
 
 		try {
