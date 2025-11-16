@@ -370,26 +370,19 @@
 
 		if (!file) return;
 
-		// Validate file type
-		const allowedTypes = [
-			'application/pdf',
-			'text/plain',
-			'text/markdown',
-			'image/png',
-			'image/jpeg',
-			'image/gif',
-			'image/webp',
-			'text/javascript',
-			'application/typescript',
-			'text/x-python',
-			'application/vnd.ms-excel',
-			'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-			'text/csv',
-			'application/json'
+		// Extract file extension
+		const extension = file.name.split('.').pop()?.toLowerCase() || '';
+
+		// Validate file type by extension (more reliable than MIME type)
+		const allowedExtensions = [
+			'pdf', 'txt', 'md', 'markdown',
+			'png', 'jpg', 'jpeg', 'gif', 'webp',
+			'js', 'jsx', 'ts', 'tsx', 'py',
+			'xlsx', 'xls', 'csv', 'json'
 		];
 
-		if (!allowedTypes.includes(file.type)) {
-			error.set(`File type not supported: ${file.type}`);
+		if (!allowedExtensions.includes(extension)) {
+			error.set(`File type not supported: .${extension}`);
 			return;
 		}
 
