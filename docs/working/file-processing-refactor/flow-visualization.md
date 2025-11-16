@@ -439,12 +439,21 @@ High-level breakdown of work required for this refactor:
 - Verify Call 3A and Call 3B prompts are already updated with combined overview+chunking logic
 - Ensure all prompts use new 3-rule framework (no "compression" terminology)
 
-### Chunk 2: Replace Semantic Chunking with Logical Chunking
-- Locate and delete chunkTextBySemantic() function in src/lib/file-chunker.ts
-- Implement new chunkTextByLogic() function that uses Call 3A/3B prompts
-- Function should send full file to LLM and receive JSON with overview + chunk boundaries
-- Parse JSON response and extract chunks based on word positions
-- Handle errors (invalid JSON, incomplete chunk coverage, gaps/overlaps)
+### Chunk 2: Add New Combined Overview + Chunking Function
+- Add Call 3A_PROMPT constant to src/lib/file-chunker.ts (full overview + chunking instructions)
+- Add Call 3B_PROMPT constant to src/lib/file-chunker.ts (verification instructions)
+- Add new exported function: generateOverviewAndChunks()
+  - Makes Call 3A + Call 3B (single pair of LLM calls)
+  - Sends full file to LLM with Call 3A prompt
+  - Receives JSON with overview + chunk boundaries
+  - Verifies with Call 3B prompt
+  - Parses JSON response and extracts chunks based on word positions
+  - Returns both overview AND chunks for efficient use in file-processor
+  - Handles errors (invalid JSON, incomplete chunk coverage, gaps/overlaps)
+- Add parseJSON() helper function to handle <think> tags and markdown code blocks
+- IMPORTANT: Leave existing functions UNCHANGED (generateFileOverview, chunkTextBySemantic)
+- This creates the infrastructure without breaking existing code
+- Next chunk will update file-processor.ts to use the new function
 
 ### Chunk 3: Update Prompt Constants in file-compressor.ts
 - Replace MODIFIED_CALL2A_PROMPT constant with new version from docs/⭐️ system-prompts/
