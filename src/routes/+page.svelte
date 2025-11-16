@@ -245,18 +245,11 @@
 	// Custom auto-scroll with adjustable speed and pause pattern
 	function handleAutoScroll() {
 		if (isAutoScrolling) {
-			if (isPaused) {
-				// Snooze: restart the pause timer
-				pauseStartTime = Date.now();
-				pauseProgress = 0;
-				return;
-			} else {
-				// Stop scrolling completely
-				isAutoScrolling = false;
-				isPaused = false;
-				pauseProgress = 0;
-				return;
-			}
+			// If auto-scroll is active (either scrolling or paused), turn it off
+			isAutoScrolling = false;
+			isPaused = false;
+			pauseProgress = 0;
+			return;
 		}
 
 		// Start scrolling
@@ -794,7 +787,7 @@
 					</div>
 
 					<div class="icon-group">
-						<button class="control-btn auto-scroll-btn" class:active={isAutoScrolling} title="Auto-scroll" onclick={handleAutoScroll}>
+						<button class="control-btn auto-scroll-btn" class:active={isAutoScrolling} title="Auto-scroll" onclick={handleAutoScroll} style="position: relative;">
 							<svg width="11" height="11" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
 								<!-- Outer circle stroke -->
 								<circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none"/>
@@ -810,6 +803,10 @@
 									/>
 								{/if}
 							</svg>
+							<!-- Red X badge when auto-scrolling is active -->
+							{#if isAutoScrolling}
+								<span style="position: absolute; top: -2px; right: -2px; width: 6px; height: 6px; background: red; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 5px; color: white; font-weight: bold; line-height: 1;">×</span>
+							{/if}
 						</button>
 						<button class="control-btn" title="Next turn" onclick={scrollToNextTurn}><Icon src={LuArrowDown} size="11" /></button>
 						<button class="control-btn" title="Previous turn" onclick={scrollToPreviousTurn}><Icon src={LuArrowUp} size="11" /></button>
