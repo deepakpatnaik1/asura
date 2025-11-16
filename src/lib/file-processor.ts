@@ -504,7 +504,7 @@ export async function processFileBackground(
 				`Compressing ${detailChunks.length} detail chunks in parallel...`
 			);
 
-			// Compress all detail chunks in batches of 10
+			// Compress all detail chunks in batches of 5 with 5s delays
 			const compressedResults = await processBatched(
 				detailChunks,
 				async (chunkText, i) => {
@@ -518,7 +518,8 @@ export async function processFileBackground(
 					});
 				},
 				{
-					batchSize: 10,
+					batchSize: 5,
+					delayBetweenBatchesMs: 5000,
 					onProgress: async (completed, total) => {
 						// Calculate progress: 40% → 70% (30% range)
 						const progress = Math.round(40 + (30 * completed / total));
@@ -603,12 +604,13 @@ export async function processFileBackground(
 				`Generating ${allCompressed.length} embeddings in parallel...`
 			);
 
-			// Generate all embeddings in batches of 10
+			// Generate all embeddings in batches of 5 with 5s delays
 			const generatedEmbeddings = await processBatched(
 				allCompressed,
 				async (compressed) => generateEmbedding(compressed.description),
 				{
-					batchSize: 10,
+					batchSize: 5,
+					delayBetweenBatchesMs: 5000,
 					onProgress: async (completed, total) => {
 						// Calculate progress: 70% → 90% (20% range)
 						const progress = Math.round(70 + (20 * completed / total));
