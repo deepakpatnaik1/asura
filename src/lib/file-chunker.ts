@@ -63,6 +63,187 @@ Keep the overview between 200-400 words. Be comprehensive but concise.
 
 Output ONLY the overview text. Do not include any preamble, commentary, or meta-text like "Here is the overview:" or "This document is...". Start directly with the content.`;
 
+/**
+ * System prompt for Call 3A: File Overview + Logical Chunking
+ * Used for new combined approach that generates both in single call
+ */
+const CALL_3A_PROMPT = `FILE OVERVIEW AND LOGICAL CHUNKING
+
+You will receive a complete file. Your task has TWO parts:
+
+1. Create a file-level overview for discoverability (Chunk 0)
+2. Divide the file into logical chunks for detailed processing
+
+## PART 1: FILE OVERVIEW
+
+CRITICAL: Users search for files by saying "that interview transcript", "the business plan I shared", "the email thread about X". Your description must enable this discovery.
+
+TARGET LENGTH: Maximum 300 words for the overview.
+
+PRESERVE:
+- Document type (interview, business plan, email thread, research paper, meeting notes, transcript, analysis, etc.)
+- Participants/authors (names, roles, organizations if mentioned)
+- Main themes and topics (high-level only, NOT detailed content)
+- Date/time context (if mentioned)
+- Document purpose/context (why this document exists)
+- Overall structure (sections, format, conversation flow)
+- Key entities at document level (companies, products mentioned)
+
+REMOVE:
+- Detailed content from specific sections
+- Granular tactical details (those belong in detail chunks)
+- Specific quotes or passages
+- Background explanations
+- Meta-commentary ("This document contains...")
+- Obvious qualifiers ("approximately", "roughly")
+- Verbose prose
+
+## PART 2: LOGICAL CHUNKING
+
+Divide the file into logical chunks based on natural sub-topic boundaries.
+
+Each chunk will be processed separately to create a high-signal/low-noise artisan cut. For this to work well, chunks must be:
+- Large enough to contain complete thoughts and context
+- Small enough to process effectively (target: 300-800 words per chunk)
+- Bounded by natural topic shifts, not arbitrary splits
+
+Think of chunking at the sub-chapter or sub-topic level:
+- If the file has chapters, chunk by sub-chapters
+- Look for shifts in focus, not just new paragraphs
+- Each chunk should be coherent enough to stand alone for processing
+
+CHUNKING RULES:
+- Target 300-800 words per chunk (flexible based on natural boundaries)
+- Word indices are 0-based
+- Chunks must cover entire file with no gaps or overlaps
+- chunk_number starts at 1 and increments sequentially
+
+## Output Format
+
+Return ONLY a JSON object:
+
+{
+  "filename": "[exact filename including extension]",
+  "file_type": "[image|pdf|text|code|spreadsheet|other]",
+  "overview": "[your compressed file-level overview here]",
+  "chunks": [
+    {
+      "chunk_number": 1,
+      "start_word": <word position>,
+      "end_word": <word position>
+    },
+    {
+      "chunk_number": 2,
+      "start_word": <word position>,
+      "end_word": <word position>
+    }
+  ]
+}`;
+
+/**
+ * System prompt for Call 3B: Verification of Call 3A output
+ */
+const CALL_3B_PROMPT = `You received the following instruction set and generated a JSON output:
+
+<earlier-instruction-set>
+FILE OVERVIEW AND LOGICAL CHUNKING
+
+You will receive a complete file. Your task has TWO parts:
+
+1. Create a file-level overview for discoverability (Chunk 0)
+2. Divide the file into logical chunks for detailed processing
+
+## PART 1: FILE OVERVIEW
+
+CRITICAL: Users search for files by saying "that interview transcript", "the business plan I shared", "the email thread about X". Your description must enable this discovery.
+
+PRESERVE:
+- Document type (interview, business plan, email thread, research paper, meeting notes, transcript, analysis, etc.)
+- Participants/authors (names, roles, organizations if mentioned)
+- Main themes and topics (high-level only, NOT detailed content)
+- Date/time context (if mentioned)
+- Document purpose/context (why this document exists)
+- Overall structure (sections, format, conversation flow)
+- Key entities at document level (companies, products mentioned)
+
+REMOVE:
+- Detailed content from specific sections
+- Granular tactical details (those belong in detail chunks)
+- Specific quotes or passages
+- Background explanations
+- Meta-commentary ("This document contains...")
+- Obvious qualifiers ("approximately", "roughly")
+- Verbose prose
+
+## PART 2: LOGICAL CHUNKING
+
+Divide the file into logical chunks based on natural sub-topic boundaries.
+
+Each chunk will be processed separately to create a high-signal/low-noise artisan cut. For this to work well, chunks must be:
+- Large enough to contain complete thoughts and context
+- Small enough to process effectively (target: 300-800 words per chunk)
+- Bounded by natural topic shifts, not arbitrary splits
+
+Think of chunking at the sub-chapter or sub-topic level:
+- If the file has chapters, chunk by sub-chapters
+- Look for shifts in focus, not just new paragraphs
+- Each chunk should be coherent enough to stand alone for processing
+
+CHUNKING RULES:
+- Target 300-800 words per chunk (flexible based on natural boundaries)
+- Word indices are 0-based
+- Chunks must cover entire file with no gaps or overlaps
+- chunk_number starts at 1 and increments sequentially
+
+## Output Format
+
+Return ONLY a JSON object:
+
+{
+  "filename": "[exact filename including extension]",
+  "file_type": "[image|pdf|text|code|spreadsheet|other]",
+  "overview": "[your compressed file-level overview here]",
+  "chunks": [
+    {
+      "chunk_number": 1,
+      "start_word": <word position>,
+      "end_word": <word position>
+    },
+    {
+      "chunk_number": 2,
+      "start_word": <word position>,
+      "end_word": <word position>
+    }
+  ]
+}
+</earlier-instruction-set>
+
+<new-instruction-set>
+
+I'm giving you back your response. Improve it. Don't mention that you are doing a review. Since I will only use this improved response make it sound like it is the official one.
+
+## VERIFY OVERVIEW QUALITY:
+
+Is the filename exact and correct?
+Is the file_type accurate?
+Is the overview concise (maximum 300 words)?
+Is the overview well crafted for discoverability? Would I be able to ask "hey, remember that interview I shared?" or "remember the pitch deck we were going through?" and have you find this file?
+Did you capture file-level metadata (document type, participants, main themes, date context, purpose)?
+Did you preserve high-level themes without detailed content?
+Did you remove granular tactical details that belong in detail chunks?
+
+## VERIFY CHUNK BOUNDARIES:
+
+Do chunks cover the entire file with no gaps or overlaps?
+Are chunk boundaries at natural topic shifts (sub-chapters, sub-topics)?
+Are chunks sized appropriately (300-800 words target, flexible for natural boundaries)?
+Are word indices 0-based and sequential?
+Do chunk_numbers start at 1 and increment properly?
+
+Return the **complete improved** JSON in the same format.
+
+</new-instruction-set>`;
+
 // ============================================================================
 // ERROR CLASSES
 // ============================================================================
@@ -695,12 +876,211 @@ function estimateTokens(text: string): number {
 }
 
 // ============================================================================
+// NEW COMBINED APPROACH (Call 3A + 3B)
+// ============================================================================
+
+/**
+ * Generate file overview AND logical chunks using Call 3A + 3B
+ *
+ * This is the new unified approach that replaces separate overview and semantic chunking.
+ * Makes a single pair of LLM calls (Call 3A + Call 3B) to get both outputs.
+ *
+ * Flow:
+ * 1. Send full file to Call 3A (overview + chunking prompt)
+ * 2. Parse JSON response
+ * 3. Send to Call 3B for verification and improvement
+ * 4. Parse verified JSON
+ * 5. Extract chunks based on word positions
+ * 6. Return overview + chunks
+ *
+ * @param text - Full file text
+ * @param filename - Original filename
+ * @param fileType - Classified file type
+ * @returns Object with overview text and chunk array
+ * @throws FileChunkerError if API call or parsing fails
+ */
+export async function generateOverviewAndChunks(
+	text: string,
+	filename: string,
+	fileType: FileType
+): Promise<{ overview: string; chunks: string[] }> {
+	// Validate input
+	if (!text || text.trim().length === 0) {
+		throw new FileChunkerError(
+			'Cannot generate overview and chunks: text is empty',
+			'EMPTY_TEXT',
+			{ filename }
+		);
+	}
+
+	// Build user prompt for Call 3A
+	const wordCount = countWords(text);
+	const userPrompt = `Filename: ${filename}
+Type: ${fileType}
+Total length: ${wordCount} words
+
+Full file text:
+${text}`;
+
+	// Call 3A: Generate overview + chunk boundaries
+	let call3AResponse: string;
+	try {
+		call3AResponse = await callFireworksAPI(CALL_3A_PROMPT, userPrompt);
+	} catch (error) {
+		if (error instanceof FileChunkerError) {
+			throw error;
+		}
+		throw new FileChunkerError(
+			`Call 3A failed for ${filename}: ${error instanceof Error ? error.message : String(error)}`,
+			'API_ERROR',
+			{ filename, fileType, wordCount, error }
+		);
+	}
+
+	// Parse Call 3A JSON
+	let call3AData: any;
+	try {
+		call3AData = parseJSON(call3AResponse);
+	} catch (error) {
+		throw new FileChunkerError(
+			`Call 3A returned invalid JSON for ${filename}: ${error instanceof Error ? error.message : String(error)}`,
+			'API_ERROR',
+			{ filename, response: call3AResponse.substring(0, 500) }
+		);
+	}
+
+	// Call 3B: Verify and improve
+	const call3BUserPrompt = `Original file:
+${text}
+
+Your earlier response:
+${call3AResponse}`;
+
+	let call3BResponse: string;
+	try {
+		call3BResponse = await callFireworksAPI(CALL_3B_PROMPT, call3BUserPrompt);
+	} catch (error) {
+		if (error instanceof FileChunkerError) {
+			throw error;
+		}
+		throw new FileChunkerError(
+			`Call 3B failed for ${filename}: ${error instanceof Error ? error.message : String(error)}`,
+			'API_ERROR',
+			{ filename, error }
+		);
+	}
+
+	// Parse Call 3B JSON (final verified version)
+	let finalData: any;
+	try {
+		finalData = parseJSON(call3BResponse);
+	} catch (error) {
+		throw new FileChunkerError(
+			`Call 3B returned invalid JSON for ${filename}: ${error instanceof Error ? error.message : String(error)}`,
+			'API_ERROR',
+			{ filename, response: call3BResponse.substring(0, 500) }
+		);
+	}
+
+	// Validate response structure
+	if (!finalData.overview || typeof finalData.overview !== 'string') {
+		throw new FileChunkerError(
+			`Invalid overview in response for ${filename}`,
+			'VALIDATION_ERROR',
+			{ finalData }
+		);
+	}
+
+	if (!Array.isArray(finalData.chunks)) {
+		throw new FileChunkerError(
+			`Invalid chunks array in response for ${filename}`,
+			'VALIDATION_ERROR',
+			{ finalData }
+		);
+	}
+
+	// Extract chunks based on word positions
+	const words = text.split(/\s+/);
+	const chunks: string[] = [];
+
+	for (const chunkDef of finalData.chunks) {
+		const { start_word, end_word } = chunkDef;
+
+		// Validate indices
+		if (typeof start_word !== 'number' || typeof end_word !== 'number') {
+			throw new FileChunkerError(
+				`Invalid chunk indices for ${filename}`,
+				'VALIDATION_ERROR',
+				{ chunkDef }
+			);
+		}
+
+		if (start_word < 0 || end_word >= words.length || start_word > end_word) {
+			throw new FileChunkerError(
+				`Chunk indices out of range for ${filename}`,
+				'VALIDATION_ERROR',
+				{ start_word, end_word, totalWords: words.length }
+			);
+		}
+
+		// Extract chunk text (inclusive end)
+		const chunkWords = words.slice(start_word, end_word + 1);
+		const chunkText = chunkWords.join(' ');
+		chunks.push(chunkText);
+	}
+
+	// Verify chunks cover entire file
+	if (chunks.length === 0) {
+		throw new FileChunkerError(
+			`No chunks generated for ${filename}`,
+			'VALIDATION_ERROR',
+			{ finalData }
+		);
+	}
+
+	return {
+		overview: finalData.overview,
+		chunks
+	};
+}
+
+/**
+ * Parse JSON from LLM response
+ *
+ * Handles <think> tags (Qwen3 includes thinking in response)
+ * Extracts JSON from markdown code blocks if present
+ *
+ * @param response - Raw LLM response text
+ * @returns Parsed JSON object
+ * @throws Error if JSON parsing fails
+ */
+function parseJSON(response: string): any {
+	let cleaned = response.trim();
+
+	// Remove <think> tags if present
+	const thinkingMatch = cleaned.match(/<think>[\s\S]*?<\/think>\s*([\s\S]*)/);
+	if (thinkingMatch) {
+		cleaned = thinkingMatch[1].trim();
+	}
+
+	// Extract JSON from markdown code blocks if present
+	const codeBlockMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+	if (codeBlockMatch) {
+		cleaned = codeBlockMatch[1].trim();
+	}
+
+	// Parse JSON
+	return JSON.parse(cleaned);
+}
+
+// ============================================================================
 // EXPORTS
 // ============================================================================
 
 // Main functions exported above:
 // - generateFileOverview (function)
 // - chunkTextBySemantic (function)
+// - generateOverviewAndChunks (function) - NEW
 // - FileChunkerError (class)
 // - ChunkingInput (interface)
 // - ChunkingOutput (interface)
