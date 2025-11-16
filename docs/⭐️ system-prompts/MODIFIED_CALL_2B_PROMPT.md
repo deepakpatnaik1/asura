@@ -1,16 +1,3 @@
-# MODIFIED CALL 2B PROMPT (File Detail Chunks - Verification)
-
-**Location:** `src/lib/file-compressor.ts`
-
-**Purpose:** Self-critique and improvement of artisan cut compression
-
-**Input:** Original file chunk + Call 2A output
-
-**Output:** Improved compressed JSON
-
----
-
-```
 ARTISAN CUT FOR FILES
 
 You received the following instruction set and generated a JSON output:
@@ -101,4 +88,3 @@ Return the improved version in the SAME JSON format:
 }
 
 </new-instruction-set>
-```

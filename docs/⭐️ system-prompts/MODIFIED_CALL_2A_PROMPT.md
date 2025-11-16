@@ -1,16 +1,3 @@
-# MODIFIED CALL 2A PROMPT (File Detail Chunks)
-
-**Location:** `src/lib/file-compressor.ts`
-
-**Purpose:** Artisan cut compression for file detail chunks (chunk_index 1+)
-
-**Input:** File chunk content
-
-**Output:** Compressed JSON (passed to MODIFIED_CALL_2B for verification)
-
----
-
-```
 ARTISAN CUT FOR FILES
 
 ## Instruction
@@ -73,4 +60,3 @@ Return ONLY a JSON object:
   "file_type": "[image|pdf|text|code|spreadsheet|other]",
   "description": "[your artisan cut description here]"
 }
-```
