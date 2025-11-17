@@ -187,6 +187,88 @@ All tables support `user_id IS NULL` for single-user development mode (auth not 
 - `POST /api/nuke`: Delete all data (development only)
 - `GET /api/superjournal/[id]`: Get superjournal entry details
 
+## UI Workflows
+
+### Nuke Button (Delete All Data)
+
+The nuke button provides atomic deletion of all conversation and file data. Located in Settings panel.
+
+**Flow**:
+1. User clicks "Nuke Everything" button in Settings
+2. Modal displays with 3-second countdown progress bar
+3. User can cancel during countdown (closes modal, no action taken)
+4. If countdown completes:
+   - Single atomic database call to `nuke_everything()` function
+   - PostgreSQL function executes TRUNCATE CASCADE on all tables
+   - Superjournal, journal, files, file_chunks all cleared atomically
+   - Transaction ensures all-or-nothing operation
+5. Modal closes, UI refreshes with empty state
+
+**Implementation**:
+- UI: [src/routes/+page.svelte](src/routes/+page.svelte) `handleNukeConfirm()` function
+- API: `POST /api/nuke` endpoint
+- Database: [20251117000000_create_nuke_function.sql](supabase/migrations/20251117000000_create_nuke_function.sql)
+
+**Key Features**:
+- Atomic operation (transaction-based)
+- 3-second safety countdown
+- Cancellable before execution
+- Cascading deletes ensure referential integrity
+
+### File Delete Button
+
+Individual file deletion with cascade to all related chunks. Located next to each file in Files panel.
+
+**Flow**:
+1. User clicks trash icon next to file
+2. Modal displays with 3-second countdown progress bar
+3. User can cancel during countdown (closes modal, no action taken)
+4. If countdown completes:
+   - `DELETE /api/files/[id]` called
+   - Database CASCADE automatically removes all `file_chunks` entries
+   - Supabase Realtime broadcasts DELETE event to `files` table
+   - SSE endpoint receives event, broadcasts to all connected clients
+   - UI receives `file-deleted` SSE event, removes file from local state
+5. Modal closes, file disappears from UI immediately
+
+**Implementation**:
+- UI: [src/routes/+page.svelte](src/routes/+page.svelte) `handleFileDeleteConfirm()` function
+- API: `DELETE /api/files/[id]` endpoint
+- SSE: [src/routes/api/files/events/+server.ts](src/routes/api/files/events/+server.ts) `handleFilesEvent()`
+- Database: [20251111120100_create_files_table.sql](supabase/migrations/20251111120100_create_files_table.sql) ON DELETE CASCADE
+
+**Key Features**:
+- Real-time UI update via SSE (no refresh needed)
+- Cascade delete ensures chunks removed automatically
+- 3-second safety countdown
+- Multi-client synchronization (all connected clients see deletion)
+
+### Message Abort Button
+
+Stops AI response generation mid-stream. Located in action bar while message is streaming.
+
+**Flow**:
+1. User submits message, AI response begins streaming
+2. Trash icon (abort button) appears in message action bar
+3. User clicks abort button
+4. `handleAbortCurrentMessage()` function:
+   - Sets `isLoading` to `false` (stops streaming)
+   - Clears `currentMessage` state (removes partial response)
+   - Logs abort action to console
+5. UI immediately stops displaying streaming text
+6. Partial response is discarded (not saved to database)
+
+**Implementation**:
+- UI: [src/routes/+page.svelte](src/routes/+page.svelte) `handleAbortCurrentMessage()` function
+- Client-side only (no API call needed)
+- Reactive state management via Svelte stores
+
+**Key Features**:
+- Instant response (no network round-trip)
+- Clean state cleanup
+- Partial responses not persisted
+- Simple implementation (3 lines of code)
+
 ## Testing Strategy
 
 **Unit Tests** ([tests/unit/](tests/unit/))

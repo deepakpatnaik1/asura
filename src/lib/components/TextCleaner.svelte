@@ -53,41 +53,101 @@
 			cleaned = cleaned.replace(`__BULLET_${index}__`, bullet);
 		});
 
-		// Step 8: Convert markdown bullets to HTML and style non-punctuated lines
+		// Step 8: Convert markdown bullets and numbered lists to HTML
 		const lines = cleaned.split('\n');
 		let html = '';
-		let inList = false;
+		let inBulletList = false;
+		let inNumberedList = false;
+
+		// Helper function to determine if a line should be treated as a bullet
+		function isBullet(line: string, lineIndex: number): boolean {
+			const bulletMatch = line.match(/^(\s*)([\*\-])\s+(.+)$/);
+			if (!bulletMatch) return false;
+
+			const content = bulletMatch[3].trim();
+
+			// Don't treat as bullet if line ends with a colon (section header)
+			if (content.endsWith(':')) return false;
+
+			// Don't treat as bullet if line ends with a question mark (section header)
+			if (content.endsWith('?')) return false;
+
+			// Don't treat as bullet if line ends with an exclamation mark (section header)
+			if (content.endsWith('!')) return false;
+
+			// Don't treat as bullet if line has no punctuation at all (section header)
+			const hasPunctuation = /[.,;:!?]/.test(content);
+			if (!hasPunctuation) return false;
+
+			// Don't treat as bullet if it's the first line after a section header
+			// (these are sub-headers, not bullets)
+			if (lineIndex > 0) {
+				const prevLine = lines[lineIndex - 1].trim();
+				// Check if previous line was a section header (ends with colon, not a bullet)
+				if (prevLine.endsWith(':') && !prevLine.match(/^(\s*)([\*\-])\s+/)) {
+					return false;
+				}
+			}
+
+			return true;
+		}
 
 		for (let i = 0; i < lines.length; i++) {
 			const line = lines[i];
 			const bulletMatch = line.match(/^(\s*)([\*\-])\s+(.+)$/);
+			const numberMatch = line.match(/^(\s*)(\d+)\.\s+(.+)$/);
 
-			if (bulletMatch) {
+			if (bulletMatch && isBullet(line, i)) {
 				const content = bulletMatch[3];
-				if (!inList) {
+				if (inNumberedList) {
+					html += '</ol>';
+					inNumberedList = false;
+				}
+				if (!inBulletList) {
 					html += '<ul>';
-					inList = true;
+					inBulletList = true;
+				}
+				html += `<li>${content}</li>`;
+			} else if (numberMatch) {
+				const content = numberMatch[3];
+				if (inBulletList) {
+					html += '</ul>';
+					inBulletList = false;
+				}
+				if (!inNumberedList) {
+					html += '<ol>';
+					inNumberedList = true;
 				}
 				html += `<li>${content}</li>`;
 			} else {
-				if (inList) {
+				if (inBulletList) {
 					html += '</ul>';
-					inList = false;
+					inBulletList = false;
+				}
+				if (inNumberedList) {
+					html += '</ol>';
+					inNumberedList = false;
 				}
 
-				// Check if line has content and doesn't end with punctuation
-				const trimmedLine = line.trim();
-				if (trimmedLine && !/[.!?:;,]$/.test(trimmedLine)) {
-					// Make it bold and brand-colored
-					html += `<span class="heading">${line}</span>\n`;
-				} else {
-					html += line + '\n';
+				// Strip bullet markers from section headers (lines starting with - or * but not bullets)
+				let outputLine = line;
+				if (bulletMatch && !isBullet(line, i)) {
+					// This is a section header with a bullet marker - strip it
+					outputLine = bulletMatch[3];
 				}
+
+				// Strip markdown heading markers (###, ##, #)
+				outputLine = outputLine.replace(/^#{1,6}\s+/, '');
+
+				html += outputLine + '\n';
 			}
 		}
 
-		if (inList) {
+		if (inBulletList) {
 			html += '</ul>';
+		}
+		if (inNumberedList) {
+			html += '</ol>';
 		}
 
 		return html;
@@ -116,6 +176,14 @@
 		padding-left: 0;
 	}
 
+	.cleaned-text :global(ol) {
+		list-style-type: decimal;
+		margin-left: 1.5em;
+		margin-top: 0;
+		margin-bottom: 0;
+		padding-left: 0;
+	}
+
 	.cleaned-text :global(li::marker) {
 		color: var(--boss-accent);
 	}
@@ -125,11 +193,5 @@
 		padding-left: 0.5em;
 		margin-top: 0;
 		margin-bottom: 0;
-	}
-
-	.cleaned-text :global(.heading) {
-		color: var(--boss-accent);
-		font-weight: bold;
-		display: block;
 	}
 </style>
