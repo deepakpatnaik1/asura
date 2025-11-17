@@ -258,8 +258,7 @@ async function callFireworksAPI(
 				}
 			],
 			temperature: TEMPERATURE,
-			max_tokens: maxTokens || MAX_TOKENS_CONFIG,
-			reasoning_effort: 'none'
+			max_tokens: maxTokens || MAX_TOKENS_CONFIG
 		});
 
 		const content = response.choices[0]?.message?.content;
