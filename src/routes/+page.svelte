@@ -25,7 +25,6 @@
 
 	// User settings state
 	let selectedPersona = $state<'gunnar' | 'kirby'>('gunnar');
-	let selectedModel = $state<string>('accounts/fireworks/models/qwen3-235b-a22b');
 
 	// File upload state
 	let fileInputRef: HTMLInputElement;
@@ -53,7 +52,6 @@
 			if (response.ok) {
 				const data = await response.json();
 				selectedPersona = data.selected_persona || 'gunnar';
-				selectedModel = data.selected_conversation_model || 'accounts/fireworks/models/qwen3-235b-a22b';
 			}
 		} catch (error) {
 			console.error('Failed to load settings:', error);
@@ -97,7 +95,7 @@
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
-				selected_conversation_model: selectedModel,
+				selected_conversation_model: 'accounts/fireworks/models/qwen3-235b-a22b',
 				selected_compression_model: 'accounts/fireworks/models/qwen3-235b-a22b-instruct-2507',
 				selected_persona: selectedPersona
 			})
@@ -784,11 +782,6 @@
 
 					<button class="control-btn" title="Download from cloud"><Icon src={LuCloudDownload} size="11" /></button>
 
-					<div class="model-dropdown">
-						<span class="model-name">Qwen 2.5 32B</span>
-						<Icon src={LuChevronDown} size="11" />
-					</div>
-
 					<div class="persona-dropdown" onclick={() => togglePersona()}>
 						<span class="persona-name">{selectedPersona.charAt(0).toUpperCase() + selectedPersona.slice(1)}</span>
 						<Icon src={LuChevronDown} size="11" />
@@ -1125,31 +1118,6 @@
 
 	.auto-scroll-btn svg {
 		display: block;
-	}
-
-	.model-dropdown {
-		display: flex;
-		align-items: center;
-		gap: 4px;
-		margin-left: 12px;
-		cursor: pointer;
-		opacity: 0.7;
-		transition: opacity 0.2s;
-		padding: 4px;
-		flex-shrink: 0;
-	}
-
-	.model-dropdown:hover {
-		opacity: 1;
-	}
-
-	.model-name {
-		font-size: 1em;
-		color: hsl(var(--foreground));
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		max-width: 140px;
 	}
 
 	.persona-dropdown {
