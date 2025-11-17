@@ -76,6 +76,7 @@ export async function buildContextForCalls1A1B(
 	};
 
 	let totalTokens = 0;
+	let queryVector: number[] | null = null;
 
 	// Priority 1: Last 5 Superjournal turns (working memory - highest priority)
 	let superjournalQuery = supabase
@@ -204,7 +205,7 @@ export async function buildContextForCalls1A1B(
 					model: 'voyage-3' // 1024 dimensions
 				});
 
-				const queryVector = queryEmbedding.data[0].embedding;
+				queryVector = queryEmbedding.data[0].embedding;
 
 				// Collect IDs to exclude (already loaded in Priorities 1-4)
 				const excludeIds: string[] = [];
@@ -296,17 +297,48 @@ export async function buildContextForCalls1A1B(
 		}
 	}
 
+	// Priority 5.5: File overviews (awareness of all uploaded files)
+	try {
+		let fileOverviewsQuery = supabase
+			.from('file_chunks')
+			.select('file_id, filename, file_type, description')
+			.eq('chunk_index', 0) // Overview chunks only
+			.order('created_at', { ascending: false });
+
+		if (userId === null) {
+			fileOverviewsQuery = fileOverviewsQuery.is('user_id', null);
+		} else {
+			fileOverviewsQuery = fileOverviewsQuery.eq('user_id', userId);
+		}
+
+		const { data: fileOverviews } = await fileOverviewsQuery;
+
+		if (fileOverviews && fileOverviews.length > 0) {
+			const fileOverviewsText = formatFileOverviews(fileOverviews);
+			const fileOverviewsTokens = estimateTokens(fileOverviewsText);
+
+			if (totalTokens + fileOverviewsTokens <= contextBudget) {
+				components.files = fileOverviewsText;
+				totalTokens += fileOverviewsTokens;
+				console.log('[Context Builder] File overviews loaded', fileOverviews.length, 'files');
+			}
+		}
+	} catch (fileOverviewError) {
+		console.error('[Context Builder] File overview error:', fileOverviewError);
+	}
+
 	// Priority 6: File chunks vector search (only if userQuery provided)
 	if (userQuery) {
 		try {
-			// Reuse query embedding from Priority 5
-			console.log('[Context Builder] Generating query embedding for file chunks');
-			const queryEmbedding = await voyage.embed({
-				input: userQuery,
-				model: 'voyage-3' // 1024 dimensions
-			});
-
-			const queryVector = queryEmbedding.data[0].embedding;
+			// Reuse query embedding from Priority 5, or generate if Priority 5 was skipped
+			if (!queryVector) {
+				console.log('[Context Builder] Generating query embedding for file chunks');
+				const queryEmbedding = await voyage.embed({
+					input: userQuery,
+					model: 'voyage-3' // 1024 dimensions
+				});
+				queryVector = queryEmbedding.data[0].embedding;
+			}
 
 			// Perform vector search on file chunks
 			const { data: fileChunkResults } = await supabase.rpc('search_file_chunks', {
@@ -322,7 +354,8 @@ export async function buildContextForCalls1A1B(
 				const fileChunksTokens = estimateTokens(fileChunksText);
 
 				if (totalTokens + fileChunksTokens <= contextBudget) {
-					components.files = fileChunksText;
+					// Append to existing file overviews (Priority 5.5)
+					components.files = components.files + fileChunksText;
 					totalTokens += fileChunksTokens;
 				}
 
@@ -477,6 +510,28 @@ AI: ${entry.persona_essence}`
 		.join('\n\n');
 
 	return `--- SEMANTICALLY RELEVANT MEMORIES (Vector Search Results) ---\n${formatted}\n\n`;
+}
+
+// Format file overviews
+function formatFileOverviews(
+	entries: Array<{
+		file_id: string;
+		filename: string;
+		file_type: string;
+		description: string;
+	}>
+): string {
+	if (entries.length === 0) return '';
+
+	const formatted = entries
+		.map(
+			(entry, index) =>
+				`${index + 1}. ${entry.filename} (${entry.file_type})
+   Overview: ${entry.description}`
+		)
+		.join('\n\n');
+
+	return `--- UPLOADED FILES (Your Knowledge Base) ---\n\n${formatted}\n\n`;
 }
 
 // Format file chunks
