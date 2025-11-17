@@ -161,16 +161,10 @@ function validateEnvironment(): void {
 }
 
 /**
- * Parse JSON response, handling markdown code blocks and thinking tags
+ * Parse JSON response, handling markdown code blocks
  */
 function parseJsonResponse(text: string): Call2Response {
 	let jsonText = text.trim();
-
-	// Remove thinking tags if present (Qwen3 includes <think>...</think>)
-	const thinkingMatch = jsonText.match(/<think>[\s\S]*?<\/think>([\s\S]*)/);
-	if (thinkingMatch) {
-		jsonText = thinkingMatch[1].trim();
-	}
 
 	// Try to extract JSON from markdown code blocks
 	const jsonCodeMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)```/);
@@ -192,7 +186,7 @@ function parseJsonResponse(text: string): Call2Response {
 		// Log full details for debugging
 		console.error('[parseJsonResponse] JSON parsing failed:');
 		console.error('Raw API response:', text);
-		console.error('After thinking tag removal:', jsonText);
+		console.error('Cleaned JSON text:', jsonText);
 		console.error('Parse error:', (error as Error).message);
 
 		throw new FileCompressionError(
