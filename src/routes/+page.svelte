@@ -40,10 +40,11 @@
 
 	// Auto-scroll state
 	let isAutoScrolling = $state(false);
-	let scrollSpeed = $state(0.5); // pixels per frame - pattern: scroll 5s, pause 10s, repeat
+	let scrollSpeed = $state(0.5); // pixels per frame - pattern: scroll 5s, pause 1min, repeat
 	let pauseProgress = $state(0); // 0-100, percentage of pause completed
 	let isPaused = $state(false); // Track if currently in pause phase
 	let pauseStartTime = $state(0); // Track when pause started
+	let scrollAccumulator = $state(0); // Accumulate fractional pixels for smooth low-speed scrolling
 
 	// Load user settings on mount
 	onMount(async () => {
@@ -249,6 +250,7 @@
 			isAutoScrolling = false;
 			isPaused = false;
 			pauseProgress = 0;
+			scrollAccumulator = 0;
 			return;
 		}
 
@@ -256,6 +258,7 @@
 		isAutoScrolling = true;
 		isPaused = false;
 		pauseProgress = 0;
+		scrollAccumulator = 0;
 		const container = document.querySelector('.chat-container');
 		if (!container) return;
 
@@ -272,6 +275,7 @@
 				isAutoScrolling = false;
 				isPaused = false;
 				pauseProgress = 0;
+				scrollAccumulator = 0;
 				return;
 			}
 
@@ -282,12 +286,18 @@
 				pauseProgress = 0;
 				const scrollElapsed = now - scrollStartTime;
 				if (scrollElapsed < 5000) {
-					// Scroll down by scrollSpeed pixels
-					container.scrollTop = currentScroll + scrollSpeed;
+					// Accumulate fractional pixels and scroll by whole pixels
+					scrollAccumulator += scrollSpeed;
+					const pixelsToScroll = Math.floor(scrollAccumulator);
+					if (pixelsToScroll > 0) {
+						container.scrollTop = currentScroll + pixelsToScroll;
+						scrollAccumulator -= pixelsToScroll;
+					}
 				} else {
 					// Switch to pause phase
 					isPaused = true;
 					pauseStartTime = now;
+					scrollAccumulator = 0;
 				}
 			} else {
 				// Pause phase: pause for 1 minute
@@ -300,6 +310,7 @@
 					isPaused = false;
 					scrollStartTime = now;
 					pauseProgress = 0;
+					scrollAccumulator = 0;
 				}
 				// Don't auto-scroll during pause, but keep checking
 			}
