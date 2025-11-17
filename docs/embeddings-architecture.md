@@ -112,8 +112,8 @@ If we could afford to embed full turns, we wouldn't need decision arcs at all. A
 **Flow:**
 1. Call 2B outputs verified compressed JSON
 2. Backend saves to Journal table
-3. Send `decision_arc_summary` to Voyage AI (Gemini model)
-4. Receive 1536-dimensional vector
+3. Send `decision_arc_summary` to Voyage AI (voyage-3 model)
+4. Receive 1024-dimensional vector
 5. Update Journal row: `SET embedding = vector WHERE id = journal_id`
 
 **No verification needed:** Embeddings are deterministic mathematical transformations, not generative outputs. Unlike Call 2A/2B where compression quality varies, embeddings are consistent.
@@ -200,7 +200,7 @@ ALTER TABLE journal
 
 -- Add embedding field (if not exists)
 ALTER TABLE journal
-  ADD COLUMN embedding VECTOR(1536);
+  ADD COLUMN embedding VECTOR(1024);
 
 -- Create HNSW index for fast vector search
 CREATE INDEX journal_embedding_idx
@@ -219,7 +219,8 @@ Existing `is_starred` field sufficient for Priority 2.
 
 ## Cost Optimization
 
-### Voyage AI Gemini Embeddings
+### Voyage AI voyage-3 Embeddings
+- Model: voyage-3 (1024 dimensions, $0.06/M tokens)
 - Only decision arcs embedded (50-150 chars vs 300-500 for full artisan cuts)
 - ~66% cost reduction vs embedding full turns
 - Query embeddings only after turn 100 (no wasted early-lifecycle calls)
@@ -264,7 +265,7 @@ Existing `is_starred` field sufficient for Priority 2.
 - [ ] Integrate Voyage AI SDK
 - [ ] Add embedding generation after Call 2B completes
 - [ ] Embed `decision_arc_summary` only
-- [ ] Save 1536-dim vector to `journal.embedding`
+- [ ] Save 1024-dim vector to `journal.embedding`
 - [ ] Create HNSW index on embedding column
 - [ ] Test: Verify embeddings generated and saved for new turns
 

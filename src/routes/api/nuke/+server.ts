@@ -1,9 +1,10 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
 import { createClient } from '@supabase/supabase-js';
+import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
+import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 
-const supabase = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY);
+const supabase = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 export const POST: RequestHandler = async () => {
 	try {
@@ -22,23 +23,36 @@ export const POST: RequestHandler = async () => {
 
 		console.log('[Nuke] Successfully deleted all Superjournal entries');
 
-		// Step 2: Delete Journal entries without a valid superjournal_id
-		// (This will delete orphaned entries since all superjournal rows are now gone)
+		// Step 2: Delete all Journal entries
+		// Using dummy condition to delete all rows (Supabase requires a WHERE clause)
 		const { error: journalError } = await supabase
 			.from('journal')
 			.delete()
-			.not('superjournal_id', 'is', null); // Delete all that have a superjournal_id (which are now orphaned)
+			.neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all (dummy condition)
 
 		if (journalError) {
 			console.error('[Nuke] Journal delete error:', journalError);
 			return json({ error: 'Failed to delete orphaned journal entries' }, { status: 500 });
 		}
 
-		console.log('[Nuke] Successfully deleted orphaned Journal entries');
+		console.log('[Nuke] Successfully deleted all Journal entries');
+
+		// Step 3: Delete all Files entries
+		const { error: filesError } = await supabase
+			.from('files')
+			.delete()
+			.neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all (dummy condition)
+
+		if (filesError) {
+			console.error('[Nuke] Files delete error:', filesError);
+			return json({ error: 'Failed to delete files' }, { status: 500 });
+		}
+
+		console.log('[Nuke] Successfully deleted all Files entries');
 
 		return json({
 			success: true,
-			message: 'All Superjournal and orphaned Journal entries deleted'
+			message: 'All Superjournal, Journal, and Files entries deleted'
 		});
 	} catch (error) {
 		console.error('[Nuke] Unexpected error:', error);

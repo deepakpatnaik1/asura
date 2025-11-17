@@ -1,9 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
-import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
-import { VOYAGE_API_KEY } from '$env/static/private';
+import { SUPABASE_SERVICE_ROLE_KEY, VOYAGE_API_KEY } from '$env/static/private';
+import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 import { VoyageAIClient } from 'voyageai';
 
-const supabase = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY);
+const supabase = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 const voyage = new VoyageAIClient({ apiKey: VOYAGE_API_KEY });
 
 // Token estimation (rough approximation: 1 token ≈ 4 characters)
@@ -56,7 +56,7 @@ interface ContextStats {
  */
 export async function buildContextForCalls1A1B(
 	userId: string | null,
-	personaName: string = 'ananya',
+	personaName: string = 'gunnar',
 	modelIdentifier: string = 'accounts/fireworks/models/qwen3-235b-a22b',
 	userQuery?: string // Optional: enables vector search (Priority 5)
 ): Promise<{ context: string; stats: ContextStats }> {
@@ -76,6 +76,7 @@ export async function buildContextForCalls1A1B(
 	};
 
 	let totalTokens = 0;
+	let queryVector: number[] | null = null;
 
 	// Priority 1: Last 5 Superjournal turns (working memory - highest priority)
 	let superjournalQuery = supabase
@@ -100,8 +101,8 @@ export async function buildContextForCalls1A1B(
 
 	// Priority 2: Starred messages (user-curated memory)
 	let starredQuery = supabase
-		.from('superjournal')
-		.select('user_message, ai_response, persona_name, created_at')
+		.from('journal')
+		.select('boss_essence, persona_essence, persona_name, created_at')
 		.eq('is_starred', true);
 
 	if (userId === null) {
@@ -201,10 +202,10 @@ export async function buildContextForCalls1A1B(
 				console.log('[Context Builder] Generating query embedding for vector search');
 				const queryEmbedding = await voyage.embed({
 					input: userQuery,
-					model: 'voyage-3-large' // 1024 dimensions (default)
+					model: 'voyage-3' // 1024 dimensions
 				});
 
-				const queryVector = queryEmbedding.data[0].embedding;
+				queryVector = queryEmbedding.data[0].embedding;
 
 				// Collect IDs to exclude (already loaded in Priorities 1-4)
 				const excludeIds: string[] = [];
@@ -296,8 +297,74 @@ export async function buildContextForCalls1A1B(
 		}
 	}
 
-	// Priority 6: File uploads (artisan cut compressed) - TODO: Implement when file upload is ready
-	// components.files = await fetchFileUploads(userId);
+	// Priority 5.5: File overviews (awareness of all uploaded files)
+	try {
+		let fileOverviewsQuery = supabase
+			.from('file_chunks')
+			.select('file_id, filename, file_type, description')
+			.eq('chunk_index', 0) // Overview chunks only
+			.order('created_at', { ascending: false });
+
+		if (userId === null) {
+			fileOverviewsQuery = fileOverviewsQuery.is('user_id', null);
+		} else {
+			fileOverviewsQuery = fileOverviewsQuery.eq('user_id', userId);
+		}
+
+		const { data: fileOverviews } = await fileOverviewsQuery;
+
+		if (fileOverviews && fileOverviews.length > 0) {
+			const fileOverviewsText = formatFileOverviews(fileOverviews);
+			const fileOverviewsTokens = estimateTokens(fileOverviewsText);
+
+			if (totalTokens + fileOverviewsTokens <= contextBudget) {
+				components.files = fileOverviewsText;
+				totalTokens += fileOverviewsTokens;
+				console.log('[Context Builder] File overviews loaded', fileOverviews.length, 'files');
+			}
+		}
+	} catch (fileOverviewError) {
+		console.error('[Context Builder] File overview error:', fileOverviewError);
+	}
+
+	// Priority 6: File chunks vector search (only if userQuery provided)
+	if (userQuery) {
+		try {
+			// Reuse query embedding from Priority 5, or generate if Priority 5 was skipped
+			if (!queryVector) {
+				console.log('[Context Builder] Generating query embedding for file chunks');
+				const queryEmbedding = await voyage.embed({
+					input: userQuery,
+					model: 'voyage-3' // 1024 dimensions
+				});
+				queryVector = queryEmbedding.data[0].embedding;
+			}
+
+			// Perform vector search on file chunks
+			const { data: fileChunkResults } = await supabase.rpc('search_file_chunks', {
+				query_embedding: queryVector,
+				match_threshold: 0.7,
+				match_count: 20,
+				filter_user_id: userId
+			});
+
+			if (fileChunkResults && fileChunkResults.length > 0) {
+				// Format file chunk results
+				const fileChunksText = formatFileChunks(fileChunkResults);
+				const fileChunksTokens = estimateTokens(fileChunksText);
+
+				if (totalTokens + fileChunksTokens <= contextBudget) {
+					// Append to existing file overviews (Priority 5.5)
+					components.files = components.files + fileChunksText;
+					totalTokens += fileChunksTokens;
+				}
+
+				console.log('[Context Builder] File chunks loaded', fileChunkResults.length, 'results');
+			}
+		} catch (fileChunkError) {
+			console.error('[Context Builder] File chunk search error:', fileChunkError);
+		}
+	}
 
 	// Assemble final context
 	const finalContext = assembleContext(components);
@@ -366,8 +433,7 @@ function formatJournalHistory(
 			(entry) =>
 				`[Recent Memory - ${new Date(entry.created_at).toLocaleDateString()}]
 User: ${entry.boss_essence}
-${entry.persona_name}: ${entry.persona_essence}
-Arc: ${entry.decision_arc_summary}`
+${entry.persona_name}: ${entry.persona_essence}`
 		)
 		.join('\n\n');
 
@@ -377,8 +443,8 @@ Arc: ${entry.decision_arc_summary}`
 // Format starred messages
 function formatStarredMessages(
 	entries: Array<{
-		user_message: string;
-		ai_response: string;
+		boss_essence: string;
+		persona_essence: string;
 		persona_name: string;
 		created_at: string;
 	}>
@@ -389,8 +455,8 @@ function formatStarredMessages(
 		.map(
 			(entry) =>
 				`[Starred - ${new Date(entry.created_at).toLocaleDateString()}]
-User: ${entry.user_message}
-${entry.persona_name}: ${entry.ai_response}`
+User: ${entry.boss_essence}
+${entry.persona_name}: ${entry.persona_essence}`
 		)
 		.join('\n\n');
 
@@ -414,8 +480,7 @@ function formatInstructions(
 			(entry) =>
 				`[Instruction - ${new Date(entry.created_at).toLocaleDateString()}]
 User: ${entry.boss_essence}
-${entry.persona_name}: ${entry.persona_essence}
-Arc: ${entry.decision_arc_summary}`
+${entry.persona_name}: ${entry.persona_essence}`
 		)
 		.join('\n\n');
 
@@ -438,14 +503,57 @@ function formatVectorSearchResults(
 	const formatted = entries
 		.map(
 			(entry) =>
-				`[Relevant Memory - ${new Date(entry.created_at).toLocaleDateString()} - Salience: ${entry.salience_score}]
+				`[Relevant Memory - ${new Date(entry.created_at).toLocaleDateString()}]
 User: ${entry.boss_essence}
-AI: ${entry.persona_essence}
-Arc: ${entry.decision_arc_summary}`
+AI: ${entry.persona_essence}`
 		)
 		.join('\n\n');
 
 	return `--- SEMANTICALLY RELEVANT MEMORIES (Vector Search Results) ---\n${formatted}\n\n`;
+}
+
+// Format file overviews
+function formatFileOverviews(
+	entries: Array<{
+		file_id: string;
+		filename: string;
+		file_type: string;
+		description: string;
+	}>
+): string {
+	if (entries.length === 0) return '';
+
+	const formatted = entries
+		.map(
+			(entry, index) =>
+				`${index + 1}. ${entry.filename} (${entry.file_type})
+   Overview: ${entry.description}`
+		)
+		.join('\n\n');
+
+	return `--- UPLOADED FILES (Your Knowledge Base) ---\n\n${formatted}\n\n`;
+}
+
+// Format file chunks
+function formatFileChunks(
+	entries: Array<{
+		filename: string;
+		chunk_index: number;
+		description: string;
+		similarity: number;
+	}>
+): string {
+	if (entries.length === 0) return '';
+
+	const formatted = entries
+		.map(
+			(entry) =>
+				`[File - ${entry.filename} - Chunk ${entry.chunk_index}]
+${entry.description}`
+		)
+		.join('\n\n');
+
+	return `--- UPLOADED FILE CONTENTS (Semantically Relevant) ---\n${formatted}\n\n`;
 }
 
 // Format decision arcs
@@ -501,6 +609,7 @@ function truncateArcsToFit(
 		? `--- OTHER DECISION ARCS (Salience 1-7) ---\n${accumulatedText}\n`
 		: '';
 }
+
 
 // Assemble all context components into final string
 function assembleContext(components: ContextComponents): string {
