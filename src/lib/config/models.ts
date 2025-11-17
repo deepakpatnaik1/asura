@@ -8,8 +8,8 @@
 /** Chat model - Thinking variant for Call 1A/1B reasoning */
 export const CHAT_MODEL = 'accounts/fireworks/models/qwen3-235b-a22b' as const;
 
-/** File model - Same as chat model but with /nothink directive to disable thinking */
-export const FILE_MODEL = 'accounts/fireworks/models/qwen3-235b-a22b' as const;
+/** File model - Qwen3 235B A22B Instruct 2507 (non-thinking, updated FP8 version) */
+export const FILE_MODEL = 'accounts/fireworks/models/qwen3-235b-a22b-instruct-2507' as const;
 
 /** Embedding model for vector search */
 export const EMBEDDING_MODEL = 'voyage-3' as const;

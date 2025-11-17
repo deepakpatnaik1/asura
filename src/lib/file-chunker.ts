@@ -2,6 +2,7 @@ import OpenAI from 'openai';
 import type { FileType } from './file-extraction';
 import { generateEmbedding } from './vectorization';
 import { FILE_MODEL, MAX_TOKENS } from '$lib/config/models';
+import { jsonrepair } from 'jsonrepair';
 
 // ============================================================================
 // CONSTANTS
@@ -450,7 +451,8 @@ async function callFireworksAPI(systemPrompt: string, userContent: string): Prom
 				}
 			],
 			temperature: TEMPERATURE,
-			max_tokens: MAX_TOKENS_OVERVIEW
+			max_tokens: MAX_TOKENS_OVERVIEW,
+			response_format: { type: 'json_object' } // Force JSON output
 		});
 
 		const content = response.choices[0]?.message?.content;
@@ -1003,11 +1005,61 @@ ${call3AResponse}`;
 	const words = text.split(/\s+/);
 	const chunks: string[] = [];
 
+	// Normalize chunk definitions to fix LLM schema inconsistencies
+	console.log('[generateOverviewAndChunks] Normalizing chunk definitions...');
+	for (let i = 0; i < finalData.chunks.length; i++) {
+		const chunk = finalData.chunks[i];
+
+		// Fix: LLM sometimes uses "end" instead of "end_word" for last chunk
+		if ('end' in chunk && !('end_word' in chunk)) {
+			console.log(`[generateOverviewAndChunks] Fixing chunk ${i + 1}: "end" -> "end_word"`);
+			chunk.end_word = chunk.end;
+			delete chunk.end;
+		}
+
+		// Fix: LLM sometimes uses null for last chunk's end_word
+		if (chunk.end_word === null || chunk.end_word === undefined) {
+			console.log(`[generateOverviewAndChunks] Fixing chunk ${i + 1}: end_word was ${chunk.end_word}, setting to ${words.length - 1}`);
+			chunk.end_word = words.length - 1;
+		}
+
+		// Fix: LLM sometimes uses 1-based indexing (end_word >= words.length)
+		if (chunk.end_word >= words.length) {
+			console.log(`[generateOverviewAndChunks] Fixing chunk ${i + 1}: end_word was ${chunk.end_word}, clamping to ${words.length - 1}`);
+			chunk.end_word = words.length - 1;
+		}
+	}
+
+	// Filter out phantom chunks with null/undefined start_word
+	const originalChunkCount = finalData.chunks.length;
+	finalData.chunks = finalData.chunks.filter((chunk, i) => {
+		if (chunk.start_word === null || chunk.start_word === undefined) {
+			console.log(`[generateOverviewAndChunks] Removing phantom chunk ${i + 1}: start_word is ${chunk.start_word}`);
+			return false;
+		}
+		return true;
+	});
+
+	if (finalData.chunks.length < originalChunkCount) {
+		console.log(`[generateOverviewAndChunks] Removed ${originalChunkCount - finalData.chunks.length} phantom chunk(s)`);
+	}
+
+	console.log('[generateOverviewAndChunks] ===== CHUNK VALIDATION DEBUG =====');
+	console.log('[generateOverviewAndChunks] File:', filename);
+	console.log('[generateOverviewAndChunks] Total words in file:', words.length);
+	console.log('[generateOverviewAndChunks] Total chunks from LLM:', originalChunkCount);
+	console.log('[generateOverviewAndChunks] Total chunks after filtering:', finalData.chunks.length);
+	console.log('[generateOverviewAndChunks] Normalized chunk definitions:', JSON.stringify(finalData.chunks, null, 2));
+	console.log('[generateOverviewAndChunks] =====================================');
+
 	for (const chunkDef of finalData.chunks) {
 		const { start_word, end_word } = chunkDef;
 
 		// Validate indices
 		if (typeof start_word !== 'number' || typeof end_word !== 'number') {
+			console.error('[generateOverviewAndChunks] Invalid chunk definition:', chunkDef);
+			console.error('[generateOverviewAndChunks] start_word type:', typeof start_word);
+			console.error('[generateOverviewAndChunks] end_word type:', typeof end_word);
 			throw new FileChunkerError(
 				`Invalid chunk indices for ${filename}`,
 				'VALIDATION_ERROR',
@@ -1016,6 +1068,14 @@ ${call3AResponse}`;
 		}
 
 		if (start_word < 0 || end_word >= words.length || start_word > end_word) {
+			console.error('[generateOverviewAndChunks] OUT OF RANGE ERROR!');
+			console.error('[generateOverviewAndChunks] start_word:', start_word);
+			console.error('[generateOverviewAndChunks] end_word:', end_word);
+			console.error('[generateOverviewAndChunks] totalWords:', words.length);
+			console.error('[generateOverviewAndChunks] Condition checks:');
+			console.error('[generateOverviewAndChunks]   start_word < 0:', start_word < 0);
+			console.error('[generateOverviewAndChunks]   end_word >= words.length:', end_word >= words.length);
+			console.error('[generateOverviewAndChunks]   start_word > end_word:', start_word > end_word);
 			throw new FileChunkerError(
 				`Chunk indices out of range for ${filename}`,
 				'VALIDATION_ERROR',
@@ -1069,8 +1129,28 @@ function parseJSON(response: string): any {
 		cleaned = codeBlockMatch[1].trim();
 	}
 
-	// Parse JSON
-	return JSON.parse(cleaned);
+	// Attempt to parse normally first
+	try {
+		return JSON.parse(cleaned);
+	} catch (parseError) {
+		// If normal parsing fails, attempt JSON repair
+		console.log('[parseJSON] Initial parse failed, attempting repair...');
+		console.log('[parseJSON] Original error:', parseError.message);
+		console.log('[parseJSON] Original JSON (first 500 chars):', cleaned.substring(0, 500));
+
+		try {
+			const repaired = jsonrepair(cleaned);
+			console.log('[parseJSON] Repaired JSON (first 500 chars):', repaired.substring(0, 500));
+			const result = JSON.parse(repaired);
+			console.log('[parseJSON] ✓ Repair successful!');
+			return result;
+		} catch (repairError) {
+			// If repair also fails, throw repair error (more useful than original)
+			console.error('[parseJSON] ✗ Repair failed:', repairError.message);
+			console.error('[parseJSON] Repaired JSON that failed:', repaired?.substring(0, 500));
+			throw repairError;
+		}
+	}
 }
 
 // ============================================================================

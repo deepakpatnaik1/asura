@@ -1,3 +1,0 @@
-Hello World! This is a test text file.
-It contains multiple lines of text.
-We're testing the file extraction library.

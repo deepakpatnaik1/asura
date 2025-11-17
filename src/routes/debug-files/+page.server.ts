@@ -5,11 +5,11 @@ import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 const supabase = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 export async function load() {
-	// Fetch all file chunks with their original content length
+	// Fetch all file chunks with their filename from the files table via JOIN
 	const { data: fileChunks, error } = await supabase
 		.from('file_chunks')
-		.select('*')
-		.order('filename', { ascending: true })
+		.select('*, files!inner(filename, file_type)')
+		.order('files(filename)', { ascending: true })
 		.order('chunk_index', { ascending: true });
 
 	if (error) {
@@ -21,10 +21,17 @@ export async function load() {
 	const fileMap = new Map<string, any[]>();
 
 	for (const chunk of fileChunks || []) {
-		if (!fileMap.has(chunk.filename)) {
-			fileMap.set(chunk.filename, []);
+		const filename = chunk.files?.filename;
+		if (!filename) continue;
+
+		if (!fileMap.has(filename)) {
+			fileMap.set(filename, []);
 		}
-		fileMap.get(chunk.filename)!.push(chunk);
+		fileMap.get(filename)!.push({
+			...chunk,
+			filename,
+			file_type: chunk.files?.file_type
+		});
 	}
 
 	// Calculate compression stats for each file
