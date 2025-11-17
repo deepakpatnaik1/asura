@@ -57,6 +57,28 @@
 			console.error('Failed to load settings:', error);
 			// Fallback to defaults if database read fails
 		}
+
+		// Set up SSE listener for message deletions
+		const eventSource = new EventSource('/api/files/events');
+
+		eventSource.addEventListener('message', (event) => {
+			try {
+				const data = JSON.parse(event.data);
+
+				if (data.eventType === 'message-deleted' && data.message?.id) {
+					console.log('[SSE] Message deleted:', data.message.id);
+					// Remove message from allMessages array
+					allMessages = allMessages.filter(msg => msg.id !== data.message.id);
+				}
+			} catch (error) {
+				console.error('[SSE] Failed to parse event:', error);
+			}
+		});
+
+		// Clean up on unmount
+		return () => {
+			eventSource.close();
+		};
 	});
 
 	// Helper function to format timestamps
