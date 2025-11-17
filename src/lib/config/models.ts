@@ -1,12 +1,16 @@
 /**
  * Centralized model configuration for Asura
  *
- * CHAT_MODEL: Uses thinking variant (qwen3-235b-a22b) for deep reasoning in conversations
- * FILE_MODEL: Uses regular variant (qwen3-235b) for fast pattern matching in file processing
+ * DEFAULT_CONVERSATION_MODEL: Thinking variant for Call 1A/1B (user-selectable)
+ * DEFAULT_COMPRESSION_MODEL: Instruct variant for Call 2A/2B, Call 3A/3B (user-selectable)
+ * FILE_MODEL: Instruct variant for file processing (not user-selectable)
  */
 
-/** Chat model - Thinking variant for Call 1A/1B reasoning */
-export const CHAT_MODEL = 'accounts/fireworks/models/qwen3-235b-a22b' as const;
+/** Default conversation model (Call 1A/1B) - Thinking variant for reasoning */
+export const DEFAULT_CONVERSATION_MODEL = 'accounts/fireworks/models/qwen3-235b-a22b' as const;
+
+/** Default compression model (Call 2A/2B, Call 3A/3B) - Instruct variant for structured output */
+export const DEFAULT_COMPRESSION_MODEL = 'accounts/fireworks/models/qwen3-235b-a22b-instruct-2507' as const;
 
 /** File model - Qwen3 235B A22B Instruct 2507 (non-thinking, updated FP8 version) */
 export const FILE_MODEL = 'accounts/fireworks/models/qwen3-235b-a22b-instruct-2507' as const;

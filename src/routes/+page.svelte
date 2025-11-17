@@ -53,7 +53,7 @@
 			if (response.ok) {
 				const data = await response.json();
 				selectedPersona = data.selected_persona || 'gunnar';
-				selectedModel = data.selected_model || 'accounts/fireworks/models/qwen3-235b-a22b';
+				selectedModel = data.selected_conversation_model || 'accounts/fireworks/models/qwen3-235b-a22b';
 			}
 		} catch (error) {
 			console.error('Failed to load settings:', error);
@@ -96,7 +96,11 @@
 			await fetch('/api/settings', {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ selected_model: selectedModel, selected_persona: selectedPersona })
+				body: JSON.stringify({
+				selected_conversation_model: selectedModel,
+				selected_compression_model: 'accounts/fireworks/models/qwen3-235b-a22b-instruct-2507',
+				selected_persona: selectedPersona
+			})
 			});
 		} catch (error) {
 			console.error('Failed to save persona:', error);

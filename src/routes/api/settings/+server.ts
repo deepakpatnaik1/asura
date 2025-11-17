@@ -9,18 +9,22 @@ const supabase = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 export const GET: RequestHandler = async () => {
 	const { data, error } = await supabase
 		.from('user_settings')
-		.select('selected_model, selected_persona')
+		.select('selected_conversation_model, selected_compression_model, selected_persona')
 		.single();
 
 	if (error) {
-		return json({ selected_model: 'accounts/fireworks/models/qwen3-235b-a22b', selected_persona: 'gunnar' });
+		return json({
+			selected_conversation_model: 'accounts/fireworks/models/qwen3-235b-a22b',
+			selected_compression_model: 'accounts/fireworks/models/qwen3-235b-a22b-instruct-2507',
+			selected_persona: 'gunnar'
+		});
 	}
 
 	return json(data);
 };
 
 export const PUT: RequestHandler = async ({ request }) => {
-	const { selected_model, selected_persona } = await request.json();
+	const { selected_conversation_model, selected_compression_model, selected_persona } = await request.json();
 
 	// Get the single row ID
 	const { data: settingsData } = await supabase
@@ -34,7 +38,12 @@ export const PUT: RequestHandler = async ({ request }) => {
 
 	const { error } = await supabase
 		.from('user_settings')
-		.update({ selected_model, selected_persona, updated_at: new Date().toISOString() })
+		.update({
+			selected_conversation_model,
+			selected_compression_model,
+			selected_persona,
+			updated_at: new Date().toISOString()
+		})
 		.eq('id', settingsData.id);
 
 	if (error) {

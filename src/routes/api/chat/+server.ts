@@ -6,7 +6,7 @@ import { FIREWORKS_API_KEY, VOYAGE_API_KEY, SUPABASE_SERVICE_ROLE_KEY } from '$e
 import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 import { createClient } from '@supabase/supabase-js';
 import { buildContextForCalls1A1B } from '$lib/context-builder';
-import { CHAT_MODEL } from '$lib/config/models';
+import { DEFAULT_CONVERSATION_MODEL, DEFAULT_COMPRESSION_MODEL } from '$lib/config/models';
 import {
 	BASE_INSTRUCTIONS,
 	PERSONA_GUNNAR,
@@ -61,19 +61,19 @@ async function compressToJournal(
 	personaName: string
 ) {
 	try {
-		// Read selected model from user_settings table
+		// Read selected compression model from user_settings table
 		const { data: settings } = await supabase
 			.from('user_settings')
-			.select('selected_model')
+			.select('selected_compression_model')
 			.single();
 
-		const selectedModel = settings?.selected_model || 'accounts/fireworks/models/qwen3-235b-a22b';
+		const compressionModel = settings?.selected_compression_model || DEFAULT_COMPRESSION_MODEL;
 
 		console.log(`[Compression] Starting Call 2A/2B for superjournal_id: ${superjournalId}`);
 
 		// Call 2A: Initial Artisan Cut compression
 		const call2A = await fireworks.chat.completions.create({
-			model: selectedModel,
+			model: compressionModel,
 			messages: [
 				{
 					role: 'system',
@@ -103,7 +103,7 @@ async function compressToJournal(
 
 		// Call 2B: Verification and refinement
 		const call2B = await fireworks.chat.completions.create({
-			model: selectedModel,
+			model: compressionModel,
 			messages: [
 				{
 					role: 'system',
@@ -196,13 +196,13 @@ async function compressToJournal(
 
 export const POST: RequestHandler = async ({ request }) => {
 	try {
-		// Read selected model and persona from user_settings table
+		// Read selected conversation model and persona from user_settings table
 		const { data: settings } = await supabase
 			.from('user_settings')
-			.select('selected_model, selected_persona')
+			.select('selected_conversation_model, selected_persona')
 			.single();
 
-		const selectedModel = settings?.selected_model || 'accounts/fireworks/models/qwen3-235b-a22b';
+		const conversationModel = settings?.selected_conversation_model || DEFAULT_CONVERSATION_MODEL;
 		const selectedPersona = settings?.selected_persona || 'gunnar';
 
 		const { message, persona = selectedPersona } = await request.json();
@@ -215,7 +215,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		const { context, stats } = await buildContextForCalls1A1B(
 			null, // user_id (null for development, no auth yet)
 			persona, // current persona for instruction filtering
-			selectedModel,
+			conversationModel,
 			message // user query for vector search (Priority 5)
 		);
 
@@ -234,7 +234,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		// Call 1A: Initial response with BASE_INSTRUCTIONS + PERSONA + memory context
 		const call1A = await fireworks.chat.completions.create({
-			model: selectedModel,
+			model: conversationModel,
 			messages: [
 				{ role: 'system', content: systemPrompt },
 				{ role: 'user', content: fullUserPrompt }
@@ -252,7 +252,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		// Call 1B: Refine response with CALL1B_PROMPT
 		// Note: Call 1B receives the SAME context as Call 1A (for informed critique)
 		const call1B = await fireworks.chat.completions.create({
-			model: selectedModel,
+			model: conversationModel,
 			messages: [
 				{ role: 'user', content: fullUserPrompt }, // Same context as Call 1A
 				{ role: 'assistant', content: call1AMessage }, // Only the message, not the thinking
