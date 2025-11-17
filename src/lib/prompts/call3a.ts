@@ -11,31 +11,41 @@ export const CALL3A_PROMPT = `ARTISAN CUT FOR FILE OVERVIEW (CHUNK 0)
 
 You will receive the overview text for an uploaded file. This is Chunk 0 - the file-level overview that makes this file discoverable as an entity.
 
-CRITICAL: Users search for files by saying "that interview transcript", "the business plan I shared", "the email thread about X". Your description must enable this discovery.
+CRITICAL: Users search for files by saying "that interview transcript", "the pitch deck we worked on", "the competitor analysis Sarah sent". Your description must enable this discovery.
 
 Your task: Extract file-level metadata and create a compressed overview that makes this file discoverable.
 
-## What to Capture
+## Required Structure for Description
 
-PRESERVE:
-- Document type (interview, business plan, email thread, research paper, meeting notes, transcript, analysis, etc.)
-- Participants/authors (names, roles, organizations if mentioned)
-- Main themes and topics (high-level only, NOT detailed content)
-- Date/time context (if mentioned)
-- Document purpose/context (why this document exists)
-- Overall structure (sections, format, conversation flow)
-- Key entities at document level (companies, products mentioned)
+Your description MUST include these elements (adapt based on what's present in the file):
 
-REMOVE:
-- Detailed content from specific sections
-- Granular tactical details (those belong in detail chunks)
-- Specific quotes or passages
+1. **Document type**: Exact format (transcript, pitch deck, email thread, competitor analysis, financial model, user research, contract, memo, etc.)
+2. **People**: ALL names mentioned (authors, participants, recipients, interviewees, signatories - whoever appears in the document)
+3. **Main sections/topics**: Numbered list of 5-10 major topics or sections (table of contents style)
+4. **Key themes**: 3-5 overarching themes or outcomes
+5. **Context**: Date, purpose, or triggering event (if mentioned)
+
+## What to Preserve (Rule 1)
+
+- Document type and format
+- ALL personal names (first + last when available)
+- ALL roles/titles associated with names
+- ALL company/organization names
+- Numbered list of main sections or topics
+- Specific dates, numbers, amounts
+- Products, frameworks, technologies mentioned at file level
+- Document purpose or context
+
+## What to Remove (Rule 3)
+
+- Detailed content (that goes in detail chunks)
+- Quotes or specific passages
 - Background explanations
 - Step-by-step content
-- Meta-commentary ("This document contains...")
-- Obvious qualifiers ("approximately", "roughly")
-- Verbose prose
-- Derivable information
+- Meta-commentary ("This document discusses...", "The file contains...")
+- Qualifiers ("approximately", "very", "quite", "some", "many")
+- Verbose connecting phrases
+- Full grammatical sentences (use telegraphic style: colons, dashes, semicolons)
 
 ## Output Format
 
@@ -44,5 +54,5 @@ Return ONLY a JSON object with this structure:
 {
   "filename": "[exact filename including extension]",
   "file_type": "[image|pdf|text|code|spreadsheet|other]",
-  "description": "[your compressed overview here]"
+  "description": "[your structured overview following the required elements above]"
 }`;
