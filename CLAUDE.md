@@ -279,6 +279,86 @@ Stops AI response generation mid-stream. Located in action bar while message is 
 - Partial responses not persisted
 - Simple implementation (3 lines of code)
 
+### Turn Navigation (Previous/Next)
+
+Navigate through conversation history by jumping to boss (user) cards. Located in bottom-right corner of UI.
+
+**Flow**:
+1. User clicks "Previous Turn" button
+2. `navigateToPreviousTurn()` function:
+   - Finds all boss cards using `querySelectorAll('[data-role="boss"]')`
+   - Determines current scroll position
+   - Finds previous boss card above current position
+   - Scrolls to 40px above boss card top (viewport anchor point)
+3. User clicks "Next Turn" button
+4. `navigateToNextTurn()` function:
+   - Finds all boss cards
+   - Determines current scroll position
+   - Finds next boss card below current position
+   - Scrolls to 40px above boss card top (viewport anchor point)
+
+**Implementation**:
+- UI: [src/routes/+page.svelte:161-268](src/routes/+page.svelte#L161-L268)
+- Buttons: [src/routes/+page.svelte:966-1016](src/routes/+page.svelte#L966-L1016)
+- Anchor point: 40px above boss card for consistent viewport positioning
+
+**Key Features**:
+- Consistent 40px spacing above each boss card
+- Wraps around (previous from top goes to bottom, next from bottom goes to top)
+- Smooth scrolling behavior
+- Works with dynamically added messages
+
+### Auto-Scroll
+
+Automatic scrolling through conversation history with pause-and-resume pattern.
+
+**Flow**:
+1. User clicks "Auto-Scroll" button to enable
+2. `startAutoScroll()` function begins 5-second scroll phase:
+   - `requestAnimationFrame` loop runs 60fps
+   - Each frame adds `pixelsPerFrame` (0.4px) to `fractionalPixelAccumulator`
+   - Integer pixels extracted and applied via `scrollBy(0, pixelsToScroll)`
+   - Fractional remainder preserved for next frame (prevents stuttering)
+3. After 5 seconds, auto-scroll enters 60-second pause:
+   - Scrolling stops but auto-scroll remains enabled
+   - UI shows "Auto-Scroll (Paused)" state
+4. After 60 seconds, returns to step 2 (5-second scroll phase)
+5. User clicks "Auto-Scroll" button again to disable
+
+**Implementation**:
+- UI: [src/routes/+page.svelte:270-347](src/routes/+page.svelte#L270-L347)
+- Button: [src/routes/+page.svelte:1018-1025](src/routes/+page.svelte#L1018-L1025)
+- State management: `autoScrollEnabled`, `autoScrollPaused`, `fractionalPixelAccumulator`
+
+**Key Features**:
+- 5-second scroll + 60-second pause pattern
+- Fractional pixel accumulator prevents stuttering (maintains smooth 0.4px/frame)
+- Pause preserves scroll position (no drift)
+- Clean state management with proper RAF cleanup
+
+### Auto-Scroll to New Message
+
+Automatically scrolls to newly submitted user message (boss card).
+
+**Flow**:
+1. User submits message via chat input
+2. `scrollToLatestBossCard()` function:
+   - Uses double `requestAnimationFrame` pattern for DOM stability
+   - First RAF: Browser commits DOM changes (new boss card rendered)
+   - Second RAF: Measurements guaranteed stable
+   - Queries for last boss card: `querySelectorAll('[data-role="boss"]')`
+   - Scrolls to 40px above boss card top (matches turn navigation anchor)
+
+**Implementation**:
+- UI: [src/routes/+page.svelte:349-392](src/routes/+page.svelte#L349-L392)
+- Triggered in: `handleSubmit()` function after message sent
+
+**Key Features**:
+- Double RAF pattern ensures DOM stability before measuring
+- Consistent 40px anchor point (matches turn navigation)
+- Graceful handling of missing boss cards
+- Smooth scroll behavior
+
 ## Testing Strategy
 
 **Unit Tests** ([tests/unit/](tests/unit/))
