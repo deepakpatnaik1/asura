@@ -30,3 +30,8 @@ vite.config.ts.timestamp-*
 
 # Verification logs (never tracked, preserved across branch operations)
 docs/verify-everything.md
+
+# Multiuser planning docs (preserved across branch operations)
+docs/multiuser-megafeature.md
+docs/multiuser-canonical-plan.md
+docs/multiuser-work-breakdown.md
