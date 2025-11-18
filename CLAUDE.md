@@ -4,400 +4,460 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Asura** is an AI-powered perpetual memory chat system for startup founders. It solves the asymmetry problem in AI chat applications where the AI loses memory of earlier conversations after N turns. The system uses a sophisticated three-tier memory architecture with "Artisan Cut" compression to maintain continuous conversation continuity indefinitely.
+Asura is a SvelteKit-based AI chat application that features a sophisticated multi-call LLM architecture with memory compression, file processing, and vector search capabilities. The system uses a two-tier memory architecture (Superjournal for full turns, Journal for compressed memory) and implements semantic file chunking with vector embeddings.
 
-**Tech Stack:**
-- Frontend: SvelteKit + TypeScript + Tailwind CSS v4
-- Backend: Supabase (PostgreSQL + pgvector for vector search + Realtime for live updates)
-- LLM: Qwen 2.5 235B via Fireworks AI (with automatic prompt caching)
-- Embeddings: Voyage AI voyage-3 (1024 dimensions)
-- File Processing: unpdf for PDFs, text extraction for other formats
+**Key Advantage**: The dual-call refinement architecture (Call 1A/1B) produces premium-quality responses using cost-effective models (Qwen3-235B), achieving quality comparable to flagship models at ~1/10th the cost.
 
-## Essential Commands
+## Technology Stack
 
-### Development
+- **Framework**: SvelteKit 2.x with Svelte 5
+- **Database**: Supabase (PostgreSQL with pgvector extension)
+- **AI Models**: Fireworks AI (Qwen3-235B variants) for chat/compression, Voyage AI (voyage-3) for embeddings
+- **Testing**: Vitest (unit/integration), Playwright (E2E)
+- **Language**: TypeScript with strict mode enabled
+
+## Development Commands
+
+### Local Development
 ```bash
-npm run dev                 # Start dev server (Vite)
-npm run build              # Build for production
-npm run preview            # Preview production build
-```
-
-### Type Checking
-```bash
-npm run check              # Run svelte-check with TypeScript
-npm run check:watch        # Run svelte-check in watch mode
+npm run dev                    # Start dev server (http://localhost:5173)
+npx supabase start            # Start local Supabase (required for development)
+npx supabase db reset         # Reset database with all migrations
 ```
 
 ### Testing
 ```bash
-npm test                   # Run all unit + integration tests (Vitest)
-npm run test:unit          # Run only unit tests
-npm run test:integration   # Run only integration tests
-npm run test:watch         # Run tests in watch mode
-npm run test:ui            # Open Vitest UI
-npm run test:coverage      # Run tests with coverage report
-
-npm run test:e2e           # Run Playwright e2e tests
-npm run test:e2e:ui        # Run Playwright tests with UI
-npm run test:all           # Run all tests (unit + integration + e2e)
+npm test                       # Run all unit + integration tests (Vitest)
+npm run test:unit              # Run unit tests only
+npm run test:integration       # Run integration tests only
+npm run test:watch             # Run tests in watch mode
+npm run test:ui                # Open Vitest UI
+npm run test:e2e               # Run Playwright E2E tests (requires dev server running)
+npm run test:e2e:ui            # Open Playwright UI
+npm run test:all               # Run unit + integration + E2E tests
+npm run test:coverage          # Generate coverage report
 ```
 
-### MCP Tools (Development)
+**Important**: Integration tests require Supabase to be running (`npx supabase start`). E2E tests require dev server running in separate terminal (`npm run dev`).
+
+### Code Quality
 ```bash
-npm run mcp:supabase       # Access Supabase via MCP
-npm run mcp:playwright     # Access Playwright via MCP
+npm run check                  # Type-check with svelte-check
+npm run check:watch            # Type-check in watch mode
+npm run build                  # Production build
+npm run preview                # Preview production build
 ```
 
-### Database
+### Supabase Local Development
 ```bash
-npx supabase start         # Start local Supabase (Docker required)
-npx supabase db reset      # Reset database and run migrations
-npx supabase db push       # Push local schema changes
+npx supabase start            # Start local stack (DB port: 54322, API port: 54321, Studio: 54323)
+npx supabase stop             # Stop local stack
+npx supabase db reset         # Drop and recreate database with migrations
+npx supabase db push          # Push local migrations to remote
 ```
+
+The Supabase config is in [supabase/config.toml](supabase/config.toml). Local database connection: `postgresql://postgres:postgres@127.0.0.1:54322/postgres`
 
 ## Core Architecture
 
-### Multi-Call AI System (Call 1A → 1B → 2A → 2B)
+### Multi-Call AI System
 
-Every user message triggers a **4-call sequence**:
+Asura implements a multi-phase AI call architecture:
 
-1. **Call 1A** (Hidden): Initial response generation using assembled context
-2. **Call 1B** (Streamed): Self-critique and refinement of 1A → shown to user
-3. **Call 2A** (Background): Artisan Cut compression of turn into journal format
-4. **Call 2B** (Background): Verification of 2A compression quality
+**Call 1A/1B** (Chat Response Generation)
+- **Call 1A**: Initial response generation with memory context injection (uses thinking model)
+- **Call 1B**: Refinement and critique of Call 1A output
+- Model: User-selectable conversation model (default: Qwen3-235B thinking variant)
+- Location: [src/routes/api/chat/+server.ts](src/routes/api/chat/+server.ts)
 
-**Pattern:** All calls use an **A-B verification pattern** where B verifies that A followed the rules correctly. B calls receive four inputs:
-1. Original input (user query or file content)
-2. A prompt (the rules that were applied)
-3. A's output (what needs verification)
-4. B prompt (verification instructions)
+**Call 2A/2B** (Chat Compression - "Artisan Cut")
+- Executes in background after Call 1B completes
+- **Call 2A**: Compress full conversation turn to Boss Essence + Persona Essence + Decision Arc + Salience Score
+  - Model: User-selectable compression model from `user_settings.selected_compression_model` (default: Qwen3-235B instruct variant)
+  - System prompt: `CALL2A_PROMPT`
+  - Input: Full message turn (user message + AI response)
+  - Output: JSON with `boss_essence`, `persona_essence`, `decision_arc_summary`, `salience_score`, `is_instruction`, `instruction_scope`
+- **Call 2B**: Verify and refine compression output
+  - Model: Same compression model as Call 2A
+  - Messages: System (`CALL2A_PROMPT`) + Assistant (Call 2A JSON) + User (`CALL2B_PROMPT`)
+  - Output: Refined JSON with same structure
+- **Embedding**: Call 2B `decision_arc_summary` sent to Voyage AI `voyage-3-large` (1024 dimensions)
+- **Database Save**: Final Call 2B output + embedding saved to `journal` table
+- Location: [src/routes/api/chat/+server.ts:56-195](src/routes/api/chat/+server.ts#L56-L195)
 
-This self-verification mechanism produces higher quality output than single-pass generation, compensating for using a cheaper model.
+**Call 3A/3B** (File Overview + Chunking)
+- **Call 3A**: Generate file-level overview (Chunk 0) AND logical chunk boundaries
+- **Call 3B**: Verify output quality
+- Combined single-phase approach (not separate calls)
+- Location: [src/lib/file-chunker.ts](src/lib/file-chunker.ts)
 
-### Three-Tier Memory Architecture
+**Modified Call 2A/2B** (Detail Chunk Compression)
+- Compress individual file chunks for detail retrieval
+- Uses same structure as Call 2A/2B but optimized for file content
+- Location: [src/lib/file-compressor.ts](src/lib/file-compressor.ts)
 
-**Problem:** Traditional AI chat loses memory after N turns due to context window limits.
+### System Prompts
 
-**Solution:** Asura maintains three memory tiers:
+All system prompts are located in [src/lib/prompts/](src/lib/prompts/) and exported via [src/lib/prompts/index.ts](src/lib/prompts/index.ts):
 
-1. **Working Memory** (Last 5 turns) - `superjournal` table
-   - Full, uncompressed conversation turns
-   - Perfect recall of recent interactions
-   - Loaded into every Call 1A/1B
+- `BASE_INSTRUCTIONS`: Core behavioral rules
+- `PERSONA_GUNNAR`, `PERSONA_KIRBY`: Personality definitions
+- `CALL1A_PROMPT`, `CALL1B_PROMPT`: Chat generation
+- `CALL2A_PROMPT`, `CALL2B_PROMPT`: Chat compression
+- `CALL3A_PROMPT`, `CALL3B_PROMPT`: File overview
+- `MODIFIED_CALL2A_PROMPT`, `MODIFIED_CALL2B_PROMPT`: File detail chunks
 
-2. **Recent Memory** (Last 100 turns) - `journal` table
-   - Artisan Cut compressed turns (lossless high-signal compression)
-   - Crystal clear memory of recent past (6-12 months equivalent)
-   - Loaded into every Call 1A/1B
+### Memory Architecture
 
-3. **Long-Term Memory** (Beyond turn 100) - `journal` table with vector search
-   - Decision Arcs (50-150 char semantic summaries) + embeddings
-   - Salience-weighted (1-10 scale) for importance ranking
-   - Retrieved via semantic search (RAG) when journal count > 100
-   - Loaded as many as fit within 40% context budget
+**Superjournal Table** (Working Memory)
+- Stores last 5 full, uncompressed conversation turns
+- Fields: `user_message`, `ai_response`, `persona_name`
+- Used for immediate context in Call 1A/1B
 
-### Context Assembly Priority System
+**Journal Table** (Compressed Memory)
+- Stores compressed conversation history (Artisan Cut format)
+- Fields: `boss_essence` (user), `persona_essence` (AI), `decision_arc_summary`, `salience_score` (1-10)
+- Includes 1024-dim vector embeddings for semantic search
+- Special flags: `is_starred` (user-pinned), `is_instruction` (behavioral directives)
 
-Context is assembled in **6 priority levels** (see `src/lib/context-builder.ts`):
+**Context Builder** ([src/lib/context-builder.ts](src/lib/context-builder.ts))
+- Enforces 40% context window cap with priority-based loading:
+  1. Last 5 Superjournal turns (working memory)
+  2. Starred messages (user-curated)
+  3. Instructions (global + persona-specific)
+  4. Last 100 Journal turns (recent memory)
+  5. Vector search results (if journal count > 100)
+  6. File overviews + file chunk vector search
 
-1. **Priority 1:** Last 5 Superjournal turns (working memory - full text)
-2. **Priority 2:** Starred messages (user-curated important turns)
-3. **Priority 3:** Instructions (persistent behavioral directives - global or persona-specific)
-4. **Priority 4:** Last 100 Journal turns (compressed - truncates if budget exceeded)
-5. **Priority 5:** Vector search results (semantic retrieval of Decision Arcs, only if journal count > 100)
-6. **Priority 5.5:** File overviews (Chunk 0 from all uploaded files for discoverability)
-7. **Priority 6:** File chunks vector search (semantic file content retrieval)
+### File Processing Pipeline
 
-**40% Context Window Cap:** All context must fit within 40% of the model's context window (60% reserved for output generation). Priority 4 truncates if budget is exceeded.
+**Full Pipeline** ([src/lib/file-processor.ts](src/lib/file-processor.ts)):
+1. **Extraction** (0-10%): Extract text from PDF/TXT/MD files
+2. **Chunking** (10-30%): Generate overview + logical chunks (combined Call 3A/3B)
+3. **Compression - Chunk 0** (30-40%): Compress overview for discovery
+4. **Compression - Details** (40-70%): Compress detail chunks in parallel (batches of 5, 5s delay)
+5. **Embedding** (70-90%): Generate 1024-dim Voyage embeddings (batches of 5, 5s delay)
+6. **Finalization** (90-100%): Save all chunks to `file_chunks` table
 
-### Artisan Cut Compression Technique
+**Key Components**:
+- [src/lib/file-extraction.ts](src/lib/file-extraction.ts): Text extraction (PDF via unpdf, plaintext direct)
+- [src/lib/file-chunker.ts](src/lib/file-chunker.ts): Combined overview + logical chunking
+- [src/lib/file-compressor.ts](src/lib/file-compressor.ts): Artisan Cut compression for chunks
+- [src/lib/vectorization.ts](src/lib/vectorization.ts): Voyage AI embedding generation
+- [src/lib/batch-processor.ts](src/lib/batch-processor.ts): Parallel processing with rate limiting
 
-**NOT naive summarization.** Compression based on **regenerability** - keeping information that cannot be easily inferred, compressing information that can be regenerated from principles.
+**Database Tables**:
+- `files`: File metadata, status tracking, progress updates
+- `file_chunks`: Individual chunks with embeddings (chunk_index 0 = overview)
 
-**User Messages (boss_essence):**
-- **PRESERVE:** Technical details, numbers, names, timelines, specific features, strategic questions, emotional states, business updates
-- **REMOVE:** Pure filler ("hey", "thanks"), grammatical padding, obvious repetitions
+### Model Configuration
 
-**AI Responses (persona_essence):**
-- **PRESERVE:** Unique strategic insights not obvious from principles, specific recommendations, critical tactical guidance, diagnostic questions asked, what was chosen/rejected and WHY
-- **REMOVE:** Tactical details derivable from principles, step-by-step methodologies, calculations regenerable from numbers, examples, analogies, background explanations, politeness/encouragement
+Centralized in [src/lib/config/models.ts](src/lib/config/models.ts):
+- `DEFAULT_CONVERSATION_MODEL`: Call 1A/1B (thinking variant)
+- `DEFAULT_COMPRESSION_MODEL`: Call 2A/2B, Call 3A/3B (instruct variant)
+- `FILE_MODEL`: File processing (instruct variant, not user-selectable)
+- `EMBEDDING_MODEL`: voyage-3 (1024 dimensions)
 
-### Decision Arcs: Semantic Memory Pointers
-
-**Format:** 50-150 character compressed behavioral patterns
-**Style:** Heavy punctuation (: ; , -) for compression
-**Content:** Pattern type: specific behavior when condition
-**Purpose:** Enable vector search into long-term memory
-
-**Example:** `"Pricing strategy: considering 20% increase, testing approach"`
-
-**Salience Scoring (1-10):**
-- **High (8-10):** Foundational decisions (values, identity, pivots, irreversible choices)
-- **Medium (5-7):** Strategic resource decisions (hiring, pricing, roadmap)
-- **Low (1-4):** Tactical/exploratory (minor choices, questions, reversible decisions)
-
-**Starred Messages:** Users can manually star turns, overriding salience to 10 (forces perpetual inclusion).
+User can select conversation and compression models via Settings UI. Selection is stored in `user_settings` table and read at runtime.
 
 ## Database Schema
 
-### Key Tables
+Key tables (see [supabase/migrations/](supabase/migrations/) for full schema):
 
-**`superjournal`** - Working memory (last 5 full turns)
-```sql
-id UUID, user_id UUID (nullable), persona_name TEXT,
-user_message TEXT, ai_response TEXT,
-created_at TIMESTAMPTZ, is_starred BOOLEAN
+- `superjournal`: Full conversation turns (last 5)
+- `journal`: Compressed memory with embeddings
+- `files`: File metadata and processing status
+- `file_chunks`: Chunked file content with embeddings
+- `models`: Available AI models for user selection
+- `user_settings`: User preferences (selected models, persona)
+
+**Vector Search Functions**:
+- `search_journal_by_embedding`: Semantic search over journal entries
+- `search_file_chunks`: Semantic search over file chunks
+
+All tables support `user_id IS NULL` for single-user development mode (auth not yet implemented).
+
+## API Endpoints
+
+### Chat
+- `POST /api/chat`: Main chat endpoint (Call 1A/1B + background Call 2A/2B)
+
+### Files
+- `POST /api/files/upload`: Upload file (creates pending record, triggers background processing)
+- `GET /api/files`: List all files
+- `GET /api/files/[id]`: Get file details with chunks
+- `DELETE /api/files/[id]`: Delete file and all chunks
+- `GET /api/files/events`: SSE endpoint for real-time file processing updates
+
+### Settings
+- `GET /api/settings`: Get user settings (selected models, persona)
+- `POST /api/settings`: Update user settings
+
+### Utilities
+- `POST /api/nuke`: Delete all data (development only)
+- `GET /api/superjournal/[id]`: Get superjournal entry details
+
+## UI Workflows
+
+### Nuke Button (Delete All Data)
+
+The nuke button provides atomic deletion of all conversation and file data. Located in Settings panel.
+
+**Flow**:
+1. User clicks "Nuke Everything" button in Settings
+2. Modal displays with 3-second countdown progress bar
+3. User can cancel during countdown (closes modal, no action taken)
+4. If countdown completes:
+   - Single atomic database call to `nuke_everything()` function
+   - PostgreSQL function executes TRUNCATE CASCADE on all tables
+   - Superjournal, journal, files, file_chunks all cleared atomically
+   - Transaction ensures all-or-nothing operation
+5. Modal closes, UI refreshes with empty state
+
+**Implementation**:
+- UI: [src/routes/+page.svelte](src/routes/+page.svelte) `handleNukeConfirm()` function
+- API: `POST /api/nuke` endpoint
+- Database: [20251117000000_create_nuke_function.sql](supabase/migrations/20251117000000_create_nuke_function.sql)
+
+**Key Features**:
+- Atomic operation (transaction-based)
+- 3-second safety countdown
+- Cancellable before execution
+- Cascading deletes ensure referential integrity
+
+### File Delete Button
+
+Individual file deletion with cascade to all related chunks. Located next to each file in Files panel.
+
+**Flow**:
+1. User clicks trash icon next to file
+2. Modal displays with 3-second countdown progress bar
+3. User can cancel during countdown (closes modal, no action taken)
+4. If countdown completes:
+   - `DELETE /api/files/[id]` called
+   - Database CASCADE automatically removes all `file_chunks` entries
+   - Supabase Realtime broadcasts DELETE event to `files` table
+   - SSE endpoint receives event, broadcasts to all connected clients
+   - UI receives `file-deleted` SSE event, removes file from local state
+5. Modal closes, file disappears from UI immediately
+
+**Implementation**:
+- UI: [src/routes/+page.svelte](src/routes/+page.svelte) `handleFileDeleteConfirm()` function
+- API: `DELETE /api/files/[id]` endpoint
+- SSE: [src/routes/api/files/events/+server.ts](src/routes/api/files/events/+server.ts) `handleFilesEvent()`
+- Database: [20251111120100_create_files_table.sql](supabase/migrations/20251111120100_create_files_table.sql) ON DELETE CASCADE
+
+**Key Features**:
+- Real-time UI update via SSE (no refresh needed)
+- Cascade delete ensures chunks removed automatically
+- 3-second safety countdown
+- Multi-client synchronization (all connected clients see deletion)
+
+### Message Abort Button
+
+Stops AI response generation mid-stream. Located in action bar while message is streaming.
+
+**Flow**:
+1. User submits message, AI response begins streaming
+2. Trash icon (abort button) appears in message action bar
+3. User clicks abort button
+4. `handleAbortCurrentMessage()` function:
+   - Sets `isLoading` to `false` (stops streaming)
+   - Clears `currentMessage` state (removes partial response)
+   - Logs abort action to console
+5. UI immediately stops displaying streaming text
+6. Partial response is discarded (not saved to database)
+
+**Implementation**:
+- UI: [src/routes/+page.svelte](src/routes/+page.svelte) `handleAbortCurrentMessage()` function
+- Client-side only (no API call needed)
+- Reactive state management via Svelte stores
+
+**Key Features**:
+- Instant response (no network round-trip)
+- Clean state cleanup
+- Partial responses not persisted
+- Simple implementation (3 lines of code)
+
+### Turn Navigation (Previous/Next)
+
+Navigate through conversation history by jumping to boss (user) cards. Located in bottom-right corner of UI.
+
+**Flow**:
+1. User clicks "Previous Turn" button
+2. `navigateToPreviousTurn()` function:
+   - Finds all boss cards using `querySelectorAll('[data-role="boss"]')`
+   - Determines current scroll position
+   - Finds previous boss card above current position
+   - Scrolls to 40px above boss card top (viewport anchor point)
+3. User clicks "Next Turn" button
+4. `navigateToNextTurn()` function:
+   - Finds all boss cards
+   - Determines current scroll position
+   - Finds next boss card below current position
+   - Scrolls to 40px above boss card top (viewport anchor point)
+
+**Implementation**:
+- UI: [src/routes/+page.svelte:161-268](src/routes/+page.svelte#L161-L268)
+- Buttons: [src/routes/+page.svelte:966-1016](src/routes/+page.svelte#L966-L1016)
+- Anchor point: 40px above boss card for consistent viewport positioning
+
+**Key Features**:
+- Consistent 40px spacing above each boss card
+- Wraps around (previous from top goes to bottom, next from bottom goes to top)
+- Smooth scrolling behavior
+- Works with dynamically added messages
+
+### Auto-Scroll
+
+Automatic scrolling through conversation history with pause-and-resume pattern.
+
+**Flow**:
+1. User clicks "Auto-Scroll" button to enable
+2. `startAutoScroll()` function begins 5-second scroll phase:
+   - `requestAnimationFrame` loop runs 60fps
+   - Each frame adds `pixelsPerFrame` (0.4px) to `fractionalPixelAccumulator`
+   - Integer pixels extracted and applied via `scrollBy(0, pixelsToScroll)`
+   - Fractional remainder preserved for next frame (prevents stuttering)
+3. After 5 seconds, auto-scroll enters 60-second pause:
+   - Scrolling stops but auto-scroll remains enabled
+   - UI shows "Auto-Scroll (Paused)" state
+4. After 60 seconds, returns to step 2 (5-second scroll phase)
+5. User clicks "Auto-Scroll" button again to disable
+
+**Implementation**:
+- UI: [src/routes/+page.svelte:270-347](src/routes/+page.svelte#L270-L347)
+- Button: [src/routes/+page.svelte:1018-1025](src/routes/+page.svelte#L1018-L1025)
+- State management: `autoScrollEnabled`, `autoScrollPaused`, `fractionalPixelAccumulator`
+
+**Key Features**:
+- 5-second scroll + 60-second pause pattern
+- Fractional pixel accumulator prevents stuttering (maintains smooth 0.4px/frame)
+- Pause preserves scroll position (no drift)
+- Clean state management with proper RAF cleanup
+
+### Auto-Scroll to New Message
+
+Automatically scrolls to newly submitted user message (boss card).
+
+**Flow**:
+1. User submits message via chat input
+2. `scrollToLatestBossCard()` function:
+   - Uses double `requestAnimationFrame` pattern for DOM stability
+   - First RAF: Browser commits DOM changes (new boss card rendered)
+   - Second RAF: Measurements guaranteed stable
+   - Queries for last boss card: `querySelectorAll('[data-role="boss"]')`
+   - Scrolls to 40px above boss card top (matches turn navigation anchor)
+
+**Implementation**:
+- UI: [src/routes/+page.svelte:349-392](src/routes/+page.svelte#L349-L392)
+- Triggered in: `handleSubmit()` function after message sent
+
+**Key Features**:
+- Double RAF pattern ensures DOM stability before measuring
+- Consistent 40px anchor point (matches turn navigation)
+- Graceful handling of missing boss cards
+- Smooth scroll behavior
+
+## Testing Strategy
+
+**Unit Tests** ([tests/unit/](tests/unit/))
+- Test individual functions and modules in isolation
+- Mock external dependencies (Supabase, AI APIs)
+- Fast execution, no external services required
+
+**Integration Tests** ([tests/integration/](tests/integration/))
+- Test database operations, API endpoints, and stores
+- Requires local Supabase running
+- Includes database schema validation, CRUD operations, vector search
+
+**Regression Tests** ([tests/regression/](tests/regression/))
+- Ensure critical flows remain stable (chat flow, context injection)
+- Run against real database and API endpoints
+
+**E2E Tests** ([tests/e2e/](tests/e2e/))
+- Full user workflows with Playwright
+- Requires dev server + Supabase running
+- Located in `tests/e2e/`, run with `npm run test:e2e`
+
+## Environment Variables
+
+Copy `.env.example` to `.env` and configure:
+
+```bash
+PUBLIC_SUPABASE_URL=          # Supabase project URL
+PUBLIC_SUPABASE_ANON_KEY=     # Supabase anon key
+SUPABASE_SERVICE_ROLE_KEY=    # Supabase service role key (server-side only)
+FIREWORKS_API_KEY=            # Fireworks AI API key
+VOYAGE_API_KEY=               # Voyage AI API key
 ```
 
-**`journal`** - Compressed turns + vector search
-```sql
-id UUID, superjournal_id UUID (FK CASCADE DELETE),
-user_id UUID (nullable), persona_name TEXT,
-boss_essence TEXT, persona_essence TEXT,
-decision_arc_summary TEXT, salience_score INTEGER (1-10),
-is_starred BOOLEAN, is_instruction BOOLEAN,
-instruction_scope TEXT (global|gunnar|kirby),
-file_name TEXT, file_type TEXT,
-created_at TIMESTAMPTZ, embedding VECTOR(1024)
+For local development, Supabase values come from `npx supabase start` output.
+
+## Important Development Notes
+
+### File Processing
+- Files are processed asynchronously after creating pending record
+- Progress updates broadcast via Supabase Realtime (subscribed via SSE endpoint)
+- Batch processing limits: 5 concurrent compressions/embeddings, 5s delay between batches
+- File size limit: 10MB (enforced in [src/lib/file-processor.ts](src/lib/file-processor.ts))
+
+### Database Migrations
+- All schema changes go in `supabase/migrations/` with timestamp prefix
+- Use `npx supabase db reset` to apply all migrations to local database
+- Migration naming: `YYYYMMDDHHMMSS_description.sql`
+
+### Vector Search
+- All embeddings are 1024 dimensions (Voyage AI voyage-3 model)
+- Similarity uses cosine distance via pgvector: `embedding <=> query_embedding`
+- Journal vector search only activates when journal count > 100
+
+### Context Window Management
+- Hard cap at 40% of model's context window
+- Priority-based loading ensures most critical context loaded first
+- Token estimation: 1 token ≈ 4 characters (rough approximation)
+
+### Error Handling
+- Custom error classes: `FileProcessorError`, `FileExtractionError`, `FileChunkerError`, `FileCompressionError`, `VectorizationError`
+- Failed files marked with status='failed', error message stored in `error_message` column
+- Progress updates continue even on errors (allows client to track failures)
+
+### Thinking Tags
+- Qwen3 thinking variant outputs `<think>...</think>` tags
+- These are stripped before presenting to user or compressing
+- Helper functions in [src/routes/api/chat/+server.ts](src/routes/api/chat/+server.ts): `extractThinking()`, `extractMessage()`
+
+## Common Workflows
+
+### Adding a New Persona
+1. Create prompt file in [src/lib/prompts/](src/lib/prompts/) (e.g., `persona-[name].ts`)
+2. Export from [src/lib/prompts/index.ts](src/lib/prompts/index.ts)
+3. Add to persona selection in [src/routes/api/chat/+server.ts](src/routes/api/chat/+server.ts)
+4. Update Settings UI to include new persona option
+
+### Modifying Memory Structure
+1. Create migration in `supabase/migrations/` to alter schema
+2. Update TypeScript types in relevant files ([src/lib/context-builder.ts](src/lib/context-builder.ts), etc.)
+3. Update context builder to handle new fields
+4. Add integration tests in [tests/integration/database/](tests/integration/database/)
+
+### Debugging File Processing
+1. Check file status in database: `SELECT * FROM files WHERE id = '...'`
+2. Check chunks: `SELECT * FROM file_chunks WHERE file_id = '...' ORDER BY chunk_index`
+3. Enable console logs in [src/lib/file-processor.ts](src/lib/file-processor.ts) (already present with `[FileProcessor]` prefix)
+4. Test individual stages: extraction, chunking, compression, embedding
+
+### Running Specific Tests
+```bash
+# Single test file
+npm run test:unit tests/unit/lib/file-processor.test.ts
+
+# Single test suite (within file)
+npm run test:unit -- -t "processFile"
+
+# Integration tests for database
+npm run test:integration tests/integration/database/
+
+# Watch mode for active development
+npm run test:watch
 ```
-- HNSW index on `embedding` for fast vector search
-- Instructions detection: `is_instruction=true` for persistent behavioral directives
-
-**`files`** - File metadata and processing status
-```sql
-id UUID, user_id UUID (nullable), filename TEXT,
-file_type TEXT (text|pdf|image|code|spreadsheet|other),
-content_hash TEXT (SHA-256), status TEXT (pending|processing|ready|failed),
-progress INTEGER (0-100), processing_stage TEXT,
-error_message TEXT, created_at TIMESTAMPTZ, updated_at TIMESTAMPTZ
-```
-
-**`file_chunks`** - Semantic file chunks with embeddings
-```sql
-id UUID, file_id UUID (FK CASCADE DELETE), user_id UUID (nullable),
-chunk_index INTEGER (0=overview, 1+=detail chunks),
-chunk_text TEXT, description TEXT (compressed),
-embedding VECTOR(1024), created_at TIMESTAMPTZ,
-UNIQUE(file_id, chunk_index)
-```
-- Chunk 0: File-level overview for discoverability ("that interview transcript")
-- Chunks 1+: Semantic detail chunks
-- HNSW index on `embedding` for semantic search
-
-**`models`** - LLM model registry
-```sql
-id UUID, model_identifier TEXT, model_name TEXT,
-context_window INTEGER, provider TEXT, created_at TIMESTAMPTZ
-```
-
-**`user_settings`** - User preferences
-```sql
-id UUID, user_id UUID (nullable), selected_model TEXT,
-selected_persona TEXT, created_at TIMESTAMPTZ, updated_at TIMESTAMPTZ
-```
-
-### Vector Search Functions
-
-- `search_file_chunks(query_embedding, threshold, count, user_id)` - Find relevant chunks across all files
-- `get_file_chunks(file_id)` - Get all chunks for a specific file in order
-
-## File Processing Pipeline
-
-Files are processed in 6 phases (see `src/lib/file-processor.ts`):
-
-### Phase 1: Extraction (0-10%)
-**Location:** `src/lib/file-extraction.ts`
-- Extract text from buffer (PDF via unpdf, text files directly)
-- Generate SHA-256 content hash for deduplication
-- Classify file type, validate size (10MB limit)
-
-### Phase 2: Overview + Semantic Chunking (10-30%)
-**Location:** `src/lib/file-chunker.ts` - `generateOverviewAndChunks()`
-- **NEW COMBINED APPROACH:** Single Call 3A + 3B generates BOTH file overview AND logical chunks
-- **Chunk 0 (Overview):** 200-400 word file-level summary for discoverability
-- **Detail Chunks:** Logical boundaries based on topic shifts (NOT arbitrary splits), 300-800 words each
-
-**CRITICAL:** Chunk 0 is NOT optional. Without it, files are invisible as entities (only content is searchable).
-
-### Phase 3: Chunk 0 Compression (30-40%)
-**Location:** `src/lib/file-compressor.ts` - `compressChunk()`
-- Compress file overview using `CALL3A_PROMPT` (Call 2A pattern)
-- Verify with `CALL3B_PROMPT` (Call 2B pattern)
-- Output: 200-400 char compressed description
-
-### Phase 4: Detail Chunks Compression (40-70%)
-- Compress each detail chunk using `MODIFIED_CALL2A_PROMPT` + `MODIFIED_CALL2B_PROMPT`
-- **Batched:** 5 chunks at a time, 5s delays (rate limit compliance)
-- Focus: Preserve behavioral directives, strategic content, exact data
-
-### Phase 5: Embedding Generation (70-90%)
-**Location:** `src/lib/vectorization.ts` - `generateEmbedding()`
-- Generate Voyage AI voyage-3 embeddings (1024 dimensions) for compressed descriptions
-- **Batched:** 5 embeddings at a time, 5s delays
-- **Why embed descriptions, not raw text?** Compression removes noise, making embeddings more semantically precise
-
-### Phase 6: Database Save (90-100%)
-- Batch insert all chunks into `file_chunks` table
-- Update `files` table: `status='ready'`, `progress=100`
-- Broadcast completion via Supabase Realtime
-
-## Prompt System Structure
-
-All prompts are modular TypeScript files in `src/lib/prompts/`:
-
-```
-src/lib/prompts/
-├── index.ts                 # Central export
-├── base-instructions.ts     # Shared base instructions
-├── persona-gunnar.ts        # Gunnar: YC Startup Mentor (execution, WHAT/HOW)
-├── persona-kirby.ts         # Kirby: Guerrilla Marketer (marketing, growth)
-├── call1a.ts                # Call 1A: Initial response generation
-├── call1b.ts                # Call 1B: Response refinement
-├── call2a.ts                # Call 2A: Chat turn compression
-├── call2b.ts                # Call 2B: Compression verification
-├── call3a.ts                # Call 3A: File overview + chunking
-├── call3b.ts                # Call 3B: Overview verification
-├── modified-call2a.ts       # Modified Call 2A: Detail chunk compression
-└── modified-call2b.ts       # Modified Call 2B: Detail verification
-```
-
-**Import Pattern:**
-```typescript
-import {
-  BASE_INSTRUCTIONS, PERSONA_GUNNAR, PERSONA_KIRBY,
-  CALL1A_PROMPT, CALL1B_PROMPT, CALL2A_PROMPT, CALL2B_PROMPT,
-  CALL3A_PROMPT, CALL3B_PROMPT,
-  MODIFIED_CALL2A_PROMPT, MODIFIED_CALL2B_PROMPT
-} from '$lib/prompts';
-```
-
-**CRITICAL:** File compressor prompts require `/nothink` prefix:
-```typescript
-const prompt = `/nothink\n\n${CALL3A_PROMPT}`;
-```
-Chat prompts do NOT use `/nothink` (handled differently).
-
-## Key Implementation Patterns
-
-### Batch Processing with Rate Limiting
-**Location:** `src/lib/batch-processor.ts`
-
-```typescript
-await processBatched(
-  items,
-  processFn,
-  { batchSize: 5, delayBetweenBatchesMs: 5000, onProgress: async (completed, total) => {} }
-);
-```
-Used for detail chunk compression and embedding generation to comply with Fireworks AI and Voyage AI rate limits.
-
-### Thinking Tags Extraction
-**Location:** `src/routes/api/chat/+server.ts`
-
-Helper functions handle `<think>` tags in LLM output:
-- `extractJSON(text)`: Removes thinking tags, extracts JSON
-- `extractThinking(text)`: Gets content inside thinking tags
-- `extractMessage(text)`: Gets content outside thinking tags
-
-### 40% Context Budget Enforcement
-**Location:** `src/lib/context-builder.ts`
-
-```typescript
-const contextWindow = await getModelContextWindow(modelIdentifier);
-const contextBudget = Math.floor(contextWindow * 0.4); // 40% cap
-```
-Priority 4 (last 100 journal) truncates if total tokens exceed budget.
-
-### Chunk 0 Pattern
-**CRITICAL:** Chunk 0 is the foundation of file-based perpetual memory.
-- **With Chunk 0:** "That interview transcript" → AI finds file
-- **Without Chunk 0:** Files invisible as entities, only content searchable
-
-## Personas
-
-**Gunnar** - YC Startup Mentor
-- Focus: Execution, WHAT and HOW
-- Style: Practical, direct, action-oriented
-- Expertise: Product, engineering, operations
-
-**Kirby** - Guerrilla Marketer
-- Focus: Marketing, sales, growth
-- Style: Creative, scrappy, experimental
-- Expertise: Customer acquisition, positioning, messaging
-
-**Selection:** User toggles via dropdown. Stored in `user_settings.selected_persona`.
-
-## Instructions System
-
-**Problem:** Persistent behavioral directives ("don't use sports analogies") must survive indefinitely.
-
-**Solution:** `journal` table fields `is_instruction` and `instruction_scope` (global|gunnar|kirby).
-
-**Detection Logic (in CALL2A_PROMPT):**
-- User message contains behavioral directives: "don't", "never", "always", "stop", "avoid", "from now on"
-- Combined with references to persona behavior/response style
-- Set `is_instruction = true`
-
-**Context Loading (Priority 3):**
-```sql
-SELECT * FROM journal
-WHERE is_instruction = true
-  AND (instruction_scope = 'global' OR instruction_scope = :currentPersona)
-ORDER BY created_at ASC;
-```
-
-**Isolation:** Each persona operates independently. Gunnar's instructions never leak to Kirby.
-
-## Cost Optimization Strategy
-
-**LLM:** Qwen 2.5 235B via Fireworks AI (cheap, automatic prompt caching)
-**Embeddings:** Voyage AI voyage-3 (cheap, high quality)
-
-**Why 4 calls × cheap model beats 1 call × expensive model:**
-- Automatic prompt caching reduces input token costs significantly
-- Multi-call architecture compensates for quality gaps
-- Self-critique ensures quality without expensive models
-- Target: <$0.01 per user message (4 LLM calls + 1 embedding after turn 100)
-
-## API Flow Example
-
-User sends: "Should we raise prices 20%?"
-
-**Call 1A (Hidden):** Initial response using assembled context (~15,000 input tokens)
-**Call 1B (Streamed):** Polished response shown to user → saved to `superjournal`
-**Call 2A (Background):** Compress into journal format with Decision Arc
-**Call 2B (Background):** Verify compression quality → saved to `journal` with embedding
-
-Total cost: ~$0.003-0.005 per message
-
-## Critical Reminders
-
-### Chunk 0 is NOT Optional
-Without Chunk 0, files are invisible as entities. Always ensure Chunk 0 exists for file discoverability.
-
-### 40% Context Budget is a Hard Constraint
-All context must fit within 40% of model's context window. Priority system ensures high-signal loading first.
-
-### Artisan Cut ≠ Summarization
-Based on regenerability principle: Keep non-regenerable information, compress derivable content.
-
-### Vector Search Activation Threshold
-Only activate when journal count > 100 (before that, all journal entries already loaded in Priority 4).
-
-### Always Batch API Calls
-Detail chunk compression: 5 at a time, 5s delays
-Embedding generation: 5 at a time, 5s delays
-
-### `/nothink` Prefix for File Compression
-File compressor requires `/nothink\n\n` prefix. Chat prompts do NOT.
-
-## Current State & Limitations
-
-**Single-user mode:** `user_id` nullable, always NULL
-**No auth:** Supabase Auth not yet integrated (planned for future branch)
-**RLS disabled:** Row-level security policies defined but disabled for development
-
-## Git Workflow
-
-**Current branch:** `file-processing-refactor`
-**Recent focus:** Batch processing, rate limiting, file overview context injection, auto-scroll fixes

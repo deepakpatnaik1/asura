@@ -57,6 +57,28 @@
 			console.error('Failed to load settings:', error);
 			// Fallback to defaults if database read fails
 		}
+
+		// Set up SSE listener for message deletions
+		const eventSource = new EventSource('/api/files/events');
+
+		eventSource.addEventListener('message', (event) => {
+			try {
+				const data = JSON.parse(event.data);
+
+				if (data.eventType === 'message-deleted' && data.message?.id) {
+					console.log('[SSE] Message deleted:', data.message.id);
+					// Remove message from allMessages array
+					allMessages = allMessages.filter(msg => msg.id !== data.message.id);
+				}
+			} catch (error) {
+				console.error('[SSE] Failed to parse event:', error);
+			}
+		});
+
+		// Clean up on unmount
+		return () => {
+			eventSource.close();
+		};
 	});
 
 	// Helper function to format timestamps
@@ -325,14 +347,61 @@
 	}
 
 	// Watch for new messages and scroll
+	// Scroll to boss card when new message is submitted (anchor at top of viewport)
+	let lastScrolledMessageId: string | null = null;
 	$effect(() => {
-		if ($currentMessage) {
-			scrollToBottom();
+		if ($currentMessage && $currentMessage.id !== lastScrolledMessageId) {
+			console.log('[Scroll Debug] New message detected, ID:', $currentMessage.id);
+			// Only scroll once when boss card first appears (not continuously as AI response updates)
+			lastScrolledMessageId = $currentMessage.id;
+
+			// Wait for DOM to fully render using multiple RAF cycles
+			tick().then(() => {
+				requestAnimationFrame(() => {
+					requestAnimationFrame(() => {
+						const container = document.querySelector('.chat-container');
+						const turnIndicators = document.querySelectorAll('.turn-indicator');
+
+						console.log('[Scroll Debug] Container:', container);
+						console.log('[Scroll Debug] Turn indicators found:', turnIndicators.length);
+
+						if (!container || turnIndicators.length === 0) {
+							console.log('[Scroll Debug] Early exit - missing container or turn indicators');
+							return;
+						}
+
+						// Get the last turn indicator (newly created boss card)
+						const newBossCard = turnIndicators[turnIndicators.length - 1];
+						console.log('[Scroll Debug] New boss card element:', newBossCard);
+
+						// Calculate position relative to container
+						const rect = newBossCard.getBoundingClientRect();
+						const containerRect = container.getBoundingClientRect();
+						const turnTopRelativeToContainer = rect.top - containerRect.top + container.scrollTop;
+
+						// Scroll to position: turn indicator position minus 40px space above
+						const spaceAbove = 40;
+						const targetScrollTop = turnTopRelativeToContainer - spaceAbove;
+
+						console.log('[Scroll Debug] Scroll calculation:', {
+							turnTop: rect.top,
+							containerTop: containerRect.top,
+							containerScrollTop: container.scrollTop,
+							turnTopRelative: turnTopRelativeToContainer,
+							targetScrollTop
+						});
+
+						// Scroll with smooth behavior
+						container.scrollTo({ top: targetScrollTop, behavior: 'smooth' });
+						console.log('[Scroll Debug] Scroll command issued');
+					});
+				});
+			});
 		}
 	});
 
-	// Scroll to bottom on initial load (instant, not smooth)
-	$effect(() => {
+	// Scroll to bottom on initial load ONLY (not on message updates)
+	onMount(() => {
 		if (allMessages.length > 0 && messagesEndRef) {
 			messagesEndRef.scrollIntoView({ behavior: 'instant' });
 		}
@@ -363,9 +432,6 @@
 
 			// Clear current message after adding to history
 			currentMessage.set(null);
-
-			// Scroll to show new message
-			scrollToBottom();
 		}
 	}
 

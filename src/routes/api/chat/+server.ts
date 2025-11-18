@@ -249,11 +249,15 @@ export const POST: RequestHandler = async ({ request }) => {
 		const call1AThinking = extractThinking(call1AResponse);
 		const call1AMessage = extractMessage(call1AResponse);
 
+		// Construct system prompt for Call 1B (BASE_INSTRUCTIONS + PERSONA, without CALL1A_PROMPT)
+		const call1BSystemPrompt = `${BASE_INSTRUCTIONS}\n\n---\n\n${personaPrompt}`;
+
 		// Call 1B: Refine response with CALL1B_PROMPT
 		// Note: Call 1B receives the SAME context as Call 1A (for informed critique)
 		const call1B = await fireworks.chat.completions.create({
 			model: conversationModel,
 			messages: [
+				{ role: 'system', content: call1BSystemPrompt },
 				{ role: 'user', content: fullUserPrompt }, // Same context as Call 1A
 				{ role: 'assistant', content: call1AMessage }, // Only the message, not the thinking
 				{ role: 'user', content: CALL1B_PROMPT }

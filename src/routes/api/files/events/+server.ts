@@ -22,7 +22,7 @@ interface FilesTablePayload {
 }
 
 interface SSEEvent {
-  eventType: 'file-update' | 'file-deleted' | 'heartbeat';
+  eventType: 'file-update' | 'file-deleted' | 'message-deleted' | 'heartbeat';
   timestamp: string;
   file?: {
     id: string;
@@ -33,14 +33,18 @@ interface SSEEvent {
     processing_stage?: string | null;
     error_message?: string | null;
   };
+  message?: {
+    id: string;
+  };
 }
 
 // ==========================================
 // GLOBAL STATE (Module-level, shared across all SSE connections)
 // ==========================================
 
-// Global Realtime subscription (one per server process)
-let globalRealtimeSubscription: any = null;
+// Global Realtime subscriptions (one per server process)
+let globalFilesSubscription: any = null;
+let globalSuperjournalSubscription: any = null;
 let isSubscriptionActive = false;
 
 // Track all active SSE client connections
@@ -78,21 +82,37 @@ async function initializeGlobalSubscription() {
 
   // Subscribe to ALL changes on files table
   // This ONE subscription will receive events and broadcast to all clients
-  globalRealtimeSubscription = supabaseAdmin
+  globalFilesSubscription = supabaseAdmin
     .channel('files-global')
     .on('postgres_changes', {
       event: '*',  // INSERT, UPDATE, DELETE
       schema: 'public',
       table: 'files'
-    }, handleRealtimeEvent)
+    }, handleFilesEvent)
     .subscribe((status: string) => {
-      console.log('[SSE Global] Subscription status:', status);
+      console.log('[SSE Global Files] Subscription status:', status);
+      if (status === 'SUBSCRIBED') {
+        console.log('[SSE Global Files] Files subscription is now active');
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+        console.error('[SSE Global Files] Subscription error, status:', status);
+      }
+    });
+
+  // Subscribe to DELETE events on superjournal table (for message deletions)
+  globalSuperjournalSubscription = supabaseAdmin
+    .channel('superjournal-global')
+    .on('postgres_changes', {
+      event: 'DELETE',
+      schema: 'public',
+      table: 'superjournal'
+    }, handleSuperjournalEvent)
+    .subscribe((status: string) => {
+      console.log('[SSE Global Superjournal] Subscription status:', status);
       if (status === 'SUBSCRIBED') {
         isSubscriptionActive = true;
-        console.log('[SSE Global] Global subscription is now active');
+        console.log('[SSE Global Superjournal] Superjournal subscription is now active');
       } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-        console.error('[SSE Global] Subscription error, status:', status);
-        isSubscriptionActive = false;
+        console.error('[SSE Global Superjournal] Subscription error, status:', status);
       }
     });
 }
@@ -102,22 +122,36 @@ async function initializeGlobalSubscription() {
 // ==========================================
 
 /**
- * Handle Realtime events and broadcast to ALL active SSE clients
- * This is the callback for the global Realtime subscription
+ * Handle Files table Realtime events and broadcast to ALL active SSE clients
  */
-function handleRealtimeEvent(payload: any) {
-  console.log('[SSE Global] Realtime event received:', payload.eventType, payload.new?.id || payload.old?.id || '(no id)');
+function handleFilesEvent(payload: any) {
+  console.log('[SSE Global Files] Realtime event received:', payload.eventType, payload.new?.id || payload.old?.id || '(no id)');
+  const event = transformFilesPayload(payload);
+  broadcastEvent(event);
+}
 
-  // Transform Supabase Realtime payload to SSE format
-  const event = transformPayload(payload);
+/**
+ * Handle Superjournal table DELETE events and broadcast to ALL active SSE clients
+ */
+function handleSuperjournalEvent(payload: any) {
+  console.log('[SSE Global Superjournal] DELETE event received:', payload.old?.id || '(no id)');
+  const event: SSEEvent = {
+    eventType: 'message-deleted',
+    timestamp: new Date().toISOString(),
+    message: { id: payload.old.id }
+  };
+  broadcastEvent(event);
+}
 
-  // Prepare SSE message
+/**
+ * Broadcast an SSE event to all active connections
+ */
+function broadcastEvent(event: SSEEvent) {
   const encoder = new TextEncoder();
   const data = JSON.stringify(event);
   const message = `data: ${data}\n\n`;
   const encoded = encoder.encode(message);
 
-  // Broadcast to ALL active connections
   const deadConnections: ReadableStreamDefaultController[] = [];
   let successCount = 0;
 
@@ -132,15 +166,13 @@ function handleRealtimeEvent(payload: any) {
   }
 
   console.log(`[SSE Global] Broadcasted to ${successCount} clients, ${deadConnections.length} dead connections`);
-
-  // Cleanup dead connections
   deadConnections.forEach(conn => activeConnections.delete(conn));
 }
 
 /**
- * Transform Supabase Realtime payload to SSE event format
+ * Transform Files table Supabase Realtime payload to SSE event format
  */
-function transformPayload(payload: any): SSEEvent {
+function transformFilesPayload(payload: any): SSEEvent {
   if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
     return {
       eventType: 'file-update',
@@ -187,10 +219,19 @@ function scheduleCleanup() {
 
   // Schedule cleanup if no connections remain
   cleanupTimer = setTimeout(() => {
-    if (activeConnections.size === 0 && globalRealtimeSubscription) {
-      console.log('[SSE Global] No active connections, cleaning up subscription');
-      globalRealtimeSubscription.unsubscribe();
-      globalRealtimeSubscription = null;
+    if (activeConnections.size === 0) {
+      console.log('[SSE Global] No active connections, cleaning up subscriptions');
+
+      if (globalFilesSubscription) {
+        globalFilesSubscription.unsubscribe();
+        globalFilesSubscription = null;
+      }
+
+      if (globalSuperjournalSubscription) {
+        globalSuperjournalSubscription.unsubscribe();
+        globalSuperjournalSubscription = null;
+      }
+
       isSubscriptionActive = false;
       supabaseAdmin = null;
       console.log('[SSE Global] Cleanup complete');
