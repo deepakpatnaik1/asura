@@ -359,6 +359,30 @@ Automatically scrolls to newly submitted user message (boss card).
 - Graceful handling of missing boss cards
 - Smooth scroll behavior
 
+## UI Layout & Responsive Design
+
+### Master Variable Layout System
+
+**Master Variable**: `--content-text-width: 450px` ([src/app.css:41](src/app.css#L41))
+- Single source of truth for all layout widths
+- Boss card width equals content text width exactly
+- All other elements scale from this value
+
+**Layout Widths**:
+- Boss card: 450px (padding: 16px, content area: 418px)
+- AI message: 450px (padding: 16px, content area: 418px)
+- Input container: 450px max-width
+- Messages content: 450px max-width (centered)
+
+**Responsive Behavior**:
+- Wide screens (>900px): Chat centered, 450px width maintained
+- Narrow screens (≤900px): Messages content constrained to 450px, centered with 16px padding
+- All screen sizes: Content width remains 450px for optimal readability
+
+**Implementation**:
+- Master variable: [src/app.css:41](src/app.css#L41)
+- Narrow screen constraint: [src/routes/+page.svelte:1020-1023](src/routes/+page.svelte#L1020-L1023)
+
 ## Testing Strategy
 
 **Unit Tests** ([tests/unit/](tests/unit/))
