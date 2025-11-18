@@ -37,8 +37,8 @@
     --boss-bg: rgba(217, 133, 107, 0.08);
     --boss-accent: rgb(217, 133, 107);
 
-    /* Layout system */
-    --middle-section-width: 700px;
+    /* Layout system - Master variable: content text width */
+    --content-text-width: 450px; /* Width of text field + send button combined */
 
     /* Spacing system - Figma-like design */
     --message-padding-x: 16px;
@@ -56,7 +56,11 @@
 
     --input-bottom-offset: 0px;
     --input-padding: 12px;
+    --input-container-gap: 12px;
     --input-max-height: 200px;
+
+    /* Boss card width equals content text width */
+    --middle-section-width: var(--content-text-width);
 
     /* Z-index system */
     --z-base: 1;

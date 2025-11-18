@@ -1016,6 +1016,11 @@
 			grid-template-columns: 0 1fr 0;
 			padding: 0 16px;
 		}
+
+		.messages-content {
+			max-width: var(--middle-section-width);
+			margin: 0 auto;
+		}
 	}
 
 	/* Messages Area - middle column */
@@ -1262,6 +1267,13 @@
 		margin: 0 auto;
 		width: 100%;
 		padding: 0 24px;
+	}
+
+	/* Adjust input padding on narrow screens to account for chat-container padding */
+	@media (max-width: 900px) {
+		.input-container {
+			padding: 0;
+		}
 	}
 
 	.input-field-wrapper {
