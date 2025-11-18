@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Asura is a SvelteKit-based AI chat application that features a sophisticated multi-call LLM architecture with memory compression, file processing, and vector search capabilities. The system uses a two-tier memory architecture (Superjournal for full turns, Journal for compressed memory) and implements semantic file chunking with vector embeddings.
 
+**Key Advantage**: The dual-call refinement architecture (Call 1A/1B) produces premium-quality responses using cost-effective models (Qwen3-235B), achieving quality comparable to flagship models at ~1/10th the cost.
+
 ## Technology Stack
 
 - **Framework**: SvelteKit 2.x with Svelte 5
@@ -69,11 +71,19 @@ Asura implements a multi-phase AI call architecture:
 - Location: [src/routes/api/chat/+server.ts](src/routes/api/chat/+server.ts)
 
 **Call 2A/2B** (Chat Compression - "Artisan Cut")
-- **Call 2A**: Compress full conversation turn to Boss Essence + Persona Essence + Decision Arc
+- Executes in background after Call 1B completes
+- **Call 2A**: Compress full conversation turn to Boss Essence + Persona Essence + Decision Arc + Salience Score
+  - Model: User-selectable compression model from `user_settings.selected_compression_model` (default: Qwen3-235B instruct variant)
+  - System prompt: `CALL2A_PROMPT`
+  - Input: Full message turn (user message + AI response)
+  - Output: JSON with `boss_essence`, `persona_essence`, `decision_arc_summary`, `salience_score`, `is_instruction`, `instruction_scope`
 - **Call 2B**: Verify and refine compression output
-- Model: User-selectable compression model (default: Qwen3-235B instruct variant)
-- Output: Saved to `journal` table with vector embeddings
-- Location: [src/routes/api/chat/+server.ts](src/routes/api/chat/+server.ts) (background function)
+  - Model: Same compression model as Call 2A
+  - Messages: System (`CALL2A_PROMPT`) + Assistant (Call 2A JSON) + User (`CALL2B_PROMPT`)
+  - Output: Refined JSON with same structure
+- **Embedding**: Call 2B `decision_arc_summary` sent to Voyage AI `voyage-3-large` (1024 dimensions)
+- **Database Save**: Final Call 2B output + embedding saved to `journal` table
+- Location: [src/routes/api/chat/+server.ts:56-195](src/routes/api/chat/+server.ts#L56-L195)
 
 **Call 3A/3B** (File Overview + Chunking)
 - **Call 3A**: Generate file-level overview (Chunk 0) AND logical chunk boundaries

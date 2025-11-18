@@ -300,10 +300,10 @@ export async function buildContextForCalls1A1B(
 	// Priority 5.5: File overviews (awareness of all uploaded files)
 	try {
 		let fileOverviewsQuery = supabase
-			.from('file_chunks')
-			.select('file_id, filename, file_type, description')
-			.eq('chunk_index', 0) // Overview chunks only
-			.order('created_at', { ascending: false });
+			.from('files')
+			.select('id, filename, file_type, description, uploaded_at')
+			.eq('status', 'ready') // Only successfully processed files
+			.order('uploaded_at', { ascending: false });
 
 		if (userId === null) {
 			fileOverviewsQuery = fileOverviewsQuery.is('user_id', null);
@@ -515,10 +515,11 @@ AI: ${entry.persona_essence}`
 // Format file overviews
 function formatFileOverviews(
 	entries: Array<{
-		file_id: string;
+		id: string;
 		filename: string;
 		file_type: string;
 		description: string;
+		uploaded_at: string;
 	}>
 ): string {
 	if (entries.length === 0) return '';
@@ -526,7 +527,7 @@ function formatFileOverviews(
 	const formatted = entries
 		.map(
 			(entry, index) =>
-				`${index + 1}. ${entry.filename} (${entry.file_type})
+				`${index + 1}. ${entry.filename} (${entry.file_type.toUpperCase()}, uploaded ${new Date(entry.uploaded_at).toLocaleDateString()})
    Overview: ${entry.description}`
 		)
 		.join('\n\n');
