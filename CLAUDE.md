@@ -175,7 +175,7 @@ Key tables (see [supabase/migrations/](supabase/migrations/) for full schema):
 - `search_journal_by_embedding`: Semantic search over journal entries
 - `search_file_chunks`: Semantic search over file chunks
 
-All tables support `user_id IS NULL` for single-user development mode (auth not yet implemented).
+**Target Scale**: 999 users (multiuser authentication in development)
 
 ## API Endpoints
 
