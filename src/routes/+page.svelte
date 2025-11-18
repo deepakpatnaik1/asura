@@ -1016,6 +1016,11 @@
 			grid-template-columns: 0 1fr 0;
 			padding: 0 16px;
 		}
+
+		.messages-content {
+			max-width: var(--middle-section-width);
+			margin: 0 auto;
+		}
 	}
 
 	/* Messages Area - middle column */
