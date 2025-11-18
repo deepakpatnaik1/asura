@@ -1264,6 +1264,13 @@
 		padding: 0 24px;
 	}
 
+	/* Adjust input padding on narrow screens to account for chat-container padding */
+	@media (max-width: 900px) {
+		.input-container {
+			padding: 0;
+		}
+	}
+
 	.input-field-wrapper {
 		flex: 1;
 		display: flex;
