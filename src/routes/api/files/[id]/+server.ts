@@ -8,11 +8,22 @@ function isValidUUID(id: string): boolean {
 }
 
 // GET: Retrieve file details
-export const GET: RequestHandler = async ({ params, locals: { supabase } }) => {
+export const GET: RequestHandler = async ({ params, locals: { supabase, safeGetSession } }) => {
   try {
     // 1. AUTHENTICATION CHECK
-    // NOTE: RLS currently DISABLED (migration 20251108000003)
-    const userId = null; // TODO: Extract from session after Chunk 1 complete
+    const { user } = await safeGetSession();
+    if (!user) {
+      return json(
+        {
+          error: {
+            message: 'Unauthorized - must be logged in',
+            code: 'UNAUTHORIZED'
+          }
+        },
+        { status: 401 }
+      );
+    }
+    const userId = user.id;
 
     // 2. VALIDATE FILE ID
     const { id } = params;
@@ -85,11 +96,22 @@ export const GET: RequestHandler = async ({ params, locals: { supabase } }) => {
 };
 
 // DELETE: Delete a file
-export const DELETE: RequestHandler = async ({ params, locals: { supabase } }) => {
+export const DELETE: RequestHandler = async ({ params, locals: { supabase, safeGetSession } }) => {
   try {
     // 1. AUTHENTICATION CHECK
-    // NOTE: RLS currently DISABLED (migration 20251108000003)
-    const userId = null; // TODO: Extract from session after Chunk 1 complete
+    const { user } = await safeGetSession();
+    if (!user) {
+      return json(
+        {
+          error: {
+            message: 'Unauthorized - must be logged in',
+            code: 'UNAUTHORIZED'
+          }
+        },
+        { status: 401 }
+      );
+    }
+    const userId = user.id;
 
     // 2. VALIDATE FILE ID
     const { id } = params;
@@ -111,7 +133,7 @@ export const DELETE: RequestHandler = async ({ params, locals: { supabase } }) =
       .from('files')
       .select('id')
       .eq('id', id)
-      .is('user_id', null)
+      .eq('user_id', userId)
       .single();
 
     if (queryError) {
@@ -146,7 +168,7 @@ export const DELETE: RequestHandler = async ({ params, locals: { supabase } }) =
       .from('files')
       .delete()
       .eq('id', id)
-      .is('user_id', null);
+      .eq('user_id', userId);
 
     if (deleteError) {
       console.error('[Delete File API] Delete error:', deleteError);

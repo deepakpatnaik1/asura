@@ -85,6 +85,9 @@ vi.mock('$lib/vectorization', () => ({
 // NOW import the module
 import { processFile, FileProcessorError } from '$lib/file-processor';
 
+// Test user ID for all test cases
+const TEST_USER_ID = '00000000-0000-0000-0000-000000000000';
+
 describe('file-processor', () => {
 	beforeEach(() => {
 		// Reset all mocks
@@ -148,7 +151,7 @@ describe('file-processor', () => {
 				contentType: 'text/plain'
 			};
 
-			const result = await processFile(input);
+			const result = await processFile(input, TEST_USER_ID);
 
 			expect(result.id).toBe('test-file-id-123');
 			expect(result.filename).toBe('test.txt');
@@ -178,7 +181,7 @@ describe('file-processor', () => {
 				contentType: 'text/plain'
 			};
 
-			await processFile(input, { onProgress });
+			await processFile(input, TEST_USER_ID, { onProgress });
 
 			expect(onProgress).toHaveBeenCalled();
 			expect(progressUpdates.length).toBeGreaterThan(0);
@@ -207,7 +210,7 @@ describe('file-processor', () => {
 				contentType: 'text/plain'
 			};
 
-			await processFile(input, { onProgress });
+			await processFile(input, TEST_USER_ID, { onProgress });
 
 			expect(onProgress).toHaveBeenCalled();
 		});
@@ -231,7 +234,7 @@ describe('file-processor', () => {
 				success: true
 			});
 
-			await processFile(input);
+			await processFile(input, TEST_USER_ID);
 
 			// Verify insert was called with correct data
 			const insertCall = mockSupabase.from().insert.mock.calls[0][0][0];
@@ -250,7 +253,7 @@ describe('file-processor', () => {
 				contentType: 'text/plain'
 			};
 
-			await processFile(input);
+			await processFile(input, TEST_USER_ID);
 
 			// Find the final update call (status=ready)
 			const updateCalls = mockSupabase.from().update.mock.calls;
@@ -295,10 +298,10 @@ describe('file-processor', () => {
 				contentType: 'text/plain'
 			};
 
-			await expect(processFile(input)).rejects.toThrow(FileProcessorError);
+			await expect(processFile(input, TEST_USER_ID)).rejects.toThrow(FileProcessorError);
 
 			try {
-				await processFile(input);
+				await processFile(input, TEST_USER_ID);
 			} catch (error) {
 				expect(error).toBeInstanceOf(FileProcessorError);
 				expect((error as FileProcessorError).code).toBe('DUPLICATE_FILE');
@@ -336,7 +339,7 @@ describe('file-processor', () => {
 				contentType: 'text/plain'
 			};
 
-			const result = await processFile(input, { skipDuplicateCheck: true });
+			const result = await processFile(input, TEST_USER_ID, { skipDuplicateCheck: true });
 
 			expect(result.status).toBe('ready');
 		});
@@ -354,10 +357,10 @@ describe('file-processor', () => {
 				contentType: 'application/pdf'
 			};
 
-			await expect(processFile(input)).rejects.toThrow(FileProcessorError);
+			await expect(processFile(input, TEST_USER_ID)).rejects.toThrow(FileProcessorError);
 
 			try {
-				await processFile(input);
+				await processFile(input, TEST_USER_ID);
 			} catch (error) {
 				expect(error).toBeInstanceOf(FileProcessorError);
 				expect((error as FileProcessorError).code).toBe('EXTRACTION_ERROR');
@@ -378,7 +381,7 @@ describe('file-processor', () => {
 				contentType: 'text/plain'
 			};
 
-			const result = await processFile(input);
+			const result = await processFile(input, TEST_USER_ID);
 
 			expect(result.status).toBe('failed');
 			expect(result.error).toBeDefined();
@@ -404,7 +407,7 @@ describe('file-processor', () => {
 				contentType: 'text/plain'
 			};
 
-			const result = await processFile(input);
+			const result = await processFile(input, TEST_USER_ID);
 
 			expect(result.status).toBe('failed');
 			expect(result.error).toBeDefined();
@@ -421,10 +424,10 @@ describe('file-processor', () => {
 				contentType: 'text/plain'
 			};
 
-			await expect(processFile(input)).rejects.toThrow(FileProcessorError);
+			await expect(processFile(input, TEST_USER_ID)).rejects.toThrow(FileProcessorError);
 
 			try {
-				await processFile(input);
+				await processFile(input, TEST_USER_ID);
 			} catch (error) {
 				expect((error as FileProcessorError).code).toBe('VALIDATION_ERROR');
 				expect((error as FileProcessorError).message).toContain('Invalid file buffer');
@@ -438,10 +441,10 @@ describe('file-processor', () => {
 				contentType: 'text/plain'
 			};
 
-			await expect(processFile(input)).rejects.toThrow(FileProcessorError);
+			await expect(processFile(input, TEST_USER_ID)).rejects.toThrow(FileProcessorError);
 
 			try {
-				await processFile(input);
+				await processFile(input, TEST_USER_ID);
 			} catch (error) {
 				expect((error as FileProcessorError).code).toBe('VALIDATION_ERROR');
 				expect((error as FileProcessorError).message).toContain('Filename is required');
@@ -455,10 +458,10 @@ describe('file-processor', () => {
 				contentType: 'text/plain'
 			};
 
-			await expect(processFile(input)).rejects.toThrow(FileProcessorError);
+			await expect(processFile(input, TEST_USER_ID)).rejects.toThrow(FileProcessorError);
 
 			try {
-				await processFile(input);
+				await processFile(input, TEST_USER_ID);
 			} catch (error) {
 				expect((error as FileProcessorError).code).toBe('VALIDATION_ERROR');
 				expect((error as FileProcessorError).message).toContain('valid UUID');
@@ -472,10 +475,10 @@ describe('file-processor', () => {
 				contentType: null as any
 			};
 
-			await expect(processFile(input)).rejects.toThrow(FileProcessorError);
+			await expect(processFile(input, TEST_USER_ID)).rejects.toThrow(FileProcessorError);
 
 			try {
-				await processFile(input);
+				await processFile(input, TEST_USER_ID);
 			} catch (error) {
 				expect((error as FileProcessorError).code).toBe('VALIDATION_ERROR');
 				expect((error as FileProcessorError).message).toContain('Content type is required');
@@ -496,7 +499,7 @@ describe('file-processor', () => {
 					contentType: 'text/plain'
 				};
 
-				const result = await processFile(input);
+				const result = await processFile(input, TEST_USER_ID);
 				expect(result.status).toBe('ready');
 			}
 		});

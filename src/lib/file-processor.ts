@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { supabaseAdmin as supabase } from './supabase-admin';
 import { extractText, validateFileSize, generateContentHash } from './file-extraction';
 import { generateOverviewAndChunks } from './file-chunker';
 import { compressChunk, type ChunkCompressionResult } from './file-compressor';
@@ -171,13 +171,14 @@ const RETRY_CONFIG = {
  */
 export async function processFile(
 	input: ProcessFileInput,
+	userId: string,
 	options?: {
 		onProgress?: ProgressCallback;
 		skipDuplicateCheck?: boolean;
 	}
 ): Promise<ProcessFileOutput> {
 	// 1. Create pending file (fast)
-	const { fileId, extraction } = await createFilePending(input, {
+	const { fileId, extraction } = await createFilePending(input, userId, {
 		skipDuplicateCheck: options?.skipDuplicateCheck
 	});
 
@@ -207,6 +208,7 @@ export async function processFile(
  */
 export async function createFilePending(
 	input: ProcessFileInput,
+	userId: string,
 	options?: {
 		skipDuplicateCheck?: boolean;
 	}
@@ -239,10 +241,10 @@ export async function createFilePending(
 		throw error;
 	}
 
-	// 3. Check for duplicates (single-user scope - userId always null)
+	// 3. Check for duplicates (scoped to user)
 	if (!options?.skipDuplicateCheck) {
 		try {
-			const duplicate = await checkDuplicate(contentHash, null);
+			const duplicate = await checkDuplicate(contentHash, userId);
 			if (duplicate.isDuplicate) {
 				throw new FileProcessorError(
 					`File already exists (duplicate content hash: ${contentHash.substring(0, 8)}...)`,
@@ -268,7 +270,7 @@ export async function createFilePending(
 	let fileId: string;
 	try {
 		const createResult = await createFileRecord(
-			null, // userId: Single-user mode, always null
+			userId,
 			input.filename,
 			contentHash,
 			fileType

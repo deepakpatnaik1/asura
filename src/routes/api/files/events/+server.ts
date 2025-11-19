@@ -18,6 +18,7 @@ interface FilesTablePayload {
   };
   old?: {
     id: string;
+    user_id: string;
   };
 }
 
@@ -32,6 +33,7 @@ interface SSEEvent {
     progress?: number;
     processing_stage?: string | null;
     error_message?: string | null;
+    user_id?: string;
   };
   message?: {
     id: string;
@@ -47,8 +49,8 @@ let globalFilesSubscription: any = null;
 let globalSuperjournalSubscription: any = null;
 let isSubscriptionActive = false;
 
-// Track all active SSE client connections
-const activeConnections = new Set<ReadableStreamDefaultController>();
+// Track all active SSE client connections with their userId
+const activeConnections = new Map<ReadableStreamDefaultController, string>();
 
 // Supabase admin client (reused across connections)
 let supabaseAdmin: any = null;
@@ -144,7 +146,7 @@ function handleSuperjournalEvent(payload: any) {
 }
 
 /**
- * Broadcast an SSE event to all active connections
+ * Broadcast an SSE event to connections belonging to the event's user
  */
 function broadcastEvent(event: SSEEvent) {
   const encoder = new TextEncoder();
@@ -152,10 +154,20 @@ function broadcastEvent(event: SSEEvent) {
   const message = `data: ${data}\n\n`;
   const encoded = encoder.encode(message);
 
+  // Extract user_id from the event payload (available in file events)
+  const eventUserId = event.file?.user_id;
+
   const deadConnections: ReadableStreamDefaultController[] = [];
   let successCount = 0;
+  let filteredCount = 0;
 
-  for (const controller of activeConnections) {
+  for (const [controller, connectionUserId] of activeConnections.entries()) {
+    // Filter: only send to connections matching the event's userId
+    if (eventUserId && connectionUserId !== eventUserId) {
+      filteredCount++;
+      continue;
+    }
+
     try {
       controller.enqueue(encoded);
       successCount++;
@@ -165,7 +177,7 @@ function broadcastEvent(event: SSEEvent) {
     }
   }
 
-  console.log(`[SSE Global] Broadcasted to ${successCount} clients, ${deadConnections.length} dead connections`);
+  console.log(`[SSE Global] Broadcasted to ${successCount} clients, filtered ${filteredCount}, ${deadConnections.length} dead connections`);
   deadConnections.forEach(conn => activeConnections.delete(conn));
 }
 
@@ -184,14 +196,18 @@ function transformFilesPayload(payload: any): SSEEvent {
         status: payload.new.status,
         progress: payload.new.progress,
         processing_stage: payload.new.processing_stage,
-        error_message: payload.new.error_message
+        error_message: payload.new.error_message,
+        user_id: payload.new.user_id
       }
     };
   } else if (payload.eventType === 'DELETE') {
     return {
       eventType: 'file-deleted',
       timestamp: new Date().toISOString(),
-      file: { id: payload.old.id }
+      file: {
+        id: payload.old.id,
+        user_id: payload.old.user_id
+      }
     };
   }
 
@@ -251,11 +267,21 @@ function cancelCleanup() {
   }
 }
 
-export const GET: RequestHandler = async ({ request }) => {
+export const GET: RequestHandler = async ({ locals: { safeGetSession } }) => {
   try {
     // 1. AUTHENTICATION CHECK
-    // TODO: Extract from request headers after Chunk 11 (Google Auth)
-    const userId = null;
+    const { user } = await safeGetSession();
+    if (!user) {
+      return new Response('event: error\ndata: {"error": "Unauthorized - must be logged in"}\n\n', {
+        status: 401,
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive'
+        }
+      });
+    }
+    const userId = user.id;
 
     // Variables shared between start() and cancel() callbacks
     let heartbeatInterval: NodeJS.Timeout | null = null;
@@ -265,9 +291,9 @@ export const GET: RequestHandler = async ({ request }) => {
       async start(controller) {
         const encoder = new TextEncoder();
 
-        // Add this connection to the global set
-        activeConnections.add(controller);
-        console.log('[SSE] Client connected, total connections:', activeConnections.size);
+        // Add this connection to the global map with userId
+        activeConnections.set(controller, userId);
+        console.log(`[SSE] Client connected (userId: ${userId}), total connections:`, activeConnections.size);
 
         // Cancel any pending cleanup (in case of reconnection within 5s window)
         cancelCleanup();

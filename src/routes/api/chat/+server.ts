@@ -56,6 +56,7 @@ function extractMessage(text: string): string {
 // Background compression function
 async function compressToJournal(
 	superjournalId: string,
+	userId: string,
 	userMessage: string,
 	aiResponse: string,
 	personaName: string
@@ -65,6 +66,7 @@ async function compressToJournal(
 		const { data: settings } = await supabase
 			.from('user_settings')
 			.select('selected_compression_model')
+			.eq('user_id', userId)
 			.single();
 
 		const compressionModel = settings?.selected_compression_model || DEFAULT_COMPRESSION_MODEL;
@@ -140,7 +142,7 @@ async function compressToJournal(
 			.from('journal')
 			.insert({
 				superjournal_id: superjournalId,
-				user_id: null, // Nullable for development
+				user_id: userId,
 				persona_name: call2BJson.persona_name || personaName,
 				boss_essence: call2BJson.boss_essence || userMessage,
 				persona_essence: call2BJson.persona_essence || aiResponse,
@@ -194,12 +196,28 @@ async function compressToJournal(
 	}
 }
 
-export const POST: RequestHandler = async ({ request }) => {
+export const POST: RequestHandler = async ({ request, locals: { safeGetSession } }) => {
 	try {
-		// Read selected conversation model and persona from user_settings table
+		// 1. AUTHENTICATION CHECK
+		const { user } = await safeGetSession();
+		if (!user) {
+			return json(
+				{
+					error: {
+						message: 'Unauthorized - must be logged in',
+						code: 'UNAUTHORIZED'
+					}
+				},
+				{ status: 401 }
+			);
+		}
+		const userId = user.id;
+
+		// 2. Read selected conversation model and persona from user_settings table
 		const { data: settings } = await supabase
 			.from('user_settings')
 			.select('selected_conversation_model, selected_persona')
+			.eq('user_id', userId)
 			.single();
 
 		const conversationModel = settings?.selected_conversation_model || DEFAULT_CONVERSATION_MODEL;
@@ -213,7 +231,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		// Build context for Call 1A/1B (memory injection with vector search)
 		const { context, stats } = await buildContextForCalls1A1B(
-			null, // user_id (null for development, no auth yet)
+			userId, // Authenticated user ID
 			persona, // current persona for instruction filtering
 			conversationModel,
 			message // user query for vector search (Priority 5)
@@ -273,7 +291,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		const { data: superjournalData, error: dbError } = await supabase
 			.from('superjournal')
 			.insert({
-				user_id: null,
+				user_id: userId,
 				persona_name: persona,
 				user_message: message,
 				ai_response: call1BMessage
@@ -289,7 +307,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		// Trigger background compression
 		if (superjournalData?.id) {
 			setTimeout(() => {
-				compressToJournal(superjournalData.id, message, call1BMessage, persona);
+				compressToJournal(superjournalData.id, userId, message, call1BMessage, persona);
 			}, 0);
 		}
 

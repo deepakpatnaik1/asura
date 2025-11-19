@@ -5,11 +5,24 @@ import { createFilePending, processFileBackground, FileProcessorError } from '$l
 // Maximum file size: 10MB
 const MAX_FILE_SIZE_MB = 10;
 
-export const POST: RequestHandler = async ({ request }) => {
+export const POST: RequestHandler = async ({ request, locals: { safeGetSession } }) => {
   try {
-    // 1. PARSE FORM DATA
-    // NOTE: No authentication check - single-user app
-    // Multi-user support will be added in subsequent branch
+    // 1. AUTHENTICATION CHECK
+    const { user } = await safeGetSession();
+    if (!user) {
+      return json(
+        {
+          error: {
+            message: 'Unauthorized - must be logged in',
+            code: 'UNAUTHORIZED'
+          }
+        },
+        { status: 401 }
+      );
+    }
+    const userId = user.id;
+
+    // 2. PARSE FORM DATA
     let file: File;
     try {
       const formData = await request.formData();
@@ -101,6 +114,7 @@ export const POST: RequestHandler = async ({ request }) => {
           filename,
           contentType
         },
+        userId,
         { skipDuplicateCheck: true } // Always allow uploads, even for duplicates
       );
 

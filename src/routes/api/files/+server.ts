@@ -1,12 +1,22 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 
-export const GET: RequestHandler = async ({ url, locals: { supabase } }) => {
+export const GET: RequestHandler = async ({ url, locals: { supabase, safeGetSession } }) => {
   try {
     // 1. AUTHENTICATION CHECK
-    // NOTE: RLS currently DISABLED (migration 20251108000003)
-    // This user_id check will enforce isolation once RLS is enabled in Chunk 2
-    const userId = null; // TODO: Extract from session after Chunk 1 complete
+    const { user } = await safeGetSession();
+    if (!user) {
+      return json(
+        {
+          error: {
+            message: 'Unauthorized - must be logged in',
+            code: 'UNAUTHORIZED'
+          }
+        },
+        { status: 401 }
+      );
+    }
+    const userId = user.id;
 
     // 2. PARSE QUERY PARAMETERS
     const statusFilter = url.searchParams.get('status');
@@ -28,16 +38,9 @@ export const GET: RequestHandler = async ({ url, locals: { supabase } }) => {
     // 3. QUERY DATABASE
     let query = supabase
       .from('files')
-      .select('id, filename, file_type, status, progress, processing_stage, error_message, uploaded_at, updated_at');
-
-    // Handle null/undefined userId properly (PostgreSQL requires IS NULL, not = 'null')
-    if (userId === null || userId === undefined) {
-      query = query.is('user_id', null);
-    } else {
-      query = query.eq('user_id', userId);
-    }
-
-    query = query.order('uploaded_at', { ascending: false });
+      .select('id, filename, file_type, status, progress, processing_stage, error_message, uploaded_at, updated_at')
+      .eq('user_id', userId)
+      .order('uploaded_at', { ascending: false });
 
     // Apply status filter if provided
     if (statusFilter) {
