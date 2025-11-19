@@ -1,9 +1,14 @@
 <script lang="ts">
-	let { content = '' } = $props();
+	let { content = '', modelIdentifier = '' } = $props();
 
 	let renderedHtml = $state('');
 
 	function processText(text: string): string {
+		// Skip cleanup for Claude models (they output clean text already)
+		if (modelIdentifier && modelIdentifier.startsWith('claude-')) {
+			return text;
+		}
+
 		let cleaned = text;
 
 		// Step 1: Convert number emojis to actual numbers with dots (for numbered lists)

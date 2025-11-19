@@ -780,7 +780,7 @@
 							<span class="message-label ai-label">{msg.persona_name.charAt(0).toUpperCase() + msg.persona_name.slice(1)}</span>
 						</div>
 						<div class="message-text">
-							<TextCleaner content={msg.ai_response} />
+							<TextCleaner content={msg.ai_response} modelIdentifier={msg.model_identifier || ""} />
 						</div>
 					</div>
 				</div>
