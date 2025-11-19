@@ -121,8 +121,6 @@
 
 			{#if isLoading}
 				<div class="loading-state">Loading settings...</div>
-			{:else if errorMessage}
-				<div class="error-message">{errorMessage}</div>
 			{:else}
 				<!-- Model Selection -->
 				<div class="settings-section">
@@ -182,56 +180,36 @@
 		left: 0;
 		width: 100%;
 		height: 100%;
-		background: rgba(0, 0, 0, 0.7);
+		background: rgba(0, 0, 0, 0.5);
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		z-index: var(--z-modal);
-		animation: fadeIn 0.15s ease-out;
-	}
-
-	@keyframes fadeIn {
-		from {
-			opacity: 0;
-		}
-		to {
-			opacity: 1;
-		}
 	}
 
 	.modal-content {
 		background: hsl(var(--card));
 		border: 1px solid hsl(var(--border));
-		border-radius: 12px;
-		padding: 24px;
-		width: 500px;
+		border-radius: 4px;
+		padding: 20px;
+		width: 420px;
 		max-width: 90%;
 		max-height: 80vh;
 		overflow-y: auto;
-		animation: slideUp 0.2s ease-out;
-	}
-
-	@keyframes slideUp {
-		from {
-			transform: translateY(20px);
-			opacity: 0;
-		}
-		to {
-			transform: translateY(0);
-			opacity: 1;
-		}
 	}
 
 	.modal-header {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		margin-bottom: 24px;
+		margin-bottom: 20px;
+		padding-bottom: 12px;
+		border-bottom: 1px solid hsl(var(--border));
 	}
 
 	.modal-header h2 {
-		font-size: 20px;
-		font-weight: 600;
+		font-size: 11px;
+		font-weight: 400;
 		color: hsl(var(--foreground));
 		margin: 0;
 	}
@@ -245,109 +223,98 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		border-radius: 4px;
-		transition: all 0.15s ease;
+		opacity: 0.5;
 	}
 
 	.close-btn:hover {
-		background: hsl(var(--accent));
-		color: hsl(var(--foreground));
+		opacity: 1;
 	}
 
 	.settings-section {
-		margin-bottom: 24px;
+		margin-bottom: 12px;
 	}
 
 	.settings-section label {
 		display: block;
-		font-weight: 600;
-		margin-bottom: 8px;
-		color: hsl(var(--foreground));
-		font-size: 14px;
+		font-weight: 400;
+		margin-bottom: 4px;
+		color: hsl(var(--muted-foreground));
+		font-size: 11px;
 	}
 
 	.settings-section select {
 		width: 100%;
-		padding: 10px 12px;
-		background: hsl(var(--input));
+		padding: 6px 24px 6px 8px;
+		background: transparent;
+		background-image: url("data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 12 12' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M3 5L6 8L9 5' stroke='%23666' stroke-width='1' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+		background-repeat: no-repeat;
+		background-position: right 8px center;
 		border: 1px solid hsl(var(--border));
-		border-radius: 6px;
+		border-radius: 0;
 		color: hsl(var(--foreground));
-		font-size: 14px;
+		font-family: Menlo, Monaco, 'Courier New', monospace;
+		font-size: 10px;
 		cursor: pointer;
-		transition: all 0.15s ease;
-	}
-
-	.settings-section select:hover {
-		border-color: hsl(var(--ring));
+		appearance: none;
 	}
 
 	.settings-section select:focus {
 		outline: none;
-		border-color: var(--boss-accent);
-		box-shadow: 0 0 0 2px rgba(217, 133, 107, 0.1);
+		border-color: hsl(var(--border));
 	}
 
 	.help-text {
-		font-size: 12px;
+		font-size: 11px;
 		color: hsl(var(--muted-foreground));
-		margin-top: 6px;
+		margin-top: 4px;
+		opacity: 0.5;
 	}
 
 	.stats-section {
-		background: hsl(var(--muted));
-		border: 1px solid hsl(var(--border));
-		border-radius: 8px;
-		padding: 16px;
-		margin: 24px 0;
+		border-top: 1px solid hsl(var(--border));
+		padding-top: 12px;
+		margin: 16px 0 12px 0;
 	}
 
 	.stats-section h3 {
-		font-size: 14px;
-		font-weight: 600;
-		color: hsl(var(--foreground));
-		margin: 0 0 12px 0;
+		font-size: 11px;
+		font-weight: 400;
+		color: hsl(var(--muted-foreground));
+		margin: 0 0 8px 0;
 	}
 
 	.stat-row {
 		display: flex;
 		justify-content: space-between;
-		padding: 8px 0;
-		font-size: 14px;
+		padding: 4px 0;
+		font-size: 11px;
 		color: hsl(var(--muted-foreground));
 	}
 
 	.stat-value {
-		font-weight: 600;
-		color: var(--boss-accent);
+		font-weight: 400;
+		color: hsl(var(--foreground));
 		font-variant-numeric: tabular-nums;
 	}
 
 	.save-btn {
 		width: 100%;
-		padding: 12px;
-		background: var(--boss-accent);
-		color: white;
-		border: none;
-		border-radius: 6px;
-		font-weight: 600;
-		font-size: 14px;
+		padding: 6px;
+		background: transparent;
+		color: hsl(var(--foreground));
+		border: 1px solid hsl(var(--border));
+		border-radius: 0;
+		font-weight: 400;
+		font-size: 11px;
 		cursor: pointer;
-		transition: all 0.15s ease;
 	}
 
 	.save-btn:hover:not(:disabled) {
-		background: rgb(197, 113, 87);
-		transform: translateY(-1px);
-		box-shadow: 0 4px 12px rgba(217, 133, 107, 0.3);
-	}
-
-	.save-btn:active:not(:disabled) {
-		transform: translateY(0);
+		border-color: hsl(var(--foreground));
 	}
 
 	.save-btn:disabled {
-		opacity: 0.5;
+		opacity: 0.3;
 		cursor: not-allowed;
 	}
 
@@ -355,15 +322,6 @@
 		text-align: center;
 		padding: 40px;
 		color: hsl(var(--muted-foreground));
-	}
-
-	.error-message {
-		background: rgba(239, 68, 68, 0.1);
-		border: 1px solid rgba(239, 68, 68, 0.3);
-		border-radius: 6px;
-		padding: 12px;
-		color: rgb(248, 113, 113);
-		font-size: 14px;
-		margin-bottom: 20px;
+		font-size: 11px;
 	}
 </style>
