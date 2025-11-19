@@ -1,12 +1,12 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { supabase } from '$lib/supabase';
 
-export const GET: RequestHandler = async ({ url }) => {
+export const GET: RequestHandler = async ({ url, locals: { supabase } }) => {
   try {
     // 1. AUTHENTICATION CHECK
-    // TODO: Replace with actual auth extraction after Chunk 11
-    const userId = null;
+    // NOTE: RLS currently DISABLED (migration 20251108000003)
+    // This user_id check will enforce isolation once RLS is enabled in Chunk 2
+    const userId = null; // TODO: Extract from session after Chunk 1 complete
 
     // 2. PARSE QUERY PARAMETERS
     const statusFilter = url.searchParams.get('status');

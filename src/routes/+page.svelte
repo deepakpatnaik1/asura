@@ -721,6 +721,26 @@
 			document.removeEventListener('click', handleClickOutside);
 		};
 	});
+
+	// Logout handler
+	async function handleLogout() {
+		try {
+			const response = await fetch('/api/auth/logout', {
+				method: 'POST'
+			});
+
+			if (response.ok || response.redirected) {
+				// Redirect will be handled by the server
+				window.location.href = '/login';
+			} else {
+				console.error('Logout failed:', response.statusText);
+			}
+		} catch (error) {
+			console.error('Logout error:', error);
+			// Still redirect to login page even if API fails
+			window.location.href = '/login';
+		}
+	}
 </script>
 
 <div class="chat-container">
@@ -882,7 +902,7 @@
 
 					<!-- User Controls (inline on narrow screens) -->
 					<div class="user-controls-inline">
-						<button class="logout-btn logout-btn-inline"><Icon src={LuLogOut} size="11" /></button>
+						<button class="logout-btn logout-btn-inline" onclick={handleLogout} title="Sign out"><Icon src={LuLogOut} size="11" /></button>
 					</div>
 
 					<button class="control-btn settings-btn" title="Nuke all history" onclick={handleNukeClick}><Icon src={LuFlame} size="11" /></button>
@@ -975,7 +995,7 @@
 
 	<!-- User Avatar/Logout (top right) -->
 	<div class="user-controls">
-		<button class="logout-btn"><Icon src={LuLogOut} size="16" /></button>
+		<button class="logout-btn" onclick={handleLogout} title="Sign out"><Icon src={LuLogOut} size="16" /></button>
 	</div>
 
 	<!-- Nuke Confirmation Modal -->

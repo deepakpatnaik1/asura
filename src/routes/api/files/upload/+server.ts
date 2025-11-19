@@ -1,6 +1,5 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { supabase } from '$lib/supabase';
 import { createFilePending, processFileBackground, FileProcessorError } from '$lib/file-processor';
 
 // Maximum file size: 10MB

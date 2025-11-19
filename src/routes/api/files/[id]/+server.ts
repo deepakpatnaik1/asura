@@ -1,6 +1,5 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { supabase } from '$lib/supabase';
 
 // Helper function to validate UUID format
 function isValidUUID(id: string): boolean {
@@ -9,11 +8,11 @@ function isValidUUID(id: string): boolean {
 }
 
 // GET: Retrieve file details
-export const GET: RequestHandler = async ({ params }) => {
+export const GET: RequestHandler = async ({ params, locals: { supabase } }) => {
   try {
     // 1. AUTHENTICATION CHECK
-    // TODO: Replace with actual auth extraction after Chunk 11
-    const userId = null;
+    // NOTE: RLS currently DISABLED (migration 20251108000003)
+    const userId = null; // TODO: Extract from session after Chunk 1 complete
 
     // 2. VALIDATE FILE ID
     const { id } = params;
@@ -86,11 +85,11 @@ export const GET: RequestHandler = async ({ params }) => {
 };
 
 // DELETE: Delete a file
-export const DELETE: RequestHandler = async ({ params }) => {
+export const DELETE: RequestHandler = async ({ params, locals: { supabase } }) => {
   try {
     // 1. AUTHENTICATION CHECK
-    // TODO: Replace with actual auth extraction after Chunk 11
-    const userId = null;
+    // NOTE: RLS currently DISABLED (migration 20251108000003)
+    const userId = null; // TODO: Extract from session after Chunk 1 complete
 
     // 2. VALIDATE FILE ID
     const { id } = params;
