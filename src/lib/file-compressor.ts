@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { createMessage } from '$lib/api/anthropic-client';
 import type { FileType } from './file-extraction';
 import { MAX_TOKENS } from '$lib/config/models';
 import { MODIFIED_CALL2A_PROMPT, MODIFIED_CALL2B_PROMPT, CALL3A_PROMPT, CALL3B_PROMPT } from '$lib/prompts';
@@ -223,7 +224,17 @@ function parseJsonResponse(text: string): Call2Response {
 }
 
 /**
- * Make API call to Fireworks with given prompt
+ * Helper function to detect if model is Anthropic
+ *
+ * @param modelIdentifier - Model identifier string
+ * @returns True if model is Anthropic (starts with 'claude-')
+ */
+function isAnthropicModel(modelIdentifier: string): boolean {
+	return modelIdentifier.startsWith('claude-');
+}
+
+/**
+ * Make API call to AI provider (supports both Fireworks and Anthropic)
  */
 async function callFireworksAPI(
 	systemPrompt: string,
@@ -231,36 +242,58 @@ async function callFireworksAPI(
 	model: string,
 	maxTokens?: number
 ): Promise<string> {
-	const apiKey = process.env.FIREWORKS_API_KEY || '';
-
-	const fireworks = new OpenAI({
-		baseURL: 'https://api.fireworks.ai/inference/v1',
-		apiKey: apiKey
-	});
+	const isAnthropic = isAnthropicModel(model);
 
 	try {
-		const response = await fireworks.chat.completions.create({
-			model: model,
-			messages: [
-				{
-					role: 'system',
-					content: systemPrompt
-				},
-				{
-					role: 'user',
-					content: userContent
-				}
-			],
-			temperature: TEMPERATURE,
-			max_tokens: maxTokens || MAX_TOKENS_CONFIG
-		});
+		let content: string;
 
-		const content = response.choices[0]?.message?.content;
+		if (isAnthropic) {
+			// Use Anthropic API
+			const response = await createMessage({
+				model: model,
+				max_tokens: maxTokens || MAX_TOKENS_CONFIG,
+				temperature: TEMPERATURE,
+				system: systemPrompt,
+				messages: [
+					{
+						role: 'user',
+						content: userContent
+					}
+				]
+			});
+			content = response.content[0]?.type === 'text' ? response.content[0].text : '';
+		} else {
+			// Use Fireworks API
+			const apiKey = process.env.FIREWORKS_API_KEY || '';
+
+			const fireworks = new OpenAI({
+				baseURL: 'https://api.fireworks.ai/inference/v1',
+				apiKey: apiKey
+			});
+
+			const response = await fireworks.chat.completions.create({
+				model: model,
+				messages: [
+					{
+						role: 'system',
+						content: systemPrompt
+					},
+					{
+						role: 'user',
+						content: userContent
+					}
+				],
+				temperature: TEMPERATURE,
+				max_tokens: maxTokens || MAX_TOKENS_CONFIG
+			});
+			content = response.choices[0]?.message?.content || '';
+		}
+
 		if (!content) {
 			throw new FileCompressionError(
 				'API returned empty response',
 				'API_ERROR',
-				{ response }
+				{ model }
 			);
 		}
 
@@ -269,7 +302,7 @@ async function callFireworksAPI(
 		// Check for rate limiting
 		if (error.status === 429) {
 			throw new FileCompressionError(
-				'Fireworks API rate limit exceeded',
+				`${isAnthropic ? 'Anthropic' : 'Fireworks'} API rate limit exceeded`,
 				'RATE_LIMIT',
 				{ originalError: error.message }
 			);
@@ -278,7 +311,7 @@ async function callFireworksAPI(
 		// Check for auth errors
 		if (error.status === 401 || error.status === 403) {
 			throw new FileCompressionError(
-				'Fireworks API authentication failed',
+				`${isAnthropic ? 'Anthropic' : 'Fireworks'} API authentication failed`,
 				'API_ERROR',
 				{ status: error.status, originalError: error.message }
 			);
@@ -286,7 +319,7 @@ async function callFireworksAPI(
 
 		// Generic API error
 		throw new FileCompressionError(
-			`Fireworks API call failed: ${error.message}`,
+			`${isAnthropic ? 'Anthropic' : 'Fireworks'} API call failed: ${error.message}`,
 			'API_ERROR',
 			{ originalError: error.message, status: error.status }
 		);

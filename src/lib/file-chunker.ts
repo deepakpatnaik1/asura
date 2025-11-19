@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { createMessage } from '$lib/api/anthropic-client';
 import type { FileType } from './file-extraction';
 import { generateEmbedding } from './vectorization';
 import { FILE_MODEL, MAX_TOKENS } from '$lib/config/models';
@@ -379,9 +380,9 @@ Focus on:
 
 DO NOT summarize detailed content. Capture "what kind of document this is" and "what it's broadly about."`;
 
-	// Call Fireworks API
+	// Call AI API (supports both Fireworks and Anthropic)
 	try {
-		const overview = await callFireworksAPI(FILE_OVERVIEW_PROMPT, userPrompt);
+		const overview = await callAIAPI(FILE_OVERVIEW_PROMPT, userPrompt, MODEL_NAME);
 		return overview;
 	} catch (error) {
 		if (error instanceof FileChunkerError) {
@@ -412,52 +413,85 @@ function countWords(text: string): number {
 }
 
 /**
- * Call Fireworks API with system and user prompts
+ * Helper function to detect if model is Anthropic
  *
- * Reuses the same API configuration as file-compressor.ts
+ * @param modelIdentifier - Model identifier string
+ * @returns True if model is Anthropic (starts with 'claude-')
+ */
+function isAnthropicModel(modelIdentifier: string): boolean {
+	return modelIdentifier.startsWith('claude-');
+}
+
+/**
+ * Call AI API with system and user prompts (supports both Fireworks and Anthropic)
+ *
+ * Routes to appropriate provider based on model identifier
  *
  * @param systemPrompt - System instruction for the model
  * @param userContent - User message content
+ * @param model - Model identifier (determines provider)
  * @returns Model response text
  * @throws FileChunkerError if API call fails
  */
-async function callFireworksAPI(systemPrompt: string, userContent: string): Promise<string> {
-	const apiKey = process.env.FIREWORKS_API_KEY || '';
-
-	if (!apiKey) {
-		throw new FileChunkerError(
-			'FIREWORKS_API_KEY environment variable not set',
-			'API_ERROR',
-			{ missingEnvVar: 'FIREWORKS_API_KEY' }
-		);
-	}
-
-	const fireworks = new OpenAI({
-		baseURL: 'https://api.fireworks.ai/inference/v1',
-		apiKey: apiKey
-	});
+async function callAIAPI(systemPrompt: string, userContent: string, model: string): Promise<string> {
+	const isAnthropic = isAnthropicModel(model);
 
 	try {
-		const response = await fireworks.chat.completions.create({
-			model: MODEL_NAME,
-			messages: [
-				{
-					role: 'system',
-					content: systemPrompt
-				},
-				{
-					role: 'user',
-					content: userContent
-				}
-			],
-			temperature: TEMPERATURE,
-			max_tokens: MAX_TOKENS_OVERVIEW,
-			response_format: { type: 'json_object' } // Force JSON output
-		});
+		let content: string;
 
-		const content = response.choices[0]?.message?.content;
+		if (isAnthropic) {
+			// Use Anthropic API
+			const response = await createMessage({
+				model: model,
+				max_tokens: MAX_TOKENS_OVERVIEW,
+				temperature: TEMPERATURE,
+				system: systemPrompt,
+				messages: [
+					{
+						role: 'user',
+						content: userContent
+					}
+				]
+			});
+			content = response.content[0]?.type === 'text' ? response.content[0].text : '';
+		} else {
+			// Use Fireworks API
+			const apiKey = process.env.FIREWORKS_API_KEY || '';
+
+			if (!apiKey) {
+				throw new FileChunkerError(
+					'FIREWORKS_API_KEY environment variable not set',
+					'API_ERROR',
+					{ missingEnvVar: 'FIREWORKS_API_KEY' }
+				);
+			}
+
+			const fireworks = new OpenAI({
+				baseURL: 'https://api.fireworks.ai/inference/v1',
+				apiKey: apiKey
+			});
+
+			const response = await fireworks.chat.completions.create({
+				model: model,
+				messages: [
+					{
+						role: 'system',
+						content: systemPrompt
+					},
+					{
+						role: 'user',
+						content: userContent
+					}
+				],
+				temperature: TEMPERATURE,
+				max_tokens: MAX_TOKENS_OVERVIEW,
+				response_format: { type: 'json_object' } // Force JSON output
+			});
+			content = response.choices[0]?.message?.content || '';
+		}
+
 		if (!content) {
-			throw new FileChunkerError('API returned empty response', 'API_ERROR', { response });
+			throw new FileChunkerError('API returned empty response', 'API_ERROR', { model });
 		}
 
 		// Remove thinking tags if present (Qwen3 includes <think>...</think>)
@@ -472,7 +506,7 @@ async function callFireworksAPI(systemPrompt: string, userContent: string): Prom
 		// Check for rate limiting
 		if (error.status === 429) {
 			throw new FileChunkerError(
-				'Fireworks API rate limit exceeded',
+				`${isAnthropic ? 'Anthropic' : 'Fireworks'} API rate limit exceeded`,
 				'RATE_LIMIT',
 				{ originalError: error.message }
 			);
@@ -481,7 +515,7 @@ async function callFireworksAPI(systemPrompt: string, userContent: string): Prom
 		// Check for auth errors
 		if (error.status === 401 || error.status === 403) {
 			throw new FileChunkerError(
-				'Fireworks API authentication failed',
+				`${isAnthropic ? 'Anthropic' : 'Fireworks'} API authentication failed`,
 				'API_ERROR',
 				{ status: error.status, originalError: error.message }
 			);
@@ -489,7 +523,7 @@ async function callFireworksAPI(systemPrompt: string, userContent: string): Prom
 
 		// Generic API error
 		throw new FileChunkerError(
-			`Fireworks API call failed: ${error.message}`,
+			`${isAnthropic ? 'Anthropic' : 'Fireworks'} API call failed: ${error.message}`,
 			'API_ERROR',
 			{ originalError: error.message, status: error.status }
 		);
@@ -927,7 +961,7 @@ ${text}`;
 	// Call 3A: Generate overview + chunk boundaries
 	let call3AResponse: string;
 	try {
-		call3AResponse = await callFireworksAPI(CALL_3A_PROMPT, userPrompt);
+		call3AResponse = await callAIAPI(CALL_3A_PROMPT, userPrompt, MODEL_NAME);
 	} catch (error) {
 		if (error instanceof FileChunkerError) {
 			throw error;
@@ -960,7 +994,7 @@ ${call3AResponse}`;
 
 	let call3BResponse: string;
 	try {
-		call3BResponse = await callFireworksAPI(CALL_3B_PROMPT, call3BUserPrompt);
+		call3BResponse = await callAIAPI(CALL_3B_PROMPT, call3BUserPrompt, MODEL_NAME);
 	} catch (error) {
 		if (error instanceof FileChunkerError) {
 			throw error;
