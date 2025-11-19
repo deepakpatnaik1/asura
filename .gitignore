@@ -28,10 +28,5 @@ vite.config.ts.timestamp-*
 /blob-report/
 /playwright/.cache/
 
-# Verification logs (never tracked, preserved across branch operations)
-docs/verify-everything.md
-
-# Multiuser planning docs (preserved across branch operations)
-docs/multiuser-megafeature.md
-docs/multiuser-canonical-plan.md
-docs/multiuser-work-breakdown.md
+# Documentation directory (preserved across branch operations)
+docs/
