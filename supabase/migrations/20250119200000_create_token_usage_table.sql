@@ -21,9 +21,11 @@ CREATE INDEX IF NOT EXISTS idx_token_usage_user_created ON token_usage(user_id, 
 ALTER TABLE token_usage ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies: Users can only see their own token usage
+DROP POLICY IF EXISTS "Users can view own token usage" ON token_usage;
 CREATE POLICY "Users can view own token usage" ON token_usage
   FOR SELECT USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can insert own token usage" ON token_usage;
 CREATE POLICY "Users can insert own token usage" ON token_usage
   FOR INSERT WITH CHECK (auth.uid() = user_id);
 

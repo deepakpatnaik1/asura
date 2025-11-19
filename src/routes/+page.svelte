@@ -11,6 +11,7 @@
 	} from '$lib/stores/filesStore';
 	import { tick, onMount } from 'svelte';
 	import TextCleaner from '$lib/components/TextCleaner.svelte';
+	import SettingsModal from '$lib/components/SettingsModal.svelte';
 
 	// Receive loaded messages from server
 	let { data } = $props();
@@ -25,6 +26,7 @@
 
 	// User settings state
 	let selectedPersona = $state<'gunnar' | 'kirby'>('gunnar');
+	let showSettings = $state(false);
 
 	// File upload state
 	let fileInputRef: HTMLInputElement;
@@ -1012,6 +1014,14 @@
 			</div>
 		</div>
 	{/if}
+
+	<!-- Settings Button (Fixed Position Bottom Right) -->
+	<button class="settings-btn-fixed" onclick={() => showSettings = true} title="Settings">
+		<Icon src={LuSettings} size="16" />
+	</button>
+
+	<!-- Settings Modal -->
+	<SettingsModal bind:open={showSettings} onClose={() => showSettings = false} />
 </div>
 
 <style>
@@ -1369,6 +1379,35 @@
 		.user-controls-inline {
 			display: flex;
 			align-items: center;
+		}
+	}
+
+	/* Fixed Settings Button - Bottom Right (matches logout button style) */
+	.settings-btn-fixed {
+		position: fixed;
+		bottom: 16px;
+		right: 16px;
+		background: transparent;
+		border: none;
+		color: hsl(var(--chat-label));
+		cursor: pointer;
+		padding: 8px;
+		opacity: 0.7;
+		transition: all 0.2s;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		z-index: var(--z-sticky);
+	}
+
+	.settings-btn-fixed:hover {
+		opacity: 1;
+		color: rgb(239, 68, 68);
+	}
+
+	@media (max-width: 900px) {
+		.settings-btn-fixed {
+			display: none;
 		}
 	}
 
