@@ -55,7 +55,7 @@ interface ContextStats {
  * Enforces 40% context window cap with priority-based truncation
  */
 export async function buildContextForCalls1A1B(
-	userId: string | null,
+	userId: string,
 	personaName: string = 'gunnar',
 	modelIdentifier: string = 'accounts/fireworks/models/qwen3-235b-a22b',
 	userQuery?: string // Optional: enables vector search (Priority 5)
@@ -79,17 +79,10 @@ export async function buildContextForCalls1A1B(
 	let queryVector: number[] | null = null;
 
 	// Priority 1: Last 5 Superjournal turns (working memory - highest priority)
-	let superjournalQuery = supabase
+	const { data: superjournalData } = await supabase
 		.from('superjournal')
-		.select('user_message, ai_response, persona_name, created_at');
-
-	if (userId === null) {
-		superjournalQuery = superjournalQuery.is('user_id', null);
-	} else {
-		superjournalQuery = superjournalQuery.eq('user_id', userId);
-	}
-
-	const { data: superjournalData } = await superjournalQuery
+		.select('user_message, ai_response, persona_name, created_at')
+		.eq('user_id', userId)
 		.order('created_at', { ascending: false })
 		.limit(5);
 
@@ -100,18 +93,12 @@ export async function buildContextForCalls1A1B(
 	}
 
 	// Priority 2: Starred messages (user-curated memory)
-	let starredQuery = supabase
+	const { data: starredData } = await supabase
 		.from('journal')
 		.select('boss_essence, persona_essence, persona_name, created_at')
-		.eq('is_starred', true);
-
-	if (userId === null) {
-		starredQuery = starredQuery.is('user_id', null);
-	} else {
-		starredQuery = starredQuery.eq('user_id', userId);
-	}
-
-	const { data: starredData } = await starredQuery.order('created_at', { ascending: false });
+		.eq('is_starred', true)
+		.eq('user_id', userId)
+		.order('created_at', { ascending: false });
 
 	if (starredData && starredData.length > 0) {
 		const starredText = formatStarredMessages(starredData.reverse()); // Oldest first
@@ -123,18 +110,11 @@ export async function buildContextForCalls1A1B(
 	}
 
 	// Priority 3: Instructions (global + current persona behavioral directives)
-	let instructionsQuery = supabase
+	const { data: instructionsData } = await supabase
 		.from('journal')
 		.select('boss_essence, persona_essence, decision_arc_summary, persona_name, created_at')
-		.eq('is_instruction', true);
-
-	if (userId === null) {
-		instructionsQuery = instructionsQuery.is('user_id', null);
-	} else {
-		instructionsQuery = instructionsQuery.eq('user_id', userId);
-	}
-
-	const { data: instructionsData } = await instructionsQuery
+		.eq('is_instruction', true)
+		.eq('user_id', userId)
 		.or(`instruction_scope.eq.global,instruction_scope.eq.${personaName}`)
 		.order('created_at', { ascending: false });
 
@@ -148,17 +128,10 @@ export async function buildContextForCalls1A1B(
 	}
 
 	// Priority 4: Last 100 Journal turns (recent memory)
-	let journalQuery = supabase
+	const { data: journalData } = await supabase
 		.from('journal')
-		.select('boss_essence, persona_essence, decision_arc_summary, persona_name, created_at');
-
-	if (userId === null) {
-		journalQuery = journalQuery.is('user_id', null);
-	} else {
-		journalQuery = journalQuery.eq('user_id', userId);
-	}
-
-	const { data: journalData } = await journalQuery
+		.select('boss_essence, persona_essence, decision_arc_summary, persona_name, created_at')
+		.eq('user_id', userId)
 		.order('created_at', { ascending: false })
 		.limit(100);
 
@@ -183,18 +156,11 @@ export async function buildContextForCalls1A1B(
 	// Priority 5: Vector search results (only if userQuery provided and journal count > 100)
 	if (userQuery) {
 		// Check journal count first
-		let countQuery = supabase
+		const { count: journalCount } = await supabase
 			.from('journal')
 			.select('id', { count: 'exact', head: true })
-			.eq('is_instruction', false);
-
-		if (userId === null) {
-			countQuery = countQuery.is('user_id', null);
-		} else {
-			countQuery = countQuery.eq('user_id', userId);
-		}
-
-		const { count: journalCount } = await countQuery;
+			.eq('is_instruction', false)
+			.eq('user_id', userId);
 
 		if (journalCount && journalCount > 100) {
 			try {
@@ -211,18 +177,11 @@ export async function buildContextForCalls1A1B(
 				const excludeIds: string[] = [];
 
 				// Get last 5 Superjournal IDs
-				let superjournalExcludeQuery = supabase
+				const { data: superjournalIds } = await supabase
 					.from('superjournal')
-					.select('id');
-
-				if (userId === null) {
-					superjournalExcludeQuery = superjournalExcludeQuery.is('user_id', null);
-				} else {
-					superjournalExcludeQuery = superjournalExcludeQuery.eq('user_id', userId);
-				}
-
-				const { data: superjournalIds } = await superjournalExcludeQuery
-					.order('created_at', { ascending: false })
+					.select('id')
+					.eq('user_id', userId)
+					.order('created_at', { ascending: false})
 					.limit(5);
 
 				// Get corresponding Journal IDs via Superjournal IDs
@@ -239,18 +198,11 @@ export async function buildContextForCalls1A1B(
 				}
 
 				// Get last 100 Journal IDs
-				let journalExcludeQuery = supabase
+				const { data: last100Ids } = await supabase
 					.from('journal')
 					.select('id')
-					.eq('is_instruction', false);
-
-				if (userId === null) {
-					journalExcludeQuery = journalExcludeQuery.is('user_id', null);
-				} else {
-					journalExcludeQuery = journalExcludeQuery.eq('user_id', userId);
-				}
-
-				const { data: last100Ids } = await journalExcludeQuery
+					.eq('is_instruction', false)
+					.eq('user_id', userId)
 					.order('created_at', { ascending: false })
 					.limit(100);
 
@@ -299,19 +251,12 @@ export async function buildContextForCalls1A1B(
 
 	// Priority 5.5: File overviews (awareness of all uploaded files)
 	try {
-		let fileOverviewsQuery = supabase
+		const { data: fileOverviews } = await supabase
 			.from('files')
 			.select('id, filename, file_type, description, uploaded_at')
 			.eq('status', 'ready') // Only successfully processed files
-			.order('uploaded_at', { ascending: false });
-
-		if (userId === null) {
-			fileOverviewsQuery = fileOverviewsQuery.is('user_id', null);
-		} else {
-			fileOverviewsQuery = fileOverviewsQuery.eq('user_id', userId);
-		}
-
-		const { data: fileOverviews } = await fileOverviewsQuery;
+			.eq('user_id', userId)
+			.order('uploaded_at', { ascending: false});
 
 		if (fileOverviews && fileOverviews.length > 0) {
 			const fileOverviewsText = formatFileOverviews(fileOverviews);
