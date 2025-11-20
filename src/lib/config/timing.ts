@@ -2,7 +2,7 @@
  * Timing Configuration
  *
  * Centralized constants for UI countdowns, SSE heartbeats, auto-scroll,
- * reconnection logic, and retry delays.
+ * cleanup delays, and error display.
  */
 
 export const TIMING = {
@@ -29,18 +29,6 @@ export const TIMING = {
 	 * After scrolling for 5s, pause for 60s before next scroll.
 	 */
 	autoScrollPause: 60000,
-
-	/**
-	 * SSE reconnection backoff base delay (ms)
-	 * First reconnect after 1s, then exponential backoff.
-	 */
-	reconnectBackoffBase: 1000,
-
-	/**
-	 * API retry base delay (ms)
-	 * First retry after 1s, then exponential backoff.
-	 */
-	retryDelayBase: 1000,
 
 	/**
 	 * SSE subscription cleanup delay (ms)

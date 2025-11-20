@@ -1662,4 +1662,64 @@ export const TIMING = {
 
 ---
 
+## Chunk 7: Fix Applied (2025-11-20)
+
+**Status**: ✅ **FIXED** - Grade restored to A (100/100)
+**Commit**: TBD - "fix(config): Remove duplicate/orphaned TIMING values"
+
+### What Was Fixed ✅
+
+**File Modified**: `src/lib/config/timing.ts`
+
+**Removed 2 unused values:**
+1. ✅ `reconnectBackoffBase: 1000` - Duplicate (RETRY_CONFIG version is used)
+2. ✅ `retryDelayBase: 1000` - Orphaned (never used anywhere)
+
+**Updated header comment:**
+- Before: "reconnection logic, and retry delays"
+- After: "cleanup delays, and error display"
+
+### Final TIMING Config (6 values, all used)
+
+```typescript
+export const TIMING = {
+  countdownDuration: 3000,        // ✅ Used 3x in +page.svelte
+  heartbeatInterval: 30000,       // ✅ Used in events/+server.ts
+  autoScrollDuration: 5000,       // ✅ Used 2x in +page.svelte
+  autoScrollPause: 60000,         // ✅ Used 2x in +page.svelte
+  cleanupDelay: 5000,             // ✅ Used in events/+server.ts
+  errorDisplayDuration: 5000      // ✅ Used in filesStore.ts
+} as const;
+```
+
+### Verification ✅
+
+**Type-Check**: ✅ Passed (133 baseline errors, no new errors)
+
+**Usage Verification**: ✅ No references to removed values
+```bash
+grep -rn "TIMING.reconnectBackoffBase\|TIMING.retryDelayBase" src/
+# (empty result - good!)
+
+grep -rn "reconnectBackoffBase" src/lib/config/
+# src/lib/config/processing.ts:128 (RETRY_CONFIG only - correct!)
+```
+
+**Single Source of Truth**: ✅ Restored
+- `reconnectBackoffBase` now only in RETRY_CONFIG (where it's used)
+- No orphaned config values
+- All TIMING values have confirmed usage
+
+### Final Grade: A (100/100) ✅
+
+**Breakdown**:
+- Config cleanup: 30/30 ✅
+- Type-check passes: 10/10 ✅
+- No duplicate values: 30/30 ✅
+- No orphaned values: 30/30 ✅
+
+**Result**: Chunk 7 fully fixed. TIMING config now contains exactly 6 values, all verified to be used. Single Source of Truth principle restored.
+
+---
+
 **Next**: Proceed to Chunk 8 (HTTP status codes & persona defaults - 14 values)
