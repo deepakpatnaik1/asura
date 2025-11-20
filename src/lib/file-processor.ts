@@ -818,7 +818,7 @@ async function saveAllChunksToDatabase(
 		.from('files')
 		.update({
 			status: 'ready',
-			progress: 100,
+			progress: PROGRESS_PHASES.finalization.end,
 			processing_stage: 'completed',
 			description: compressed[0].description, // Chunk 0 description
 			updated_at: new Date().toISOString()
