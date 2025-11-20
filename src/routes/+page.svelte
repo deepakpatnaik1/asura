@@ -13,6 +13,7 @@
 	import TextCleaner from '$lib/components/TextCleaner.svelte';
 	import SettingsModal from '$lib/components/SettingsModal.svelte';
 	import { FILE_PROCESSING } from '$lib/config/processing';
+	import { TIMING } from '$lib/config/timing';
 
 	// Receive loaded messages from server
 	let { data } = $props();
@@ -310,7 +311,7 @@
 				// Scrolling phase: scroll for 5 seconds
 				pauseProgress = 0;
 				const scrollElapsed = now - scrollStartTime;
-				if (scrollElapsed < 5000) {
+				if (scrollElapsed < TIMING.autoScrollDuration) {
 					// Accumulate fractional pixels and scroll by whole pixels
 					scrollAccumulator += scrollSpeed;
 					const pixelsToScroll = Math.floor(scrollAccumulator);
@@ -328,9 +329,9 @@
 				// Pause phase: pause for 1 minute
 				// During pause, user can manually scroll - we'll resume from their position
 				const pauseElapsed = now - pauseStartTime;
-				pauseProgress = Math.min(100, (pauseElapsed / 60000) * 100);
+				pauseProgress = Math.min(100, (pauseElapsed / TIMING.autoScrollPause) * 100);
 
-				if (pauseElapsed >= 60000) {
+				if (pauseElapsed >= TIMING.autoScrollPause) {
 					// Switch back to scrolling phase from current scroll position
 					isPaused = false;
 					scrollStartTime = now;
@@ -490,7 +491,7 @@
 		deleteProgress = 0;
 
 		// Auto-confirm after 3 seconds
-		const duration = 3000;
+		const duration = TIMING.countdownDuration;
 		const interval = 50;
 		const increment = (interval / duration) * 100;
 
@@ -537,7 +538,7 @@
 		deleteMessageProgress = 0;
 
 		// Auto-confirm after 3 seconds
-		const duration = 3000;
+		const duration = TIMING.countdownDuration;
 		const interval = 50;
 		const increment = (interval / duration) * 100;
 
@@ -642,7 +643,7 @@
 		nukeProgress = 0;
 
 		// Auto-confirm after 3 seconds
-		const duration = 3000;
+		const duration = TIMING.countdownDuration;
 		const interval = 50;
 		const increment = (interval / duration) * 100;
 

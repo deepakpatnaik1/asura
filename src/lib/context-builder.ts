@@ -3,6 +3,7 @@ import { SUPABASE_SERVICE_ROLE_KEY, VOYAGE_API_KEY } from '$env/static/private';
 import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 import { VoyageAIClient } from 'voyageai';
 import { EMBEDDING_MODEL } from '$lib/config/models';
+import { MEMORY } from '$lib/config/memory';
 
 const supabase = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 const voyage = new VoyageAIClient({ apiKey: VOYAGE_API_KEY });
@@ -63,7 +64,7 @@ export async function buildContextForCalls1A1B(
 ): Promise<{ context: string; stats: ContextStats }> {
 	// Get model's context window and calculate budget
 	const contextWindow = await getModelContextWindow(modelIdentifier);
-	const contextBudget = Math.floor(contextWindow * 0.4); // 40% cap
+	const contextBudget = Math.floor(contextWindow * MEMORY.contextWindowCap); // 40% cap
 
 	// Initialize context components
 	const components: ContextComponents = {
@@ -79,13 +80,13 @@ export async function buildContextForCalls1A1B(
 	let totalTokens = 0;
 	let queryVector: number[] | null = null;
 
-	// Priority 1: Last 5 Superjournal turns (working memory - highest priority)
+	// Priority 1: Last N Superjournal turns (working memory - highest priority)
 	const { data: superjournalData } = await supabase
 		.from('superjournal')
 		.select('user_message, ai_response, persona_name, created_at')
 		.eq('user_id', userId)
 		.order('created_at', { ascending: false })
-		.limit(5);
+		.limit(MEMORY.superjournalLimit);
 
 	if (superjournalData && superjournalData.length > 0) {
 		const superjournalText = formatSuperjournalHistory(superjournalData.reverse()); // Oldest first
@@ -128,13 +129,13 @@ export async function buildContextForCalls1A1B(
 		}
 	}
 
-	// Priority 4: Last 100 Journal turns (recent memory)
+	// Priority 4: Last N Journal turns (recent memory)
 	const { data: journalData } = await supabase
 		.from('journal')
 		.select('boss_essence, persona_essence, decision_arc_summary, persona_name, created_at')
 		.eq('user_id', userId)
 		.order('created_at', { ascending: false })
-		.limit(100);
+		.limit(MEMORY.lastNJournalEntries);
 
 	if (journalData && journalData.length > 0) {
 		const journalText = formatJournalHistory(journalData.reverse()); // Oldest first
@@ -163,7 +164,7 @@ export async function buildContextForCalls1A1B(
 			.eq('is_instruction', false)
 			.eq('user_id', userId);
 
-		if (journalCount && journalCount > 100) {
+		if (journalCount && journalCount > MEMORY.vectorSearchThreshold) {
 			try {
 				// Generate embedding for user query
 				console.log('[Context Builder] Generating query embedding for vector search');
@@ -177,13 +178,13 @@ export async function buildContextForCalls1A1B(
 				// Collect IDs to exclude (already loaded in Priorities 1-4)
 				const excludeIds: string[] = [];
 
-				// Get last 5 Superjournal IDs
+				// Get last N Superjournal IDs
 				const { data: superjournalIds } = await supabase
 					.from('superjournal')
 					.select('id')
 					.eq('user_id', userId)
 					.order('created_at', { ascending: false})
-					.limit(5);
+					.limit(MEMORY.superjournalLimit);
 
 				// Get corresponding Journal IDs via Superjournal IDs
 				if (superjournalIds && superjournalIds.length > 0) {
@@ -198,14 +199,14 @@ export async function buildContextForCalls1A1B(
 					}
 				}
 
-				// Get last 100 Journal IDs
+				// Get last N Journal IDs
 				const { data: last100Ids } = await supabase
 					.from('journal')
 					.select('id')
 					.eq('is_instruction', false)
 					.eq('user_id', userId)
 					.order('created_at', { ascending: false })
-					.limit(100);
+					.limit(MEMORY.lastNJournalEntries);
 
 				if (last100Ids) {
 					excludeIds.push(...last100Ids.map(j => j.id));
@@ -246,7 +247,7 @@ export async function buildContextForCalls1A1B(
 				console.error('[Context Builder] Vector search error:', vectorError);
 			}
 		} else {
-			console.log('[Context Builder] Skipping vector search (journal count <=100)');
+			console.log(`[Context Builder] Skipping vector search (journal count <= ${MEMORY.vectorSearchThreshold})`);
 		}
 	}
 
@@ -339,7 +340,7 @@ export async function buildContextForCalls1A1B(
 	return { context: finalContext, stats };
 }
 
-// Format Superjournal history (last 5 full turns)
+// Format Superjournal history (recent full turns)
 function formatSuperjournalHistory(
 	entries: Array<{
 		user_message: string;
@@ -359,10 +360,10 @@ ${entry.persona_name}: ${entry.ai_response}`
 		)
 		.join('\n\n');
 
-	return `--- WORKING MEMORY (Last 5 Full Turns) ---\n${formatted}\n\n`;
+	return `--- WORKING MEMORY (Last ${MEMORY.superjournalLimit} Full Turns) ---\n${formatted}\n\n`;
 }
 
-// Format Journal history (last 100 compressed turns)
+// Format Journal history (recent compressed turns)
 function formatJournalHistory(
 	entries: Array<{
 		boss_essence: string;
@@ -383,7 +384,7 @@ ${entry.persona_name}: ${entry.persona_essence}`
 		)
 		.join('\n\n');
 
-	return `--- RECENT MEMORY (Last 100 Compressed Turns) ---\n${formatted}\n\n`;
+	return `--- RECENT MEMORY (Last ${MEMORY.lastNJournalEntries} Compressed Turns) ---\n${formatted}\n\n`;
 }
 
 // Format starred messages
