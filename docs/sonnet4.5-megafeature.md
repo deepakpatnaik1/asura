@@ -1437,4 +1437,229 @@ export const MEMORY = {
 
 ---
 
-**Next**: Proceed to Chunk 7 (Timing Values - SSE heartbeat, additional timing constants)
+## Chunk 7: Timing Values - SSE & Error Display (2025-11-20)
+
+**Status**: ⚠️ **COMPLETE WITH ISSUES** - 75/100 (C+)
+**Commit**: `f881d33` - "feat(config): Complete Chunk 7 - Timing values (SSE heartbeat, cleanup, error display)"
+**Date**: 2025-11-20
+
+### What Was Completed ✅
+
+**Files Modified**: 3 files, 3 timing values centralized
+
+**1. `src/lib/config/timing.ts`** - Added 2 new constants
+- ✅ Line 50: `cleanupDelay: 5000` - SSE subscription cleanup debounce
+- ✅ Line 56: `errorDisplayDuration: 5000` - Error message auto-clear timeout
+- ✅ JSDoc comments for both values
+
+**2. `src/routes/api/files/events/+server.ts`** - 3 replacements
+- ✅ Line 5: Added `import { TIMING } from '$lib/config/timing'`
+- ✅ Line 60: Removed `const CLEANUP_DELAY_MS = 5000` (local constant)
+- ✅ Line 255: `CLEANUP_DELAY_MS` → `TIMING.cleanupDelay`
+- ✅ Line 328: `30000` → `TIMING.heartbeatInterval`
+- ✅ Line 319: Updated comment from "(every 30s)" to generic "heartbeat interval"
+
+**3. `src/lib/stores/filesStore.ts`** - 2 replacements
+- ✅ Line 4: Added `import { TIMING } from '$lib/config/timing'`
+- ✅ Line 423: `5000` → `TIMING.errorDisplayDuration`
+- ✅ Line 417: Updated comment from "after 5 seconds" to generic "with auto-clear"
+
+### Timing Values Summary (Chunks 5-7)
+
+**Actually Used TIMING Values: 6**
+1. ✅ `countdownDuration: 3000` - Used 3x in +page.svelte (Chunk 6)
+2. ✅ `autoScrollDuration: 5000` - Used 2x in +page.svelte (Chunk 6)
+3. ✅ `autoScrollPause: 60000` - Used 2x in +page.svelte (Chunk 6)
+4. ✅ `heartbeatInterval: 30000` - Used in events/+server.ts (Chunk 7)
+5. ✅ `cleanupDelay: 5000` - Used in events/+server.ts (Chunk 7)
+6. ✅ `errorDisplayDuration: 5000` - Used in filesStore.ts (Chunk 7)
+
+**CRITICAL: Orphaned/Unused Values: 2** ❌
+7. ❌ `retryDelayBase: 1000` - Defined in TIMING, **NEVER USED ANYWHERE**
+8. ❌ `reconnectBackoffBase: 1000` - **DUPLICATE** (exists in both TIMING and RETRY_CONFIG)
+
+### Critical Issues Discovered 🚨
+
+**Issue 1: Duplicate Configuration** (Severity: MEDIUM)
+
+**`reconnectBackoffBase` exists in TWO places:**
+- `src/lib/config/timing.ts:37` → `TIMING.reconnectBackoffBase: 1000`
+- `src/lib/config/processing.ts:128` → `RETRY_CONFIG.reconnectBackoffBase: 1000`
+
+**Which is used?**
+- ✅ `RETRY_CONFIG.reconnectBackoffBase` - Used in `filesStore.ts:325` (Chunk 5)
+- ❌ `TIMING.reconnectBackoffBase` - **NEVER USED**
+
+**Root Cause**:
+- Chunk 1 created TIMING config with `reconnectBackoffBase`
+- Chunk 5 created RETRY_CONFIG with its own `reconnectBackoffBase` and wired it up
+- The TIMING version was never removed, creating duplicate sources of truth
+
+**Impact**:
+- Violates Single Source of Truth principle
+- Confusing for maintainers (which one to use?)
+- No runtime bug (both have same value: 1000)
+
+---
+
+**Issue 2: Orphaned Configuration** (Severity: LOW)
+
+**`retryDelayBase` is defined but NEVER USED:**
+- `src/lib/config/timing.ts:43` → `TIMING.retryDelayBase: 1000`
+- Search results: **NO USAGE ANYWHERE** in src/
+
+**Root Cause**:
+- Defined in Chunk 1 when creating config files
+- Never wired up to replace any hardcoded values
+- Likely intended for API retry logic but that uses `RETRY_CONFIG.initialDelay` instead
+
+**Impact**:
+- Dead code / config pollution
+- Misleading (suggests it's used when it's not)
+- No runtime impact (just unused)
+
+### Verification ✅
+
+**Type-Check**: ✅ Passed
+```bash
+npm run check
+# 133 baseline errors, no new errors
+```
+
+**Grep Verification**: ✅ No hardcoded timing values remain
+```bash
+# No hardcoded 30000 in events endpoint
+grep -rn "\b30000\b" src/routes/api/files/events/+server.ts
+# (empty result)
+
+# No CLEANUP_DELAY_MS constant
+grep -rn "CLEANUP_DELAY_MS" src/routes/api/files/events/+server.ts
+# (empty result)
+
+# No hardcoded 5000 in error display
+grep -rn "\b5000\b" src/lib/stores/filesStore.ts | grep -v "TIMING"
+# (empty result)
+```
+
+**Usage Verification**: ❌ Found orphaned values
+```bash
+# TIMING.retryDelayBase is NEVER USED
+grep -rn "retryDelayBase" src/
+# Only result: src/lib/config/timing.ts:43 (definition)
+
+# TIMING.reconnectBackoffBase is NEVER USED (RETRY_CONFIG version used instead)
+grep -rn "TIMING.reconnectBackoffBase" src/
+# (empty result)
+```
+
+### Architecture Before/After
+
+**Before Chunk 7** (Hardcoded):
+```typescript
+// ❌ Magic numbers in events endpoint
+const CLEANUP_DELAY_MS = 5000;
+setInterval(() => { ... }, 30000);  // Heartbeat
+setTimeout(() => { ... }, CLEANUP_DELAY_MS);
+
+// ❌ Magic number in filesStore
+setTimeout(() => { error.set(null); }, 5000);
+```
+
+**After Chunk 7** (Centralized):
+```typescript
+// ✅ Single source of truth
+import { TIMING } from '$lib/config/timing';
+
+setInterval(() => { ... }, TIMING.heartbeatInterval);
+setTimeout(() => { ... }, TIMING.cleanupDelay);
+setTimeout(() => { error.set(null); }, TIMING.errorDisplayDuration);
+```
+
+### Grade: C+ (75/100) ⚠️
+
+**What Worked** (75 points):
+- Config constants added: 10/10 ✅
+- SSE heartbeat centralized: 20/20 ✅
+- SSE cleanup centralized: 20/20 ✅
+- Error display centralized: 20/20 ✅
+- Type-check passes: 5/5 ✅
+
+**Critical Issues** (25 points deducted):
+- Duplicate `reconnectBackoffBase`: -15 points ❌
+- Orphaned `retryDelayBase`: -10 points ❌
+
+### Root Cause Analysis
+
+**Why were duplicates/orphans created?**
+
+1. **Chunk 1 over-specified**: Created TIMING config with 6 values before knowing which would actually be needed
+2. **Chunk 5 didn't check TIMING**: Created RETRY_CONFIG.reconnectBackoffBase without checking if TIMING already had it
+3. **No cross-chunk verification**: Each chunk worked in isolation without reviewing existing configs
+4. **No usage audit**: Never verified that all TIMING values are actually used
+
+**Lesson Learned**:
+> Configuration centralization requires both (1) defining constants AND (2) verifying they're actually used. Creating a config file is only 50% of the work.
+
+### Recommended Fixes
+
+**Fix 1: Remove Duplicate** (5 min)
+```typescript
+// src/lib/config/timing.ts
+export const TIMING = {
+  // ... other values ...
+
+  // REMOVE THIS (duplicate of RETRY_CONFIG.reconnectBackoffBase)
+  // reconnectBackoffBase: 1000,  // ❌ DELETE
+};
+```
+
+**Fix 2: Remove Orphan** (1 min)
+```typescript
+// src/lib/config/timing.ts
+export const TIMING = {
+  // ... other values ...
+
+  // REMOVE THIS (never used anywhere)
+  // retryDelayBase: 1000,  // ❌ DELETE
+};
+```
+
+**Fix 3: Consolidate Documentation** (10 min)
+- Update Chunk 7 docs to reflect 6 values (not 7)
+- Document that reconnect/retry backoff lives in RETRY_CONFIG (not TIMING)
+- Update architecture diagrams
+
+**Total fix time**: ~15 minutes
+
+### Impact Assessment
+
+**What's Broken**:
+- ❌ Duplicate config values violate Single Source of Truth
+- ❌ Orphaned values create confusion
+- ❌ Documentation claims "7 timing values" when only 6 are used
+
+**What Still Works**:
+- ✅ All 6 active timing values function correctly
+- ✅ Type-check passes
+- ✅ No runtime bugs
+- ✅ Core Chunk 7 work (heartbeat, cleanup, errorDisplay) is solid
+
+**Severity**: MEDIUM - Technical debt, not blocking
+
+### Next Steps
+
+**Option 1: Fix Now** (15 minutes)
+- Clean up duplicates/orphans
+- Update documentation
+- New commit: "fix(config): Remove duplicate/orphaned TIMING values"
+
+**Option 2: Document and Defer**
+- Mark as known issue
+- Fix during Chunk 9 cleanup phase
+- Continue to Chunk 8
+
+**Recommendation**: Document and defer. Core functionality works, cleanup can happen in Chunk 9.
+
+---
+
+**Next**: Proceed to Chunk 8 (HTTP status codes & persona defaults - 14 values)
