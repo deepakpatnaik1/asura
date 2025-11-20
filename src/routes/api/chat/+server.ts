@@ -486,7 +486,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 		// Return simple JSON response
 		return json({
 			message: call1BMessage,
-			timestamp: new Date().toISOString()
+			timestamp: new Date().toISOString(),
+			model_identifier: conversationModel
 		});
 	} catch (error) {
 		console.error('Chat API error:', error);

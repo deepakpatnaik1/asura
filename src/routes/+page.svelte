@@ -430,7 +430,8 @@
 				ai_response: $currentMessage.ai,
 				persona_name: selectedPersona,
 				created_at: now,
-				formatted_timestamp: formattedTimestamp
+				formatted_timestamp: formattedTimestamp,
+				model_identifier: $currentMessage.model_identifier
 			}];
 
 			// Clear current message after adding to history

@@ -11,7 +11,7 @@ Asura is a SvelteKit-based AI chat application that features a sophisticated mul
 ## Technology Stack
 
 - **Framework**: SvelteKit 2.x with Svelte 5
-- **Database**: Supabase (PostgreSQL with pgvector extension)
+- **Database**: Supabase (PostgreSQL with pgvector extension) - **Remote hosted instance**
 - **AI Models**: Fireworks AI (Qwen3-235B variants) for chat/compression, Voyage AI (voyage-3) for embeddings
 - **Testing**: Vitest (unit/integration), Playwright (E2E)
 - **Language**: TypeScript with strict mode enabled
@@ -21,8 +21,6 @@ Asura is a SvelteKit-based AI chat application that features a sophisticated mul
 ### Local Development
 ```bash
 npm run dev                    # Start dev server (http://localhost:5173)
-npx supabase start            # Start local Supabase (required for development)
-npx supabase db reset         # Reset database with all migrations
 ```
 
 ### Testing
@@ -38,7 +36,7 @@ npm run test:all               # Run unit + integration + E2E tests
 npm run test:coverage          # Generate coverage report
 ```
 
-**Important**: Integration tests require Supabase to be running (`npx supabase start`). E2E tests require dev server running in separate terminal (`npm run dev`).
+**Important**: E2E tests require dev server running in separate terminal (`npm run dev`).
 
 ### Code Quality
 ```bash
@@ -47,16 +45,6 @@ npm run check:watch            # Type-check in watch mode
 npm run build                  # Production build
 npm run preview                # Preview production build
 ```
-
-### Supabase Local Development
-```bash
-npx supabase start            # Start local stack (DB port: 54322, API port: 54321, Studio: 54323)
-npx supabase stop             # Stop local stack
-npx supabase db reset         # Drop and recreate database with migrations
-npx supabase db push          # Push local migrations to remote
-```
-
-The Supabase config is in [supabase/config.toml](supabase/config.toml). Local database connection: `postgresql://postgres:postgres@127.0.0.1:54322/postgres`
 
 ## Core Architecture
 
@@ -392,7 +380,6 @@ Automatically scrolls to newly submitted user message (boss card).
 
 **Integration Tests** ([tests/integration/](tests/integration/))
 - Test database operations, API endpoints, and stores
-- Requires local Supabase running
 - Includes database schema validation, CRUD operations, vector search
 
 **Regression Tests** ([tests/regression/](tests/regression/))
@@ -401,7 +388,7 @@ Automatically scrolls to newly submitted user message (boss card).
 
 **E2E Tests** ([tests/e2e/](tests/e2e/))
 - Full user workflows with Playwright
-- Requires dev server + Supabase running
+- Requires dev server running
 - Located in `tests/e2e/`, run with `npm run test:e2e`
 
 ## Environment Variables
@@ -409,14 +396,14 @@ Automatically scrolls to newly submitted user message (boss card).
 Copy `.env.example` to `.env` and configure:
 
 ```bash
-PUBLIC_SUPABASE_URL=          # Supabase project URL
+PUBLIC_SUPABASE_URL=          # Supabase project URL (remote hosted instance)
 PUBLIC_SUPABASE_ANON_KEY=     # Supabase anon key
 SUPABASE_SERVICE_ROLE_KEY=    # Supabase service role key (server-side only)
 FIREWORKS_API_KEY=            # Fireworks AI API key
 VOYAGE_API_KEY=               # Voyage AI API key
 ```
 
-For local development, Supabase values come from `npx supabase start` output.
+This project uses a remote Supabase instance. Get your credentials from your Supabase project dashboard at https://supabase.com/dashboard.
 
 ## Important Development Notes
 
@@ -428,7 +415,7 @@ For local development, Supabase values come from `npx supabase start` output.
 
 ### Database Migrations
 - All schema changes go in `supabase/migrations/` with timestamp prefix
-- Use `npx supabase db reset` to apply all migrations to local database
+- Apply migrations to remote database via Supabase dashboard or `npx supabase db push`
 - Migration naming: `YYYYMMDDHHMMSS_description.sql`
 
 ### Vector Search

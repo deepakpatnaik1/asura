@@ -5,6 +5,7 @@ interface Message {
 	boss: string;
 	ai: string;
 	timestamp: string;
+	model_identifier?: string;
 }
 
 export const currentMessage = writable<Message | null>(null);
@@ -49,7 +50,8 @@ export async function sendMessage(userMessage: string, persona?: string): Promis
 			id: crypto.randomUUID(),
 			boss: userMessage,
 			ai: data.message,
-			timestamp
+			timestamp,
+			model_identifier: data.model_identifier
 		});
 
 		isLoading.set(false);

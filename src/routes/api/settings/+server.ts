@@ -35,6 +35,9 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession } }) => {
 		.eq('user_id', userId)
 		.single();
 
+	console.log('[Settings GET] User ID:', userId);
+	console.log('[Settings GET] Query result:', { data, error });
+
 	// 3. HANDLE MISSING SETTINGS (create defaults for new user)
 	if (error) {
 		const defaults = {
@@ -81,8 +84,16 @@ export const PUT: RequestHandler = async ({ request, locals: { safeGetSession } 
 	// 2. PARSE REQUEST BODY
 	const { selected_conversation_model, selected_compression_model, selected_embedding_model, selected_persona } = await request.json();
 
+	console.log('[Settings PUT] User ID:', userId);
+	console.log('[Settings PUT] Body received:', {
+		selected_conversation_model,
+		selected_compression_model,
+		selected_embedding_model,
+		selected_persona
+	});
+
 	// 3. UPDATE USER SETTINGS
-	const { error } = await supabase
+	const { data, error } = await supabase
 		.from('user_settings')
 		.update({
 			selected_conversation_model,
@@ -91,9 +102,13 @@ export const PUT: RequestHandler = async ({ request, locals: { safeGetSession } 
 			selected_persona,
 			updated_at: new Date().toISOString()
 		})
-		.eq('user_id', userId);
+		.eq('user_id', userId)
+		.select();
+
+	console.log('[Settings PUT] Update result:', { data, error });
 
 	if (error) {
+		console.error('[Settings PUT] Update error:', error);
 		return json({ error: error.message }, { status: 500 });
 	}
 
