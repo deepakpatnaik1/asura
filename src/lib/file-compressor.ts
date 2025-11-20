@@ -1,7 +1,7 @@
 import OpenAI from 'openai';
 import { createMessage } from '$lib/api/anthropic-client';
 import type { FileType } from './file-extraction';
-import { MAX_TOKENS } from '$lib/config/models';
+import { MAX_TOKENS, DEFAULT_COMPRESSION_MODEL } from '$lib/config/models';
 import { MODIFIED_CALL2A_PROMPT, MODIFIED_CALL2B_PROMPT, CALL3A_PROMPT, CALL3B_PROMPT } from '$lib/prompts';
 import { createClient } from '@supabase/supabase-js';
 import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
@@ -372,7 +372,7 @@ export async function compressChunk(input: ChunkCompressionInput): Promise<Chunk
 		.select('selected_compression_model')
 		.single();
 
-	const compressionModel = settings?.selected_compression_model || 'accounts/fireworks/models/qwen3-235b-a22b-instruct-2507';
+	const compressionModel = settings?.selected_compression_model || DEFAULT_COMPRESSION_MODEL;
 
 	// Select prompts based on chunk index
 	const call2aPrompt = input.chunkIndex === 0

@@ -2,15 +2,14 @@ import OpenAI from 'openai';
 import { createMessage } from '$lib/api/anthropic-client';
 import type { FileType } from './file-extraction';
 import { generateEmbedding } from './vectorization';
-import { FILE_MODEL, MAX_TOKENS } from '$lib/config/models';
+import { FILE_MODEL, MAX_TOKENS, DEFAULT_COMPRESSION_MODEL } from '$lib/config/models';
 import { jsonrepair } from 'jsonrepair';
+import { PUBLIC_SUPABASE_URL } from '$env/static/public';
+import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
 
 // ============================================================================
 // CONSTANTS
 // ============================================================================
-
-/** API Model Configuration */
-const MODEL_NAME = FILE_MODEL;
 
 /** API Call Configuration */
 const TEMPERATURE = 0.7;
@@ -382,7 +381,7 @@ DO NOT summarize detailed content. Capture "what kind of document this is" and "
 
 	// Call AI API (supports both Fireworks and Anthropic)
 	try {
-		const overview = await callAIAPI(FILE_OVERVIEW_PROMPT, userPrompt, MODEL_NAME);
+		const overview = await callAIAPI(FILE_OVERVIEW_PROMPT, userPrompt, FILE_MODEL);
 		return overview;
 	} catch (error) {
 		if (error instanceof FileChunkerError) {
@@ -936,6 +935,7 @@ function estimateTokens(text: string): number {
  * @throws FileChunkerError if API call or parsing fails
  */
 export async function generateOverviewAndChunks(
+	userId: string,
 	text: string,
 	filename: string,
 	fileType: FileType
@@ -949,6 +949,18 @@ export async function generateOverviewAndChunks(
 		);
 	}
 
+	// Query user_settings to get selected compression model
+	const { createClient } = await import('@supabase/supabase-js');
+	const supabase = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+	const { data: settings } = await supabase
+		.from('user_settings')
+		.select('selected_compression_model')
+		.eq('user_id', userId)
+		.single();
+
+	const compressionModel = settings?.selected_compression_model || DEFAULT_COMPRESSION_MODEL;
+
 	// Build user prompt for Call 3A
 	const wordCount = countWords(text);
 	const userPrompt = `Filename: ${filename}
@@ -961,7 +973,7 @@ ${text}`;
 	// Call 3A: Generate overview + chunk boundaries
 	let call3AResponse: string;
 	try {
-		call3AResponse = await callAIAPI(CALL_3A_PROMPT, userPrompt, MODEL_NAME);
+		call3AResponse = await callAIAPI(CALL_3A_PROMPT, userPrompt, compressionModel);
 	} catch (error) {
 		if (error instanceof FileChunkerError) {
 			throw error;
@@ -994,7 +1006,7 @@ ${call3AResponse}`;
 
 	let call3BResponse: string;
 	try {
-		call3BResponse = await callAIAPI(CALL_3B_PROMPT, call3BUserPrompt, MODEL_NAME);
+		call3BResponse = await callAIAPI(CALL_3B_PROMPT, call3BUserPrompt, compressionModel);
 	} catch (error) {
 		if (error instanceof FileChunkerError) {
 			throw error;

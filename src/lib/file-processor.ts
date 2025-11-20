@@ -328,6 +328,24 @@ export async function processFileBackground(
 		const fullText = extraction.text;
 		const fileType = extraction.fileType;
 
+		// Fetch user_id from files table (needed for model selection)
+		const { data: fileData } = await supabase
+			.from('files')
+			.select('user_id')
+			.eq('id', fileId)
+			.single();
+
+		if (!fileData?.user_id) {
+			throw new FileProcessorError(
+				`Could not fetch user_id for file ${fileId}`,
+				'DATABASE_ERROR',
+				'extraction',
+				{ fileId }
+			);
+		}
+
+		const userId = fileData.user_id;
+
 		// Update to extraction complete (10%)
 		await updateProgress(fileId, PROGRESS_EXTRACTION, 'extraction');
 		await reportProgress(
@@ -354,7 +372,7 @@ export async function processFileBackground(
 				'Generating file overview and logical chunks...'
 			);
 
-			const result = await generateOverviewAndChunks(fullText, filename, fileType);
+			const result = await generateOverviewAndChunks(userId, fullText, filename, fileType);
 			chunk0Text = result.overview;
 			detailChunks = result.chunks;
 
