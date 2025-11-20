@@ -1,5 +1,6 @@
 import { writable, derived, type Writable, type Derived } from 'svelte/store';
 import { browser } from '$app/environment';
+import { RETRY_CONFIG } from '$lib/config/processing';
 
 // ============================================================================
 // TYPES
@@ -40,7 +41,6 @@ export const error: Writable<string | null> = writable(null);
  */
 let eventSource: EventSource | null = null;
 let subscriberCount = 0;
-const MAX_RECONNECT_ATTEMPTS = 5;
 let reconnectAttempts = 0;
 let reconnectTimeout: NodeJS.Timeout | null = null;
 
@@ -310,20 +310,20 @@ function disconnectSSE(): void {
  * - Attempt 4: Wait 8 seconds (8000ms)
  * - Attempt 5: Wait 16 seconds (16000ms)
  *
- * After 5 failed attempts, reconnection stops and an error is displayed.
+ * After max attempts, reconnection stops and an error is displayed.
  * User can manually retry via refreshFiles() action.
  */
 function reconnect(): void {
-	if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+	if (reconnectAttempts >= RETRY_CONFIG.maxReconnectAttempts) {
 		setError('Connection lost. Please refresh the page.');
 		console.error('[Files Store] Max reconnection attempts reached');
 		return;
 	}
 
 	reconnectAttempts++;
-	const delayMs = 1000 * Math.pow(2, reconnectAttempts - 1); // Exponential backoff: 1s, 2s, 4s, 8s, 16s
+	const delayMs = RETRY_CONFIG.reconnectBackoffBase * Math.pow(2, reconnectAttempts - 1); // Exponential backoff
 
-	console.log(`[Files Store] Reconnecting in ${delayMs}ms (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
+	console.log(`[Files Store] Reconnecting in ${delayMs}ms (attempt ${reconnectAttempts}/${RETRY_CONFIG.maxReconnectAttempts})`);
 
 	reconnectTimeout = setTimeout(() => {
 		connectSSE();

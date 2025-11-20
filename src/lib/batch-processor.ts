@@ -3,6 +3,8 @@
  * Prevents rate limiting by processing N items at a time instead of all at once
  */
 
+import { BATCH_PROCESSING } from '$lib/config/processing';
+
 export interface BatchProcessorOptions {
   batchSize?: number;
   onProgress?: (completed: number, total: number) => void;
@@ -25,7 +27,7 @@ export async function processBatched<T, R>(
   processFn: (item: T, index: number) => Promise<R>,
   options: BatchProcessorOptions = {}
 ): Promise<R[]> {
-  const { batchSize = 10, onProgress, delayBetweenBatchesMs } = options;
+  const { batchSize = BATCH_PROCESSING.defaultBatchSize, onProgress, delayBetweenBatchesMs } = options;
 
   const results: R[] = [];
   let completed = 0;

@@ -15,6 +15,8 @@
  * ```
  */
 
+import { RETRY_CONFIG } from '$lib/config/processing';
+
 export interface RetryOptions {
   /** Maximum number of retry attempts (default: 3) */
   maxRetries?: number;
@@ -44,10 +46,10 @@ export class RetryableError extends Error {
 }
 
 const DEFAULT_OPTIONS: Required<RetryOptions> = {
-  maxRetries: 3,
-  initialDelay: 1000,
-  backoffMultiplier: 2,
-  retryableStatuses: [429, 503],
+  maxRetries: RETRY_CONFIG.maxRetries,
+  initialDelay: RETRY_CONFIG.initialDelay,
+  backoffMultiplier: RETRY_CONFIG.backoffMultiplier,
+  retryableStatuses: [...RETRY_CONFIG.retryableStatuses],
   logger: (message: string) => console.log(`[api-retry] ${message}`)
 };
 

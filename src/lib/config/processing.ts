@@ -79,6 +79,84 @@ export const EMBEDDING = {
 } as const;
 
 // ============================================================================
+// BATCH PROCESSING
+// ============================================================================
+
+/**
+ * Batch processing configuration for rate limiting
+ * Controls concurrent operations and delays between batches
+ */
+export const BATCH_PROCESSING = {
+	/** Default batch size for general operations */
+	defaultBatchSize: 10,
+
+	/** Batch size for chunk compression (Modified Call 2A/2B) */
+	chunkCompressionBatchSize: 5,
+
+	/** Batch size for embedding generation */
+	embeddingBatchSize: 5,
+
+	/** Delay between batches in milliseconds (rate limiting) */
+	delayMs: 5000
+} as const;
+
+// ============================================================================
+// RETRY CONFIGURATION
+// ============================================================================
+
+/**
+ * Retry logic configuration for API calls and SSE connections
+ * Controls exponential backoff behavior
+ */
+export const RETRY_CONFIG = {
+	/** Maximum number of retry attempts for API calls */
+	maxRetries: 3,
+
+	/** Initial delay before first retry (milliseconds) */
+	initialDelay: 1000,
+
+	/** Multiplier for exponential backoff (delay doubles each retry) */
+	backoffMultiplier: 2,
+
+	/** HTTP status codes that should trigger retry */
+	retryableStatuses: [429, 503],
+
+	/** Maximum SSE reconnection attempts */
+	maxReconnectAttempts: 5,
+
+	/** Base delay for SSE reconnection backoff (milliseconds) */
+	reconnectBackoffBase: 1000
+} as const;
+
+// ============================================================================
+// PROGRESS PHASES
+// ============================================================================
+
+/**
+ * Processing phase progress percentages
+ * Maps each file processing stage to its progress range
+ */
+export const PROGRESS_PHASES = {
+	/** Text extraction phase (0-10%) */
+	extraction: { start: 0, end: 10 },
+
+	/** Chunking phase (10-30%) */
+	chunking: { start: 10, end: 30 },
+
+	/** Compression - Chunk 0 overview (30-40%) */
+	compressionOverview: { start: 30, end: 40 },
+
+	/** Compression - Detail chunks (40-70%) */
+	compressionDetails: { start: 40, end: 70 },
+
+	/** Embedding generation (70-90%) */
+	embedding: { start: 70, end: 90 },
+
+	/** Finalization (90-100%) */
+	finalization: { start: 90, end: 100 }
+} as const;
+
+// ============================================================================
 // TYPE EXPORTS
 // ============================================================================
 
@@ -89,3 +167,6 @@ export const EMBEDDING = {
 export type FileProcessingConfig = typeof FILE_PROCESSING;
 export type ChunkingConfig = typeof CHUNKING;
 export type EmbeddingConfig = typeof EMBEDDING;
+export type BatchProcessingConfig = typeof BATCH_PROCESSING;
+export type RetryConfig = typeof RETRY_CONFIG;
+export type ProgressPhasesConfig = typeof PROGRESS_PHASES;

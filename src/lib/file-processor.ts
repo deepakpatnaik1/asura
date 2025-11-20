@@ -9,6 +9,7 @@ import { FileChunkerError } from './file-chunker';
 import { FileCompressionError } from './file-compressor';
 import { VectorizationError } from './vectorization';
 import { processBatched } from './batch-processor';
+import { BATCH_PROCESSING } from './config/processing';
 
 // ============================================================================
 // ERROR CLASSES
@@ -538,8 +539,8 @@ export async function processFileBackground(
 					});
 				},
 				{
-					batchSize: 5,
-					delayBetweenBatchesMs: 5000,
+					batchSize: BATCH_PROCESSING.chunkCompressionBatchSize,
+					delayBetweenBatchesMs: BATCH_PROCESSING.delayMs,
 					onProgress: async (completed, total) => {
 						// Calculate progress: 40% → 70% (30% range)
 						const progress = Math.round(40 + (30 * completed / total));
@@ -624,13 +625,13 @@ export async function processFileBackground(
 				`Generating ${allCompressed.length} embeddings in parallel...`
 			);
 
-			// Generate all embeddings in batches of 5 with 5s delays
+			// Generate all embeddings in batches with delays (rate limiting)
 			const generatedEmbeddings = await processBatched(
 				allCompressed,
 				async (compressed) => generateEmbedding(compressed.description),
 				{
-					batchSize: 5,
-					delayBetweenBatchesMs: 5000,
+					batchSize: BATCH_PROCESSING.embeddingBatchSize,
+					delayBetweenBatchesMs: BATCH_PROCESSING.delayMs,
 					onProgress: async (completed, total) => {
 						// Calculate progress: 70% → 90% (20% range)
 						const progress = Math.round(70 + (20 * completed / total));
