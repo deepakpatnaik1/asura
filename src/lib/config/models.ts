@@ -6,11 +6,11 @@
  * FILE_MODEL: Instruct variant for file processing (not user-selectable)
  */
 
-/** Default conversation model (Call 1A/1B) - Thinking variant for reasoning */
-export const DEFAULT_CONVERSATION_MODEL = 'accounts/fireworks/models/qwen3-235b-a22b' as const;
+/** Default conversation model (Call 1A/1B) - Claude Sonnet 4.5 for premium quality */
+export const DEFAULT_CONVERSATION_MODEL = 'claude-sonnet-4-5-20250929' as const;
 
-/** Default compression model (Call 2A/2B, Call 3A/3B) - Instruct variant for structured output */
-export const DEFAULT_COMPRESSION_MODEL = 'accounts/fireworks/models/qwen3-235b-a22b-instruct-2507' as const;
+/** Default compression model (Call 2A/2B, Call 3A/3B) - Claude Sonnet 4.5 for structured output */
+export const DEFAULT_COMPRESSION_MODEL = 'claude-sonnet-4-5-20250929' as const;
 
 /** File model - Qwen3 235B A22B Instruct 2507 (non-thinking, updated FP8 version) */
 export const FILE_MODEL = 'accounts/fireworks/models/qwen3-235b-a22b-instruct-2507' as const;
