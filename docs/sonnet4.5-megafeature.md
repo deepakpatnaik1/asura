@@ -1685,7 +1685,7 @@ export const TIMING = {
 export const TIMING = {
   countdownDuration: 3000,        // ✅ Used 3x in +page.svelte
   heartbeatInterval: 30000,       // ✅ Used in events/+server.ts
-  autoScrollDuration: 5000,       // ✅ Used 2x in +page.svelte
+  autoScrollDuration: 5000,       // ✅ Used 1x in +page.svelte
   autoScrollPause: 60000,         // ✅ Used 2x in +page.svelte
   cleanupDelay: 5000,             // ✅ Used in events/+server.ts
   errorDisplayDuration: 5000      // ✅ Used in filesStore.ts
