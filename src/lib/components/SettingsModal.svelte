@@ -33,7 +33,7 @@
 	let selectedConversationModel = $state<string>('');
 	let selectedCompressionModel = $state<string>('');
 	let selectedEmbeddingModel = $state<string>('');
-	let selectedPersona = $state<string>('gunnar');
+	let selectedPersona = $state<string>(DEFAULT_PERSONA);
 	let tokenUsage = $state<TokenUsage>({
 		total_input: 0,
 		total_output: 0,

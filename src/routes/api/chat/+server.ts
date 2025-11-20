@@ -12,6 +12,7 @@ import {
 	EMBEDDING_MODEL
 } from '$lib/config/models';
 import { getModelParams } from '$lib/config/model-params';
+import { DEFAULT_PERSONA } from '$lib/config/personas';
 import {
 	BASE_INSTRUCTIONS,
 	PERSONA_GUNNAR,
@@ -279,7 +280,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 			.single();
 
 		const conversationModel = settings?.selected_conversation_model || DEFAULT_CONVERSATION_MODEL;
-		const selectedPersona = settings?.selected_persona || 'gunnar';
+		const selectedPersona = settings?.selected_persona || DEFAULT_PERSONA;
 
 		// Fetch conversation parameters from database
 		const conversationParams = await getModelParams(conversationModel, 'conversation');

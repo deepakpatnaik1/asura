@@ -4,6 +4,7 @@ import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 import { VoyageAIClient } from 'voyageai';
 import { EMBEDDING_MODEL } from '$lib/config/models';
 import { MEMORY } from '$lib/config/memory';
+import { DEFAULT_PERSONA } from '$lib/config/personas';
 
 const supabase = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 const voyage = new VoyageAIClient({ apiKey: VOYAGE_API_KEY });
@@ -58,7 +59,7 @@ interface ContextStats {
  */
 export async function buildContextForCalls1A1B(
 	userId: string,
-	personaName: string = 'gunnar',
+	personaName: string = DEFAULT_PERSONA,
 	modelIdentifier: string,
 	userQuery?: string // Optional: enables vector search (Priority 5)
 ): Promise<{ context: string; stats: ContextStats }> {

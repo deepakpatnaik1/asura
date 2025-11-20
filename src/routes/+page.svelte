@@ -14,6 +14,7 @@
 	import SettingsModal from '$lib/components/SettingsModal.svelte';
 	import { FILE_PROCESSING } from '$lib/config/processing';
 	import { TIMING } from '$lib/config/timing';
+	import { DEFAULT_PERSONA } from '$lib/config/personas';
 
 	// Receive loaded messages from server
 	let { data } = $props();
@@ -27,7 +28,7 @@
 	let nukeTimer: number | null = null;
 
 	// User settings state
-	let selectedPersona = $state<'gunnar' | 'kirby'>('gunnar');
+	let selectedPersona = $state<'gunnar' | 'kirby'>(DEFAULT_PERSONA);
 	let showSettings = $state(false);
 
 	// File upload state
@@ -55,7 +56,7 @@
 			const response = await fetch('/api/settings');
 			if (response.ok) {
 				const data = await response.json();
-				selectedPersona = data.selected_persona || 'gunnar';
+				selectedPersona = data.selected_persona || DEFAULT_PERSONA;
 			}
 		} catch (error) {
 			console.error('Failed to load settings:', error);
