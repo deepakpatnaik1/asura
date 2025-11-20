@@ -2186,6 +2186,65 @@ Data flow mismatch between API endpoint and client-side message handling:
 
 **Result**: ✅ `model_identifier` now flows API → Store → UI, TextCleaner always knows which model generated response
 
+**Commit**: `500cb4e` - "fix(chat): Fix BUG-001 - TextCleaner applies correct formatting to Sonnet 4.5 responses"
+
+---
+
+### BUG-002: Token Usage Deleted When Nuking Conversations
+
+**Date**: 2025-11-20
+**Severity**: HIGH - Financial tracking data should NEVER be deleted
+**Status**: ✅ **FIXED**
+
+**Description**:
+When user clicked "Nuke Everything" to clear conversation history, the token_usage records were also deleted due to CASCADE constraint. This caused loss of billing accountability - user lost track of actual API spend even though the costs were already incurred.
+
+**Business Logic Issue**:
+Token usage is **accounting data** (billing records), NOT conversation data. API bills must be paid regardless of whether conversations are kept. Deleting token_usage records when nuking conversations is like deleting your phone bill when you delete text messages.
+
+**Steps to Reproduce**:
+1. Have some conversation history with token spend (e.g., $0.50)
+2. Check Settings modal - shows correct spend
+3. Click "Nuke Everything"
+4. Check Settings modal again
+5. **Bug**: Shows $0.00, 0 tokens (billing history lost)
+
+**Expected Behavior**:
+- Nuke deletes conversations (superjournal, journal, files) → ✅ Clear history
+- Nuke PRESERVES token_usage records → ✅ Keep billing accountability
+- Settings modal continues to show actual spend
+
+**Actual Behavior** (Before Fix):
+- Nuke deleted everything including token_usage
+- Billing history lost
+- No way to track actual API costs
+
+**Environment**:
+- Node: 22.21.1
+- Database: Remote Supabase (PostgreSQL)
+- Models: Claude Sonnet 4.5 / Qwen3-235B
+
+**Root Cause**:
+Line 7 of `token_usage` table schema:
+```sql
+conversation_id UUID NOT NULL REFERENCES superjournal(id) ON DELETE CASCADE,
+```
+
+When superjournal records deleted → CASCADE deleted token_usage → lost billing records
+
+**Fix Applied**:
+Migration `20250120170000_fix_token_usage_cascade_delete.sql`:
+1. Dropped existing foreign key constraint with CASCADE
+2. Made `conversation_id` nullable (allow orphaned billing records)
+3. Added new foreign key constraint with `ON DELETE SET NULL`
+
+**Result**: ✅ When superjournal deleted, token_usage records persist with `conversation_id = NULL`, preserving billing history
+
+**Testing**:
+- Before nuke: Token usage shows $X.XX
+- After nuke: Token usage STILL shows $X.XX ✅
+- Conversations cleared, billing records preserved
+
 **Commit**: (pending)
 
 ---
@@ -2198,17 +2257,17 @@ Data flow mismatch between API endpoint and client-side message handling:
 |------|--------|--------|-------|
 | 1. Settings Modal | ✅ PASSED | Settings persist correctly | Tested save/load cycle, database working |
 | 2. Sonnet Response Quality | ✅ PASSED | Pristine formatting on first render | BUG-001 discovered and fixed |
-| 3. Token Usage | ⏳ Pending | - | - |
+| 3. Token Usage Tracking | ✅ PASSED | Spend persists after nuke | BUG-002 discovered and fixed |
 | 4. File Upload | ⏳ Pending | - | - |
 | 5. Persona Selection | ⏳ Pending | - | - |
 | 6. Memory System | ⏳ Pending | - | - |
 | 7. Auto-Scroll | ⏳ Pending | - | - |
-| 8. Nuke Button | ⏳ Pending | - | - |
+| 8. Nuke Button | ✅ PASSED | Preserves billing records | BUG-002 fix verified |
 
-**Pass Rate**: 2/8 (25.0%)
+**Pass Rate**: 4/8 (50.0%)
 
 **Critical Issues**: 0
-**High Priority Issues**: 1 (BUG-001) → ✅ Fixed
+**High Priority Issues**: 2 (BUG-001, BUG-002) → ✅ Both Fixed
 **Medium Priority Issues**: 0
 **Low Priority Issues**: 0
 
