@@ -11,6 +11,7 @@
 		model_identifier: string;
 		model_name: string;
 		provider: string;
+		model_type: string;
 		context_window: number;
 		input_price_per_million: number;
 		output_price_per_million: number;
@@ -25,6 +26,8 @@
 	let models = $state<Model[]>([]);
 	let selectedConversationModel = $state<string>('');
 	let selectedCompressionModel = $state<string>('');
+	let selectedEmbeddingModel = $state<string>('');
+	let selectedPersona = $state<string>('gunnar');
 	let tokenUsage = $state<TokenUsage>({
 		total_input: 0,
 		total_output: 0,
@@ -55,6 +58,8 @@
 			selectedCompressionModel =
 				settings.selected_compression_model ||
 				'accounts/fireworks/models/qwen3-235b-a22b-instruct-2507';
+			selectedEmbeddingModel = settings.selected_embedding_model || 'voyage-3';
+			selectedPersona = settings.selected_persona || 'gunnar';
 
 			// Fetch token usage
 			const tokenRes = await fetch('/api/token-usage');
@@ -82,7 +87,8 @@
 				body: JSON.stringify({
 					selected_conversation_model: selectedConversationModel,
 					selected_compression_model: selectedCompressionModel,
-					selected_persona: 'gunnar' // Keep current persona (not changing in this UI)
+					selected_embedding_model: selectedEmbeddingModel,
+					selected_persona: selectedPersona
 				})
 			});
 
@@ -126,7 +132,7 @@
 				<div class="settings-section">
 					<label for="conversation-model">Conversation Model (Call 1A, 1B)</label>
 					<select id="conversation-model" bind:value={selectedConversationModel}>
-						{#each models as model}
+						{#each models.filter(m => m.model_type === 'text_generation') as model}
 							<option value={model.model_identifier}>
 								{model.model_name} ({model.provider})
 							</option>
@@ -138,13 +144,25 @@
 				<div class="settings-section">
 					<label for="compression-model">Artisan Cut Model (Compression & Files)</label>
 					<select id="compression-model" bind:value={selectedCompressionModel}>
-						{#each models as model}
+						{#each models.filter(m => m.model_type === 'text_generation') as model}
 							<option value={model.model_identifier}>
 								{model.model_name} ({model.provider})
 							</option>
 						{/each}
 					</select>
 					<p class="help-text">Used for memory compression and file processing</p>
+				</div>
+
+				<div class="settings-section">
+					<label for="embedding-model">Embedding Model</label>
+					<select id="embedding-model" bind:value={selectedEmbeddingModel}>
+						{#each models.filter(m => m.model_type === 'embedding') as model}
+							<option value={model.model_identifier}>
+								{model.model_name}
+							</option>
+						{/each}
+					</select>
+					<p class="help-text">Used for vector embeddings (memory search & file chunks)</p>
 				</div>
 
 				<!-- Token Usage Stats -->

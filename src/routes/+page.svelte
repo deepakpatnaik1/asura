@@ -113,16 +113,14 @@
 		const name = selectedPersona.charAt(0).toUpperCase() + selectedPersona.slice(1);
 		inputMessage = `${name}, ${inputMessage}`;
 
-		// Write to database
+		// Write to database - only update persona, preserve model settings
 		try {
 			await fetch('/api/settings', {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
-				selected_conversation_model: 'accounts/fireworks/models/qwen3-235b-a22b',
-				selected_compression_model: 'accounts/fireworks/models/qwen3-235b-a22b-instruct-2507',
-				selected_persona: selectedPersona
-			})
+					selected_persona: selectedPersona
+				})
 			});
 		} catch (error) {
 			console.error('Failed to save persona:', error);

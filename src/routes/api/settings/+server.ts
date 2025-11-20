@@ -25,7 +25,7 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession } }) => {
 	// 2. QUERY USER SETTINGS
 	const { data, error } = await supabase
 		.from('user_settings')
-		.select('selected_conversation_model, selected_compression_model, selected_persona')
+		.select('selected_conversation_model, selected_compression_model, selected_embedding_model, selected_persona')
 		.eq('user_id', userId)
 		.single();
 
@@ -34,6 +34,7 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession } }) => {
 		const defaults = {
 			selected_conversation_model: 'accounts/fireworks/models/qwen3-235b-a22b',
 			selected_compression_model: 'accounts/fireworks/models/qwen3-235b-a22b-instruct-2507',
+			selected_embedding_model: 'voyage-3',
 			selected_persona: 'gunnar'
 		};
 
@@ -72,15 +73,15 @@ export const PUT: RequestHandler = async ({ request, locals: { safeGetSession } 
 	const userId = user.id;
 
 	// 2. PARSE REQUEST BODY
-	const { selected_conversation_model, selected_compression_model, selected_persona } = await request.json();
+	const { selected_conversation_model, selected_compression_model, selected_embedding_model, selected_persona } = await request.json();
 
-	// 3. UPDATE USER SETTINGS (upsert pattern)
+	// 3. UPDATE USER SETTINGS
 	const { error } = await supabase
 		.from('user_settings')
-		.upsert({
-			user_id: userId,
+		.update({
 			selected_conversation_model,
 			selected_compression_model,
+			selected_embedding_model,
 			selected_persona,
 			updated_at: new Date().toISOString()
 		})

@@ -55,7 +55,18 @@ export async function sendMessage(userMessage: string, persona?: string): Promis
 		isLoading.set(false);
 	} catch (error) {
 		console.error('Error sending message:', error);
-		currentMessage.set(null);
+
+		// Don't clear the message - preserve UI state and show error
+		currentMessage.update(msg => {
+			if (msg) {
+				return {
+					...msg,
+					ai: '❌ Failed to generate response. Please try again.'
+				};
+			}
+			return msg;
+		});
+
 		isLoading.set(false);
 	}
 }
