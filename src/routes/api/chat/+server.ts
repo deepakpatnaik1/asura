@@ -11,6 +11,7 @@ import {
 	DEFAULT_COMPRESSION_MODEL,
 	EMBEDDING_MODEL
 } from '$lib/config/models';
+import { getModelParams } from '$lib/config/model-params';
 import {
 	BASE_INSTRUCTIONS,
 	PERSONA_GUNNAR,
@@ -81,6 +82,9 @@ async function compressToJournal(
 
 		const compressionModel = settings?.selected_compression_model || DEFAULT_COMPRESSION_MODEL;
 
+		// Fetch compression parameters from database
+		const compressionParams = await getModelParams(compressionModel, 'compression');
+
 		console.log(`[Compression] Starting Call 2A/2B for superjournal_id: ${superjournalId}`);
 
 		const isAnthropicCompression = isAnthropicModel(compressionModel);
@@ -92,8 +96,8 @@ async function compressToJournal(
 			// Use Anthropic API
 			const response = await createMessage({
 				model: compressionModel,
-				max_tokens: 2048,
-				temperature: 0.3,
+				max_tokens: compressionParams.max_tokens,
+				temperature: compressionParams.temperature,
 				system: CALL2A_PROMPT,
 				messages: [
 					{
@@ -117,8 +121,8 @@ async function compressToJournal(
 						content: `User message: ${userMessage}\n\nPersona (${personaName}) response: ${aiResponse}`
 					}
 				],
-				max_tokens: 2048,
-				temperature: 0.3
+				max_tokens: compressionParams.max_tokens,
+				temperature: compressionParams.temperature
 			});
 			call2AOutput = response.choices[0]?.message?.content || '{}';
 		}
@@ -141,8 +145,8 @@ async function compressToJournal(
 			// Use Anthropic API
 			const response = await createMessage({
 				model: compressionModel,
-				max_tokens: 2048,
-				temperature: 0.3,
+				max_tokens: compressionParams.max_tokens,
+				temperature: compressionParams.temperature,
 				system: CALL2A_PROMPT,
 				messages: [
 					{
@@ -174,8 +178,8 @@ async function compressToJournal(
 						content: CALL2B_PROMPT
 					}
 				],
-				max_tokens: 2048,
-				temperature: 0.3
+				max_tokens: compressionParams.max_tokens,
+				temperature: compressionParams.temperature
 			});
 			call2BOutput = response.choices[0]?.message?.content || '{}';
 		}
@@ -277,6 +281,9 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 		const conversationModel = settings?.selected_conversation_model || DEFAULT_CONVERSATION_MODEL;
 		const selectedPersona = settings?.selected_persona || 'gunnar';
 
+		// Fetch conversation parameters from database
+		const conversationParams = await getModelParams(conversationModel, 'conversation');
+
 		const { message, persona = selectedPersona } = await request.json();
 
 		if (!message) {
@@ -313,8 +320,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 			// Use Anthropic API
 			const response = await createMessage({
 				model: conversationModel,
-				max_tokens: 4096,
-				temperature: 0.7,
+				max_tokens: conversationParams.max_tokens,
+				temperature: conversationParams.temperature,
 				system: systemPrompt,
 				messages: [
 					{
@@ -336,8 +343,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 					{ role: 'system', content: systemPrompt },
 					{ role: 'user', content: fullUserPrompt }
 				],
-				max_tokens: 4096,
-				temperature: 0.7
+				max_tokens: conversationParams.max_tokens,
+				temperature: conversationParams.temperature
 			});
 			call1AResponse = response.choices[0]?.message?.content || 'No response generated';
 			call1ATokens = {
@@ -362,8 +369,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 			// Use Anthropic API
 			const response = await createMessage({
 				model: conversationModel,
-				max_tokens: 4096,
-				temperature: 0.7,
+				max_tokens: conversationParams.max_tokens,
+				temperature: conversationParams.temperature,
 				system: call1BSystemPrompt,
 				messages: [
 					{
@@ -395,8 +402,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 					{ role: 'assistant', content: call1AMessage }, // Only the message, not the thinking
 					{ role: 'user', content: CALL1B_PROMPT }
 				],
-				max_tokens: 4096,
-				temperature: 0.7
+				max_tokens: conversationParams.max_tokens,
+				temperature: conversationParams.temperature
 			});
 			call1BResponse = response.choices[0]?.message?.content || 'No response generated';
 			call1BTokens = {

@@ -1,7 +1,8 @@
 import OpenAI from 'openai';
 import { createMessage } from '$lib/api/anthropic-client';
 import type { FileType } from './file-extraction';
-import { MAX_TOKENS, DEFAULT_COMPRESSION_MODEL } from '$lib/config/models';
+import { DEFAULT_COMPRESSION_MODEL } from '$lib/config/models';
+import { getModelParams } from '$lib/config/model-params';
 import { MODIFIED_CALL2A_PROMPT, MODIFIED_CALL2B_PROMPT, CALL3A_PROMPT, CALL3B_PROMPT } from '$lib/prompts';
 import { createClient } from '@supabase/supabase-js';
 import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
@@ -86,14 +87,6 @@ export interface Call2Response {
 // ============================================================================
 
 /** API Model Configuration - Read from user_settings in compressChunk function */
-
-/** API Call Configuration */
-const TEMPERATURE = 0.7;
-const MAX_TOKENS_CONFIG = MAX_TOKENS.file; // 1000 tokens - no thinking needed for file compression
-
-/** Max tokens for chunk compression */
-const MAX_TOKENS_CHUNK_0 = MAX_TOKENS_CONFIG;  // Chunk 0: No thinking needed, prompt enforces 200-400 char output
-const MAX_TOKENS_DETAIL = MAX_TOKENS_CONFIG;    // Detail chunks: No thinking needed, prompt enforces content preservation
 
 /** Validation constants */
 const MAX_CONTENT_LENGTH = 100000;
@@ -240,7 +233,8 @@ async function callFireworksAPI(
 	systemPrompt: string,
 	userContent: string,
 	model: string,
-	maxTokens?: number
+	temperature: number,
+	maxTokens: number
 ): Promise<string> {
 	const isAnthropic = isAnthropicModel(model);
 
@@ -251,8 +245,8 @@ async function callFireworksAPI(
 			// Use Anthropic API
 			const response = await createMessage({
 				model: model,
-				max_tokens: maxTokens || MAX_TOKENS_CONFIG,
-				temperature: TEMPERATURE,
+				max_tokens: maxTokens,
+				temperature: temperature,
 				system: systemPrompt,
 				messages: [
 					{
@@ -283,8 +277,8 @@ async function callFireworksAPI(
 						content: userContent
 					}
 				],
-				temperature: TEMPERATURE,
-				max_tokens: maxTokens || MAX_TOKENS_CONFIG
+				temperature: temperature,
+				max_tokens: maxTokens
 			});
 			content = response.choices[0]?.message?.content || '';
 		}
@@ -374,6 +368,9 @@ export async function compressChunk(input: ChunkCompressionInput): Promise<Chunk
 
 	const compressionModel = settings?.selected_compression_model || DEFAULT_COMPRESSION_MODEL;
 
+	// Fetch compression parameters from database
+	const compressionParams = await getModelParams(compressionModel, 'compression');
+
 	// Select prompts based on chunk index
 	const call2aPrompt = input.chunkIndex === 0
 		? CALL3A_PROMPT           // Metadata-focused (Chunk 0 overview)
@@ -382,11 +379,6 @@ export async function compressChunk(input: ChunkCompressionInput): Promise<Chunk
 	const call2bPrompt = input.chunkIndex === 0
 		? CALL3B_PROMPT
 		: MODIFIED_CALL2B_PROMPT;
-
-	// Select max tokens based on chunk index
-	const maxTokens = input.chunkIndex === 0
-		? MAX_TOKENS_CHUNK_0  // 150: concise metadata
-		: MAX_TOKENS_DETAIL;  // 250: preserve content
 
 	let call2aResponse: Call2Response;
 	let call2bResponse: Call2Response;
@@ -399,7 +391,13 @@ File Type: ${input.fileType}
 ${input.chunkText}`;
 
 		console.log(`[compressChunk] Starting Call 2A for chunk ${input.chunkIndex} (${input.chunkIndex === 0 ? 'Chunk 0 overview' : 'detail chunk'})`);
-		const call2aRaw = await callFireworksAPI(call2aPrompt, userContent, compressionModel, maxTokens);
+		const call2aRaw = await callFireworksAPI(
+			call2aPrompt,
+			userContent,
+			compressionModel,
+			compressionParams.temperature,
+			compressionParams.max_tokens
+		);
 		console.log(`[compressChunk] Call 2A completed for chunk ${input.chunkIndex}, parsing response...`);
 		call2aResponse = parseJsonResponse(call2aRaw);
 		console.log(`[compressChunk] Call 2A parsed successfully for chunk ${input.chunkIndex}`);
@@ -418,7 +416,13 @@ ${input.chunkText}`;
 	// Call 2B: Verification
 	try {
 		const userContent = JSON.stringify(call2aResponse);
-		const call2bRaw = await callFireworksAPI(call2bPrompt, userContent, compressionModel, maxTokens);
+		const call2bRaw = await callFireworksAPI(
+			call2bPrompt,
+			userContent,
+			compressionModel,
+			compressionParams.temperature,
+			compressionParams.max_tokens
+		);
 		call2bResponse = parseJsonResponse(call2bRaw);
 	} catch (error) {
 		if (error instanceof FileCompressionError) {

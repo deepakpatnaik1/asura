@@ -2,7 +2,8 @@ import OpenAI from 'openai';
 import { createMessage } from '$lib/api/anthropic-client';
 import type { FileType } from './file-extraction';
 import { generateEmbedding } from './vectorization';
-import { MAX_TOKENS, DEFAULT_COMPRESSION_MODEL } from '$lib/config/models';
+import { DEFAULT_COMPRESSION_MODEL } from '$lib/config/models';
+import { getModelParams } from '$lib/config/model-params';
 import { jsonrepair } from 'jsonrepair';
 import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
@@ -10,10 +11,6 @@ import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
 // ============================================================================
 // CONSTANTS
 // ============================================================================
-
-/** API Call Configuration */
-const TEMPERATURE = 0.7;
-const MAX_TOKENS_OVERVIEW = 1000;
 
 /** Word count threshold for heuristic vs LLM approach */
 const WORD_COUNT_THRESHOLD = 2000;
@@ -379,9 +376,18 @@ Focus on:
 
 DO NOT summarize detailed content. Capture "what kind of document this is" and "what it's broadly about."`;
 
+	// Fetch compression parameters from database
+	const params = await getModelParams(DEFAULT_COMPRESSION_MODEL, 'compression');
+
 	// Call AI API (supports both Fireworks and Anthropic)
 	try {
-		const overview = await callAIAPI(FILE_OVERVIEW_PROMPT, userPrompt, DEFAULT_COMPRESSION_MODEL);
+		const overview = await callAIAPI(
+			FILE_OVERVIEW_PROMPT,
+			userPrompt,
+			DEFAULT_COMPRESSION_MODEL,
+			params.temperature,
+			params.max_tokens
+		);
 		return overview;
 	} catch (error) {
 		if (error instanceof FileChunkerError) {
@@ -432,7 +438,13 @@ function isAnthropicModel(modelIdentifier: string): boolean {
  * @returns Model response text
  * @throws FileChunkerError if API call fails
  */
-async function callAIAPI(systemPrompt: string, userContent: string, model: string): Promise<string> {
+async function callAIAPI(
+	systemPrompt: string,
+	userContent: string,
+	model: string,
+	temperature: number,
+	maxTokens: number
+): Promise<string> {
 	const isAnthropic = isAnthropicModel(model);
 
 	try {
@@ -442,8 +454,8 @@ async function callAIAPI(systemPrompt: string, userContent: string, model: strin
 			// Use Anthropic API
 			const response = await createMessage({
 				model: model,
-				max_tokens: MAX_TOKENS_OVERVIEW,
-				temperature: TEMPERATURE,
+				max_tokens: maxTokens,
+				temperature: temperature,
 				system: systemPrompt,
 				messages: [
 					{
@@ -482,8 +494,8 @@ async function callAIAPI(systemPrompt: string, userContent: string, model: strin
 						content: userContent
 					}
 				],
-				temperature: TEMPERATURE,
-				max_tokens: MAX_TOKENS_OVERVIEW,
+				temperature: temperature,
+				max_tokens: maxTokens,
 				response_format: { type: 'json_object' } // Force JSON output
 			});
 			content = response.choices[0]?.message?.content || '';
@@ -961,6 +973,9 @@ export async function generateOverviewAndChunks(
 
 	const compressionModel = settings?.selected_compression_model || DEFAULT_COMPRESSION_MODEL;
 
+	// Fetch compression parameters from database
+	const compressionParams = await getModelParams(compressionModel, 'compression');
+
 	// Build user prompt for Call 3A
 	const wordCount = countWords(text);
 	const userPrompt = `Filename: ${filename}
@@ -973,7 +988,13 @@ ${text}`;
 	// Call 3A: Generate overview + chunk boundaries
 	let call3AResponse: string;
 	try {
-		call3AResponse = await callAIAPI(CALL_3A_PROMPT, userPrompt, compressionModel);
+		call3AResponse = await callAIAPI(
+			CALL_3A_PROMPT,
+			userPrompt,
+			compressionModel,
+			compressionParams.temperature,
+			compressionParams.max_tokens
+		);
 	} catch (error) {
 		if (error instanceof FileChunkerError) {
 			throw error;
@@ -1006,7 +1027,13 @@ ${call3AResponse}`;
 
 	let call3BResponse: string;
 	try {
-		call3BResponse = await callAIAPI(CALL_3B_PROMPT, call3BUserPrompt, compressionModel);
+		call3BResponse = await callAIAPI(
+			CALL_3B_PROMPT,
+			call3BUserPrompt,
+			compressionModel,
+			compressionParams.temperature,
+			compressionParams.max_tokens
+		);
 	} catch (error) {
 		if (error instanceof FileChunkerError) {
 			throw error;
