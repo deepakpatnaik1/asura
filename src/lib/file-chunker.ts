@@ -4,6 +4,7 @@ import type { FileType } from './file-extraction';
 import { generateEmbedding } from './vectorization';
 import { DEFAULT_COMPRESSION_MODEL } from '$lib/config/models';
 import { getModelParams } from '$lib/config/model-params';
+import { FILE_PROCESSING, CHUNKING } from '$lib/config/processing';
 import { jsonrepair } from 'jsonrepair';
 import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
@@ -12,26 +13,9 @@ import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
 // CONSTANTS
 // ============================================================================
 
-/** Word count threshold for heuristic vs LLM approach */
-const WORD_COUNT_THRESHOLD = 2000;
-
-/** Word counts for overview generation */
-const HEURISTIC_WORDS = 1000; // For small files
-const LLM_FIRST_WORDS = 2000; // For large files
-const LLM_LAST_WORDS = 500; // For large files
-
-/** Default parameters for semantic chunking */
-const DEFAULT_TARGET_TOKENS = 768; // Target chunk size in tokens
-const DEFAULT_SIMILARITY_THRESHOLD = 0.5; // Topic shift detection threshold
-const MAX_CHUNK_TOKENS = 1024; // Hard limit per chunk
-const MIN_CHUNK_TOKENS = 256; // Minimum viable chunk size
-
-/** Rate limiting for Voyage AI (500 req/min = ~120ms between requests) */
-const EMBEDDING_DELAY_MS = 120;
-
 /**
  * System prompt for LLM-based file overview generation
- * Used when files exceed WORD_COUNT_THRESHOLD (2000 words)
+ * Used when files exceed wordCountThreshold (2000 words)
  */
 const FILE_OVERVIEW_PROMPT = `You are creating a concise file-level overview for document discovery and search.
 
@@ -301,7 +285,7 @@ export async function generateFileOverview(
 	const wordCount = countWords(text);
 
 	// Choose approach based on word count
-	if (wordCount <= WORD_COUNT_THRESHOLD) {
+	if (wordCount <= FILE_PROCESSING.wordCountThreshold) {
 		// Small file: use heuristic approach
 		return generateOverviewHeuristic(text, filename);
 	} else {
@@ -326,7 +310,7 @@ export async function generateFileOverview(
  */
 function generateOverviewHeuristic(text: string, filename: string): string {
 	const words = text.split(/\s+/);
-	const overviewWords = words.slice(0, HEURISTIC_WORDS);
+	const overviewWords = words.slice(0, FILE_PROCESSING.heuristicWords);
 	return overviewWords.join(' ');
 }
 
@@ -351,8 +335,8 @@ async function generateOverviewLLM(
 ): Promise<string> {
 	// Extract first 2000 and last 500 words
 	const words = text.split(/\s+/);
-	const firstKWords = words.slice(0, LLM_FIRST_WORDS).join(' ');
-	const lastKWords = words.slice(-LLM_LAST_WORDS).join(' ');
+	const firstKWords = words.slice(0, FILE_PROCESSING.llmFirstWords).join(' ');
+	const lastKWords = words.slice(-FILE_PROCESSING.llmLastWords).join(' ');
 
 	// Build user prompt
 	const userPrompt = `Create a concise overview (200-400 words) of this document:
@@ -600,8 +584,8 @@ export interface ChunkingOutput {
 export async function chunkTextBySemantic(input: ChunkingInput): Promise<ChunkingOutput> {
 	const {
 		text,
-		targetChunkTokens = DEFAULT_TARGET_TOKENS,
-		similarityThreshold = DEFAULT_SIMILARITY_THRESHOLD
+		targetChunkTokens = CHUNKING.targetTokens,
+		similarityThreshold = CHUNKING.similarityThreshold
 	} = input;
 
 	// Validate input
@@ -841,7 +825,7 @@ function detectTopicBoundaries(embeddings: number[][], threshold: number): Set<n
  * Group sentences into chunks based on boundaries and size limits
  *
  * Creates chunks at topic boundaries while respecting target token size.
- * Also creates new chunks if size exceeds MAX_CHUNK_TOKENS.
+ * Also creates new chunks if size exceeds CHUNKING.maxTokens.
  *
  * @param sentences - Array of sentences
  * @param boundaries - Set of boundary indices
@@ -868,7 +852,7 @@ function groupSentencesIntoChunks(
 
 		// Check if we should start a new chunk
 		const isBoundary = boundaries.has(i);
-		const wouldExceedMax = currentTokens + sentenceTokens > MAX_CHUNK_TOKENS;
+		const wouldExceedMax = currentTokens + sentenceTokens > CHUNKING.maxTokens;
 		const shouldStartNewChunk = (isBoundary || wouldExceedMax) && currentChunk.length > 0;
 
 		if (shouldStartNewChunk) {

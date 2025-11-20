@@ -3,6 +3,7 @@ import { createMessage } from '$lib/api/anthropic-client';
 import type { FileType } from './file-extraction';
 import { DEFAULT_COMPRESSION_MODEL } from '$lib/config/models';
 import { getModelParams } from '$lib/config/model-params';
+import { FILE_PROCESSING } from '$lib/config/processing';
 import { MODIFIED_CALL2A_PROMPT, MODIFIED_CALL2B_PROMPT, CALL3A_PROMPT, CALL3B_PROMPT } from '$lib/prompts';
 import { createClient } from '@supabase/supabase-js';
 import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
@@ -87,9 +88,6 @@ export interface Call2Response {
 // ============================================================================
 
 /** API Model Configuration - Read from user_settings in compressChunk function */
-
-/** Validation constants */
-const MAX_CONTENT_LENGTH = 100000;
 
 // ============================================================================
 // HELPER FUNCTIONS

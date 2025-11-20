@@ -1,5 +1,6 @@
 import { createHash } from 'crypto';
 import { extractText as extractPdfText } from 'unpdf';
+import { FILE_PROCESSING } from '$lib/config/processing';
 
 // ============================================================================
 // ERROR CLASSES
@@ -73,9 +74,6 @@ export interface ExtractionResult {
 // CONSTANTS
 // ============================================================================
 
-/** File size limit: 10MB in bytes */
-const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
-
 /** Supported text file extensions */
 const TEXT_EXTENSIONS = ['txt', 'md', 'markdown', 'rtf'];
 
@@ -111,7 +109,7 @@ export async function extractText(
 ): Promise<ExtractionResult> {
 	try {
 		// 1. Validate file size
-		validateFileSize(buffer, MAX_FILE_SIZE_BYTES / (1024 * 1024));
+		validateFileSize(buffer, FILE_PROCESSING.maxFileSizeMB);
 
 		// 2. Classify file type
 		const extension = extractExtension(filename);

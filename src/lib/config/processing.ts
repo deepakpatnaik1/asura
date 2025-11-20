@@ -1,90 +1,91 @@
 /**
- * File Processing & Chunking Configuration
+ * File Processing Configuration
  *
- * Centralized constants for file upload, extraction, chunking, embedding,
- * batch processing, retry logic, and progress tracking.
+ * Centralized constants for file upload, extraction, chunking, and vectorization.
+ * These values control how files are processed and stored in the system.
+ *
+ * @module config/processing
  */
 
-/** File size and content limits */
+// ============================================================================
+// FILE PROCESSING
+// ============================================================================
+
+/**
+ * File upload and extraction limits
+ */
 export const FILE_PROCESSING = {
 	/** Maximum file size in megabytes */
 	maxFileSizeMB: 10,
-	/** Maximum file size in bytes (10 * 1024 * 1024) */
-	maxFileSizeBytes: 10 * 1024 * 1024,
-	/** Maximum content length after extraction (characters) */
+
+	/** Maximum file size in bytes (computed from MB) */
+	maxFileSizeBytes: 10 * 1024 * 1024, // 10MB = 10,485,760 bytes
+
+	/** Maximum content length for text extraction */
 	maxContentLength: 100000,
-	/** Word count threshold for triggering LLM overview generation */
+
+	/** Word count threshold: files below use heuristic overview, above use LLM */
 	wordCountThreshold: 2000,
-	/** Number of words used for heuristic overview (beginning) */
+
+	/** Number of words to extract for heuristic overview (small files) */
 	heuristicWords: 1000,
-	/** Number of words from beginning for LLM overview */
+
+	/** Number of words from start for LLM overview (large files) */
 	llmFirstWords: 2000,
-	/** Number of words from end for LLM overview */
+
+	/** Number of words from end for LLM overview (large files) */
 	llmLastWords: 500
 } as const;
 
-/** Semantic chunking parameters */
+// ============================================================================
+// SEMANTIC CHUNKING
+// ============================================================================
+
+/**
+ * Parameters for semantic chunking algorithm
+ * Controls how documents are split into searchable chunks
+ */
 export const CHUNKING = {
-	/** Target chunk size in tokens (ideal) */
+	/** Target chunk size in tokens (aim for this size) */
 	targetTokens: 768,
+
 	/** Maximum chunk size in tokens (hard limit) */
 	maxTokens: 1024,
-	/** Minimum chunk size in tokens (hard limit) */
+
+	/** Minimum chunk size in tokens (prevent tiny chunks) */
 	minTokens: 256,
-	/** Cosine similarity threshold for chunk boundary detection */
+
+	/** Similarity threshold for topic shift detection (0.0-1.0) */
 	similarityThreshold: 0.5
 } as const;
 
-/** Embedding generation configuration */
+// ============================================================================
+// EMBEDDING & VECTORIZATION
+// ============================================================================
+
+/**
+ * Configuration for vector embeddings
+ * Used with Voyage AI API for semantic search
+ */
 export const EMBEDDING = {
-	/** Vector dimensions for voyage-3 model */
+	/** Embedding vector dimensions (Voyage-3 outputs 1024-dim vectors) */
 	dimensions: 1024,
-	/** Maximum token estimate for embedding input */
-	maxTokenEstimate: 32000,
-	/** Delay between individual embedding API calls (ms) */
-	delayMs: 120
+
+	/** Maximum tokens for embedding input (Voyage AI limit) */
+	maxTokens: 32000,
+
+	/** Character-to-token ratio for estimation (1 token ≈ 4 characters) */
+	charsPerToken: 4
 } as const;
 
-/** Batch processing limits */
-export const BATCH_PROCESSING = {
-	/** Number of chunks to compress in parallel */
-	compressionSize: 5,
-	/** Number of chunks to embed in parallel */
-	embeddingSize: 5,
-	/** Delay between compression/embedding batches (ms) */
-	delayBetweenBatchesMs: 5000
-} as const;
+// ============================================================================
+// TYPE EXPORTS
+// ============================================================================
 
-/** Retry configuration for API calls */
-export const RETRY_CONFIG = {
-	/** Maximum retry attempts before failing */
-	maxAttempts: 3,
-	/** Base delay before first retry (ms) */
-	baseDelayMs: 1000,
-	/** Exponential backoff multiplier */
-	backoffMultiplier: 2,
-	/** Maximum reconnection attempts for SSE */
-	maxReconnectAttempts: 5
-} as const;
-
-/** File processing progress phase boundaries (0-100) */
-export const PROGRESS_PHASES = {
-	/** Text extraction complete */
-	extraction: 10,
-	/** Overview generation + chunking complete */
-	overviewAndChunking: 30,
-	/** Chunk 0 (overview) compression complete */
-	chunk0Compression: 40,
-	/** Detail chunk compression start */
-	detailCompressionStart: 40,
-	/** Detail chunk compression end */
-	detailCompressionEnd: 70,
-	/** Embedding generation start */
-	embeddingStart: 70,
-	/** Embedding generation end */
-	embeddingEnd: 90,
-	/** Database save start */
-	saveStart: 90,
-	/** Processing complete */
-	complete: 100
-} as const;
+/**
+ * Type-safe access to configuration values
+ * Use these types when passing config to functions
+ */
+export type FileProcessingConfig = typeof FILE_PROCESSING;
+export type ChunkingConfig = typeof CHUNKING;
+export type EmbeddingConfig = typeof EMBEDDING;

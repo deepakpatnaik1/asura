@@ -1,5 +1,6 @@
 import { VoyageAIClient } from 'voyageai';
 import { EMBEDDING_MODEL } from '$lib/config/models';
+import { EMBEDDING } from '$lib/config/processing';
 
 // Get API key from environment variable
 // In SvelteKit runtime, this will be loaded via $env/static/private in server hooks
@@ -7,16 +8,13 @@ import { EMBEDDING_MODEL } from '$lib/config/models';
 const VOYAGE_API_KEY = process.env.VOYAGE_API_KEY || '';
 
 // ============================================================================
-// CONSTANTS
+// HELPER FUNCTIONS
 // ============================================================================
-
-const EMBEDDING_DIMENSIONS = 1024;
-const MAX_TOKEN_ESTIMATE = 32000;
 
 // Rough approximation: 1 token ≈ 4 characters
 // Used for client-side validation before API call
 function estimateTokens(text: string): number {
-	return Math.ceil(text.length / 4);
+	return Math.ceil(text.length / EMBEDDING.charsPerToken);
 }
 
 // ============================================================================
@@ -146,11 +144,11 @@ function validateInput(text: string): void {
 
 	// Check text length (estimate tokens)
 	const tokenCount = estimateTokens(text);
-	if (tokenCount > MAX_TOKEN_ESTIMATE) {
+	if (tokenCount > EMBEDDING.maxTokens) {
 		throw new VectorizationError(
-			`Text is too long (~${tokenCount} tokens, max ${MAX_TOKEN_ESTIMATE})`,
+			`Text is too long (~${tokenCount} tokens, max ${EMBEDDING.maxTokens})`,
 			'TEXT_TOO_LONG',
-			{ estimatedTokens: tokenCount, maxTokens: MAX_TOKEN_ESTIMATE }
+			{ estimatedTokens: tokenCount, maxTokens: EMBEDDING.maxTokens }
 		);
 	}
 }
@@ -173,11 +171,11 @@ function validateEnvironment(): void {
  * @throws VectorizationError if dimensions don't match
  */
 function validateEmbeddingDimensions(embedding: any): void {
-	if (!Array.isArray(embedding) || embedding.length !== EMBEDDING_DIMENSIONS) {
+	if (!Array.isArray(embedding) || embedding.length !== EMBEDDING.dimensions) {
 		throw new VectorizationError(
-			`Expected ${EMBEDDING_DIMENSIONS}-dimensional embedding, got ${embedding?.length || 0}`,
+			`Expected ${EMBEDDING.dimensions}-dimensional embedding, got ${embedding?.length || 0}`,
 			'INVALID_EMBEDDING_DIMENSIONS',
-			{ expectedDimensions: EMBEDDING_DIMENSIONS, actualDimensions: embedding?.length }
+			{ expectedDimensions: EMBEDDING.dimensions, actualDimensions: embedding?.length }
 		);
 	}
 

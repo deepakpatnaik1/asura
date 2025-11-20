@@ -12,6 +12,7 @@
 	import { tick, onMount } from 'svelte';
 	import TextCleaner from '$lib/components/TextCleaner.svelte';
 	import SettingsModal from '$lib/components/SettingsModal.svelte';
+	import { FILE_PROCESSING } from '$lib/config/processing';
 
 	// Receive loaded messages from server
 	let { data } = $props();
@@ -465,9 +466,9 @@
 			return;
 		}
 
-		// Validate file size (10MB = 10485760 bytes)
-		if (file.size > 10485760) {
-			error.set('File is too large. Maximum size is 10MB.');
+		// Validate file size (max from config)
+		if (file.size > FILE_PROCESSING.maxFileSizeBytes) {
+			error.set(`File is too large. Maximum size is ${FILE_PROCESSING.maxFileSizeMB}MB.`);
 			return;
 		}
 
