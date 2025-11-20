@@ -9,7 +9,7 @@ import { FileChunkerError } from './file-chunker';
 import { FileCompressionError } from './file-compressor';
 import { VectorizationError } from './vectorization';
 import { processBatched } from './batch-processor';
-import { BATCH_PROCESSING } from './config/processing';
+import { BATCH_PROCESSING, RETRY_CONFIG, PROGRESS_PHASES } from './config/processing';
 
 // ============================================================================
 // ERROR CLASSES
@@ -127,28 +127,6 @@ interface FileRecord {
 // ============================================================================
 // CONSTANTS
 // ============================================================================
-
-/**
- * Progress phase boundaries (percentages)
- * Updated for new combined overview + chunking flow
- */
-const PROGRESS_EXTRACTION = 10;
-const PROGRESS_OVERVIEW_AND_CHUNKING = 30; // Combined phase (was separate 20% and 30%)
-const PROGRESS_CHUNK0_COMPRESSION = 40;
-const PROGRESS_DETAIL_COMPRESSION_START = 40;
-const PROGRESS_DETAIL_COMPRESSION_END = 70;
-const PROGRESS_EMBEDDING_START = 70;
-const PROGRESS_EMBEDDING_END = 90;
-const PROGRESS_SAVE_START = 90;
-const PROGRESS_COMPLETE = 100;
-
-/**
- * Retry configuration for database updates
- */
-const RETRY_CONFIG = {
-	maxAttempts: 3,
-	baseDelayMs: 1000 // 1 second
-};
 
 // ============================================================================
 // MAIN FUNCTION
@@ -348,12 +326,12 @@ export async function processFileBackground(
 		const userId = fileData.user_id;
 
 		// Update to extraction complete (10%)
-		await updateProgress(fileId, PROGRESS_EXTRACTION, 'extraction');
+		await updateProgress(fileId, PROGRESS_PHASES.extraction.end, 'extraction');
 		await reportProgress(
 			options?.onProgress,
 			fileId,
 			'extraction',
-			PROGRESS_EXTRACTION,
+			PROGRESS_PHASES.extraction.end,
 			'Text extraction complete'
 		);
 
@@ -369,7 +347,7 @@ export async function processFileBackground(
 				options?.onProgress,
 				fileId,
 				'chunking',
-				PROGRESS_EXTRACTION,
+				PROGRESS_PHASES.extraction.end,
 				'Generating file overview and logical chunks...'
 			);
 
@@ -377,12 +355,12 @@ export async function processFileBackground(
 			chunk0Text = result.overview;
 			detailChunks = result.chunks;
 
-			await updateProgress(fileId, PROGRESS_OVERVIEW_AND_CHUNKING, 'chunking');
+			await updateProgress(fileId, PROGRESS_PHASES.chunking.end, 'chunking');
 			await reportProgress(
 				options?.onProgress,
 				fileId,
 				'chunking',
-				PROGRESS_OVERVIEW_AND_CHUNKING,
+				PROGRESS_PHASES.chunking.end,
 				`Generated overview + ${detailChunks.length} logical chunks`
 			);
 		} catch (error) {
@@ -439,7 +417,7 @@ export async function processFileBackground(
 				options?.onProgress,
 				fileId,
 				'compression',
-				PROGRESS_OVERVIEW_AND_CHUNKING,
+				PROGRESS_PHASES.chunking.end,
 				'Compressing file overview...'
 			);
 
@@ -453,12 +431,12 @@ export async function processFileBackground(
 			});
 			console.log(`[FileProcessor] Chunk 0 compression successful for file ${fileId}`);
 
-			await updateProgress(fileId, PROGRESS_CHUNK0_COMPRESSION, 'compression');
+			await updateProgress(fileId, PROGRESS_PHASES.compressionOverview.end, 'compression');
 			await reportProgress(
 				options?.onProgress,
 				fileId,
 				'compression',
-				PROGRESS_CHUNK0_COMPRESSION,
+				PROGRESS_PHASES.compressionOverview.end,
 				'Chunk 0 compressed'
 			);
 		} catch (error) {
@@ -521,7 +499,7 @@ export async function processFileBackground(
 				options?.onProgress,
 				fileId,
 				'compression',
-				PROGRESS_DETAIL_COMPRESSION_START,
+				PROGRESS_PHASES.compressionDetails.start,
 				`Compressing ${detailChunks.length} detail chunks in parallel...`
 			);
 
@@ -557,12 +535,12 @@ export async function processFileBackground(
 			detailChunksCompressed.push(...compressedResults);
 
 			// Report completion
-			await updateProgress(fileId, PROGRESS_DETAIL_COMPRESSION_END, 'compression');
+			await updateProgress(fileId, PROGRESS_PHASES.compressionDetails.end, 'compression');
 			await reportProgress(
 				options?.onProgress,
 				fileId,
 				'compression',
-				PROGRESS_DETAIL_COMPRESSION_END,
+				PROGRESS_PHASES.compressionDetails.end,
 				`Compressed ${detailChunks.length} detail chunks`
 			);
 		} catch (error) {
@@ -621,7 +599,7 @@ export async function processFileBackground(
 				options?.onProgress,
 				fileId,
 				'embedding',
-				PROGRESS_EMBEDDING_START,
+				PROGRESS_PHASES.embedding.start,
 				`Generating ${allCompressed.length} embeddings in parallel...`
 			);
 
@@ -648,12 +626,12 @@ export async function processFileBackground(
 			embeddings.push(...generatedEmbeddings);
 
 			// Report completion
-			await updateProgress(fileId, PROGRESS_EMBEDDING_END, 'embedding');
+			await updateProgress(fileId, PROGRESS_PHASES.embedding.end, 'embedding');
 			await reportProgress(
 				options?.onProgress,
 				fileId,
 				'embedding',
-				PROGRESS_EMBEDDING_END,
+				PROGRESS_PHASES.embedding.end,
 				`Generated ${allCompressed.length} embeddings`
 			);
 		} catch (error) {
@@ -707,7 +685,7 @@ export async function processFileBackground(
 				options?.onProgress,
 				fileId,
 				'finalization',
-				PROGRESS_SAVE_START,
+				PROGRESS_PHASES.finalization.start,
 				'Saving chunks to database...'
 			);
 
@@ -721,12 +699,12 @@ export async function processFileBackground(
 				filename
 			);
 
-			await updateProgress(fileId, PROGRESS_COMPLETE, 'completed');
+			await updateProgress(fileId, PROGRESS_PHASES.finalization.end, 'completed');
 			await reportProgress(
 				options?.onProgress,
 				fileId,
 				'completed',
-				PROGRESS_COMPLETE,
+				PROGRESS_PHASES.finalization.end,
 				'Processing complete'
 			);
 		} catch (error) {
@@ -916,7 +894,7 @@ async function markFileFailed(
 	errorMessage: string,
 	stage: ProcessingStage
 ): Promise<void> {
-	const maxAttempts = RETRY_CONFIG.maxAttempts;
+	const maxAttempts = RETRY_CONFIG.maxRetries;
 	let lastError: Error | null = null;
 
 	for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -947,7 +925,7 @@ async function markFileFailed(
 
 			// Wait before retry (exponential backoff: 1s, 2s, 4s)
 			if (attempt < maxAttempts - 1) {
-				const delayMs = RETRY_CONFIG.baseDelayMs * Math.pow(2, attempt);
+				const delayMs = RETRY_CONFIG.initialDelay * Math.pow(2, attempt);
 				await new Promise((resolve) => setTimeout(resolve, delayMs));
 			}
 		}
