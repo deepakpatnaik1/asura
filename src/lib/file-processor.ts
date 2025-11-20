@@ -520,8 +520,10 @@ export async function processFileBackground(
 					batchSize: BATCH_PROCESSING.chunkCompressionBatchSize,
 					delayBetweenBatchesMs: BATCH_PROCESSING.delayMs,
 					onProgress: async (completed, total) => {
-						// Calculate progress: 40% → 70% (30% range)
-						const progress = Math.round(40 + (30 * completed / total));
+						// Calculate progress dynamically from PROGRESS_PHASES
+						const start = PROGRESS_PHASES.compressionDetails.start;
+						const range = PROGRESS_PHASES.compressionDetails.end - PROGRESS_PHASES.compressionDetails.start;
+						const progress = Math.round(start + (range * completed / total));
 						await reportProgress(
 							options?.onProgress,
 							fileId,
@@ -611,8 +613,10 @@ export async function processFileBackground(
 					batchSize: BATCH_PROCESSING.embeddingBatchSize,
 					delayBetweenBatchesMs: BATCH_PROCESSING.delayMs,
 					onProgress: async (completed, total) => {
-						// Calculate progress: 70% → 90% (20% range)
-						const progress = Math.round(70 + (20 * completed / total));
+						// Calculate progress dynamically from PROGRESS_PHASES
+						const start = PROGRESS_PHASES.embedding.start;
+						const range = PROGRESS_PHASES.embedding.end - PROGRESS_PHASES.embedding.start;
+						const progress = Math.round(start + (range * completed / total));
 						await reportProgress(
 							options?.onProgress,
 							fileId,
