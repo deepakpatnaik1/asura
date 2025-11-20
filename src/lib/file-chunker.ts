@@ -2,7 +2,7 @@ import OpenAI from 'openai';
 import { createMessage } from '$lib/api/anthropic-client';
 import type { FileType } from './file-extraction';
 import { generateEmbedding } from './vectorization';
-import { FILE_MODEL, MAX_TOKENS, DEFAULT_COMPRESSION_MODEL } from '$lib/config/models';
+import { MAX_TOKENS, DEFAULT_COMPRESSION_MODEL } from '$lib/config/models';
 import { jsonrepair } from 'jsonrepair';
 import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
@@ -381,7 +381,7 @@ DO NOT summarize detailed content. Capture "what kind of document this is" and "
 
 	// Call AI API (supports both Fireworks and Anthropic)
 	try {
-		const overview = await callAIAPI(FILE_OVERVIEW_PROMPT, userPrompt, FILE_MODEL);
+		const overview = await callAIAPI(FILE_OVERVIEW_PROMPT, userPrompt, DEFAULT_COMPRESSION_MODEL);
 		return overview;
 	} catch (error) {
 		if (error instanceof FileChunkerError) {

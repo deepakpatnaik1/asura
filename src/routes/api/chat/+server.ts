@@ -6,7 +6,11 @@ import { FIREWORKS_API_KEY, VOYAGE_API_KEY, SUPABASE_SERVICE_ROLE_KEY } from '$e
 import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 import { createClient } from '@supabase/supabase-js';
 import { buildContextForCalls1A1B } from '$lib/context-builder';
-import { DEFAULT_CONVERSATION_MODEL, DEFAULT_COMPRESSION_MODEL } from '$lib/config/models';
+import {
+	DEFAULT_CONVERSATION_MODEL,
+	DEFAULT_COMPRESSION_MODEL,
+	EMBEDDING_MODEL
+} from '$lib/config/models';
 import {
 	BASE_INSTRUCTIONS,
 	PERSONA_GUNNAR,
@@ -222,7 +226,7 @@ async function compressToJournal(
 
 			const embeddingResponse = await voyage.embed({
 				input: decisionArc,
-				model: 'voyage-3-large' // 1024 dimensions (default)
+				model: EMBEDDING_MODEL // 1024 dimensions (default)
 			});
 
 			const embedding = embeddingResponse.data[0].embedding;

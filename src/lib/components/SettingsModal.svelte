@@ -2,6 +2,12 @@
 	import { onMount } from 'svelte';
 	import { Icon } from 'svelte-icons-pack';
 	import { LuX } from 'svelte-icons-pack/lu';
+	import {
+		DEFAULT_CONVERSATION_MODEL,
+		DEFAULT_COMPRESSION_MODEL,
+		EMBEDDING_MODEL
+	} from '$lib/config/models';
+	import { DEFAULT_PERSONA } from '$lib/config/personas';
 
 	// Props
 	let { open = $bindable(false), onClose }: { open?: boolean; onClose: () => void } = $props();
@@ -54,12 +60,12 @@
 			}
 			const settings = await settingsRes.json();
 			selectedConversationModel =
-				settings.selected_conversation_model || 'accounts/fireworks/models/qwen3-235b-a22b';
+				settings.selected_conversation_model || DEFAULT_CONVERSATION_MODEL;
 			selectedCompressionModel =
 				settings.selected_compression_model ||
-				'accounts/fireworks/models/qwen3-235b-a22b-instruct-2507';
-			selectedEmbeddingModel = settings.selected_embedding_model || 'voyage-3';
-			selectedPersona = settings.selected_persona || 'gunnar';
+				DEFAULT_COMPRESSION_MODEL;
+			selectedEmbeddingModel = settings.selected_embedding_model || EMBEDDING_MODEL;
+			selectedPersona = settings.selected_persona || DEFAULT_PERSONA;
 
 			// Fetch token usage
 			const tokenRes = await fetch('/api/token-usage');

@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { SUPABASE_SERVICE_ROLE_KEY, VOYAGE_API_KEY } from '$env/static/private';
 import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 import { VoyageAIClient } from 'voyageai';
+import { EMBEDDING_MODEL } from '$lib/config/models';
 
 const supabase = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 const voyage = new VoyageAIClient({ apiKey: VOYAGE_API_KEY });
@@ -57,7 +58,7 @@ interface ContextStats {
 export async function buildContextForCalls1A1B(
 	userId: string,
 	personaName: string = 'gunnar',
-	modelIdentifier: string = 'accounts/fireworks/models/qwen3-235b-a22b',
+	modelIdentifier: string,
 	userQuery?: string // Optional: enables vector search (Priority 5)
 ): Promise<{ context: string; stats: ContextStats }> {
 	// Get model's context window and calculate budget
@@ -168,7 +169,7 @@ export async function buildContextForCalls1A1B(
 				console.log('[Context Builder] Generating query embedding for vector search');
 				const queryEmbedding = await voyage.embed({
 					input: userQuery,
-					model: 'voyage-3' // 1024 dimensions
+					model: EMBEDDING_MODEL // 1024 dimensions
 				});
 
 				queryVector = queryEmbedding.data[0].embedding;
@@ -280,7 +281,7 @@ export async function buildContextForCalls1A1B(
 				console.log('[Context Builder] Generating query embedding for file chunks');
 				const queryEmbedding = await voyage.embed({
 					input: userQuery,
-					model: 'voyage-3' // 1024 dimensions
+					model: EMBEDDING_MODEL // 1024 dimensions
 				});
 				queryVector = queryEmbedding.data[0].embedding;
 			}

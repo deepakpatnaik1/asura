@@ -3,6 +3,12 @@ import type { RequestHandler } from './$types';
 import { createClient } from '@supabase/supabase-js';
 import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
 import { PUBLIC_SUPABASE_URL } from '$env/static/public';
+import {
+	DEFAULT_CONVERSATION_MODEL,
+	DEFAULT_COMPRESSION_MODEL,
+	EMBEDDING_MODEL
+} from '$lib/config/models';
+import { DEFAULT_PERSONA } from '$lib/config/personas';
 
 const supabase = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
@@ -32,10 +38,10 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession } }) => {
 	// 3. HANDLE MISSING SETTINGS (create defaults for new user)
 	if (error) {
 		const defaults = {
-			selected_conversation_model: 'accounts/fireworks/models/qwen3-235b-a22b',
-			selected_compression_model: 'accounts/fireworks/models/qwen3-235b-a22b-instruct-2507',
-			selected_embedding_model: 'voyage-3',
-			selected_persona: 'gunnar'
+			selected_conversation_model: DEFAULT_CONVERSATION_MODEL,
+			selected_compression_model: DEFAULT_COMPRESSION_MODEL,
+			selected_embedding_model: EMBEDDING_MODEL,
+			selected_persona: DEFAULT_PERSONA
 		};
 
 		// Try to create default settings for this user

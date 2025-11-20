@@ -1,4 +1,5 @@
 import { VoyageAIClient } from 'voyageai';
+import { EMBEDDING_MODEL } from '$lib/config/models';
 
 // Get API key from environment variable
 // In SvelteKit runtime, this will be loaded via $env/static/private in server hooks
@@ -9,7 +10,6 @@ const VOYAGE_API_KEY = process.env.VOYAGE_API_KEY || '';
 // CONSTANTS
 // ============================================================================
 
-const MODEL_NAME = 'voyage-3' as const;
 const EMBEDDING_DIMENSIONS = 1024;
 const MAX_TOKEN_ESTIMATE = 32000;
 
@@ -89,7 +89,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 		console.log('[Vectorization] Generating embedding for text:', text.substring(0, 50) + '...');
 		const response = await voyageClient.embed({
 			input: text,
-			model: MODEL_NAME,
+			model: EMBEDDING_MODEL,
 			inputType: 'document' // For stored documents/files
 		});
 
