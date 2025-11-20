@@ -3396,3 +3396,182 @@ max_tokens: params.max_tokens
 - Use EMBEDDING.delayMs (already in place)
 
 ---
+
+## Chunk 5: Batch Processing & Retry Config (2025-11-20)
+
+**Status**: 🟡 **INCOMPLETE** - Partial implementation (60% complete)
+**Commit**: `5db8d32` - "feat(config): Complete Chunk 5 - Batch processing and retry config"
+**Grade**: C (60/100) - Major features missing
+
+### What Was Completed ✅
+
+**1. Config Constants Created** - `src/lib/config/processing.ts`
+- ✅ `BATCH_PROCESSING` - Batch sizes and delays
+  - `defaultBatchSize: 10`
+  - `chunkCompressionBatchSize: 5`
+  - `embeddingBatchSize: 5`
+  - `delayMs: 5000`
+- ✅ `RETRY_CONFIG` - API retry and SSE reconnect
+  - `maxRetries: 3`
+  - `initialDelay: 1000`
+  - `backoffMultiplier: 2`
+  - `retryableStatuses: [429, 503]`
+  - `maxReconnectAttempts: 5`
+  - `reconnectBackoffBase: 1000`
+- ✅ `PROGRESS_PHASES` - File processing phase percentages
+  - `extraction: { start: 0, end: 10 }`
+  - `chunking: { start: 10, end: 30 }`
+  - `compressionOverview: { start: 30, end: 40 }`
+  - `compressionDetails: { start: 40, end: 70 }`
+  - `embedding: { start: 70, end: 90 }`
+  - `finalization: { start: 90, end: 100 }`
+
+**2. Batch Processing Constants** - ✅ Correctly Replaced
+- ✅ `src/lib/batch-processor.ts:30`
+  - Replaced `batchSize = 10` → `BATCH_PROCESSING.defaultBatchSize`
+- ✅ `src/lib/file-processor.ts:542-543`
+  - Replaced `batchSize: 5` → `BATCH_PROCESSING.chunkCompressionBatchSize`
+  - Replaced `delayBetweenBatchesMs: 5000` → `BATCH_PROCESSING.delayMs`
+- ✅ `src/lib/file-processor.ts:633-634`
+  - Replaced `batchSize: 5` → `BATCH_PROCESSING.embeddingBatchSize`
+  - Replaced `delayBetweenBatchesMs: 5000` → `BATCH_PROCESSING.delayMs`
+
+**3. API Retry Config** - ✅ Correctly Replaced
+- ✅ `src/lib/api-retry.ts:48-54`
+  - Replaced all `DEFAULT_OPTIONS` hardcoded values with `RETRY_CONFIG.*`
+  - Fixed readonly array issue with spread operator `[...RETRY_CONFIG.retryableStatuses]`
+
+**4. SSE Reconnect Config** - ✅ Correctly Replaced
+- ✅ `src/lib/stores/filesStore.ts:317`
+  - Replaced `MAX_RECONNECT_ATTEMPTS = 5` → `RETRY_CONFIG.maxReconnectAttempts`
+- ✅ `src/lib/stores/filesStore.ts:324`
+  - Replaced `1000 * Math.pow(2, ...)` → `RETRY_CONFIG.reconnectBackoffBase * Math.pow(2, ...)`
+
+### Critical Missing Components ❌
+
+**1. PROGRESS_PHASES Not Used** - `src/lib/file-processor.ts`
+- ❌ **FAILED to replace hardcoded progress constants** (lines 135-143)
+- Still hardcoded:
+  ```typescript
+  const PROGRESS_EXTRACTION = 10;
+  const PROGRESS_OVERVIEW_AND_CHUNKING = 30;
+  const PROGRESS_CHUNK0_COMPRESSION = 40;
+  const PROGRESS_DETAIL_COMPRESSION_START = 40;
+  const PROGRESS_DETAIL_COMPRESSION_END = 70;
+  const PROGRESS_EMBEDDING_START = 70;
+  const PROGRESS_EMBEDDING_END = 90;
+  const PROGRESS_SAVE_START = 90;
+  const PROGRESS_COMPLETE = 100;
+  ```
+- **Impact**: 9 hardcoded values remain that should use `PROGRESS_PHASES.*`
+- **Expected**: Import `PROGRESS_PHASES` and replace all constants
+  - `PROGRESS_EXTRACTION` → `PROGRESS_PHASES.extraction.end`
+  - `PROGRESS_OVERVIEW_AND_CHUNKING` → `PROGRESS_PHASES.chunking.end`
+  - Etc.
+
+**2. Local RETRY_CONFIG Not Replaced** - `src/lib/file-processor.ts`
+- ❌ **FAILED to replace local RETRY_CONFIG** (lines 148-151)
+- Still hardcoded:
+  ```typescript
+  const RETRY_CONFIG = {
+    maxAttempts: 3,
+    baseDelayMs: 1000
+  };
+  ```
+- **Impact**: Naming conflict! Two `RETRY_CONFIG` constants exist
+  - Global one in `config/processing.ts` ✅
+  - Local one in `file-processor.ts` ❌ (shadows global)
+- **Used in**: Lines 919, 950 (database update retry logic)
+- **Expected**:
+  - Remove local `RETRY_CONFIG`
+  - Import global `RETRY_CONFIG` from config
+  - Rename properties: `maxAttempts` → `maxRetries`, `baseDelayMs` → `initialDelay`
+
+**3. Missing Import** - `src/lib/file-processor.ts`
+- ❌ Only imported `BATCH_PROCESSING`
+- ❌ Missing `RETRY_CONFIG` import
+- ❌ Missing `PROGRESS_PHASES` import
+- **Spec violation**: "Import BATCH_PROCESSING, RETRY_CONFIG, PROGRESS_PHASES"
+
+### Impact Assessment
+
+**What Works** (60%):
+- ✅ Batch processing centralized (4 values)
+- ✅ API retry centralized (4 values)
+- ✅ SSE reconnect centralized (2 values)
+- ✅ Type-check passes (no new errors)
+
+**What's Broken** (40%):
+- ❌ Progress phases not centralized (9 values)
+- ❌ File processor retry config not centralized (2 values)
+- ❌ Total: **11 hardcoded values remain** that should be centralized
+
+**Severity**: MEDIUM
+- Core functionality works (batch sizes, delays, API retry)
+- But incomplete scope (progress phases, file processor retry)
+- Naming conflict creates confusion
+
+### Root Cause Analysis
+
+**Why was this missed?**
+1. **Incomplete requirements review** - Focused on batch/delay aspect, missed progress phases
+2. **Didn't search thoroughly** - Should have grepped for ALL hardcoded constants in file-processor.ts
+3. **Premature completion** - Marked chunk complete without verifying spec requirements
+4. **No test** - Should have verified that file-processor.ts imports all 3 configs
+
+### Required Fixes
+
+**Fix 1: Replace PROGRESS_PHASES** (15 min)
+1. Import `PROGRESS_PHASES` in file-processor.ts
+2. Remove local progress constants (lines 135-143)
+3. Replace 9 usages with `PROGRESS_PHASES.*`
+4. Example: `PROGRESS_EXTRACTION` → `PROGRESS_PHASES.extraction.end`
+
+**Fix 2: Replace Local RETRY_CONFIG** (10 min)
+1. Remove local `RETRY_CONFIG` (lines 148-151)
+2. Import global `RETRY_CONFIG` from config
+3. Update references (lines 919, 950):
+   - `RETRY_CONFIG.maxAttempts` → `RETRY_CONFIG.maxRetries`
+   - `RETRY_CONFIG.baseDelayMs` → `RETRY_CONFIG.initialDelay`
+
+**Fix 3: Add Missing Imports** (1 min)
+1. Add `RETRY_CONFIG, PROGRESS_PHASES` to existing import
+
+**Total fix time**: ~30 minutes
+
+### Grade Breakdown
+
+**Completed** (60 points):
+- Config constants created: 20/20 ✅
+- Batch processing replaced: 15/15 ✅
+- API retry replaced: 15/15 ✅
+- SSE reconnect replaced: 10/10 ✅
+
+**Missing** (40 points):
+- Progress phases not replaced: 0/20 ❌
+- File processor retry not replaced: 0/15 ❌
+- Missing imports: 0/5 ❌
+
+**Final Grade**: 60/100 (C) - Partial implementation, major features missing
+
+### Verification
+
+- ✅ Type-check passes (133 pre-existing errors, no new errors)
+- ✅ Git commit created
+- ❌ Spec requirements not fully met
+- ❌ 11 hardcoded values remain
+
+### Next Steps
+
+**Option 1: Fix Chunk 5** (30 minutes)
+- Complete the missing work
+- New commit: "fix(config): Complete Chunk 5 - Add missing progress phases and retry config"
+
+**Option 2: Continue to Chunk 6**
+- Accept partial implementation
+- Mark Chunk 5 as "partially complete"
+- Risk: Technical debt, inconsistent config usage
+
+**Recommendation**: Fix Chunk 5 before proceeding. Incomplete config centralization defeats the purpose of this refactor.
+
+---
