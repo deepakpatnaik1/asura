@@ -87,7 +87,7 @@
 
 		<div class="info-text">
 			<p>Multi-call AI architecture with compressed memory</p>
-			<p class="tech-stack">Powered by Supabase + Fireworks AI + Voyage AI</p>
+			<p class="tech-stack">Powered by Supabase + Anthropic Claude + Voyage AI</p>
 		</div>
 	</div>
 </div>

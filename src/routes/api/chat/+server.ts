@@ -1,8 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import OpenAI from 'openai';
 import { VoyageAIClient } from 'voyageai';
-import { FIREWORKS_API_KEY, VOYAGE_API_KEY, SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
+import { VOYAGE_API_KEY, SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
 import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 import { createClient } from '@supabase/supabase-js';
 import { buildContextForCalls1A1B } from '$lib/context-builder';
@@ -23,11 +22,6 @@ import {
 	CALL2B_PROMPT
 } from '$lib/prompts';
 import { createMessage } from '$lib/api/anthropic-client';
-
-const fireworks = new OpenAI({
-	baseURL: 'https://api.fireworks.ai/inference/v1',
-	apiKey: FIREWORKS_API_KEY
-});
 
 const voyage = new VoyageAIClient({ apiKey: VOYAGE_API_KEY });
 
@@ -60,9 +54,18 @@ function extractMessage(text: string): string {
 	return text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
 }
 
-// Helper function to detect if model is Anthropic
-function isAnthropicModel(modelIdentifier: string): boolean {
-	return modelIdentifier.startsWith('claude-');
+// Helper function to detect provider type
+function getProviderType(modelIdentifier: string): 'anthropic' | 'openai' | 'fireworks' {
+	if (modelIdentifier.startsWith('claude-')) {
+		return 'anthropic';
+	}
+	if (modelIdentifier.startsWith('gpt-') || modelIdentifier.startsWith('o1-')) {
+		return 'openai';
+	}
+	if (modelIdentifier.startsWith('accounts/fireworks/')) {
+		return 'fireworks';
+	}
+	throw new Error(`Unknown model provider for identifier: ${modelIdentifier}`);
 }
 
 // Background compression function
@@ -88,12 +91,12 @@ async function compressToJournal(
 
 		console.log(`[Compression] Starting Call 2A/2B for superjournal_id: ${superjournalId}`);
 
-		const isAnthropicCompression = isAnthropicModel(compressionModel);
+		const compressionProvider = getProviderType(compressionModel);
 
 		// Call 2A: Initial Artisan Cut compression
 		let call2AOutput: string;
 
-		if (isAnthropicCompression) {
+		if (compressionProvider === 'anthropic') {
 			// Use Anthropic API
 			const response = await createMessage({
 				model: compressionModel,
@@ -109,23 +112,7 @@ async function compressToJournal(
 			});
 			call2AOutput = response.content[0]?.type === 'text' ? response.content[0].text : '{}';
 		} else {
-			// Use Fireworks API
-			const response = await fireworks.chat.completions.create({
-				model: compressionModel,
-				messages: [
-					{
-						role: 'system',
-						content: CALL2A_PROMPT
-					},
-					{
-						role: 'user',
-						content: `User message: ${userMessage}\n\nPersona (${personaName}) response: ${aiResponse}`
-					}
-				],
-				max_tokens: compressionParams.max_tokens,
-				temperature: compressionParams.temperature
-			});
-			call2AOutput = response.choices[0]?.message?.content || '{}';
+			throw new Error(`Provider '${compressionProvider}' not implemented. Only 'anthropic' is currently supported.`);
 		}
 		console.log('[Compression] Call 2A output:', call2AOutput);
 
@@ -142,7 +129,7 @@ async function compressToJournal(
 		// Call 2B: Verification and refinement
 		let call2BOutput: string;
 
-		if (isAnthropicCompression) {
+		if (compressionProvider === 'anthropic') {
 			// Use Anthropic API
 			const response = await createMessage({
 				model: compressionModel,
@@ -162,27 +149,7 @@ async function compressToJournal(
 			});
 			call2BOutput = response.content[0]?.type === 'text' ? response.content[0].text : '{}';
 		} else {
-			// Use Fireworks API
-			const response = await fireworks.chat.completions.create({
-				model: compressionModel,
-				messages: [
-					{
-						role: 'system',
-						content: CALL2A_PROMPT
-					},
-					{
-						role: 'assistant',
-						content: JSON.stringify(call2AJson)
-					},
-					{
-						role: 'user',
-						content: CALL2B_PROMPT
-					}
-				],
-				max_tokens: compressionParams.max_tokens,
-				temperature: compressionParams.temperature
-			});
-			call2BOutput = response.choices[0]?.message?.content || '{}';
+			throw new Error(`Provider '${compressionProvider}' not implemented. Only 'anthropic' is currently supported.`);
 		}
 		console.log('[Compression] Call 2B output:', call2BOutput);
 
@@ -313,11 +280,11 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 			: message;
 
 		// Call 1A: Initial response with BASE_INSTRUCTIONS + PERSONA + memory context
-		const isAnthropic = isAnthropicModel(conversationModel);
+		const conversationProvider = getProviderType(conversationModel);
 		let call1AResponse: string;
 		let call1ATokens: { input: number; output: number };
 
-		if (isAnthropic) {
+		if (conversationProvider === 'anthropic') {
 			// Use Anthropic API
 			const response = await createMessage({
 				model: conversationModel,
@@ -337,21 +304,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 				output: response.usage.output_tokens
 			};
 		} else {
-			// Use Fireworks API
-			const response = await fireworks.chat.completions.create({
-				model: conversationModel,
-				messages: [
-					{ role: 'system', content: systemPrompt },
-					{ role: 'user', content: fullUserPrompt }
-				],
-				max_tokens: conversationParams.max_tokens,
-				temperature: conversationParams.temperature
-			});
-			call1AResponse = response.choices[0]?.message?.content || 'No response generated';
-			call1ATokens = {
-				input: response.usage?.prompt_tokens || 0,
-				output: response.usage?.completion_tokens || 0
-			};
+			throw new Error(`Provider '${conversationProvider}' not implemented. Only 'anthropic' is currently supported.`);
 		}
 
 		// Extract thinking and message from Call 1A
@@ -366,7 +319,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 		let call1BResponse: string;
 		let call1BTokens: { input: number; output: number };
 
-		if (isAnthropic) {
+		if (conversationProvider === 'anthropic') {
 			// Use Anthropic API
 			const response = await createMessage({
 				model: conversationModel,
@@ -394,23 +347,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 				output: response.usage.output_tokens
 			};
 		} else {
-			// Use Fireworks API
-			const response = await fireworks.chat.completions.create({
-				model: conversationModel,
-				messages: [
-					{ role: 'system', content: call1BSystemPrompt },
-					{ role: 'user', content: fullUserPrompt }, // Same context as Call 1A
-					{ role: 'assistant', content: call1AMessage }, // Only the message, not the thinking
-					{ role: 'user', content: CALL1B_PROMPT }
-				],
-				max_tokens: conversationParams.max_tokens,
-				temperature: conversationParams.temperature
-			});
-			call1BResponse = response.choices[0]?.message?.content || 'No response generated';
-			call1BTokens = {
-				input: response.usage?.prompt_tokens || 0,
-				output: response.usage?.completion_tokens || 0
-			};
+			throw new Error(`Provider '${conversationProvider}' not implemented. Only 'anthropic' is currently supported.`);
 		}
 
 		const call1BMessage = extractMessage(call1BResponse);

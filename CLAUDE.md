@@ -6,13 +6,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Asura is a SvelteKit-based AI chat application that features a sophisticated multi-call LLM architecture with memory compression, file processing, and vector search capabilities. The system uses a two-tier memory architecture (Superjournal for full turns, Journal for compressed memory) and implements semantic file chunking with vector embeddings.
 
-**Key Advantage**: The dual-call refinement architecture (Call 1A/1B) produces premium-quality responses using cost-effective models (Qwen3-235B), achieving quality comparable to flagship models at ~1/10th the cost.
+**Key Advantage**: The dual-call refinement architecture (Call 1A/1B) produces premium-quality responses using frontier models (Claude Sonnet 4.5), with user-selectable compression models for cost optimization.
 
 ## Technology Stack
 
 - **Framework**: SvelteKit 2.x with Svelte 5
 - **Database**: Supabase (PostgreSQL with pgvector extension) - **Remote hosted instance**
-- **AI Models**: Fireworks AI (Qwen3-235B variants) for chat/compression, Voyage AI (voyage-3) for embeddings
+- **AI Models**: Anthropic Claude (Sonnet 4.5) for chat/compression, Voyage AI (voyage-3) for embeddings
 - **Testing**: Vitest (unit/integration), Playwright (E2E)
 - **Language**: TypeScript with strict mode enabled
 
@@ -55,13 +55,13 @@ Asura implements a multi-phase AI call architecture:
 **Call 1A/1B** (Chat Response Generation)
 - **Call 1A**: Initial response generation with memory context injection (uses thinking model)
 - **Call 1B**: Refinement and critique of Call 1A output
-- Model: User-selectable conversation model (default: Qwen3-235B thinking variant)
+- Model: User-selectable conversation model (default: Claude Sonnet 4.5)
 - Location: [src/routes/api/chat/+server.ts](src/routes/api/chat/+server.ts)
 
 **Call 2A/2B** (Chat Compression - "Artisan Cut")
 - Executes in background after Call 1B completes
 - **Call 2A**: Compress full conversation turn to Boss Essence + Persona Essence + Decision Arc + Salience Score
-  - Model: User-selectable compression model from `user_settings.selected_compression_model` (default: Qwen3-235B instruct variant)
+  - Model: User-selectable compression model from `user_settings.selected_compression_model` (default: Claude Sonnet 4.5)
   - System prompt: `CALL2A_PROMPT`
   - Input: Full message turn (user message + AI response)
   - Output: JSON with `boss_essence`, `persona_essence`, `decision_arc_summary`, `salience_score`, `is_instruction`, `instruction_scope`
@@ -396,11 +396,18 @@ Automatically scrolls to newly submitted user message (boss card).
 Copy `.env.example` to `.env` and configure:
 
 ```bash
+# Supabase
 PUBLIC_SUPABASE_URL=          # Supabase project URL (remote hosted instance)
 PUBLIC_SUPABASE_ANON_KEY=     # Supabase anon key
 SUPABASE_SERVICE_ROLE_KEY=    # Supabase service role key (server-side only)
-FIREWORKS_API_KEY=            # Fireworks AI API key
-VOYAGE_API_KEY=               # Voyage AI API key
+
+# AI API Keys
+ANTHROPIC_API_KEY=            # Anthropic API key (Claude models)
+VOYAGE_API_KEY=               # Voyage AI API key (embeddings)
+
+# Optional: Future providers
+# OPENAI_API_KEY=             # OpenAI API key (GPT models)
+# FIREWORKS_API_KEY=          # Fireworks AI API key
 ```
 
 This project uses a remote Supabase instance. Get your credentials from your Supabase project dashboard at https://supabase.com/dashboard.
@@ -434,7 +441,7 @@ This project uses a remote Supabase instance. Get your credentials from your Sup
 - Progress updates continue even on errors (allows client to track failures)
 
 ### Thinking Tags
-- Qwen3 thinking variant outputs `<think>...</think>` tags
+- Some models output `<think>...</think>` tags for internal reasoning
 - These are stripped before presenting to user or compressing
 - Helper functions in [src/routes/api/chat/+server.ts](src/routes/api/chat/+server.ts): `extractThinking()`, `extractMessage()`
 

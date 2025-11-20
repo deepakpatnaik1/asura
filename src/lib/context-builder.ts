@@ -24,7 +24,7 @@ async function getModelContextWindow(modelIdentifier: string): Promise<number> {
 
 	if (error || !data) {
 		console.warn('Failed to fetch model context window, using default 131072');
-		return 131072; // Default to Qwen3-235B context window
+		return 131072; // Default fallback (128K tokens)
 	}
 
 	return data.context_window;

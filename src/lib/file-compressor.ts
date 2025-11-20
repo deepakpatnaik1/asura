@@ -1,4 +1,3 @@
-import OpenAI from 'openai';
 import { createMessage } from '$lib/api/anthropic-client';
 import type { FileType } from './file-extraction';
 import { DEFAULT_COMPRESSION_MODEL } from '$lib/config/models';
@@ -139,20 +138,6 @@ function validateChunkInput(input: ChunkCompressionInput): void {
 }
 
 /**
- * Validate environment and API key
- */
-function validateEnvironment(): void {
-	const apiKey = process.env.FIREWORKS_API_KEY || '';
-	if (!apiKey) {
-		throw new FileCompressionError(
-			'FIREWORKS_API_KEY environment variable not set',
-			'API_ERROR',
-			{ missingEnvVar: 'FIREWORKS_API_KEY' }
-		);
-	}
-}
-
-/**
  * Parse JSON response, handling markdown code blocks
  */
 function parseJsonResponse(text: string): Call2Response {
@@ -215,31 +200,37 @@ function parseJsonResponse(text: string): Call2Response {
 }
 
 /**
- * Helper function to detect if model is Anthropic
- *
- * @param modelIdentifier - Model identifier string
- * @returns True if model is Anthropic (starts with 'claude-')
+ * Helper function to detect provider type
  */
-function isAnthropicModel(modelIdentifier: string): boolean {
-	return modelIdentifier.startsWith('claude-');
+function getProviderType(modelIdentifier: string): 'anthropic' | 'openai' | 'fireworks' {
+	if (modelIdentifier.startsWith('claude-')) {
+		return 'anthropic';
+	}
+	if (modelIdentifier.startsWith('gpt-') || modelIdentifier.startsWith('o1-')) {
+		return 'openai';
+	}
+	if (modelIdentifier.startsWith('accounts/fireworks/')) {
+		return 'fireworks';
+	}
+	throw new Error(`Unknown model provider for identifier: ${modelIdentifier}`);
 }
 
 /**
- * Make API call to AI provider (supports both Fireworks and Anthropic)
+ * Make API call to AI provider
  */
-async function callFireworksAPI(
+async function callProviderAPI(
 	systemPrompt: string,
 	userContent: string,
 	model: string,
 	temperature: number,
 	maxTokens: number
 ): Promise<string> {
-	const isAnthropic = isAnthropicModel(model);
+	const provider = getProviderType(model);
 
 	try {
 		let content: string;
 
-		if (isAnthropic) {
+		if (provider === 'anthropic') {
 			// Use Anthropic API
 			const response = await createMessage({
 				model: model,
@@ -255,30 +246,7 @@ async function callFireworksAPI(
 			});
 			content = response.content[0]?.type === 'text' ? response.content[0].text : '';
 		} else {
-			// Use Fireworks API
-			const apiKey = process.env.FIREWORKS_API_KEY || '';
-
-			const fireworks = new OpenAI({
-				baseURL: 'https://api.fireworks.ai/inference/v1',
-				apiKey: apiKey
-			});
-
-			const response = await fireworks.chat.completions.create({
-				model: model,
-				messages: [
-					{
-						role: 'system',
-						content: systemPrompt
-					},
-					{
-						role: 'user',
-						content: userContent
-					}
-				],
-				temperature: temperature,
-				max_tokens: maxTokens
-			});
-			content = response.choices[0]?.message?.content || '';
+			throw new Error(`Provider '${provider}' not implemented. Only 'anthropic' is currently supported.`);
 		}
 
 		if (!content) {
@@ -294,7 +262,7 @@ async function callFireworksAPI(
 		// Check for rate limiting
 		if (error.status === 429) {
 			throw new FileCompressionError(
-				`${isAnthropic ? 'Anthropic' : 'Fireworks'} API rate limit exceeded`,
+				`Anthropic API rate limit exceeded`,
 				'RATE_LIMIT',
 				{ originalError: error.message }
 			);
@@ -303,7 +271,7 @@ async function callFireworksAPI(
 		// Check for auth errors
 		if (error.status === 401 || error.status === 403) {
 			throw new FileCompressionError(
-				`${isAnthropic ? 'Anthropic' : 'Fireworks'} API authentication failed`,
+				`Anthropic API authentication failed`,
 				'API_ERROR',
 				{ status: error.status, originalError: error.message }
 			);
@@ -311,7 +279,7 @@ async function callFireworksAPI(
 
 		// Generic API error
 		throw new FileCompressionError(
-			`${isAnthropic ? 'Anthropic' : 'Fireworks'} API call failed: ${error.message}`,
+			`Anthropic API call failed: ${error.message}`,
 			'API_ERROR',
 			{ originalError: error.message, status: error.status }
 		);
@@ -323,7 +291,7 @@ async function callFireworksAPI(
 // ============================================================================
 
 /**
- * Compress a single file chunk using Artisan Cut technique via Fireworks AI
+ * Compress a single file chunk using Artisan Cut technique
  *
  * This function handles both Chunk 0 (file overview) and detail chunks (1+) by
  * routing to different prompts and token limits based on chunk index.
@@ -352,9 +320,6 @@ async function callFireworksAPI(
  * @throws FileCompressionError - For validation, API, or parsing errors
  */
 export async function compressChunk(input: ChunkCompressionInput): Promise<ChunkCompressionResult> {
-	// Validate environment first
-	validateEnvironment();
-
 	// Validate input
 	validateChunkInput(input);
 
@@ -389,7 +354,7 @@ File Type: ${input.fileType}
 ${input.chunkText}`;
 
 		console.log(`[compressChunk] Starting Call 2A for chunk ${input.chunkIndex} (${input.chunkIndex === 0 ? 'Chunk 0 overview' : 'detail chunk'})`);
-		const call2aRaw = await callFireworksAPI(
+		const call2aRaw = await callProviderAPI(
 			call2aPrompt,
 			userContent,
 			compressionModel,
@@ -414,7 +379,7 @@ ${input.chunkText}`;
 	// Call 2B: Verification
 	try {
 		const userContent = JSON.stringify(call2aResponse);
-		const call2bRaw = await callFireworksAPI(
+		const call2bRaw = await callProviderAPI(
 			call2bPrompt,
 			userContent,
 			compressionModel,

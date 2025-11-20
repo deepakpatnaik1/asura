@@ -1,4 +1,3 @@
-import OpenAI from 'openai';
 import { createMessage } from '$lib/api/anthropic-client';
 import type { FileType } from './file-extraction';
 import { generateEmbedding } from './vectorization';
@@ -363,7 +362,7 @@ DO NOT summarize detailed content. Capture "what kind of document this is" and "
 	// Fetch compression parameters from database
 	const params = await getModelParams(DEFAULT_COMPRESSION_MODEL, 'compression');
 
-	// Call AI API (supports both Fireworks and Anthropic)
+	// Call AI API (multi-provider support)
 	try {
 		const overview = await callAIAPI(
 			FILE_OVERVIEW_PROMPT,
@@ -402,17 +401,23 @@ function countWords(text: string): number {
 }
 
 /**
- * Helper function to detect if model is Anthropic
- *
- * @param modelIdentifier - Model identifier string
- * @returns True if model is Anthropic (starts with 'claude-')
+ * Helper function to detect provider type
  */
-function isAnthropicModel(modelIdentifier: string): boolean {
-	return modelIdentifier.startsWith('claude-');
+function getProviderType(modelIdentifier: string): 'anthropic' | 'openai' | 'fireworks' {
+	if (modelIdentifier.startsWith('claude-')) {
+		return 'anthropic';
+	}
+	if (modelIdentifier.startsWith('gpt-') || modelIdentifier.startsWith('o1-')) {
+		return 'openai';
+	}
+	if (modelIdentifier.startsWith('accounts/fireworks/')) {
+		return 'fireworks';
+	}
+	throw new Error(`Unknown model provider for identifier: ${modelIdentifier}`);
 }
 
 /**
- * Call AI API with system and user prompts (supports both Fireworks and Anthropic)
+ * Call AI API with system and user prompts
  *
  * Routes to appropriate provider based on model identifier
  *
@@ -429,12 +434,12 @@ async function callAIAPI(
 	temperature: number,
 	maxTokens: number
 ): Promise<string> {
-	const isAnthropic = isAnthropicModel(model);
+	const provider = getProviderType(model);
 
 	try {
 		let content: string;
 
-		if (isAnthropic) {
+		if (provider === 'anthropic') {
 			// Use Anthropic API
 			const response = await createMessage({
 				model: model,
@@ -450,46 +455,14 @@ async function callAIAPI(
 			});
 			content = response.content[0]?.type === 'text' ? response.content[0].text : '';
 		} else {
-			// Use Fireworks API
-			const apiKey = process.env.FIREWORKS_API_KEY || '';
-
-			if (!apiKey) {
-				throw new FileChunkerError(
-					'FIREWORKS_API_KEY environment variable not set',
-					'API_ERROR',
-					{ missingEnvVar: 'FIREWORKS_API_KEY' }
-				);
-			}
-
-			const fireworks = new OpenAI({
-				baseURL: 'https://api.fireworks.ai/inference/v1',
-				apiKey: apiKey
-			});
-
-			const response = await fireworks.chat.completions.create({
-				model: model,
-				messages: [
-					{
-						role: 'system',
-						content: systemPrompt
-					},
-					{
-						role: 'user',
-						content: userContent
-					}
-				],
-				temperature: temperature,
-				max_tokens: maxTokens,
-				response_format: { type: 'json_object' } // Force JSON output
-			});
-			content = response.choices[0]?.message?.content || '';
+			throw new Error(`Provider '${provider}' not implemented. Only 'anthropic' is currently supported.`);
 		}
 
 		if (!content) {
 			throw new FileChunkerError('API returned empty response', 'API_ERROR', { model });
 		}
 
-		// Remove thinking tags if present (Qwen3 includes <think>...</think>)
+		// Remove thinking tags if present (some models include <think>...</think>)
 		let cleanedContent = content.trim();
 		const thinkingMatch = cleanedContent.match(/<think>[\s\S]*?<\/think>\s*([\s\S]*)/);
 		if (thinkingMatch) {
@@ -501,7 +474,7 @@ async function callAIAPI(
 		// Check for rate limiting
 		if (error.status === 429) {
 			throw new FileChunkerError(
-				`${isAnthropic ? 'Anthropic' : 'Fireworks'} API rate limit exceeded`,
+				`Anthropic API rate limit exceeded`,
 				'RATE_LIMIT',
 				{ originalError: error.message }
 			);
@@ -510,7 +483,7 @@ async function callAIAPI(
 		// Check for auth errors
 		if (error.status === 401 || error.status === 403) {
 			throw new FileChunkerError(
-				`${isAnthropic ? 'Anthropic' : 'Fireworks'} API authentication failed`,
+				`Anthropic API authentication failed`,
 				'API_ERROR',
 				{ status: error.status, originalError: error.message }
 			);
@@ -518,7 +491,7 @@ async function callAIAPI(
 
 		// Generic API error
 		throw new FileChunkerError(
-			`${isAnthropic ? 'Anthropic' : 'Fireworks'} API call failed: ${error.message}`,
+			`Anthropic API call failed: ${error.message}`,
 			'API_ERROR',
 			{ originalError: error.message, status: error.status }
 		);
@@ -1164,7 +1137,7 @@ ${call3AResponse}`;
 /**
  * Parse JSON from LLM response
  *
- * Handles <think> tags (Qwen3 includes thinking in response)
+ * Handles <think> tags (some models include thinking in response)
  * Extracts JSON from markdown code blocks if present
  *
  * @param response - Raw LLM response text

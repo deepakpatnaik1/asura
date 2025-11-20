@@ -1,6 +1,8 @@
 import { createHash } from 'crypto';
 import { extractText as extractPdfText } from 'unpdf';
 import { FILE_PROCESSING } from '$lib/config/processing';
+import { createMessage } from '$lib/api/anthropic-client';
+import { DEFAULT_CONVERSATION_MODEL } from '$lib/config/models';
 
 // ============================================================================
 // ERROR CLASSES
@@ -268,23 +270,83 @@ function classifyFileType(extension: string): FileType {
 }
 
 /**
- * Extract text from PDF using unpdf
+ * Perform OCR on PDF using Claude's native PDF support
+ *
+ * Claude can directly read PDF files, so we don't need to convert to images.
+ * This is simpler and more accurate than image-based OCR.
+ *
+ * @param buffer - PDF file buffer
+ * @param filename - Original filename for logging
+ * @returns Extracted text from PDF
+ * @throws FileExtractionError if OCR fails
+ */
+async function ocrPdfWithClaude(buffer: Buffer, filename: string): Promise<string> {
+	try {
+		console.log(`[OCR] Starting Claude PDF extraction for scanned PDF: ${filename}`);
+
+		const base64Pdf = buffer.toString('base64');
+
+		// Send PDF directly to Claude - it has native PDF support!
+		const response = await createMessage({
+			model: DEFAULT_CONVERSATION_MODEL,
+			max_tokens: 4096,
+			messages: [{
+				role: 'user',
+				content: [
+					{
+						type: 'document',
+						source: {
+							type: 'base64',
+							media_type: 'application/pdf',
+							data: base64Pdf
+						}
+					},
+					{
+						type: 'text',
+						text: 'Extract all text from this PDF document. Preserve the layout and formatting as much as possible. Output only the extracted text, no commentary or preamble.'
+					}
+				]
+			}]
+		});
+
+		const extractedText = response.content[0].type === 'text' ? response.content[0].text : '';
+		console.log(`[OCR] Extraction complete: ${extractedText.length} characters extracted`);
+
+		return extractedText;
+
+	} catch (error) {
+		const errorMessage = error instanceof Error ? error.message : String(error);
+		throw new FileExtractionError(
+			`OCR failed for ${filename}: ${errorMessage}`,
+			'PDF_PARSE_ERROR',
+			error
+		);
+	}
+}
+
+/**
+ * Extract text from PDF using unpdf, with OCR fallback for scanned PDFs
  *
  * @param buffer - PDF file buffer
  * @param filename - Original filename for error messages
  * @returns Extracted text
- * @throws FileExtractionError if PDF parsing fails
+ * @throws FileExtractionError if both extraction and OCR fail
  */
 async function extractFromPdf(buffer: Buffer, filename: string): Promise<string> {
 	try {
-		// unpdf expects Uint8Array
+		// STEP 1: Try standard text extraction first (fast, free)
 		const uint8Array = new Uint8Array(buffer);
-
-		// Extract text from all pages
 		const result = await extractPdfText(uint8Array, { mergePages: true });
+		const extractedText = result.text || '';
 
-		// result.text contains merged text from all pages
-		return result.text || '';
+		// STEP 2: If no text extracted, assume scanned PDF → Use OCR
+		if (!extractedText.trim()) {
+			console.log(`[PDF Extraction] No extractable text found in ${filename}, falling back to OCR...`);
+			return await ocrPdfWithClaude(buffer, filename);
+		}
+
+		// STEP 3: Return extracted text
+		return extractedText;
 
 	} catch (error) {
 		const errorMessage = error instanceof Error ? error.message : String(error);

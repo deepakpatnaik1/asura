@@ -63,10 +63,10 @@ const DEFAULT_OPTIONS: Required<RetryOptions> = {
  *
  * @example
  * ```typescript
- * // Retry Fireworks AI call on 429 errors
+ * // Retry AI API call on 429 errors
  * const response = await callWithRetry(
  *   async () => {
- *     const res = await fetch('https://api.fireworks.ai/inference/v1/completions', {
+ *     const res = await fetch('https://api.example.com/v1/completions', {
  *       method: 'POST',
  *       headers: { 'Authorization': `Bearer ${apiKey}` },
  *       body: JSON.stringify(payload)
@@ -132,7 +132,7 @@ export async function callWithRetry<T>(
  *
  * @example
  * ```typescript
- * const response = await fetchWithRetry('https://api.fireworks.ai/endpoint', {
+ * const response = await fetchWithRetry('https://api.example.com/endpoint', {
  *   method: 'POST',
  *   headers: { 'Authorization': `Bearer ${key}` },
  *   body: JSON.stringify(data)
