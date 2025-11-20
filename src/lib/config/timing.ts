@@ -40,5 +40,18 @@ export const TIMING = {
 	 * API retry base delay (ms)
 	 * First retry after 1s, then exponential backoff.
 	 */
-	retryDelayBase: 1000
+	retryDelayBase: 1000,
+
+	/**
+	 * SSE subscription cleanup delay (ms)
+	 * Wait 5s before cleaning up Supabase subscription when all clients disconnect.
+	 * Debounces rapid disconnect/reconnect cycles.
+	 */
+	cleanupDelay: 5000,
+
+	/**
+	 * Error message display duration (ms)
+	 * Error messages auto-clear after 5 seconds.
+	 */
+	errorDisplayDuration: 5000
 } as const;

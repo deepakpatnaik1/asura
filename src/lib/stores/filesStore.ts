@@ -1,6 +1,7 @@
 import { writable, derived, type Writable, type Derived } from 'svelte/store';
 import { browser } from '$app/environment';
 import { RETRY_CONFIG } from '$lib/config/processing';
+import { TIMING } from '$lib/config/timing';
 
 // ============================================================================
 // TYPES
@@ -413,13 +414,13 @@ function inferFileType(filename: string): FileType {
 }
 
 /**
- * Set error message (with auto-clear after 5 seconds)
+ * Set error message (with auto-clear)
  */
 function setError(message: string): void {
 	error.set(message);
 	setTimeout(() => {
 		error.set(null);
-	}, 5000);
+	}, TIMING.errorDisplayDuration);
 }
 
 /**

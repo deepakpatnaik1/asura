@@ -2,6 +2,7 @@ import type { RequestHandler } from './$types';
 import { createClient } from '@supabase/supabase-js';
 import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
 import { PUBLIC_SUPABASE_URL } from '$env/static/public';
+import { TIMING } from '$lib/config/timing';
 
 // Types for Supabase Realtime payload
 interface FilesTablePayload {
@@ -57,7 +58,6 @@ let supabaseAdmin: any = null;
 
 // Cleanup timer (debounced to avoid rapid subscribe/unsubscribe)
 let cleanupTimer: NodeJS.Timeout | null = null;
-const CLEANUP_DELAY_MS = 5000; // Wait 5s before cleaning up subscription
 
 // ==========================================
 // INITIALIZATION FUNCTION
@@ -252,7 +252,7 @@ function scheduleCleanup() {
       supabaseAdmin = null;
       console.log('[SSE Global] Cleanup complete');
     }
-  }, CLEANUP_DELAY_MS);
+  }, TIMING.cleanupDelay);
 }
 
 /**
@@ -316,7 +316,7 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession } }) => {
           console.error('[SSE] Failed to send initial heartbeat:', error);
         }
 
-        // Set up heartbeat interval (every 30s)
+        // Set up heartbeat interval
         heartbeatInterval = setInterval(() => {
           try {
             controller.enqueue(heartbeat);
@@ -325,7 +325,7 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession } }) => {
             clearInterval(heartbeatInterval!);
             heartbeatInterval = null;
           }
-        }, 30000);
+        }, TIMING.heartbeatInterval);
       },
 
       cancel(controller) {
