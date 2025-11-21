@@ -6,6 +6,7 @@
 	import SettingsModal from '$lib/components/SettingsModal.svelte';
 	import { TIMING } from '$lib/config/timing';
 	import { DEFAULT_PERSONA } from '$lib/config/personas';
+	import { renderMarkdown } from '$lib/markdown-renderer';
 
 	// Receive loaded messages from server
 	let { data } = $props();
@@ -577,7 +578,7 @@
 							<span class="message-label ai-label">{msg.persona_name.charAt(0).toUpperCase() + msg.persona_name.slice(1)}</span>
 						</div>
 						<div class="message-text">
-							{msg.ai_response}
+							{@html renderMarkdown(msg.ai_response)}
 						</div>
 					</div>
 				</div>
@@ -893,7 +894,7 @@
 	.message-text {
 		line-height: 1.6;
 		color: hsl(var(--foreground));
-		white-space: pre-wrap;
+		white-space: normal;
 	}
 
 	/* Input Area - explicitly positioned at bottom */
