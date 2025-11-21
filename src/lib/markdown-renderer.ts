@@ -46,13 +46,13 @@ export function renderMarkdown(markdown: string): string {
 		return text;
 	};
 
-	// Paragraph → Rule 6: One line space after phrases ending in colon
+	// Paragraph → Rule 6: One line space before AND after phrases ending in colon
 	renderer.paragraph = ({ text }) => {
 		// Check if paragraph ends with colon (after stripping HTML tags)
 		const textContent = text.replace(/<[^>]*>/g, '').trim();
 		const endsWithColon = textContent.endsWith(':');
-		const bottomMargin = endsWithColon ? '1.6em' : '0';
-		return `<p style="margin: 0 0 ${bottomMargin} 0; display: block;">${text}</p>`;
+		const margin = endsWithColon ? '1.6em 0' : '0';
+		return `<p style="margin: ${margin}; display: block;">${text}</p>`;
 	};
 
 	// 5. Bullet lists → Indented accent bullets
