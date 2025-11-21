@@ -71,6 +71,18 @@ All critical bugs identified and resolved:
   - **Impact**: Chat API was broken - "Failed to fetch model parameters" error
   - **Resolution**: Migration successfully run against remote database, chat API now functional
 
+- ❌ **BUG-CACHE-005**: Persona prompt changes not taking effect due to cache
+  - **Status**: INVESTIGATING
+  - **Issue**: Updated `persona-gunnar.ts` from elaborate YC mentor to simple assistant
+  - **Problem**: Cache breakpoint on `BASE_INSTRUCTIONS + PERSONA` has 5-minute TTL
+  - **Impact**: Old persona served from cache for 5 minutes after code change
+  - **Root Cause**: Prompt caching working correctly, but creates deployment friction
+  - **Options**:
+    1. Wait 5 minutes for cache expiry (natural)
+    2. Add cache-busting mechanism (force refresh flag)
+    3. Accept 5-minute delay as tradeoff for cache benefits
+  - **Note**: This is a feature, not a bug - cache is working as designed
+
 ### Streaming Verification ✅ COMPLETE
 - ✅ Call 1B streaming fully functional via SSE
 - ✅ Server sends 138+ chunks per response via text/event-stream
