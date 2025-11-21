@@ -63,51 +63,61 @@ export async function sendMessage(userMessage: string, persona?: string): Promis
 				throw new Error('No response body available');
 			}
 
-			while (true) {
-				const { done, value } = await reader.read();
-				if (done) break;
+			try {
+				while (true) {
+					const { done, value } = await reader.read();
+					if (done) break;
 
-				// Append to buffer and split into lines
-				buffer += decoder.decode(value, { stream: true });
-				const lines = buffer.split('\n');
+					// Append to buffer and split into lines
+					buffer += decoder.decode(value, { stream: true });
+					const lines = buffer.split('\n');
 
-				// Keep last (potentially incomplete) line in buffer
-				buffer = lines.pop() || '';
+					// Keep last (potentially incomplete) line in buffer
+					buffer = lines.pop() || '';
 
-				for (const line of lines) {
-					if (line.startsWith('data: ')) {
-						try {
-							const data = JSON.parse(line.slice(6));
+					for (const line of lines) {
+						// Skip blank lines (SSE heartbeats)
+						if (!line.trim()) continue;
 
-							if (data.type === 'chunk') {
-								// Append streaming chunk to AI response
-								streamedText += data.content;
-								currentMessage.update(msg => {
-									if (msg) {
-										return { ...msg, ai: streamedText };
-									}
-									return msg;
-								});
-							} else if (data.type === 'done') {
-								// Stream complete
-								modelIdentifier = data.model_identifier;
-								currentMessage.update(msg => {
-									if (msg) {
-										return { ...msg, model_identifier: modelIdentifier };
-									}
-									return msg;
-								});
-								isLoading.set(false);
-							} else if (data.type === 'error') {
-								throw new Error(data.message);
+						if (line.startsWith('data: ')) {
+							try {
+								const data = JSON.parse(line.slice(6));
+
+								if (data.type === 'chunk') {
+									// Append streaming chunk to AI response
+									streamedText += data.content;
+									currentMessage.update(msg => {
+										if (msg) {
+											return { ...msg, ai: streamedText };
+										}
+										return msg;
+									});
+								} else if (data.type === 'done') {
+									// Stream complete
+									modelIdentifier = data.model_identifier;
+									currentMessage.update(msg => {
+										if (msg) {
+											return { ...msg, model_identifier: modelIdentifier };
+										}
+										return msg;
+									});
+								} else if (data.type === 'error') {
+									throw new Error(data.message);
+								}
+							} catch (parseError) {
+								console.error('[SSE] Failed to parse event data:', line, parseError);
+								// Continue processing other lines
 							}
-						} catch (parseError) {
-							console.error('[SSE] Failed to parse event data:', line, parseError);
-							// Continue processing other lines
 						}
 					}
 				}
+			} finally {
+				// Always release reader lock, even on abort/error (fixes BUG-STREAM-005)
+				reader.releaseLock();
 			}
+
+			// Always set loading to false when stream ends (fixes BUG-STREAM-006)
+			isLoading.set(false);
 		} else {
 			// Fallback: Handle JSON response (backward compatibility)
 			const data = await response.json();
@@ -128,7 +138,7 @@ export async function sendMessage(userMessage: string, persona?: string): Promis
 		if (error instanceof Error && error.name === 'AbortError') {
 			console.log('[Chat] Request aborted by user');
 			// Don't show error message for user-initiated abort
-			isLoading.set(false);
+			// (isLoading already set to false in abortCurrentMessage())
 			return;
 		}
 
@@ -154,13 +164,16 @@ export async function sendMessage(userMessage: string, persona?: string): Promis
 
 /**
  * Abort the current streaming message request
+ * Only clears message if there's an active request (fixes BUG-STREAM-007)
  */
 export function abortCurrentMessage() {
 	if (currentAbortController) {
 		console.log('[Chat] Aborting current message request');
 		currentAbortController.abort();
 		currentAbortController = null;
+		// Only clear message if we actually aborted an active request
+		currentMessage.set(null);
+		isLoading.set(false);
 	}
-	currentMessage.set(null);
-	isLoading.set(false);
+	// Don't clear message if no active request (protects completed messages)
 }
