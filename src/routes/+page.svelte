@@ -10,7 +10,6 @@
 		refreshFiles
 	} from '$lib/stores/filesStore';
 	import { tick, onMount } from 'svelte';
-	import TextCleaner from '$lib/components/TextCleaner.svelte';
 	import SettingsModal from '$lib/components/SettingsModal.svelte';
 	import { FILE_PROCESSING } from '$lib/config/processing';
 	import { TIMING } from '$lib/config/timing';
@@ -782,7 +781,7 @@
 							<span class="message-label ai-label">{msg.persona_name.charAt(0).toUpperCase() + msg.persona_name.slice(1)}</span>
 						</div>
 						<div class="message-text">
-							<TextCleaner content={msg.ai_response} modelIdentifier={msg.model_identifier || ""} />
+							{msg.ai_response}
 						</div>
 					</div>
 				</div>
