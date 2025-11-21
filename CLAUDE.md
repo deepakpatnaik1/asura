@@ -341,11 +341,58 @@ VOYAGE_API_KEY=               # Voyage AI API key (embeddings)
 
 This project uses a remote Supabase instance. Get your credentials from your Supabase project dashboard at https://supabase.com/dashboard.
 
+**IMPORTANT - API Key Security**:
+- ✅ `.env` file is in `.gitignore` - NEVER commit it
+- ✅ All API keys must stay in `.env` only (local development)
+- ✅ For production, set environment variables in your hosting platform (Vercel, Netlify, etc.)
+- ❌ NEVER commit API keys to git (even in documentation or example files)
+- 🔄 If keys are accidentally committed, immediately:
+  1. Rotate (delete and regenerate) the exposed keys
+  2. Update `.env` with new keys
+  3. Consider using `git filter-repo` to clean history (advanced)
+
 ## Important Development Notes
+
+### Security & Authentication
+
+**Multi-User Security** (Implemented 2025-11-21)
+- ✅ Row-Level Security (RLS) enabled on all user-data tables
+- ✅ Admin role system with `user_roles` table and `is_admin()` helper function
+- ✅ Database-level isolation: Users can only access their own data
+- ✅ Admin bypass: Admin users can view/manage all users' data
+
+**RLS Policy Pattern**:
+```sql
+-- Regular users see only their data, admins see all data
+CREATE POLICY "Policy name" ON table_name
+  FOR SELECT USING (auth.uid() = user_id OR is_admin(auth.uid()));
+```
+
+**Authentication Flow**:
+1. User authenticates via Supabase Auth (JWT-based)
+2. `hooks.server.ts` validates session with `safeGetSession()`
+3. All API endpoints check authentication before processing
+4. RLS policies enforce data isolation at database level
+
+**Admin Access**:
+- Admin role stored in `user_roles` table
+- Admin account: deepakpatnaik1@gmail.com
+- Admins can view/manage all users' conversations, settings, and token usage
+- Regular users remain isolated to their own data
+
+**Key Security Files**:
+- [src/hooks.server.ts](src/hooks.server.ts) - Authentication middleware (uses ANON_KEY, respects RLS)
+- [supabase/migrations/20251121120000_enable_rls_for_multiuser.sql](supabase/migrations/20251121120000_enable_rls_for_multiuser.sql) - RLS foundation
+- [supabase/migrations/20251121130000_create_admin_role_system.sql](supabase/migrations/20251121130000_create_admin_role_system.sql) - Admin role system
+- [multi-user-security-continued.md](multi-user-security-continued.md) - Complete security analysis
 
 ### Database Migrations
 - All schema changes go in `supabase/migrations/` with timestamp prefix
-- Apply migrations to remote database via Supabase dashboard or `npx supabase db push`
+- **IMPORTANT**: Apply migrations to remote database via **Supabase Dashboard SQL Editor**
+  - Navigate to: https://supabase.com/dashboard/project/hsxjcowijclwdxcmhbhs/sql
+  - Copy migration SQL and paste into editor
+  - Click "Run" to apply
+- **DO NOT use** `npx supabase db push` (causes migration history conflicts with remote database)
 - Migration naming: `YYYYMMDDHHMMSS_description.sql`
 
 ### Vector Search
