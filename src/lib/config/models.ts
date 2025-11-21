@@ -11,11 +11,11 @@
  * See src/lib/config/model-params.ts for the helper function.
  */
 
-/** Default conversation model (Call 1A/1B) - Claude Sonnet 4.5 for premium quality */
-export const DEFAULT_CONVERSATION_MODEL = 'claude-sonnet-4-5-20250929' as const;
+/** Default conversation model (Call 1A/1B) - Claude 3.5 Haiku for cost-effective development */
+export const DEFAULT_CONVERSATION_MODEL = 'claude-3-5-haiku-20241022' as const;
 
-/** Default compression model (Call 2A/2B, Call 3A/3B, Modified Call 2A/2B) - Claude Sonnet 4.5 for structured output */
-export const DEFAULT_COMPRESSION_MODEL = 'claude-sonnet-4-5-20250929' as const;
+/** Default compression model (Call 2A/2B, Call 3A/3B, Modified Call 2A/2B) - Claude 3.5 Haiku for cost-effective development */
+export const DEFAULT_COMPRESSION_MODEL = 'claude-3-5-haiku-20241022' as const;
 
 /** Default embedding model for vector search - Voyage AI v3 (1024 dimensions) */
 export const EMBEDDING_MODEL = 'voyage-3' as const;
