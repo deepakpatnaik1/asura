@@ -10,10 +10,11 @@ import type { Handle } from '@sveltejs/kit';
  * - ANON_KEY respects Row-Level Security (RLS) policies
  * - SERVICE_ROLE_KEY bypasses RLS (only for admin/background jobs)
  *
- * RLS Status: Currently DISABLED (migration 20251108000003)
- * - Zero data isolation until Chunk 2 enables RLS
- * - All authenticated users see all data
- * - This is intentional for Chunk 1 (basic auth skeleton)
+ * RLS Status: ✅ ENABLED (migration 20251121120000_enable_rls_for_multiuser.sql)
+ * - Database-level security enforces user data isolation
+ * - Users can only see/modify their own data
+ * - All users can read models catalog (read-only)
+ * - Service role bypasses RLS for admin operations
  */
 export const handle: Handle = async ({ event, resolve }) => {
 	// Create Supabase client with automatic cookie handling
