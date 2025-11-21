@@ -4,15 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Asura is a SvelteKit-based AI chat application that features a sophisticated multi-call LLM architecture with memory compression, file processing, and vector search capabilities. The system uses a two-tier memory architecture (Superjournal for full turns, Journal for compressed memory) and implements semantic file chunking with vector embeddings.
+Asura is a SvelteKit-based AI chat application that extends conversational AI memory indefinitely through orchestration-layer innovations. The system uses a multi-call LLM architecture with memory compression ("Artisan Cut"), semantic retrieval, and file processing to maintain coherent long-term context beyond standard context window limitations.
 
-**Key Advantage**: The dual-call refinement architecture (Call 1A/1B) produces premium-quality responses using frontier models (Claude Sonnet 4.5), with user-selectable compression models for cost optimization.
+**Core Innovation**: Two-tier memory architecture (Superjournal for recent context, Journal for compressed semantic memory) combined with vector search enables conversations to scale without bound while maintaining quality and coherence. All AI calls use Claude Sonnet 4.5 for consistent frontier-model performance.
 
 ## Technology Stack
 
 - **Framework**: SvelteKit 2.x with Svelte 5
 - **Database**: Supabase (PostgreSQL with pgvector extension) - **Remote hosted instance**
-- **AI Models**: Anthropic Claude (Sonnet 4.5) for chat/compression, Voyage AI (voyage-3) for embeddings
+- **AI Models**: Anthropic Claude Sonnet 4.5 for all LLM tasks, Voyage AI (voyage-3) for embeddings
 - **Testing**: Vitest (unit/integration), Playwright (E2E)
 - **Language**: TypeScript with strict mode enabled
 
@@ -53,35 +53,37 @@ npm run preview                # Preview production build
 Asura implements a multi-phase AI call architecture:
 
 **Call 1A/1B** (Chat Response Generation)
-- **Call 1A**: Initial response generation with memory context injection (uses thinking model)
+- **Call 1A**: Initial response generation with memory context injection (extended thinking enabled)
 - **Call 1B**: Refinement and critique of Call 1A output
-- Model: User-selectable conversation model (default: Claude Sonnet 4.5)
+- Model: Claude Sonnet 4.5 (thinking variant)
 - Location: [src/routes/api/chat/+server.ts](src/routes/api/chat/+server.ts)
 
 **Call 2A/2B** (Chat Compression - "Artisan Cut")
 - Executes in background after Call 1B completes
 - **Call 2A**: Compress full conversation turn to Boss Essence + Persona Essence + Decision Arc + Salience Score
-  - Model: User-selectable compression model from `user_settings.selected_compression_model` (default: Claude Sonnet 4.5)
+  - Model: Claude Sonnet 4.5 (instruct variant)
   - System prompt: `CALL2A_PROMPT`
   - Input: Full message turn (user message + AI response)
   - Output: JSON with `boss_essence`, `persona_essence`, `decision_arc_summary`, `salience_score`, `is_instruction`, `instruction_scope`
 - **Call 2B**: Verify and refine compression output
-  - Model: Same compression model as Call 2A
+  - Model: Claude Sonnet 4.5 (instruct variant)
   - Messages: System (`CALL2A_PROMPT`) + Assistant (Call 2A JSON) + User (`CALL2B_PROMPT`)
   - Output: Refined JSON with same structure
-- **Embedding**: Call 2B `decision_arc_summary` sent to Voyage AI `voyage-3-large` (1024 dimensions)
-- **Database Save**: Final Call 2B output + embedding saved to `journal` table
+- **Embedding**: Call 2B `decision_arc_summary` vectorized via Voyage AI `voyage-3` (1024 dimensions)
+- **Database Save**: Final Call 2B output + embedding saved to `journal` table for semantic retrieval
 - Location: [src/routes/api/chat/+server.ts:56-195](src/routes/api/chat/+server.ts#L56-L195)
 
 **Call 3A/3B** (File Overview + Chunking)
 - **Call 3A**: Generate file-level overview (Chunk 0) AND logical chunk boundaries
 - **Call 3B**: Verify output quality
+- Model: Claude Sonnet 4.5 (instruct variant)
 - Combined single-phase approach (not separate calls)
 - Location: [src/lib/file-chunker.ts](src/lib/file-chunker.ts)
 
 **Modified Call 2A/2B** (Detail Chunk Compression)
-- Compress individual file chunks for detail retrieval
-- Uses same structure as Call 2A/2B but optimized for file content
+- Compress individual file chunks using Artisan Cut format for detail retrieval
+- Model: Claude Sonnet 4.5 (instruct variant)
+- Same structure as Call 2A/2B but optimized for file content
 - Location: [src/lib/file-compressor.ts](src/lib/file-compressor.ts)
 
 ### System Prompts
@@ -109,13 +111,15 @@ All system prompts are located in [src/lib/prompts/](src/lib/prompts/) and expor
 - Special flags: `is_starred` (user-pinned), `is_instruction` (behavioral directives)
 
 **Context Builder** ([src/lib/context-builder.ts](src/lib/context-builder.ts))
-- Enforces 40% context window cap with priority-based loading:
-  1. Last 5 Superjournal turns (working memory)
-  2. Starred messages (user-curated)
-  3. Instructions (global + persona-specific)
-  4. Last 100 Journal turns (recent memory)
-  5. Vector search results (if journal count > 100)
-  6. File overviews + file chunk vector search
+- Enforces 40% context window cap with priority-based loading
+- Enables indefinite conversation length through intelligent context assembly
+- Priority order:
+  1. Last 5 Superjournal turns (working memory - immediate context)
+  2. Starred messages (user-curated important context)
+  3. Instructions (global + persona-specific behavioral directives)
+  4. Last 100 Journal turns (recent compressed memory)
+  5. Vector search results (semantic retrieval when journal > 100 entries)
+  6. File overviews + file chunk vector search (uploaded document context)
 
 ### File Processing Pipeline
 
@@ -141,12 +145,12 @@ All system prompts are located in [src/lib/prompts/](src/lib/prompts/) and expor
 ### Model Configuration
 
 Centralized in [src/lib/config/models.ts](src/lib/config/models.ts):
-- `DEFAULT_CONVERSATION_MODEL`: Call 1A/1B (thinking variant)
-- `DEFAULT_COMPRESSION_MODEL`: Call 2A/2B, Call 3A/3B (instruct variant)
-- `FILE_MODEL`: File processing (instruct variant, not user-selectable)
-- `EMBEDDING_MODEL`: voyage-3 (1024 dimensions)
+- `DEFAULT_CONVERSATION_MODEL`: Call 1A/1B - Claude Sonnet 4.5 (thinking variant with extended thinking)
+- `DEFAULT_COMPRESSION_MODEL`: Call 2A/2B, Call 3A/3B - Claude Sonnet 4.5 (instruct variant)
+- `FILE_MODEL`: File processing - Claude Sonnet 4.5 (instruct variant)
+- `EMBEDDING_MODEL`: Voyage AI voyage-3 (1024 dimensions)
 
-User can select conversation and compression models via Settings UI. Selection is stored in `user_settings` table and read at runtime.
+All language model tasks use Claude Sonnet 4.5 to ensure consistent frontier-model quality across chat generation, memory compression, and file processing.
 
 ## Database Schema
 
@@ -160,8 +164,10 @@ Key tables (see [supabase/migrations/](supabase/migrations/) for full schema):
 - `user_settings`: User preferences (selected models, persona)
 
 **Vector Search Functions**:
-- `search_journal_by_embedding`: Semantic search over journal entries
+- `search_journal_by_embedding`: Semantic search over compressed conversation memory
 - `search_file_chunks`: Semantic search over file chunks
+
+These functions enable the system to retrieve relevant context from arbitrarily large conversation histories, supporting the indefinite memory extension architecture.
 
 **Target Scale**: 999 users (multiuser authentication in development)
 
@@ -431,8 +437,9 @@ This project uses a remote Supabase instance. Get your credentials from your Sup
 - Journal vector search only activates when journal count > 100
 
 ### Context Window Management
-- Hard cap at 40% of model's context window
+- Hard cap at 40% of model's context window to ensure reliable performance
 - Priority-based loading ensures most critical context loaded first
+- Intelligent context assembly enables conversations to continue indefinitely beyond typical context limits
 - Token estimation: 1 token ≈ 4 characters (rough approximation)
 
 ### Error Handling
