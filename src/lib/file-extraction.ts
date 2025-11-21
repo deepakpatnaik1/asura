@@ -136,9 +136,8 @@ export async function extractText(
 				break;
 
 			case 'image':
-				// Images: OCR not in scope for MVP
-				warnings.push('Image files: text extraction via OCR not yet supported. Only filename will be processed.');
-				text = ''; // Empty text - will rely on filename in compression
+				// Images: Use Claude vision for OCR and description
+				text = await ocrImageWithClaude(buffer, filename, extension);
 				break;
 
 			case 'spreadsheet':
@@ -267,6 +266,72 @@ function classifyFileType(extension: string): FileType {
 	if (CODE_EXTENSIONS.includes(extension)) return 'code';
 	if (SPREADSHEET_EXTENSIONS.includes(extension)) return 'spreadsheet';
 	return 'other';
+}
+
+/**
+ * Perform OCR on image using Claude's vision capabilities
+ *
+ * @param buffer - Image file buffer
+ * @param filename - Original filename for logging
+ * @param extension - File extension (e.g., 'jpg', 'png')
+ * @returns Extracted text and visual description
+ * @throws FileExtractionError if OCR fails
+ */
+async function ocrImageWithClaude(buffer: Buffer, filename: string, extension: string): Promise<string> {
+	try {
+		console.log(`[OCR] Starting Claude image extraction for: ${filename}`);
+
+		const base64Image = buffer.toString('base64');
+
+		// Map file extension to MIME type
+		const mimeTypeMap: Record<string, string> = {
+			'jpg': 'image/jpeg',
+			'jpeg': 'image/jpeg',
+			'png': 'image/png',
+			'gif': 'image/gif',
+			'webp': 'image/webp',
+			'bmp': 'image/bmp',
+			'svg': 'image/svg+xml',
+			'ico': 'image/x-icon'
+		};
+		const mediaType = mimeTypeMap[extension] || 'image/jpeg';
+
+		// Send image to Claude for OCR and description
+		const response = await createMessage({
+			model: DEFAULT_CONVERSATION_MODEL,
+			max_tokens: 4096,
+			messages: [{
+				role: 'user',
+				content: [
+					{
+						type: 'image',
+						source: {
+							type: 'base64',
+							media_type: mediaType,
+							data: base64Image
+						}
+					},
+					{
+						type: 'text',
+						text: 'Extract all visible text from this image. If the image contains charts, diagrams, medical scans, or other visual elements, describe them in detail. Output the extracted text first, then visual descriptions. Be thorough and preserve layout where possible.'
+					}
+				]
+			}]
+		});
+
+		const extractedText = response.content[0].type === 'text' ? response.content[0].text : '';
+		console.log(`[OCR] Image extraction complete: ${extractedText.length} characters extracted`);
+
+		return extractedText;
+
+	} catch (error) {
+		const errorMessage = error instanceof Error ? error.message : String(error);
+		throw new FileExtractionError(
+			`Image OCR failed for ${filename}: ${errorMessage}`,
+			'PDF_PARSE_ERROR', // Reuse same error code for OCR failures
+			error
+		);
+	}
 }
 
 /**
