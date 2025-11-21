@@ -1,9 +1,5 @@
 import type { PageServerLoad } from './$types';
-import { createClient } from '@supabase/supabase-js';
-import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
-import { PUBLIC_SUPABASE_URL } from '$env/static/public';
-
-const supabase = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+import { redirect } from '@sveltejs/kit';
 
 function formatTimestamp(dateString: string): string {
 	const date = new Date(dateString);
@@ -16,8 +12,18 @@ function formatTimestamp(dateString: string): string {
 	});
 }
 
-export const load: PageServerLoad = async () => {
+export const load: PageServerLoad = async ({ locals: { safeGetSession, supabase } }) => {
+	// Require authentication
+	const { session, user } = await safeGetSession();
+
+	if (!session) {
+		throw redirect(303, '/login');
+	}
+
 	// Fetch all Superjournal entries, newest first
+	// NOTE: Currently using SERVICE_ROLE client for data queries
+	// This is acceptable because RLS is DISABLED (migration 20251108000003)
+	// In Chunk 2, we'll switch to user-scoped queries when RLS is enabled
 	const { data: messages, error } = await supabase
 		.from('superjournal')
 		.select('*')
@@ -25,16 +31,17 @@ export const load: PageServerLoad = async () => {
 
 	if (error) {
 		console.error('Error loading superjournal:', error);
-		return { messages: [] };
+		return { messages: [], user };
 	}
 
 	// Format timestamps on the server to prevent hydration mismatch
-	const messagesWithFormattedTimestamps = (messages || []).map(msg => ({
+	const messagesWithFormattedTimestamps = (messages || []).map((msg) => ({
 		...msg,
 		formatted_timestamp: formatTimestamp(msg.created_at)
 	}));
 
 	return {
-		messages: messagesWithFormattedTimestamps
+		messages: messagesWithFormattedTimestamps,
+		user
 	};
 };

@@ -3,50 +3,112 @@ import type { RequestHandler } from './$types';
 import { createClient } from '@supabase/supabase-js';
 import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
 import { PUBLIC_SUPABASE_URL } from '$env/static/public';
+import {
+	DEFAULT_CONVERSATION_MODEL,
+	DEFAULT_COMPRESSION_MODEL,
+	EMBEDDING_MODEL
+} from '$lib/config/models';
+import { DEFAULT_PERSONA } from '$lib/config/personas';
 
 const supabase = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-export const GET: RequestHandler = async () => {
+export const GET: RequestHandler = async ({ locals: { safeGetSession } }) => {
+	// 1. AUTHENTICATION CHECK
+	const { user } = await safeGetSession();
+	if (!user) {
+		return json(
+			{
+				error: {
+					message: 'Unauthorized - must be logged in',
+					code: 'UNAUTHORIZED'
+				}
+			},
+			{ status: 401 }
+		);
+	}
+	const userId = user.id;
+
+	// 2. QUERY USER SETTINGS
 	const { data, error } = await supabase
 		.from('user_settings')
-		.select('selected_conversation_model, selected_compression_model, selected_persona')
+		.select('selected_conversation_model, selected_compression_model, selected_embedding_model, selected_persona')
+		.eq('user_id', userId)
 		.single();
 
+	console.log('[Settings GET] User ID:', userId);
+	console.log('[Settings GET] Query result:', { data, error });
+
+	// 3. HANDLE MISSING SETTINGS (create defaults for new user)
 	if (error) {
-		return json({
-			selected_conversation_model: 'accounts/fireworks/models/qwen3-235b-a22b',
-			selected_compression_model: 'accounts/fireworks/models/qwen3-235b-a22b-instruct-2507',
-			selected_persona: 'gunnar'
-		});
+		const defaults = {
+			selected_conversation_model: DEFAULT_CONVERSATION_MODEL,
+			selected_compression_model: DEFAULT_COMPRESSION_MODEL,
+			selected_embedding_model: EMBEDDING_MODEL,
+			selected_persona: DEFAULT_PERSONA
+		};
+
+		// Try to create default settings for this user
+		const { error: insertError } = await supabase
+			.from('user_settings')
+			.insert({
+				user_id: userId,
+				...defaults
+			});
+
+		if (insertError) {
+			console.error('[Settings GET] Failed to create defaults:', insertError);
+		}
+
+		return json(defaults);
 	}
 
 	return json(data);
 };
 
-export const PUT: RequestHandler = async ({ request }) => {
-	const { selected_conversation_model, selected_compression_model, selected_persona } = await request.json();
-
-	// Get the single row ID
-	const { data: settingsData } = await supabase
-		.from('user_settings')
-		.select('id')
-		.single();
-
-	if (!settingsData) {
-		return json({ error: 'Settings not found' }, { status: 404 });
+export const PUT: RequestHandler = async ({ request, locals: { safeGetSession } }) => {
+	// 1. AUTHENTICATION CHECK
+	const { user } = await safeGetSession();
+	if (!user) {
+		return json(
+			{
+				error: {
+					message: 'Unauthorized - must be logged in',
+					code: 'UNAUTHORIZED'
+				}
+			},
+			{ status: 401 }
+		);
 	}
+	const userId = user.id;
 
-	const { error } = await supabase
+	// 2. PARSE REQUEST BODY
+	const { selected_conversation_model, selected_compression_model, selected_embedding_model, selected_persona } = await request.json();
+
+	console.log('[Settings PUT] User ID:', userId);
+	console.log('[Settings PUT] Body received:', {
+		selected_conversation_model,
+		selected_compression_model,
+		selected_embedding_model,
+		selected_persona
+	});
+
+	// 3. UPDATE USER SETTINGS
+	const { data, error } = await supabase
 		.from('user_settings')
 		.update({
 			selected_conversation_model,
 			selected_compression_model,
+			selected_embedding_model,
 			selected_persona,
 			updated_at: new Date().toISOString()
 		})
-		.eq('id', settingsData.id);
+		.eq('user_id', userId)
+		.select();
+
+	console.log('[Settings PUT] Update result:', { data, error });
 
 	if (error) {
+		console.error('[Settings PUT] Update error:', error);
 		return json({ error: error.message }, { status: 500 });
 	}
 

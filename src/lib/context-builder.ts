@@ -2,6 +2,9 @@ import { createClient } from '@supabase/supabase-js';
 import { SUPABASE_SERVICE_ROLE_KEY, VOYAGE_API_KEY } from '$env/static/private';
 import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 import { VoyageAIClient } from 'voyageai';
+import { EMBEDDING_MODEL } from '$lib/config/models';
+import { MEMORY } from '$lib/config/memory';
+import { DEFAULT_PERSONA } from '$lib/config/personas';
 
 const supabase = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 const voyage = new VoyageAIClient({ apiKey: VOYAGE_API_KEY });
@@ -21,7 +24,7 @@ async function getModelContextWindow(modelIdentifier: string): Promise<number> {
 
 	if (error || !data) {
 		console.warn('Failed to fetch model context window, using default 131072');
-		return 131072; // Default to Qwen3-235B context window
+		return 131072; // Default fallback (128K tokens)
 	}
 
 	return data.context_window;
@@ -34,7 +37,6 @@ interface ContextComponents {
 	journal: string;
 	highSalienceArcs: string;
 	otherArcs: string;
-	files: string;
 }
 
 interface ContextStats {
@@ -46,8 +48,13 @@ interface ContextStats {
 		journal: number;
 		highSalienceArcs: number;
 		otherArcs: number;
-		files: number;
 	};
+}
+
+export interface StructuredContext {
+	context: string; // Full assembled context (for backwards compat)
+	components: ContextComponents; // Individual components for cache control
+	stats: ContextStats;
 }
 
 /**
@@ -55,14 +62,14 @@ interface ContextStats {
  * Enforces 40% context window cap with priority-based truncation
  */
 export async function buildContextForCalls1A1B(
-	userId: string | null,
-	personaName: string = 'gunnar',
-	modelIdentifier: string = 'accounts/fireworks/models/qwen3-235b-a22b',
+	userId: string,
+	personaName: string = DEFAULT_PERSONA,
+	modelIdentifier: string,
 	userQuery?: string // Optional: enables vector search (Priority 5)
-): Promise<{ context: string; stats: ContextStats }> {
+): Promise<StructuredContext> {
 	// Get model's context window and calculate budget
 	const contextWindow = await getModelContextWindow(modelIdentifier);
-	const contextBudget = Math.floor(contextWindow * 0.4); // 40% cap
+	const contextBudget = Math.floor(contextWindow * MEMORY.contextWindowCap); // 40% cap
 
 	// Initialize context components
 	const components: ContextComponents = {
@@ -71,27 +78,19 @@ export async function buildContextForCalls1A1B(
 		instructions: '',
 		journal: '',
 		highSalienceArcs: '',
-		otherArcs: '',
-		files: ''
+		otherArcs: ''
 	};
 
 	let totalTokens = 0;
 	let queryVector: number[] | null = null;
 
-	// Priority 1: Last 5 Superjournal turns (working memory - highest priority)
-	let superjournalQuery = supabase
+	// Priority 1: Last N Superjournal turns (working memory - highest priority)
+	const { data: superjournalData } = await supabase
 		.from('superjournal')
-		.select('user_message, ai_response, persona_name, created_at');
-
-	if (userId === null) {
-		superjournalQuery = superjournalQuery.is('user_id', null);
-	} else {
-		superjournalQuery = superjournalQuery.eq('user_id', userId);
-	}
-
-	const { data: superjournalData } = await superjournalQuery
+		.select('user_message, ai_response, persona_name, created_at')
+		.eq('user_id', userId)
 		.order('created_at', { ascending: false })
-		.limit(5);
+		.limit(MEMORY.superjournalLimit);
 
 	if (superjournalData && superjournalData.length > 0) {
 		const superjournalText = formatSuperjournalHistory(superjournalData.reverse()); // Oldest first
@@ -100,18 +99,12 @@ export async function buildContextForCalls1A1B(
 	}
 
 	// Priority 2: Starred messages (user-curated memory)
-	let starredQuery = supabase
+	const { data: starredData } = await supabase
 		.from('journal')
 		.select('boss_essence, persona_essence, persona_name, created_at')
-		.eq('is_starred', true);
-
-	if (userId === null) {
-		starredQuery = starredQuery.is('user_id', null);
-	} else {
-		starredQuery = starredQuery.eq('user_id', userId);
-	}
-
-	const { data: starredData } = await starredQuery.order('created_at', { ascending: false });
+		.eq('is_starred', true)
+		.eq('user_id', userId)
+		.order('created_at', { ascending: false });
 
 	if (starredData && starredData.length > 0) {
 		const starredText = formatStarredMessages(starredData.reverse()); // Oldest first
@@ -123,18 +116,11 @@ export async function buildContextForCalls1A1B(
 	}
 
 	// Priority 3: Instructions (global + current persona behavioral directives)
-	let instructionsQuery = supabase
+	const { data: instructionsData } = await supabase
 		.from('journal')
 		.select('boss_essence, persona_essence, decision_arc_summary, persona_name, created_at')
-		.eq('is_instruction', true);
-
-	if (userId === null) {
-		instructionsQuery = instructionsQuery.is('user_id', null);
-	} else {
-		instructionsQuery = instructionsQuery.eq('user_id', userId);
-	}
-
-	const { data: instructionsData } = await instructionsQuery
+		.eq('is_instruction', true)
+		.eq('user_id', userId)
 		.or(`instruction_scope.eq.global,instruction_scope.eq.${personaName}`)
 		.order('created_at', { ascending: false });
 
@@ -147,20 +133,13 @@ export async function buildContextForCalls1A1B(
 		}
 	}
 
-	// Priority 4: Last 100 Journal turns (recent memory)
-	let journalQuery = supabase
+	// Priority 4: Last N Journal turns (recent memory)
+	const { data: journalData } = await supabase
 		.from('journal')
-		.select('boss_essence, persona_essence, decision_arc_summary, persona_name, created_at');
-
-	if (userId === null) {
-		journalQuery = journalQuery.is('user_id', null);
-	} else {
-		journalQuery = journalQuery.eq('user_id', userId);
-	}
-
-	const { data: journalData } = await journalQuery
+		.select('boss_essence, persona_essence, decision_arc_summary, persona_name, created_at')
+		.eq('user_id', userId)
 		.order('created_at', { ascending: false })
-		.limit(100);
+		.limit(MEMORY.lastNJournalEntries);
 
 	if (journalData && journalData.length > 0) {
 		const journalText = formatJournalHistory(journalData.reverse()); // Oldest first
@@ -183,26 +162,19 @@ export async function buildContextForCalls1A1B(
 	// Priority 5: Vector search results (only if userQuery provided and journal count > 100)
 	if (userQuery) {
 		// Check journal count first
-		let countQuery = supabase
+		const { count: journalCount } = await supabase
 			.from('journal')
 			.select('id', { count: 'exact', head: true })
-			.eq('is_instruction', false);
+			.eq('is_instruction', false)
+			.eq('user_id', userId);
 
-		if (userId === null) {
-			countQuery = countQuery.is('user_id', null);
-		} else {
-			countQuery = countQuery.eq('user_id', userId);
-		}
-
-		const { count: journalCount } = await countQuery;
-
-		if (journalCount && journalCount > 100) {
+		if (journalCount && journalCount > MEMORY.vectorSearchThreshold) {
 			try {
 				// Generate embedding for user query
 				console.log('[Context Builder] Generating query embedding for vector search');
 				const queryEmbedding = await voyage.embed({
 					input: userQuery,
-					model: 'voyage-3' // 1024 dimensions
+					model: EMBEDDING_MODEL // 1024 dimensions
 				});
 
 				queryVector = queryEmbedding.data[0].embedding;
@@ -210,20 +182,13 @@ export async function buildContextForCalls1A1B(
 				// Collect IDs to exclude (already loaded in Priorities 1-4)
 				const excludeIds: string[] = [];
 
-				// Get last 5 Superjournal IDs
-				let superjournalExcludeQuery = supabase
+				// Get last N Superjournal IDs
+				const { data: superjournalIds } = await supabase
 					.from('superjournal')
-					.select('id');
-
-				if (userId === null) {
-					superjournalExcludeQuery = superjournalExcludeQuery.is('user_id', null);
-				} else {
-					superjournalExcludeQuery = superjournalExcludeQuery.eq('user_id', userId);
-				}
-
-				const { data: superjournalIds } = await superjournalExcludeQuery
-					.order('created_at', { ascending: false })
-					.limit(5);
+					.select('id')
+					.eq('user_id', userId)
+					.order('created_at', { ascending: false})
+					.limit(MEMORY.superjournalLimit);
 
 				// Get corresponding Journal IDs via Superjournal IDs
 				if (superjournalIds && superjournalIds.length > 0) {
@@ -238,21 +203,14 @@ export async function buildContextForCalls1A1B(
 					}
 				}
 
-				// Get last 100 Journal IDs
-				let journalExcludeQuery = supabase
+				// Get last N Journal IDs
+				const { data: last100Ids } = await supabase
 					.from('journal')
 					.select('id')
-					.eq('is_instruction', false);
-
-				if (userId === null) {
-					journalExcludeQuery = journalExcludeQuery.is('user_id', null);
-				} else {
-					journalExcludeQuery = journalExcludeQuery.eq('user_id', userId);
-				}
-
-				const { data: last100Ids } = await journalExcludeQuery
+					.eq('is_instruction', false)
+					.eq('user_id', userId)
 					.order('created_at', { ascending: false })
-					.limit(100);
+					.limit(MEMORY.lastNJournalEntries);
 
 				if (last100Ids) {
 					excludeIds.push(...last100Ids.map(j => j.id));
@@ -293,78 +251,10 @@ export async function buildContextForCalls1A1B(
 				console.error('[Context Builder] Vector search error:', vectorError);
 			}
 		} else {
-			console.log('[Context Builder] Skipping vector search (journal count <=100)');
+			console.log(`[Context Builder] Skipping vector search (journal count <= ${MEMORY.vectorSearchThreshold})`);
 		}
 	}
 
-	// Priority 5.5: File overviews (awareness of all uploaded files)
-	try {
-		let fileOverviewsQuery = supabase
-			.from('files')
-			.select('id, filename, file_type, description, uploaded_at')
-			.eq('status', 'ready') // Only successfully processed files
-			.order('uploaded_at', { ascending: false });
-
-		if (userId === null) {
-			fileOverviewsQuery = fileOverviewsQuery.is('user_id', null);
-		} else {
-			fileOverviewsQuery = fileOverviewsQuery.eq('user_id', userId);
-		}
-
-		const { data: fileOverviews } = await fileOverviewsQuery;
-
-		if (fileOverviews && fileOverviews.length > 0) {
-			const fileOverviewsText = formatFileOverviews(fileOverviews);
-			const fileOverviewsTokens = estimateTokens(fileOverviewsText);
-
-			if (totalTokens + fileOverviewsTokens <= contextBudget) {
-				components.files = fileOverviewsText;
-				totalTokens += fileOverviewsTokens;
-				console.log('[Context Builder] File overviews loaded', fileOverviews.length, 'files');
-			}
-		}
-	} catch (fileOverviewError) {
-		console.error('[Context Builder] File overview error:', fileOverviewError);
-	}
-
-	// Priority 6: File chunks vector search (only if userQuery provided)
-	if (userQuery) {
-		try {
-			// Reuse query embedding from Priority 5, or generate if Priority 5 was skipped
-			if (!queryVector) {
-				console.log('[Context Builder] Generating query embedding for file chunks');
-				const queryEmbedding = await voyage.embed({
-					input: userQuery,
-					model: 'voyage-3' // 1024 dimensions
-				});
-				queryVector = queryEmbedding.data[0].embedding;
-			}
-
-			// Perform vector search on file chunks
-			const { data: fileChunkResults } = await supabase.rpc('search_file_chunks', {
-				query_embedding: queryVector,
-				match_threshold: 0.7,
-				match_count: 20,
-				filter_user_id: userId
-			});
-
-			if (fileChunkResults && fileChunkResults.length > 0) {
-				// Format file chunk results
-				const fileChunksText = formatFileChunks(fileChunkResults);
-				const fileChunksTokens = estimateTokens(fileChunksText);
-
-				if (totalTokens + fileChunksTokens <= contextBudget) {
-					// Append to existing file overviews (Priority 5.5)
-					components.files = components.files + fileChunksText;
-					totalTokens += fileChunksTokens;
-				}
-
-				console.log('[Context Builder] File chunks loaded', fileChunkResults.length, 'results');
-			}
-		} catch (fileChunkError) {
-			console.error('[Context Builder] File chunk search error:', fileChunkError);
-		}
-	}
 
 	// Assemble final context
 	const finalContext = assembleContext(components);
@@ -378,8 +268,7 @@ export async function buildContextForCalls1A1B(
 			instructions: estimateTokens(components.instructions),
 			journal: estimateTokens(components.journal),
 			highSalienceArcs: estimateTokens(components.highSalienceArcs),
-			otherArcs: estimateTokens(components.otherArcs),
-			files: estimateTokens(components.files)
+			otherArcs: estimateTokens(components.otherArcs)
 		}
 	};
 
@@ -390,10 +279,10 @@ export async function buildContextForCalls1A1B(
 		components: stats.components
 	});
 
-	return { context: finalContext, stats };
+	return { context: finalContext, components, stats };
 }
 
-// Format Superjournal history (last 5 full turns)
+// Format Superjournal history (recent full turns)
 function formatSuperjournalHistory(
 	entries: Array<{
 		user_message: string;
@@ -413,10 +302,10 @@ ${entry.persona_name}: ${entry.ai_response}`
 		)
 		.join('\n\n');
 
-	return `--- WORKING MEMORY (Last 5 Full Turns) ---\n${formatted}\n\n`;
+	return `--- WORKING MEMORY (Last ${MEMORY.superjournalLimit} Full Turns) ---\n${formatted}\n\n`;
 }
 
-// Format Journal history (last 100 compressed turns)
+// Format Journal history (recent compressed turns)
 function formatJournalHistory(
 	entries: Array<{
 		boss_essence: string;
@@ -437,7 +326,7 @@ ${entry.persona_name}: ${entry.persona_essence}`
 		)
 		.join('\n\n');
 
-	return `--- RECENT MEMORY (Last 100 Compressed Turns) ---\n${formatted}\n\n`;
+	return `--- RECENT MEMORY (Last ${MEMORY.lastNJournalEntries} Compressed Turns) ---\n${formatted}\n\n`;
 }
 
 // Format starred messages
@@ -512,50 +401,6 @@ AI: ${entry.persona_essence}`
 	return `--- SEMANTICALLY RELEVANT MEMORIES (Vector Search Results) ---\n${formatted}\n\n`;
 }
 
-// Format file overviews
-function formatFileOverviews(
-	entries: Array<{
-		id: string;
-		filename: string;
-		file_type: string;
-		description: string;
-		uploaded_at: string;
-	}>
-): string {
-	if (entries.length === 0) return '';
-
-	const formatted = entries
-		.map(
-			(entry, index) =>
-				`${index + 1}. ${entry.filename} (${entry.file_type.toUpperCase()}, uploaded ${new Date(entry.uploaded_at).toLocaleDateString()})
-   Overview: ${entry.description}`
-		)
-		.join('\n\n');
-
-	return `--- UPLOADED FILES (Your Knowledge Base) ---\n\n${formatted}\n\n`;
-}
-
-// Format file chunks
-function formatFileChunks(
-	entries: Array<{
-		filename: string;
-		chunk_index: number;
-		description: string;
-		similarity: number;
-	}>
-): string {
-	if (entries.length === 0) return '';
-
-	const formatted = entries
-		.map(
-			(entry) =>
-				`[File - ${entry.filename} - Chunk ${entry.chunk_index}]
-${entry.description}`
-		)
-		.join('\n\n');
-
-	return `--- UPLOADED FILE CONTENTS (Semantically Relevant) ---\n${formatted}\n\n`;
-}
 
 // Format decision arcs
 function formatDecisionArcs(
@@ -620,8 +465,7 @@ function assembleContext(components: ContextComponents): string {
 		components.instructions,
 		components.journal,
 		components.highSalienceArcs,
-		components.otherArcs,
-		components.files
+		components.otherArcs
 	].filter((part) => part.length > 0);
 
 	return parts.join('');

@@ -1,22 +1,34 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { createClient } from '@supabase/supabase-js';
-import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
-import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 
-const supabase = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+export const DELETE: RequestHandler = async ({ params, locals: { supabase, safeGetSession } }) => {
+	// 1. AUTHENTICATION CHECK
+	const { user } = await safeGetSession();
+	if (!user) {
+		return json(
+			{
+				error: {
+					message: 'Unauthorized - must be logged in',
+					code: 'UNAUTHORIZED'
+				}
+			},
+			{ status: 401 }
+		);
+	}
+	const userId = user.id;
 
-export const DELETE: RequestHandler = async ({ params }) => {
 	const { id } = params;
 
 	try {
-		console.log(`[DELETE Superjournal] Deleting entry: ${id}`);
+		console.log(`[DELETE Superjournal] User ${userId} deleting entry: ${id}`);
 
 		// Delete from superjournal (cascade will handle journal)
+		// CRITICAL: Include user_id check to prevent cross-user deletions
 		const { error } = await supabase
 			.from('superjournal')
 			.delete()
-			.eq('id', id);
+			.eq('id', id)
+			.eq('user_id', userId);
 
 		if (error) {
 			console.error('[DELETE Superjournal] Error:', error);

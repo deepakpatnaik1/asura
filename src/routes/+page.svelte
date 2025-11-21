@@ -1,16 +1,11 @@
 <script lang="ts">
 	import { Icon } from 'svelte-icons-pack';
 	import { LuStar, LuCopy, LuTrash2, LuArchive, LuRefreshCw, LuPaperclip, LuFolder, LuChevronDown, LuSettings, LuLogOut, LuCloudDownload, LuEllipsisVertical, LuArrowDown, LuArrowUp, LuMessageSquare, LuFlame, LuX, LuCircle } from 'svelte-icons-pack/lu';
-	import { currentMessage, isLoading, sendMessage } from '$lib/stores/chat';
-	import {
-		files,
-		error,
-		uploadFile,
-		deleteFile,
-		refreshFiles
-	} from '$lib/stores/filesStore';
+	import { currentMessage, isLoading, sendMessage, abortCurrentMessage } from '$lib/stores/chat';
 	import { tick, onMount } from 'svelte';
-	import TextCleaner from '$lib/components/TextCleaner.svelte';
+	import SettingsModal from '$lib/components/SettingsModal.svelte';
+	import { TIMING } from '$lib/config/timing';
+	import { DEFAULT_PERSONA } from '$lib/config/personas';
 
 	// Receive loaded messages from server
 	let { data } = $props();
@@ -24,18 +19,13 @@
 	let nukeTimer: number | null = null;
 
 	// User settings state
-	let selectedPersona = $state<'gunnar' | 'kirby'>('gunnar');
+	let selectedPersona = $state<'gunnar' | 'kirby'>(DEFAULT_PERSONA);
+	let showSettings = $state(false);
 
-	// File upload state
-	let fileInputRef: HTMLInputElement;
-	let showFileList = $state(false);
-	let deleteConfirmId = $state<string | null>(null);
-	let deleteProgress = $state(0);
-	let deleteTimer: number | null = null;
+	// Message deletion state
 	let deleteMessageId = $state<string | null>(null);
 	let deleteMessageProgress = $state(0);
 	let deleteMessageTimer: number | null = null;
-	let dragOverActive = $state(false);
 
 	// Auto-scroll state
 	let isAutoScrolling = $state(false);
@@ -51,34 +41,12 @@
 			const response = await fetch('/api/settings');
 			if (response.ok) {
 				const data = await response.json();
-				selectedPersona = data.selected_persona || 'gunnar';
+				selectedPersona = data.selected_persona || DEFAULT_PERSONA;
 			}
 		} catch (error) {
 			console.error('Failed to load settings:', error);
 			// Fallback to defaults if database read fails
 		}
-
-		// Set up SSE listener for message deletions
-		const eventSource = new EventSource('/api/files/events');
-
-		eventSource.addEventListener('message', (event) => {
-			try {
-				const data = JSON.parse(event.data);
-
-				if (data.eventType === 'message-deleted' && data.message?.id) {
-					console.log('[SSE] Message deleted:', data.message.id);
-					// Remove message from allMessages array
-					allMessages = allMessages.filter(msg => msg.id !== data.message.id);
-				}
-			} catch (error) {
-				console.error('[SSE] Failed to parse event:', error);
-			}
-		});
-
-		// Clean up on unmount
-		return () => {
-			eventSource.close();
-		};
 	});
 
 	// Helper function to format timestamps
@@ -111,16 +79,14 @@
 		const name = selectedPersona.charAt(0).toUpperCase() + selectedPersona.slice(1);
 		inputMessage = `${name}, ${inputMessage}`;
 
-		// Write to database
+		// Write to database - only update persona, preserve model settings
 		try {
 			await fetch('/api/settings', {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
-				selected_conversation_model: 'accounts/fireworks/models/qwen3-235b-a22b',
-				selected_compression_model: 'accounts/fireworks/models/qwen3-235b-a22b-instruct-2507',
-				selected_persona: selectedPersona
-			})
+					selected_persona: selectedPersona
+				})
 			});
 		} catch (error) {
 			console.error('Failed to save persona:', error);
@@ -309,7 +275,7 @@
 				// Scrolling phase: scroll for 5 seconds
 				pauseProgress = 0;
 				const scrollElapsed = now - scrollStartTime;
-				if (scrollElapsed < 5000) {
+				if (scrollElapsed < TIMING.autoScrollDuration) {
 					// Accumulate fractional pixels and scroll by whole pixels
 					scrollAccumulator += scrollSpeed;
 					const pixelsToScroll = Math.floor(scrollAccumulator);
@@ -327,9 +293,9 @@
 				// Pause phase: pause for 1 minute
 				// During pause, user can manually scroll - we'll resume from their position
 				const pauseElapsed = now - pauseStartTime;
-				pauseProgress = Math.min(100, (pauseElapsed / 60000) * 100);
+				pauseProgress = Math.min(100, (pauseElapsed / TIMING.autoScrollPause) * 100);
 
-				if (pauseElapsed >= 60000) {
+				if (pauseElapsed >= TIMING.autoScrollPause) {
 					// Switch back to scrolling phase from current scroll position
 					isPaused = false;
 					scrollStartTime = now;
@@ -427,7 +393,8 @@
 				ai_response: $currentMessage.ai,
 				persona_name: selectedPersona,
 				created_at: now,
-				formatted_timestamp: formattedTimestamp
+				formatted_timestamp: formattedTimestamp,
+				model_identifier: $currentMessage.model_identifier
 			}];
 
 			// Clear current message after adding to history
@@ -442,101 +409,13 @@
 		}
 	}
 
-	// File upload handler
-	async function handleFileSelect(event: Event) {
-		const target = event.target as HTMLInputElement;
-		const file = target.files?.[0];
-
-		if (!file) return;
-
-		// Extract file extension
-		const extension = file.name.split('.').pop()?.toLowerCase() || '';
-
-		// Validate file type by extension (more reliable than MIME type)
-		const allowedExtensions = [
-			'pdf', 'txt', 'md', 'markdown',
-			'png', 'jpg', 'jpeg', 'gif', 'webp',
-			'js', 'jsx', 'ts', 'tsx', 'py',
-			'xlsx', 'xls', 'csv', 'json'
-		];
-
-		if (!allowedExtensions.includes(extension)) {
-			error.set(`File type not supported: .${extension}`);
-			return;
-		}
-
-		// Validate file size (10MB = 10485760 bytes)
-		if (file.size > 10485760) {
-			error.set('File is too large. Maximum size is 10MB.');
-			return;
-		}
-
-		try {
-			showFileList = true;
-			const fileId = await uploadFile(file);
-			console.log('[Chunk 9 UI] File uploaded:', fileId);
-		} catch (err) {
-			console.error('[Chunk 9 UI] Upload failed:', err);
-			error.set(`Upload failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
-		}
-
-		// Reset input
-		target.value = '';
-	}
-
-	function handleDeleteClick(fileId: string) {
-		deleteConfirmId = fileId;
-		deleteProgress = 0;
-
-		// Auto-confirm after 3 seconds
-		const duration = 3000;
-		const interval = 50;
-		const increment = (interval / duration) * 100;
-
-		deleteTimer = window.setInterval(() => {
-			deleteProgress += increment;
-			if (deleteProgress >= 100) {
-				if (deleteTimer) clearInterval(deleteTimer);
-				handleDeleteConfirm();
-			}
-		}, interval);
-	}
-
-	function handleDeleteCancel() {
-		if (deleteTimer) {
-			clearInterval(deleteTimer);
-			deleteTimer = null;
-		}
-		deleteConfirmId = null;
-		deleteProgress = 0;
-	}
-
-	async function handleDeleteConfirm() {
-		if (deleteTimer) {
-			clearInterval(deleteTimer);
-			deleteTimer = null;
-		}
-		const fileId = deleteConfirmId;
-		deleteConfirmId = null;
-		deleteProgress = 0;
-
-		if (fileId) {
-			try {
-				await deleteFile(fileId);
-				console.log('[Chunk 9 UI] File deleted:', fileId);
-			} catch (err) {
-				console.error('[Chunk 9 UI] Delete failed:', err);
-				error.set(`Delete failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
-			}
-		}
-	}
 
 	function handleMessageDeleteClick(messageId: string) {
 		deleteMessageId = messageId;
 		deleteMessageProgress = 0;
 
 		// Auto-confirm after 3 seconds
-		const duration = 3000;
+		const duration = TIMING.countdownDuration;
 		const interval = 50;
 		const increment = (interval / duration) * 100;
 
@@ -583,65 +462,18 @@
 	}
 
 	function handleAbortCurrentMessage() {
-		// Stop the streaming immediately
-		if ($isLoading) {
-			isLoading.set(false);
-			currentMessage.set(null);
-			console.log('[Abort] Current message aborted');
-		}
+		// Use the abort function from chat store (supports AbortController)
+		abortCurrentMessage();
+		console.log('[Abort] Current message aborted');
 	}
 
-	function triggerFileInput() {
-		fileInputRef?.click();
-	}
-
-	// Helper to format file size
-	function formatFileSize(bytes: number): string {
-		if (bytes === 0) return '0 Bytes';
-		const k = 1024;
-		const sizes = ['Bytes', 'KB', 'MB'];
-		const i = Math.floor(Math.log(bytes) / Math.log(k));
-		return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
-	}
-
-	// Drag and drop handlers
-	function handleDragOver(event: DragEvent) {
-		event.preventDefault();
-		event.dataTransfer!.dropEffect = 'copy';
-		dragOverActive = true;
-	}
-
-	function handleDragLeave(event: DragEvent) {
-		// Check if we're leaving the wrapper entirely
-		const target = event.currentTarget as HTMLElement;
-		if (event.relatedTarget && !target.contains(event.relatedTarget as Node)) {
-			dragOverActive = false;
-		}
-	}
-
-	function handleDrop(event: DragEvent) {
-		event.preventDefault();
-		dragOverActive = false;
-		const fileList = event.dataTransfer?.files;
-		if (fileList?.length) {
-			const file = fileList[0];
-			// Create synthetic event for reuse of validation logic
-			const syntheticEvent = {
-				target: {
-					files: fileList,
-					value: ''
-				}
-			} as unknown as Event;
-			handleFileSelect(syntheticEvent);
-		}
-	}
 
 	function handleNukeClick() {
 		showNukeConfirm = true;
 		nukeProgress = 0;
 
 		// Auto-confirm after 3 seconds
-		const duration = 3000;
+		const duration = TIMING.countdownDuration;
 		const interval = 50;
 		const increment = (interval / duration) * 100;
 
@@ -683,44 +515,31 @@
 			// Clear local messages
 			allMessages = [];
 			currentMessage.set(null);
-
-			// Refresh files list to clear UI
-			await refreshFiles();
 		} catch (error) {
 			console.error('Nuke error:', error);
 		}
 	}
 
-	// Close file dropdown on Escape key or click outside
-	$effect(() => {
-		if (!showFileList) return;
 
-		const handleEscape = (e: KeyboardEvent) => {
-			if (e.key === 'Escape') {
-				showFileList = false;
+	// Logout handler
+	async function handleLogout() {
+		try {
+			const response = await fetch('/api/auth/logout', {
+				method: 'POST'
+			});
+
+			if (response.ok || response.redirected) {
+				// Redirect will be handled by the server
+				window.location.href = '/login';
+			} else {
+				console.error('Logout failed:', response.statusText);
 			}
-		};
-
-		const handleClickOutside = (e: MouseEvent) => {
-			const target = e.target as HTMLElement;
-			// Close if clicking outside the dropdown, folder button, and delete modal
-			if (
-				!target.closest('.files-dropdown') &&
-				!target.closest('.file-list-btn') &&
-				!target.closest('.modal-overlay')
-			) {
-				showFileList = false;
-			}
-		};
-
-		document.addEventListener('keydown', handleEscape);
-		document.addEventListener('click', handleClickOutside);
-
-		return () => {
-			document.removeEventListener('keydown', handleEscape);
-			document.removeEventListener('click', handleClickOutside);
-		};
-	});
+		} catch (error) {
+			console.error('Logout error:', error);
+			// Still redirect to login page even if API fails
+			window.location.href = '/login';
+		}
+	}
 </script>
 
 <div class="chat-container">
@@ -758,7 +577,7 @@
 							<span class="message-label ai-label">{msg.persona_name.charAt(0).toUpperCase() + msg.persona_name.slice(1)}</span>
 						</div>
 						<div class="message-text">
-							<TextCleaner content={msg.ai_response} />
+							{msg.ai_response}
 						</div>
 					</div>
 				</div>
@@ -809,41 +628,16 @@
 	<!-- Input Area -->
 	<div class="input-area">
 		<div class="input-container">
-			<div
-				class="input-field-wrapper"
-				ondragover={handleDragOver}
-				ondragleave={handleDragLeave}
-				ondrop={handleDrop}
-				class:drag-active={dragOverActive}
-			>
+			<div class="input-field-wrapper">
 				<div class="input-controls">
-					<button
-						class="control-btn file-upload-btn"
-						title="Attach file"
-						onclick={triggerFileInput}
-					>
+					<!-- Paperclip icon (decorative only) -->
+					<button class="control-btn" title="Attach file (disabled)" disabled>
 						<Icon src={LuPaperclip} size="11" />
 					</button>
 
-					<!-- Hidden file input -->
-					<input
-						type="file"
-						bind:this={fileInputRef}
-						onchange={handleFileSelect}
-						accept=".pdf,.txt,.md,.png,.jpg,.jpeg,.gif,.webp,.js,.ts,.py,.xlsx,.csv,.json"
-						style="display: none"
-					/>
-
-					<!-- File list toggle button (show file count) -->
-					<button
-						class="control-btn file-list-btn"
-						title={`Files (${$files.length})`}
-						onclick={() => (showFileList = !showFileList)}
-					>
+					<!-- Folder icon (decorative only) -->
+					<button class="control-btn" title="Files (disabled)" disabled>
 						<Icon src={LuFolder} size="11" />
-						{#if $files.length > 0}
-							<span class="file-count">{$files.length}</span>
-						{/if}
 					</button>
 
 					<button class="control-btn" title="Download from cloud"><Icon src={LuCloudDownload} size="11" /></button>
@@ -882,7 +676,7 @@
 
 					<!-- User Controls (inline on narrow screens) -->
 					<div class="user-controls-inline">
-						<button class="logout-btn logout-btn-inline"><Icon src={LuLogOut} size="11" /></button>
+						<button class="logout-btn logout-btn-inline" onclick={handleLogout} title="Sign out"><Icon src={LuLogOut} size="11" /></button>
 					</div>
 
 					<button class="control-btn settings-btn" title="Nuke all history" onclick={handleNukeClick}><Icon src={LuFlame} size="11" /></button>
@@ -902,61 +696,6 @@
 		</div>
 	</div>
 
-	<!-- File List Dropdown -->
-	{#if showFileList}
-		<div class="files-dropdown">
-			<!-- Header -->
-			<div class="files-header">
-				<span>Files ({$files.length})</span>
-				<button class="close-btn" onclick={() => (showFileList = false)}>
-					<Icon src={LuX} size="12" />
-				</button>
-			</div>
-
-			<!-- File List -->
-			<div class="files-list">
-				{#if $files.length === 0}
-					<div class="empty-state">No files uploaded</div>
-				{:else}
-					{#each $files as file (file.id)}
-						<div class="file-row">
-							<button class="delete-btn" onclick={() => handleDeleteClick(file.id)}>
-								<Icon src={LuTrash2} size="10" />
-							</button>
-							<span class="filename">{file.filename.substring(0, 30)}{file.filename.length > 30 ? '...' : ''}</span>
-							<div class="progress-bar">
-								<div class="progress-fill {file.status}" style="width: {file.status === 'ready' ? 100 : file.progress}%"></div>
-							</div>
-							<span class="percent">{file.status === 'ready' ? 100 : file.progress}%</span>
-						</div>
-					{/each}
-				{/if}
-			</div>
-
-			<!-- Error Banner -->
-			{#if $error}
-				<div class="error-banner">
-					{$error}
-					<button onclick={() => error.set(null)}>×</button>
-				</div>
-			{/if}
-		</div>
-	{/if}
-
-	<!-- Delete Confirmation Modal -->
-	{#if deleteConfirmId}
-		<div class="modal-overlay" onclick={handleDeleteCancel}>
-			<div class="modal-content" onclick={(e) => e.stopPropagation()}>
-				<p class="modal-text">Hush... it'll all be over soon.</p>
-				<div class="nuke-progress-container">
-					<div class="nuke-progress-bar" style="width: {deleteProgress}%"></div>
-				</div>
-				<div class="nuke-actions">
-					<button class="nuke-cancel-btn" onclick={handleDeleteCancel}>Cancel</button>
-				</div>
-			</div>
-		</div>
-	{/if}
 
 	<!-- Message Delete Confirmation Modal -->
 	{#if deleteMessageId}
@@ -975,7 +714,7 @@
 
 	<!-- User Avatar/Logout (top right) -->
 	<div class="user-controls">
-		<button class="logout-btn"><Icon src={LuLogOut} size="16" /></button>
+		<button class="logout-btn" onclick={handleLogout} title="Sign out"><Icon src={LuLogOut} size="16" /></button>
 	</div>
 
 	<!-- Nuke Confirmation Modal -->
@@ -992,6 +731,14 @@
 			</div>
 		</div>
 	{/if}
+
+	<!-- Settings Button (Fixed Position Bottom Right) -->
+	<button class="settings-btn-fixed" onclick={() => showSettings = true} title="Settings">
+		<Icon src={LuSettings} size="16" />
+	</button>
+
+	<!-- Settings Modal -->
+	<SettingsModal bind:open={showSettings} onClose={() => showSettings = false} />
 </div>
 
 <style>
@@ -1352,6 +1099,35 @@
 		}
 	}
 
+	/* Fixed Settings Button - Bottom Right (matches logout button style) */
+	.settings-btn-fixed {
+		position: fixed;
+		bottom: 16px;
+		right: 16px;
+		background: transparent;
+		border: none;
+		color: hsl(var(--chat-label));
+		cursor: pointer;
+		padding: 8px;
+		opacity: 0.7;
+		transition: all 0.2s;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		z-index: var(--z-sticky);
+	}
+
+	.settings-btn-fixed:hover {
+		opacity: 1;
+		color: rgb(239, 68, 68);
+	}
+
+	@media (max-width: 900px) {
+		.settings-btn-fixed {
+			display: none;
+		}
+	}
+
 	.logout-btn {
 		background: transparent;
 		border: none;
@@ -1591,209 +1367,4 @@
 		background: hsl(var(--muted) / 0.1);
 	}
 
-	/* File Upload UI Styles */
-
-	/* File upload button */
-	.file-upload-btn {
-		position: relative;
-	}
-
-	.file-upload-btn:hover {
-		opacity: 1;
-		color: var(--boss-accent);
-	}
-
-	/* File list button with count badge */
-	.file-list-btn {
-		position: relative;
-		display: flex;
-		align-items: center;
-		gap: 4px;
-	}
-
-	.file-count {
-		font-size: 0.75em;
-		background: var(--boss-accent);
-		color: hsl(var(--background));
-		border-radius: 10px;
-		padding: 1px 4px;
-		font-weight: 600;
-		min-width: 16px;
-		text-align: center;
-	}
-
-	/* Drag and drop visual feedback */
-	.input-field-wrapper {
-		transition: background-color 0.2s, border-color 0.2s;
-	}
-
-	.input-field-wrapper.drag-active {
-		background-color: hsl(var(--input) / 0.15);
-		border-color: var(--boss-accent);
-	}
-
-	/* Files Dropdown */
-	.files-dropdown {
-		position: fixed;
-		bottom: 120px;
-		left: 50%;
-		transform: translateX(-50%);
-		width: min(420px, calc(100% - 32px));
-		max-height: 400px;
-		background: hsl(var(--card));
-		border: 1px solid hsl(var(--border));
-		border-radius: 8px;
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-		z-index: 100;
-		display: flex;
-		flex-direction: column;
-	}
-
-	/* Header */
-	.files-header {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		padding: 12px 16px;
-		border-bottom: 1px solid hsl(var(--border));
-		font-weight: 600;
-		font-size: 0.9em;
-	}
-
-	.close-btn {
-		background: none;
-		border: none;
-		cursor: pointer;
-		opacity: 0.7;
-		padding: 4px;
-		display: flex;
-	}
-
-	.close-btn:hover {
-		opacity: 1;
-	}
-
-	/* Files List */
-	.files-list {
-		overflow-y: auto;
-		padding: 8px;
-	}
-
-	.empty-state {
-		padding: 32px;
-		text-align: center;
-		color: hsl(var(--muted-foreground));
-		font-size: 0.9em;
-	}
-
-	/* File Row */
-	.file-row {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		padding: 6px 16px;
-		border-radius: 4px;
-		margin-bottom: 2px;
-	}
-
-	.file-row:hover {
-		background: hsl(var(--muted) / 0.1);
-	}
-
-	.delete-btn {
-		background: none;
-		border: none;
-		cursor: pointer;
-		color: rgb(239, 68, 68);
-		opacity: 0.6;
-		padding: 4px;
-		display: flex;
-		flex-shrink: 0;
-	}
-
-	.delete-btn:hover {
-		opacity: 1;
-	}
-
-	.filename {
-		font-size: 0.85em;
-		width: 180px;
-		flex-shrink: 0;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
-	.progress-bar {
-		width: 100px;
-		height: 6px;
-		background: hsl(var(--muted) / 0.3);
-		border-radius: 3px;
-		overflow: hidden;
-		flex-shrink: 0;
-	}
-
-	.progress-fill {
-		height: 100%;
-		transition: width 150ms linear;
-	}
-
-	.progress-fill.processing,
-	.progress-fill.pending {
-		background: var(--boss-accent);
-	}
-
-	.progress-fill.ready {
-		background: rgb(34, 197, 94);
-	}
-
-	.progress-fill.failed {
-		background: rgb(239, 68, 68);
-	}
-
-	.percent {
-		font-size: 0.75em;
-		color: hsl(var(--muted-foreground));
-		width: 35px;
-		text-align: right;
-		flex-shrink: 0;
-	}
-
-	/* Error Banner */
-	.error-banner {
-		padding: 8px 12px;
-		background: rgba(239, 68, 68, 0.1);
-		border-top: 1px solid rgb(239, 68, 68);
-		color: rgb(239, 68, 68);
-		font-size: 0.85em;
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-	}
-
-	.error-banner button {
-		background: none;
-		border: none;
-		color: inherit;
-		cursor: pointer;
-		font-size: 1.2em;
-		padding: 0 4px;
-		opacity: 0.7;
-	}
-
-	.error-banner button:hover {
-		opacity: 1;
-	}
-
-	/* Delete confirmation modal */
-	.modal-btn-confirm {
-		background: var(--boss-accent);
-		color: hsl(var(--background));
-		border: 1px solid var(--boss-accent);
-	}
-
-	.modal-btn-confirm:hover {
-		background: rgb(217, 133, 107);
-		border-color: rgb(217, 133, 107);
-	}
 </style>

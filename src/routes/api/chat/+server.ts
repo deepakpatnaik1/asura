@@ -1,12 +1,17 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import OpenAI from 'openai';
 import { VoyageAIClient } from 'voyageai';
-import { FIREWORKS_API_KEY, VOYAGE_API_KEY, SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
+import { VOYAGE_API_KEY, SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
 import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 import { createClient } from '@supabase/supabase-js';
 import { buildContextForCalls1A1B } from '$lib/context-builder';
-import { DEFAULT_CONVERSATION_MODEL, DEFAULT_COMPRESSION_MODEL } from '$lib/config/models';
+import {
+	DEFAULT_CONVERSATION_MODEL,
+	DEFAULT_COMPRESSION_MODEL,
+	EMBEDDING_MODEL
+} from '$lib/config/models';
+import { getModelParams } from '$lib/config/model-params';
+import { DEFAULT_PERSONA } from '$lib/config/personas';
 import {
 	BASE_INSTRUCTIONS,
 	PERSONA_GUNNAR,
@@ -16,11 +21,7 @@ import {
 	CALL2A_PROMPT,
 	CALL2B_PROMPT
 } from '$lib/prompts';
-
-const fireworks = new OpenAI({
-	baseURL: 'https://api.fireworks.ai/inference/v1',
-	apiKey: FIREWORKS_API_KEY
-});
+import { createMessage, createMessageStream } from '$lib/api/anthropic-client';
 
 const voyage = new VoyageAIClient({ apiKey: VOYAGE_API_KEY });
 
@@ -53,9 +54,107 @@ function extractMessage(text: string): string {
 	return text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
 }
 
+// Helper function to detect provider type
+function getProviderType(modelIdentifier: string): 'anthropic' | 'openai' | 'fireworks' {
+	if (modelIdentifier.startsWith('claude-')) {
+		return 'anthropic';
+	}
+	if (modelIdentifier.startsWith('gpt-') || modelIdentifier.startsWith('o1-')) {
+		return 'openai';
+	}
+	if (modelIdentifier.startsWith('accounts/fireworks/')) {
+		return 'fireworks';
+	}
+	throw new Error(`Unknown model provider for identifier: ${modelIdentifier}`);
+}
+
+// Background function to save conversation to database
+async function saveConversationToDatabase(
+	userId: string,
+	message: string,
+	call1BMessage: string,
+	call1ATokens: { input: number; output: number },
+	call1BTokens: { input: number; output: number },
+	conversationModel: string,
+	persona: string
+) {
+	try {
+		// Save to Superjournal
+		const { data: superjournalData, error: dbError } = await supabase
+			.from('superjournal')
+			.insert({
+				user_id: userId,
+				persona_name: persona,
+				user_message: message,
+				ai_response: call1BMessage,
+				model_identifier: conversationModel
+			})
+			.select('id')
+			.single();
+
+		if (dbError) {
+			console.error('[Database] Failed to save to superjournal:', dbError);
+			return;
+		}
+
+		// Track token usage for this conversation turn
+		if (superjournalData?.id) {
+			try {
+				// Sum tokens from Call 1A + Call 1B
+				const totalInputTokens = call1ATokens.input + call1BTokens.input;
+				const totalOutputTokens = call1ATokens.output + call1BTokens.output;
+
+				// Fetch pricing for the conversation model
+				const { data: modelData, error: modelError } = await supabase
+					.from('models')
+					.select('input_price_per_million, output_price_per_million')
+					.eq('model_identifier', conversationModel)
+					.single();
+
+				if (modelError) {
+					console.error('[Token Tracking] Failed to fetch model pricing:', modelError);
+				} else if (modelData) {
+					// Calculate cost in USD
+					const inputCost = (totalInputTokens / 1_000_000) * modelData.input_price_per_million;
+					const outputCost = (totalOutputTokens / 1_000_000) * modelData.output_price_per_million;
+					const totalCost = inputCost + outputCost;
+
+					// Insert token usage record
+					const { error: tokenError } = await supabase.from('token_usage').insert({
+						user_id: userId,
+						conversation_id: superjournalData.id,
+						model_identifier: conversationModel,
+						total_input_tokens: totalInputTokens,
+						total_output_tokens: totalOutputTokens,
+						cost_usd: totalCost
+					});
+
+					if (tokenError) {
+						console.error('[Token Tracking] Failed to save token usage:', tokenError);
+					} else {
+						console.log(
+							`[Token Tracking] Saved: ${totalInputTokens} input, ${totalOutputTokens} output, $${totalCost.toFixed(6)} cost`
+						);
+					}
+				}
+			} catch (tokenTrackingError) {
+				console.error('[Token Tracking] Error:', tokenTrackingError);
+			}
+
+			// Trigger background compression
+			setTimeout(() => {
+				compressToJournal(superjournalData.id, userId, message, call1BMessage, persona);
+			}, 0);
+		}
+	} catch (error) {
+		console.error('[Database] Error saving conversation:', error);
+	}
+}
+
 // Background compression function
 async function compressToJournal(
 	superjournalId: string,
+	userId: string,
 	userMessage: string,
 	aiResponse: string,
 	personaName: string
@@ -65,30 +164,45 @@ async function compressToJournal(
 		const { data: settings } = await supabase
 			.from('user_settings')
 			.select('selected_compression_model')
+			.eq('user_id', userId)
 			.single();
 
 		const compressionModel = settings?.selected_compression_model || DEFAULT_COMPRESSION_MODEL;
 
+		// Fetch compression parameters from database
+		const compressionParams = await getModelParams(compressionModel, 'compression');
+
 		console.log(`[Compression] Starting Call 2A/2B for superjournal_id: ${superjournalId}`);
 
-		// Call 2A: Initial Artisan Cut compression
-		const call2A = await fireworks.chat.completions.create({
-			model: compressionModel,
-			messages: [
-				{
-					role: 'system',
-					content: CALL2A_PROMPT
-				},
-				{
-					role: 'user',
-					content: `User message: ${userMessage}\n\nPersona (${personaName}) response: ${aiResponse}`
-				}
-			],
-			max_tokens: 2048,
-			temperature: 0.3
-		});
+		const compressionProvider = getProviderType(compressionModel);
 
-		const call2AOutput = call2A.choices[0]?.message?.content || '{}';
+		// Call 2A: Initial Artisan Cut compression
+		let call2AOutput: string;
+
+		if (compressionProvider === 'anthropic') {
+			// Use Anthropic API with prompt caching
+			const response = await createMessage({
+				model: compressionModel,
+				max_tokens: compressionParams.max_tokens,
+				temperature: compressionParams.temperature,
+				system: [
+					{
+						type: 'text' as const,
+						text: CALL2A_PROMPT,
+						cache_control: { type: 'ephemeral' as const }
+					}
+				],
+				messages: [
+					{
+						role: 'user',
+						content: `User message: ${userMessage}\n\nPersona (${personaName}) response: ${aiResponse}`
+					}
+				]
+			});
+			call2AOutput = response.content[0]?.type === 'text' ? response.content[0].text : '{}';
+		} else {
+			throw new Error(`Provider '${compressionProvider}' not implemented. Only 'anthropic' is currently supported.`);
+		}
 		console.log('[Compression] Call 2A output:', call2AOutput);
 
 		let call2AJson;
@@ -102,27 +216,36 @@ async function compressToJournal(
 		}
 
 		// Call 2B: Verification and refinement
-		const call2B = await fireworks.chat.completions.create({
-			model: compressionModel,
-			messages: [
-				{
-					role: 'system',
-					content: CALL2A_PROMPT
-				},
-				{
-					role: 'assistant',
-					content: JSON.stringify(call2AJson)
-				},
-				{
-					role: 'user',
-					content: CALL2B_PROMPT
-				}
-			],
-			max_tokens: 2048,
-			temperature: 0.3
-		});
+		let call2BOutput: string;
 
-		const call2BOutput = call2B.choices[0]?.message?.content || '{}';
+		if (compressionProvider === 'anthropic') {
+			// Use Anthropic API with prompt caching (reuses Call 2A cache)
+			const response = await createMessage({
+				model: compressionModel,
+				max_tokens: compressionParams.max_tokens,
+				temperature: compressionParams.temperature,
+				system: [
+					{
+						type: 'text' as const,
+						text: CALL2A_PROMPT,
+						cache_control: { type: 'ephemeral' as const }
+					}
+				],
+				messages: [
+					{
+						role: 'assistant',
+						content: JSON.stringify(call2AJson)
+					},
+					{
+						role: 'user',
+						content: CALL2B_PROMPT
+					}
+				]
+			});
+			call2BOutput = response.content[0]?.type === 'text' ? response.content[0].text : '{}';
+		} else {
+			throw new Error(`Provider '${compressionProvider}' not implemented. Only 'anthropic' is currently supported.`);
+		}
 		console.log('[Compression] Call 2B output:', call2BOutput);
 
 		let call2BJson;
@@ -140,7 +263,7 @@ async function compressToJournal(
 			.from('journal')
 			.insert({
 				superjournal_id: superjournalId,
-				user_id: null, // Nullable for development
+				user_id: userId,
 				persona_name: call2BJson.persona_name || personaName,
 				boss_essence: call2BJson.boss_essence || userMessage,
 				persona_essence: call2BJson.persona_essence || aiResponse,
@@ -170,7 +293,7 @@ async function compressToJournal(
 
 			const embeddingResponse = await voyage.embed({
 				input: decisionArc,
-				model: 'voyage-3-large' // 1024 dimensions (default)
+				model: EMBEDDING_MODEL // 1024 dimensions (default)
 			});
 
 			const embedding = embeddingResponse.data[0].embedding;
@@ -194,16 +317,35 @@ async function compressToJournal(
 	}
 }
 
-export const POST: RequestHandler = async ({ request }) => {
+export const POST: RequestHandler = async ({ request, locals: { safeGetSession } }) => {
 	try {
-		// Read selected conversation model and persona from user_settings table
+		// 1. AUTHENTICATION CHECK
+		const { user } = await safeGetSession();
+		if (!user) {
+			return json(
+				{
+					error: {
+						message: 'Unauthorized - must be logged in',
+						code: 'UNAUTHORIZED'
+					}
+				},
+				{ status: 401 }
+			);
+		}
+		const userId = user.id;
+
+		// 2. Read selected conversation model and persona from user_settings table
 		const { data: settings } = await supabase
 			.from('user_settings')
 			.select('selected_conversation_model, selected_persona')
+			.eq('user_id', userId)
 			.single();
 
 		const conversationModel = settings?.selected_conversation_model || DEFAULT_CONVERSATION_MODEL;
-		const selectedPersona = settings?.selected_persona || 'gunnar';
+		const selectedPersona = settings?.selected_persona || DEFAULT_PERSONA;
+
+		// Fetch conversation parameters from database
+		const conversationParams = await getModelParams(conversationModel, 'conversation');
 
 		const { message, persona = selectedPersona } = await request.json();
 
@@ -213,7 +355,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		// Build context for Call 1A/1B (memory injection with vector search)
 		const { context, stats } = await buildContextForCalls1A1B(
-			null, // user_id (null for development, no auth yet)
+			userId, // Authenticated user ID
 			persona, // current persona for instruction filtering
 			conversationModel,
 			message // user query for vector search (Priority 5)
@@ -224,80 +366,168 @@ export const POST: RequestHandler = async ({ request }) => {
 		// Select persona prompt based on selected persona
 		const personaPrompt = persona === 'kirby' ? PERSONA_KIRBY : PERSONA_GUNNAR;
 
-		// Construct system prompt (BASE_INSTRUCTIONS + PERSONA + CALL1A_PROMPT)
-		const systemPrompt = `${BASE_INSTRUCTIONS}\n\n---\n\n${personaPrompt}\n\n---\n\n${CALL1A_PROMPT}`;
+		// Construct system prompt with cache breakpoints
+		// Cache only stable behavioral instructions (BASE_INSTRUCTIONS + PERSONA + CALL1A_PROMPT)
+		// Context stays in user message to preserve proven prompt architecture
+		const systemPromptWithCache = [
+			{
+				type: 'text' as const,
+				text: `${BASE_INSTRUCTIONS}\n\n---\n\n${personaPrompt}`,
+				cache_control: { type: 'ephemeral' as const }
+			},
+			{
+				type: 'text' as const,
+				text: CALL1A_PROMPT,
+				cache_control: { type: 'ephemeral' as const }
+			}
+		];
 
-		// Construct full user prompt with memory context
+		// Construct full user prompt with context (proven architecture)
 		const fullUserPrompt = context.length > 0
 			? `${context}--- CURRENT QUERY ---\n${message}`
 			: message;
 
 		// Call 1A: Initial response with BASE_INSTRUCTIONS + PERSONA + memory context
-		const call1A = await fireworks.chat.completions.create({
-			model: conversationModel,
-			messages: [
-				{ role: 'system', content: systemPrompt },
-				{ role: 'user', content: fullUserPrompt }
-			],
-			max_tokens: 4096,
-			temperature: 0.7
-		});
+		const conversationProvider = getProviderType(conversationModel);
+		let call1AResponse: string;
+		let call1ATokens: { input: number; output: number };
 
-		const call1AResponse = call1A.choices[0]?.message?.content || 'No response generated';
+		if (conversationProvider === 'anthropic') {
+			// Use Anthropic API with prompt caching
+			const response = await createMessage({
+				model: conversationModel,
+				max_tokens: conversationParams.max_tokens,
+				temperature: conversationParams.temperature,
+				system: systemPromptWithCache,
+				messages: [
+					{
+						role: 'user',
+						content: fullUserPrompt
+					}
+				]
+			});
+			call1AResponse = response.content[0]?.type === 'text' ? response.content[0].text : 'No response generated';
+			call1ATokens = {
+				input: response.usage.input_tokens,
+				output: response.usage.output_tokens
+			};
+		} else {
+			throw new Error(`Provider '${conversationProvider}' not implemented. Only 'anthropic' is currently supported.`);
+		}
 
 		// Extract thinking and message from Call 1A
 		const call1AThinking = extractThinking(call1AResponse);
 		const call1AMessage = extractMessage(call1AResponse);
 
-		// Construct system prompt for Call 1B (BASE_INSTRUCTIONS + PERSONA, without CALL1A_PROMPT)
-		const call1BSystemPrompt = `${BASE_INSTRUCTIONS}\n\n---\n\n${personaPrompt}`;
+		// Construct system prompt for Call 1B with cache (only BASE_INSTRUCTIONS + PERSONA)
+		// CALL1B_PROMPT delivered as user message, context preserved in fullUserPrompt
+		const call1BSystemPromptWithCache = [
+			{
+				type: 'text' as const,
+				text: `${BASE_INSTRUCTIONS}\n\n---\n\n${personaPrompt}`,
+				cache_control: { type: 'ephemeral' as const }
+			}
+		];
 
-		// Call 1B: Refine response with CALL1B_PROMPT
+		// Call 1B: Stream response with CALL1B_PROMPT
 		// Note: Call 1B receives the SAME context as Call 1A (for informed critique)
-		const call1B = await fireworks.chat.completions.create({
-			model: conversationModel,
-			messages: [
-				{ role: 'system', content: call1BSystemPrompt },
-				{ role: 'user', content: fullUserPrompt }, // Same context as Call 1A
-				{ role: 'assistant', content: call1AMessage }, // Only the message, not the thinking
-				{ role: 'user', content: CALL1B_PROMPT }
-			],
-			max_tokens: 4096,
-			temperature: 0.7
-		});
 
-		const call1BResponse = call1B.choices[0]?.message?.content || 'No response generated';
-		const call1BMessage = extractMessage(call1BResponse);
+		if (conversationProvider === 'anthropic') {
+			// Set up SSE headers for streaming
+			const stream = new ReadableStream({
+				async start(controller) {
+					const encoder = new TextEncoder();
 
-		// Save to Superjournal
-		const { data: superjournalData, error: dbError } = await supabase
-			.from('superjournal')
-			.insert({
-				user_id: null,
-				persona_name: persona,
-				user_message: message,
-				ai_response: call1BMessage
-			})
-			.select('id')
-			.single();
+					try {
+						// Start streaming from Anthropic API
+						const streamResponse = await createMessageStream({
+							model: conversationModel,
+							max_tokens: conversationParams.max_tokens,
+							temperature: conversationParams.temperature,
+							system: call1BSystemPromptWithCache,
+							messages: [
+								{
+									role: 'user',
+									content: fullUserPrompt // Same context as Call 1A
+								},
+								{
+									role: 'assistant',
+									content: call1AMessage // Only the message, not the thinking
+								},
+								{
+									role: 'user',
+									content: CALL1B_PROMPT
+								}
+							]
+						});
 
-		if (dbError) {
-			console.error('Database error:', dbError);
-			return json({ error: 'Failed to save message' }, { status: 500 });
+						let call1BResponse = '';
+
+						// Stream chunks to client
+						for await (const event of streamResponse) {
+							// Handle content delta events (actual text chunks)
+							if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+								const chunk = event.delta.text;
+								call1BResponse += chunk;
+
+								// Send chunk to client via SSE
+								const data = JSON.stringify({ type: 'chunk', content: chunk });
+								controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+							}
+						}
+
+						// Capture token counts AFTER loop completes (fixes race condition)
+						const finalMessage = await streamResponse.finalMessage();
+						const call1BTokens = {
+							input: finalMessage.usage.input_tokens,
+							output: finalMessage.usage.output_tokens
+						};
+
+						const call1BMessage = extractMessage(call1BResponse);
+
+						// Send completion event IMMEDIATELY (don't wait for database)
+						const doneData = JSON.stringify({
+							type: 'done',
+							timestamp: new Date().toISOString(),
+							model_identifier: conversationModel
+						});
+						controller.enqueue(encoder.encode(`data: ${doneData}\n\n`));
+						controller.close();
+
+						// Trigger background save AFTER stream closes but with correct values
+						// This runs asynchronously without blocking the stream closure
+						saveConversationToDatabase(
+							userId,
+							message,
+							call1BMessage,
+							call1ATokens,
+							call1BTokens,
+							conversationModel,
+							persona
+						).catch((error) => {
+							console.error('[Background] Failed to save conversation:', error);
+						});
+
+					} catch (error) {
+						console.error('Streaming error:', error);
+						const errorData = JSON.stringify({ type: 'error', message: 'Failed to generate response' });
+						controller.enqueue(encoder.encode(`data: ${errorData}\n\n`));
+						controller.close();
+					}
+				}
+			});
+
+			// Return response immediately
+			return new Response(stream, {
+				headers: {
+					'Content-Type': 'text/event-stream',
+					'Cache-Control': 'no-cache',
+					'Connection': 'keep-alive'
+				}
+			});
+		} else {
+			throw new Error(`Provider '${conversationProvider}' not implemented. Only 'anthropic' is currently supported.`);
 		}
-
-		// Trigger background compression
-		if (superjournalData?.id) {
-			setTimeout(() => {
-				compressToJournal(superjournalData.id, message, call1BMessage, persona);
-			}, 0);
-		}
-
-		// Return simple JSON response
-		return json({
-			message: call1BMessage,
-			timestamp: new Date().toISOString()
-		});
 	} catch (error) {
 		console.error('Chat API error:', error);
 		return json({ error: 'Failed to generate response' }, { status: 500 });

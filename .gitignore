@@ -28,5 +28,5 @@ vite.config.ts.timestamp-*
 /blob-report/
 /playwright/.cache/
 
-# Verification logs (never tracked, preserved across branch operations)
-docs/verify-everything.md
+# Documentation directory (preserved across branch operations)
+docs/
