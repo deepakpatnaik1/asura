@@ -25,13 +25,15 @@ export function renderMarkdown(markdown: string): string {
 	let listItemIndex = 0;
 
 	// 1. Headings → Accent Bold (all levels identical)
+	// Rule 2: One line space after section header
 	renderer.heading = ({ text }) => {
-		return `<div style="font-weight: bold; color: ${ACCENT_COLOR}; margin: 0;">${text}</div>`;
+		return `<div style="font-weight: bold; color: ${ACCENT_COLOR}; margin: 0 0 1.6em 0;">${text}</div>`;
 	};
 
 	// 2. Horizontal Rules → Thin grey divider (matches Gunnar border)
+	// Rule 3: One line space before and after horizontal rule
 	renderer.hr = () => {
-		return `<hr style="border: none; border-top: 0.5px solid ${DIVIDER_COLOR}; margin: 0;" />`;
+		return `<hr style="border: none; border-top: 0.5px solid ${DIVIDER_COLOR}; margin: 1.6em 0;" />`;
 	};
 
 	// 3. Bold → Strip asterisks, render as plain text
@@ -44,22 +46,27 @@ export function renderMarkdown(markdown: string): string {
 		return text;
 	};
 
-	// Paragraph → No spacing
+	// Paragraph → Rule 6: One line space after phrases ending in colon
 	renderer.paragraph = ({ text }) => {
-		return `<p style="margin: 0; display: block;">${text}</p>`;
+		// Check if paragraph ends with colon (after stripping HTML tags)
+		const textContent = text.replace(/<[^>]*>/g, '').trim();
+		const endsWithColon = textContent.endsWith(':');
+		const bottomMargin = endsWithColon ? '1.6em' : '0';
+		return `<p style="margin: 0 0 ${bottomMargin} 0; display: block;">${text}</p>`;
 	};
 
 	// 5. Bullet lists → Indented accent bullets
 	// 6. Numbered lists → Indented accent numbers
+	// Rule 4 & 5: One line space before and after lists
 	const originalList = renderer.list.bind(renderer);
 	renderer.list = (token) => {
 		isOrderedList = token.ordered;
 		listItemIndex = 0;
 		const listHtml = originalList(token);
-		// Add custom styling to the list - no margins, display block
+		// Add custom styling to the list - one line space before and after
 		return listHtml.replace(
 			/<(ul|ol)>/,
-			'<$1 style="margin: 0; padding: 0 0 0 24px; list-style: none; display: block;">'
+			'<$1 style="margin: 1.6em 0; padding: 0 0 0 24px; list-style: none; display: block;">'
 		);
 	};
 
