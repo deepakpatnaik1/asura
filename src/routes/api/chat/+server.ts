@@ -180,12 +180,18 @@ async function compressToJournal(
 		let call2AOutput: string;
 
 		if (compressionProvider === 'anthropic') {
-			// Use Anthropic API
+			// Use Anthropic API with prompt caching
 			const response = await createMessage({
 				model: compressionModel,
 				max_tokens: compressionParams.max_tokens,
 				temperature: compressionParams.temperature,
-				system: CALL2A_PROMPT,
+				system: [
+					{
+						type: 'text' as const,
+						text: CALL2A_PROMPT,
+						cache_control: { type: 'ephemeral' as const }
+					}
+				],
 				messages: [
 					{
 						role: 'user',
@@ -213,12 +219,18 @@ async function compressToJournal(
 		let call2BOutput: string;
 
 		if (compressionProvider === 'anthropic') {
-			// Use Anthropic API
+			// Use Anthropic API with prompt caching (reuses Call 2A cache)
 			const response = await createMessage({
 				model: compressionModel,
 				max_tokens: compressionParams.max_tokens,
 				temperature: compressionParams.temperature,
-				system: CALL2A_PROMPT,
+				system: [
+					{
+						type: 'text' as const,
+						text: CALL2A_PROMPT,
+						cache_control: { type: 'ephemeral' as const }
+					}
+				],
 				messages: [
 					{
 						role: 'assistant',
@@ -354,10 +366,23 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 		// Select persona prompt based on selected persona
 		const personaPrompt = persona === 'kirby' ? PERSONA_KIRBY : PERSONA_GUNNAR;
 
-		// Construct system prompt (BASE_INSTRUCTIONS + PERSONA + CALL1A_PROMPT)
-		const systemPrompt = `${BASE_INSTRUCTIONS}\n\n---\n\n${personaPrompt}\n\n---\n\n${CALL1A_PROMPT}`;
+		// Construct system prompt with cache breakpoints
+		// Cache only stable behavioral instructions (BASE_INSTRUCTIONS + PERSONA + CALL1A_PROMPT)
+		// Context stays in user message to preserve proven prompt architecture
+		const systemPromptWithCache = [
+			{
+				type: 'text' as const,
+				text: `${BASE_INSTRUCTIONS}\n\n---\n\n${personaPrompt}`,
+				cache_control: { type: 'ephemeral' as const }
+			},
+			{
+				type: 'text' as const,
+				text: CALL1A_PROMPT,
+				cache_control: { type: 'ephemeral' as const }
+			}
+		];
 
-		// Construct full user prompt with memory context
+		// Construct full user prompt with context (proven architecture)
 		const fullUserPrompt = context.length > 0
 			? `${context}--- CURRENT QUERY ---\n${message}`
 			: message;
@@ -368,12 +393,12 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 		let call1ATokens: { input: number; output: number };
 
 		if (conversationProvider === 'anthropic') {
-			// Use Anthropic API
+			// Use Anthropic API with prompt caching
 			const response = await createMessage({
 				model: conversationModel,
 				max_tokens: conversationParams.max_tokens,
 				temperature: conversationParams.temperature,
-				system: systemPrompt,
+				system: systemPromptWithCache,
 				messages: [
 					{
 						role: 'user',
@@ -394,8 +419,15 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 		const call1AThinking = extractThinking(call1AResponse);
 		const call1AMessage = extractMessage(call1AResponse);
 
-		// Construct system prompt for Call 1B (BASE_INSTRUCTIONS + PERSONA, without CALL1A_PROMPT)
-		const call1BSystemPrompt = `${BASE_INSTRUCTIONS}\n\n---\n\n${personaPrompt}`;
+		// Construct system prompt for Call 1B with cache (only BASE_INSTRUCTIONS + PERSONA)
+		// CALL1B_PROMPT delivered as user message, context preserved in fullUserPrompt
+		const call1BSystemPromptWithCache = [
+			{
+				type: 'text' as const,
+				text: `${BASE_INSTRUCTIONS}\n\n---\n\n${personaPrompt}`,
+				cache_control: { type: 'ephemeral' as const }
+			}
+		];
 
 		// Call 1B: Stream response with CALL1B_PROMPT
 		// Note: Call 1B receives the SAME context as Call 1A (for informed critique)
@@ -412,7 +444,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 							model: conversationModel,
 							max_tokens: conversationParams.max_tokens,
 							temperature: conversationParams.temperature,
-							system: call1BSystemPrompt,
+							system: call1BSystemPromptWithCache,
 							messages: [
 								{
 									role: 'user',

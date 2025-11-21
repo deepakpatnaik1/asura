@@ -17,7 +17,7 @@ export interface CreateMessageParams {
 	model: string;
 	max_tokens: number;
 	temperature: number;
-	system: string;
+	system: string | Anthropic.Messages.TextBlockParam[];
 	messages: Array<{
 		role: 'user' | 'assistant';
 		content: string;
@@ -47,6 +47,10 @@ export async function createMessage(params: CreateMessageParams): Promise<Anthro
 		temperature: params.temperature,
 		system: params.system,
 		messages: params.messages
+	}, {
+		headers: {
+			'anthropic-beta': 'prompt-caching-2024-07-31'
+		}
 	});
 }
 
@@ -77,5 +81,9 @@ export async function createMessageStream(params: CreateMessageParams) {
 		temperature: params.temperature,
 		system: params.system,
 		messages: params.messages
+	}, {
+		headers: {
+			'anthropic-beta': 'prompt-caching-2024-07-31'
+		}
 	});
 }

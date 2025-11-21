@@ -55,9 +55,43 @@ All critical bugs identified and resolved:
 - **Call 2A/2B**: Background compression (Artisan Cut)
 - **Configuration**: Centralized in `src/lib/config/`
 
+## Recent Updates (2025-11-21)
+
+### Haiku Models Added
+- ✅ Claude 3.5 Haiku (`claude-3-5-haiku-20241022`) - $0.80/$4 per million tokens
+- ✅ Claude 4.5 Haiku (`claude-haiku-4-5`) - $1/$5 per million tokens
+- ✅ Default switched to 3.5 Haiku for cost-effective development (73% savings)
+- Migration: `20251121000000_add_haiku_models.sql`
+
+### Prompt Caching Implementation ✅ COMPLETE
+- ✅ Added 5-minute TTL prompt caching support
+- ✅ Modified `anthropic-client.ts` to support array-based system prompts with `cache_control`
+- ✅ Added `anthropic-beta: prompt-caching-2024-07-31` header
+- ✅ Updated `context-builder.ts` to return structured components
+- ✅ Applied cache breakpoints to Call 1A/1B (surgical fix applied)
+- ✅ Applied cache breakpoints to Call 2A/2B (compression)
+- ✅ Preserved proven architecture: context in user message, cache on system prompt only
+
+#### Cache Architecture
+- **Call 1A**: 2 cache breakpoints
+  - Breakpoint 1: `BASE_INSTRUCTIONS + PERSONA` (100% hit rate)
+  - Breakpoint 2: `CALL1A_PROMPT` (100% hit rate)
+  - Context delivered in user message: `${context}--- CURRENT QUERY ---\n${message}`
+- **Call 1B**: 1 cache breakpoint
+  - Breakpoint 1: `BASE_INSTRUCTIONS + PERSONA` (100% hit rate, reuses Call 1A cache)
+  - Context delivered in user message, `CALL1B_PROMPT` in final user turn
+- **Call 2A**: 1 cache breakpoint
+  - Breakpoint 1: `CALL2A_PROMPT` (100% hit rate)
+  - Compression prompt cached, runs every turn in background
+- **Call 2B**: 1 cache breakpoint
+  - Breakpoint 1: `CALL2A_PROMPT` (100% hit rate, reuses Call 2A cache)
+  - Verification prompt reuses compression cache
+
 ## Files Modified
-- `src/routes/api/chat/+server.ts` - Streaming logic
+- `src/routes/api/chat/+server.ts` - Streaming logic, prompt caching
 - `src/lib/stores/chat.ts` - SSE handling
 - `src/lib/components/SettingsModal.svelte` - UI
 - `src/lib/config/*` - Configuration centralization
-- `src/lib/api/anthropic-client.ts` - SDK wrapper
+- `src/lib/api/anthropic-client.ts` - SDK wrapper, cache support
+- `src/lib/context-builder.ts` - Structured context components
+- `supabase/migrations/20251121000000_add_haiku_models.sql` - Haiku models

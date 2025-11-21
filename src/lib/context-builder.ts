@@ -53,6 +53,12 @@ interface ContextStats {
 	};
 }
 
+export interface StructuredContext {
+	context: string; // Full assembled context (for backwards compat)
+	components: ContextComponents; // Individual components for cache control
+	stats: ContextStats;
+}
+
 /**
  * Builds complete context for Call 1A and Call 1B
  * Enforces 40% context window cap with priority-based truncation
@@ -62,7 +68,7 @@ export async function buildContextForCalls1A1B(
 	personaName: string = DEFAULT_PERSONA,
 	modelIdentifier: string,
 	userQuery?: string // Optional: enables vector search (Priority 5)
-): Promise<{ context: string; stats: ContextStats }> {
+): Promise<StructuredContext> {
 	// Get model's context window and calculate budget
 	const contextWindow = await getModelContextWindow(modelIdentifier);
 	const contextBudget = Math.floor(contextWindow * MEMORY.contextWindowCap); // 40% cap
@@ -338,7 +344,7 @@ export async function buildContextForCalls1A1B(
 		components: stats.components
 	});
 
-	return { context: finalContext, stats };
+	return { context: finalContext, components, stats };
 }
 
 // Format Superjournal history (recent full turns)
