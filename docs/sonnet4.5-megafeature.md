@@ -32,8 +32,6 @@ Add Anthropic Claude Sonnet 4.5 as the premium model option, with separate conve
 All critical bugs identified and resolved:
 - BUG-001: TextCleaner formatting for Sonnet responses ✅
 - BUG-002: Token usage cascade delete ✅
-- BUG-003: File upload failure (OCR fallback) ✅
-- BUG-004: Nuke button files table clear ✅
 - BUG-005: TextCleaner component removed ✅
 - BUG-STREAM-001 through BUG-STREAM-009: Streaming implementation bugs ✅
 

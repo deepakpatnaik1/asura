@@ -37,7 +37,6 @@ interface ContextComponents {
 	journal: string;
 	highSalienceArcs: string;
 	otherArcs: string;
-	files: string;
 }
 
 interface ContextStats {
@@ -49,7 +48,6 @@ interface ContextStats {
 		journal: number;
 		highSalienceArcs: number;
 		otherArcs: number;
-		files: number;
 	};
 }
 
@@ -80,8 +78,7 @@ export async function buildContextForCalls1A1B(
 		instructions: '',
 		journal: '',
 		highSalienceArcs: '',
-		otherArcs: '',
-		files: ''
+		otherArcs: ''
 	};
 
 	let totalTokens = 0;
@@ -258,67 +255,6 @@ export async function buildContextForCalls1A1B(
 		}
 	}
 
-	// Priority 5.5: File overviews (awareness of all uploaded files)
-	try {
-		const { data: fileOverviews } = await supabase
-			.from('files')
-			.select('id, filename, file_type, description, uploaded_at')
-			.eq('status', 'ready') // Only successfully processed files
-			.eq('user_id', userId)
-			.order('uploaded_at', { ascending: false});
-
-		if (fileOverviews && fileOverviews.length > 0) {
-			const fileOverviewsText = formatFileOverviews(fileOverviews);
-			const fileOverviewsTokens = estimateTokens(fileOverviewsText);
-
-			if (totalTokens + fileOverviewsTokens <= contextBudget) {
-				components.files = fileOverviewsText;
-				totalTokens += fileOverviewsTokens;
-				console.log('[Context Builder] File overviews loaded', fileOverviews.length, 'files');
-			}
-		}
-	} catch (fileOverviewError) {
-		console.error('[Context Builder] File overview error:', fileOverviewError);
-	}
-
-	// Priority 6: File chunks vector search (only if userQuery provided)
-	if (userQuery) {
-		try {
-			// Reuse query embedding from Priority 5, or generate if Priority 5 was skipped
-			if (!queryVector) {
-				console.log('[Context Builder] Generating query embedding for file chunks');
-				const queryEmbedding = await voyage.embed({
-					input: userQuery,
-					model: EMBEDDING_MODEL // 1024 dimensions
-				});
-				queryVector = queryEmbedding.data[0].embedding;
-			}
-
-			// Perform vector search on file chunks
-			const { data: fileChunkResults } = await supabase.rpc('search_file_chunks', {
-				query_embedding: queryVector,
-				match_threshold: 0.7,
-				match_count: 20,
-				filter_user_id: userId
-			});
-
-			if (fileChunkResults && fileChunkResults.length > 0) {
-				// Format file chunk results
-				const fileChunksText = formatFileChunks(fileChunkResults);
-				const fileChunksTokens = estimateTokens(fileChunksText);
-
-				if (totalTokens + fileChunksTokens <= contextBudget) {
-					// Append to existing file overviews (Priority 5.5)
-					components.files = components.files + fileChunksText;
-					totalTokens += fileChunksTokens;
-				}
-
-				console.log('[Context Builder] File chunks loaded', fileChunkResults.length, 'results');
-			}
-		} catch (fileChunkError) {
-			console.error('[Context Builder] File chunk search error:', fileChunkError);
-		}
-	}
 
 	// Assemble final context
 	const finalContext = assembleContext(components);
@@ -332,8 +268,7 @@ export async function buildContextForCalls1A1B(
 			instructions: estimateTokens(components.instructions),
 			journal: estimateTokens(components.journal),
 			highSalienceArcs: estimateTokens(components.highSalienceArcs),
-			otherArcs: estimateTokens(components.otherArcs),
-			files: estimateTokens(components.files)
+			otherArcs: estimateTokens(components.otherArcs)
 		}
 	};
 
@@ -466,50 +401,6 @@ AI: ${entry.persona_essence}`
 	return `--- SEMANTICALLY RELEVANT MEMORIES (Vector Search Results) ---\n${formatted}\n\n`;
 }
 
-// Format file overviews
-function formatFileOverviews(
-	entries: Array<{
-		id: string;
-		filename: string;
-		file_type: string;
-		description: string;
-		uploaded_at: string;
-	}>
-): string {
-	if (entries.length === 0) return '';
-
-	const formatted = entries
-		.map(
-			(entry, index) =>
-				`${index + 1}. ${entry.filename} (${entry.file_type.toUpperCase()}, uploaded ${new Date(entry.uploaded_at).toLocaleDateString()})
-   Overview: ${entry.description}`
-		)
-		.join('\n\n');
-
-	return `--- UPLOADED FILES (Your Knowledge Base) ---\n\n${formatted}\n\n`;
-}
-
-// Format file chunks
-function formatFileChunks(
-	entries: Array<{
-		filename: string;
-		chunk_index: number;
-		description: string;
-		similarity: number;
-	}>
-): string {
-	if (entries.length === 0) return '';
-
-	const formatted = entries
-		.map(
-			(entry) =>
-				`[File - ${entry.filename} - Chunk ${entry.chunk_index}]
-${entry.description}`
-		)
-		.join('\n\n');
-
-	return `--- UPLOADED FILE CONTENTS (Semantically Relevant) ---\n${formatted}\n\n`;
-}
 
 // Format decision arcs
 function formatDecisionArcs(
@@ -574,8 +465,7 @@ function assembleContext(components: ContextComponents): string {
 		components.instructions,
 		components.journal,
 		components.highSalienceArcs,
-		components.otherArcs,
-		components.files
+		components.otherArcs
 	].filter((part) => part.length > 0);
 
 	return parts.join('');

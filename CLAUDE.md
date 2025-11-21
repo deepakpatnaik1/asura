@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Asura is a SvelteKit-based AI chat application that extends conversational AI memory indefinitely through orchestration-layer innovations. The system uses a multi-call LLM architecture with memory compression ("Artisan Cut"), semantic retrieval, and file processing to maintain coherent long-term context beyond standard context window limitations.
+Asura is a SvelteKit-based AI chat application that extends conversational AI memory indefinitely through orchestration-layer innovations. The system uses a multi-call LLM architecture with memory compression ("Artisan Cut") and semantic retrieval to maintain coherent long-term context beyond standard context window limitations.
 
 **Core Innovation**: Two-tier memory architecture (Superjournal for recent context, Journal for compressed semantic memory) combined with vector search enables conversations to scale without bound while maintaining quality and coherence. All AI calls use Claude Sonnet 4.5 for consistent frontier-model performance.
 
@@ -73,19 +73,6 @@ Asura implements a multi-phase AI call architecture:
 - **Database Save**: Final Call 2B output + embedding saved to `journal` table for semantic retrieval
 - Location: [src/routes/api/chat/+server.ts:56-195](src/routes/api/chat/+server.ts#L56-L195)
 
-**Call 3A/3B** (File Overview + Chunking)
-- **Call 3A**: Generate file-level overview (Chunk 0) AND logical chunk boundaries
-- **Call 3B**: Verify output quality
-- Model: Claude Sonnet 4.5 (instruct variant)
-- Combined single-phase approach (not separate calls)
-- Location: [src/lib/file-chunker.ts](src/lib/file-chunker.ts)
-
-**Modified Call 2A/2B** (Detail Chunk Compression)
-- Compress individual file chunks using Artisan Cut format for detail retrieval
-- Model: Claude Sonnet 4.5 (instruct variant)
-- Same structure as Call 2A/2B but optimized for file content
-- Location: [src/lib/file-compressor.ts](src/lib/file-compressor.ts)
-
 ### System Prompts
 
 All system prompts are located in [src/lib/prompts/](src/lib/prompts/) and exported via [src/lib/prompts/index.ts](src/lib/prompts/index.ts):
@@ -94,8 +81,6 @@ All system prompts are located in [src/lib/prompts/](src/lib/prompts/) and expor
 - `PERSONA_GUNNAR`, `PERSONA_KIRBY`: Personality definitions
 - `CALL1A_PROMPT`, `CALL1B_PROMPT`: Chat generation
 - `CALL2A_PROMPT`, `CALL2B_PROMPT`: Chat compression
-- `CALL3A_PROMPT`, `CALL3B_PROMPT`: File overview
-- `MODIFIED_CALL2A_PROMPT`, `MODIFIED_CALL2B_PROMPT`: File detail chunks
 
 ### Memory Architecture
 
@@ -119,38 +104,15 @@ All system prompts are located in [src/lib/prompts/](src/lib/prompts/) and expor
   3. Instructions (global + persona-specific behavioral directives)
   4. Last 100 Journal turns (recent compressed memory)
   5. Vector search results (semantic retrieval when journal > 100 entries)
-  6. File overviews + file chunk vector search (uploaded document context)
-
-### File Processing Pipeline
-
-**Full Pipeline** ([src/lib/file-processor.ts](src/lib/file-processor.ts)):
-1. **Extraction** (0-10%): Extract text from PDF/TXT/MD files
-2. **Chunking** (10-30%): Generate overview + logical chunks (combined Call 3A/3B)
-3. **Compression - Chunk 0** (30-40%): Compress overview for discovery
-4. **Compression - Details** (40-70%): Compress detail chunks in parallel (batches of 5, 5s delay)
-5. **Embedding** (70-90%): Generate 1024-dim Voyage embeddings (batches of 5, 5s delay)
-6. **Finalization** (90-100%): Save all chunks to `file_chunks` table
-
-**Key Components**:
-- [src/lib/file-extraction.ts](src/lib/file-extraction.ts): Text extraction (PDF via unpdf, plaintext direct)
-- [src/lib/file-chunker.ts](src/lib/file-chunker.ts): Combined overview + logical chunking
-- [src/lib/file-compressor.ts](src/lib/file-compressor.ts): Artisan Cut compression for chunks
-- [src/lib/vectorization.ts](src/lib/vectorization.ts): Voyage AI embedding generation
-- [src/lib/batch-processor.ts](src/lib/batch-processor.ts): Parallel processing with rate limiting
-
-**Database Tables**:
-- `files`: File metadata, status tracking, progress updates
-- `file_chunks`: Individual chunks with embeddings (chunk_index 0 = overview)
 
 ### Model Configuration
 
 Centralized in [src/lib/config/models.ts](src/lib/config/models.ts):
 - `DEFAULT_CONVERSATION_MODEL`: Call 1A/1B - Claude Sonnet 4.5 (thinking variant with extended thinking)
-- `DEFAULT_COMPRESSION_MODEL`: Call 2A/2B, Call 3A/3B - Claude Sonnet 4.5 (instruct variant)
-- `FILE_MODEL`: File processing - Claude Sonnet 4.5 (instruct variant)
+- `DEFAULT_COMPRESSION_MODEL`: Call 2A/2B - Claude Sonnet 4.5 (instruct variant)
 - `EMBEDDING_MODEL`: Voyage AI voyage-3 (1024 dimensions)
 
-All language model tasks use Claude Sonnet 4.5 to ensure consistent frontier-model quality across chat generation, memory compression, and file processing.
+All language model tasks use Claude Sonnet 4.5 to ensure consistent frontier-model quality across chat generation and memory compression.
 
 ## Database Schema
 
@@ -158,16 +120,13 @@ Key tables (see [supabase/migrations/](supabase/migrations/) for full schema):
 
 - `superjournal`: Full conversation turns (last 5)
 - `journal`: Compressed memory with embeddings
-- `files`: File metadata and processing status
-- `file_chunks`: Chunked file content with embeddings
 - `models`: Available AI models for user selection
 - `user_settings`: User preferences (selected models, persona)
 
 **Vector Search Functions**:
 - `search_journal_by_embedding`: Semantic search over compressed conversation memory
-- `search_file_chunks`: Semantic search over file chunks
 
-These functions enable the system to retrieve relevant context from arbitrarily large conversation histories, supporting the indefinite memory extension architecture.
+This function enables the system to retrieve relevant context from arbitrarily large conversation histories, supporting the indefinite memory extension architecture.
 
 **Target Scale**: 999 users (multiuser authentication in development)
 
@@ -175,13 +134,6 @@ These functions enable the system to retrieve relevant context from arbitrarily 
 
 ### Chat
 - `POST /api/chat`: Main chat endpoint (Call 1A/1B + background Call 2A/2B)
-
-### Files
-- `POST /api/files/upload`: Upload file (creates pending record, triggers background processing)
-- `GET /api/files`: List all files
-- `GET /api/files/[id]`: Get file details with chunks
-- `DELETE /api/files/[id]`: Delete file and all chunks
-- `GET /api/files/events`: SSE endpoint for real-time file processing updates
 
 ### Settings
 - `GET /api/settings`: Get user settings (selected models, persona)
@@ -195,57 +147,28 @@ These functions enable the system to retrieve relevant context from arbitrarily 
 
 ### Nuke Button (Delete All Data)
 
-The nuke button provides atomic deletion of all conversation and file data. Located in Settings panel.
+The nuke button provides atomic deletion of all conversation data. Located in Settings panel.
 
 **Flow**:
 1. User clicks "Nuke Everything" button in Settings
 2. Modal displays with 3-second countdown progress bar
 3. User can cancel during countdown (closes modal, no action taken)
 4. If countdown completes:
-   - Single atomic database call to `nuke_everything()` function
-   - PostgreSQL function executes TRUNCATE CASCADE on all tables
-   - Superjournal, journal, files, file_chunks all cleared atomically
+   - Single atomic database call to `nuke_all_data()` function
+   - PostgreSQL function deletes all journal and superjournal entries
    - Transaction ensures all-or-nothing operation
 5. Modal closes, UI refreshes with empty state
 
 **Implementation**:
 - UI: [src/routes/+page.svelte](src/routes/+page.svelte) `handleNukeConfirm()` function
 - API: `POST /api/nuke` endpoint
-- Database: [20251117000000_create_nuke_function.sql](supabase/migrations/20251117000000_create_nuke_function.sql)
+- Database: [20251121000002_remove_files_from_nuke.sql](supabase/migrations/20251121000002_remove_files_from_nuke.sql)
 
 **Key Features**:
 - Atomic operation (transaction-based)
 - 3-second safety countdown
 - Cancellable before execution
-- Cascading deletes ensure referential integrity
-
-### File Delete Button
-
-Individual file deletion with cascade to all related chunks. Located next to each file in Files panel.
-
-**Flow**:
-1. User clicks trash icon next to file
-2. Modal displays with 3-second countdown progress bar
-3. User can cancel during countdown (closes modal, no action taken)
-4. If countdown completes:
-   - `DELETE /api/files/[id]` called
-   - Database CASCADE automatically removes all `file_chunks` entries
-   - Supabase Realtime broadcasts DELETE event to `files` table
-   - SSE endpoint receives event, broadcasts to all connected clients
-   - UI receives `file-deleted` SSE event, removes file from local state
-5. Modal closes, file disappears from UI immediately
-
-**Implementation**:
-- UI: [src/routes/+page.svelte](src/routes/+page.svelte) `handleFileDeleteConfirm()` function
-- API: `DELETE /api/files/[id]` endpoint
-- SSE: [src/routes/api/files/events/+server.ts](src/routes/api/files/events/+server.ts) `handleFilesEvent()`
-- Database: [20251111120100_create_files_table.sql](supabase/migrations/20251111120100_create_files_table.sql) ON DELETE CASCADE
-
-**Key Features**:
-- Real-time UI update via SSE (no refresh needed)
-- Cascade delete ensures chunks removed automatically
-- 3-second safety countdown
-- Multi-client synchronization (all connected clients see deletion)
+- Clean deletion of all conversation history
 
 ### Message Abort Button
 
@@ -420,12 +343,6 @@ This project uses a remote Supabase instance. Get your credentials from your Sup
 
 ## Important Development Notes
 
-### File Processing
-- Files are processed asynchronously after creating pending record
-- Progress updates broadcast via Supabase Realtime (subscribed via SSE endpoint)
-- Batch processing limits: 5 concurrent compressions/embeddings, 5s delay between batches
-- File size limit: 10MB (enforced in [src/lib/file-processor.ts](src/lib/file-processor.ts))
-
 ### Database Migrations
 - All schema changes go in `supabase/migrations/` with timestamp prefix
 - Apply migrations to remote database via Supabase dashboard or `npx supabase db push`
@@ -441,11 +358,6 @@ This project uses a remote Supabase instance. Get your credentials from your Sup
 - Priority-based loading ensures most critical context loaded first
 - Intelligent context assembly enables conversations to continue indefinitely beyond typical context limits
 - Token estimation: 1 token ≈ 4 characters (rough approximation)
-
-### Error Handling
-- Custom error classes: `FileProcessorError`, `FileExtractionError`, `FileChunkerError`, `FileCompressionError`, `VectorizationError`
-- Failed files marked with status='failed', error message stored in `error_message` column
-- Progress updates continue even on errors (allows client to track failures)
 
 ### Thinking Tags
 - Some models output `<think>...</think>` tags for internal reasoning
@@ -466,19 +378,13 @@ This project uses a remote Supabase instance. Get your credentials from your Sup
 3. Update context builder to handle new fields
 4. Add integration tests in [tests/integration/database/](tests/integration/database/)
 
-### Debugging File Processing
-1. Check file status in database: `SELECT * FROM files WHERE id = '...'`
-2. Check chunks: `SELECT * FROM file_chunks WHERE file_id = '...' ORDER BY chunk_index`
-3. Enable console logs in [src/lib/file-processor.ts](src/lib/file-processor.ts) (already present with `[FileProcessor]` prefix)
-4. Test individual stages: extraction, chunking, compression, embedding
-
 ### Running Specific Tests
 ```bash
 # Single test file
-npm run test:unit tests/unit/lib/file-processor.test.ts
+npm run test:unit tests/unit/lib/context-builder.test.ts
 
 # Single test suite (within file)
-npm run test:unit -- -t "processFile"
+npm run test:unit -- -t "assembleContext"
 
 # Integration tests for database
 npm run test:integration tests/integration/database/
