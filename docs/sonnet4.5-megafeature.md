@@ -61,7 +61,15 @@ All critical bugs identified and resolved:
 - ✅ Claude 3.5 Haiku (`claude-3-5-haiku-20241022`) - $0.80/$4 per million tokens
 - ✅ Claude 4.5 Haiku (`claude-haiku-4-5`) - $1/$5 per million tokens
 - ✅ Default switched to 3.5 Haiku for cost-effective development (73% savings)
-- Migration: `20251121000000_add_haiku_models.sql`
+- ✅ Added model_parameters for both Haiku models (conversation + compression)
+- Migrations: `20251121000000_add_haiku_models.sql`, `20251121000001_add_haiku_model_parameters.sql`
+
+### Bugs Fixed
+- ✅ **BUG-HAIKU-001**: Missing model_parameters for Haiku models causes 500 error on chat
+  - **Status**: FIXED ✅
+  - **Fix**: Created and applied migration `20251121000001_add_haiku_model_parameters.sql`
+  - **Impact**: Chat API was broken - "Failed to fetch model parameters" error
+  - **Resolution**: Migration successfully run against remote database, chat API now functional
 
 ### Prompt Caching Implementation ✅ COMPLETE
 - ✅ Added 5-minute TTL prompt caching support
