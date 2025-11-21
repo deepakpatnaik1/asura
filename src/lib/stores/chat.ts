@@ -50,8 +50,10 @@ export async function sendMessage(userMessage: string, persona?: string): Promis
 
 		// Check if response is streaming (SSE) or JSON
 		const contentType = response.headers.get('content-type');
+		console.log('[Chat Store] Response content-type:', contentType);
 
 		if (contentType?.includes('text/event-stream')) {
+			console.log('[Chat Store] Starting SSE stream handling');
 			// Handle SSE streaming response
 			const reader = response.body?.getReader();
 			const decoder = new TextDecoder();

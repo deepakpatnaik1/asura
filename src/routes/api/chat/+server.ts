@@ -68,6 +68,89 @@ function getProviderType(modelIdentifier: string): 'anthropic' | 'openai' | 'fir
 	throw new Error(`Unknown model provider for identifier: ${modelIdentifier}`);
 }
 
+// Background function to save conversation to database
+async function saveConversationToDatabase(
+	userId: string,
+	message: string,
+	call1BMessage: string,
+	call1ATokens: { input: number; output: number },
+	call1BTokens: { input: number; output: number },
+	conversationModel: string,
+	persona: string
+) {
+	try {
+		// Save to Superjournal
+		const { data: superjournalData, error: dbError } = await supabase
+			.from('superjournal')
+			.insert({
+				user_id: userId,
+				persona_name: persona,
+				user_message: message,
+				ai_response: call1BMessage,
+				model_identifier: conversationModel
+			})
+			.select('id')
+			.single();
+
+		if (dbError) {
+			console.error('[Database] Failed to save to superjournal:', dbError);
+			return;
+		}
+
+		// Track token usage for this conversation turn
+		if (superjournalData?.id) {
+			try {
+				// Sum tokens from Call 1A + Call 1B
+				const totalInputTokens = call1ATokens.input + call1BTokens.input;
+				const totalOutputTokens = call1ATokens.output + call1BTokens.output;
+
+				// Fetch pricing for the conversation model
+				const { data: modelData, error: modelError } = await supabase
+					.from('models')
+					.select('input_price_per_million, output_price_per_million')
+					.eq('model_identifier', conversationModel)
+					.single();
+
+				if (modelError) {
+					console.error('[Token Tracking] Failed to fetch model pricing:', modelError);
+				} else if (modelData) {
+					// Calculate cost in USD
+					const inputCost = (totalInputTokens / 1_000_000) * modelData.input_price_per_million;
+					const outputCost = (totalOutputTokens / 1_000_000) * modelData.output_price_per_million;
+					const totalCost = inputCost + outputCost;
+
+					// Insert token usage record
+					const { error: tokenError } = await supabase.from('token_usage').insert({
+						user_id: userId,
+						conversation_id: superjournalData.id,
+						model_identifier: conversationModel,
+						total_input_tokens: totalInputTokens,
+						total_output_tokens: totalOutputTokens,
+						cost_usd: totalCost
+					});
+
+					if (tokenError) {
+						console.error('[Token Tracking] Failed to save token usage:', tokenError);
+					} else {
+						console.log(
+							`[Token Tracking] Saved: ${totalInputTokens} input, ${totalOutputTokens} output, $${totalCost.toFixed(6)} cost`
+						);
+					}
+				}
+			} catch (tokenTrackingError) {
+				console.error('[Token Tracking] Error:', tokenTrackingError);
+			}
+
+			// Trigger background compression
+			setTimeout(() => {
+				compressToJournal(superjournalData.id, userId, message, call1BMessage, persona);
+			}, 0);
+		}
+	} catch (error) {
+		console.error('[Database] Error saving conversation:', error);
+	}
+}
+
 // Background compression function
 async function compressToJournal(
 	superjournalId: string,
@@ -370,78 +453,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 
 						const call1BMessage = extractMessage(call1BResponse);
 
-						// Save to Superjournal
-						const { data: superjournalData, error: dbError } = await supabase
-							.from('superjournal')
-							.insert({
-								user_id: userId,
-								persona_name: persona,
-								user_message: message,
-								ai_response: call1BMessage,
-								model_identifier: conversationModel
-							})
-							.select('id')
-							.single();
-
-						if (dbError) {
-							console.error('Database error:', dbError);
-							const errorData = JSON.stringify({ type: 'error', message: 'Failed to save message' });
-							controller.enqueue(encoder.encode(`data: ${errorData}\n\n`));
-							controller.close();
-							return;
-						}
-
-						// Track token usage for this conversation turn
-						if (superjournalData?.id) {
-							try {
-								// Sum tokens from Call 1A + Call 1B
-								const totalInputTokens = call1ATokens.input + call1BTokens.input;
-								const totalOutputTokens = call1ATokens.output + call1BTokens.output;
-
-								// Fetch pricing for the conversation model
-								const { data: modelData, error: modelError } = await supabase
-									.from('models')
-									.select('input_price_per_million, output_price_per_million')
-									.eq('model_identifier', conversationModel)
-									.single();
-
-								if (modelError) {
-									console.error('[Token Tracking] Failed to fetch model pricing:', modelError);
-								} else if (modelData) {
-									// Calculate cost in USD
-									const inputCost = (totalInputTokens / 1_000_000) * modelData.input_price_per_million;
-									const outputCost = (totalOutputTokens / 1_000_000) * modelData.output_price_per_million;
-									const totalCost = inputCost + outputCost;
-
-									// Insert token usage record
-									const { error: tokenError } = await supabase.from('token_usage').insert({
-										user_id: userId,
-										conversation_id: superjournalData.id,
-										model_identifier: conversationModel,
-										total_input_tokens: totalInputTokens,
-										total_output_tokens: totalOutputTokens,
-										cost_usd: totalCost
-									});
-
-									if (tokenError) {
-										console.error('[Token Tracking] Failed to save token usage:', tokenError);
-									} else {
-										console.log(
-											`[Token Tracking] Saved: ${totalInputTokens} input, ${totalOutputTokens} output, $${totalCost.toFixed(6)} cost`
-										);
-									}
-								}
-							} catch (tokenTrackingError) {
-								console.error('[Token Tracking] Error:', tokenTrackingError);
-							}
-
-							// Trigger background compression
-							setTimeout(() => {
-								compressToJournal(superjournalData.id, userId, message, call1BMessage, persona);
-							}, 0);
-						}
-
-						// Send completion event
+						// Send completion event IMMEDIATELY (don't wait for database)
 						const doneData = JSON.stringify({
 							type: 'done',
 							timestamp: new Date().toISOString(),
@@ -449,6 +461,20 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 						});
 						controller.enqueue(encoder.encode(`data: ${doneData}\n\n`));
 						controller.close();
+
+						// Trigger background save AFTER stream closes but with correct values
+						// This runs asynchronously without blocking the stream closure
+						saveConversationToDatabase(
+							userId,
+							message,
+							call1BMessage,
+							call1ATokens,
+							call1BTokens,
+							conversationModel,
+							persona
+						).catch((error) => {
+							console.error('[Background] Failed to save conversation:', error);
+						});
 
 					} catch (error) {
 						console.error('Streaming error:', error);
@@ -459,6 +485,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 				}
 			});
 
+			// Return response immediately
 			return new Response(stream, {
 				headers: {
 					'Content-Type': 'text/event-stream',
