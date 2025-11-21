@@ -25,8 +25,7 @@ export const POST: RequestHandler = async ({ locals: { safeGetSession } }) => {
 
 		console.log(`[Nuke] Starting user data cleanup for user: ${userId}`);
 
-		// 2. Delete user data (CASCADE will handle file_chunks via files foreign key)
-		// Order matters: delete child tables before parent tables
+		// 2. Delete user data
 		const { error: superjournalError } = await supabase
 			.from('superjournal')
 			.delete()
@@ -45,17 +44,6 @@ export const POST: RequestHandler = async ({ locals: { safeGetSession } }) => {
 		if (journalError) {
 			console.error('[Nuke] Journal delete error:', journalError);
 			return json({ error: 'Failed to delete journal data' }, { status: 500 });
-		}
-
-		// Delete files (CASCADE will automatically delete file_chunks)
-		const { error: filesError } = await supabase
-			.from('files')
-			.delete()
-			.eq('user_id', userId);
-
-		if (filesError) {
-			console.error('[Nuke] Files delete error:', filesError);
-			return json({ error: 'Failed to delete files' }, { status: 500 });
 		}
 
 		// Delete user settings
