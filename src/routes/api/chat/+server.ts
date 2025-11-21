@@ -21,7 +21,7 @@ import {
 	CALL2A_PROMPT,
 	CALL2B_PROMPT
 } from '$lib/prompts';
-import { createMessage } from '$lib/api/anthropic-client';
+import { createMessage, createMessageStream } from '$lib/api/anthropic-client';
 
 const voyage = new VoyageAIClient({ apiKey: VOYAGE_API_KEY });
 
@@ -314,118 +314,161 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 		// Construct system prompt for Call 1B (BASE_INSTRUCTIONS + PERSONA, without CALL1A_PROMPT)
 		const call1BSystemPrompt = `${BASE_INSTRUCTIONS}\n\n---\n\n${personaPrompt}`;
 
-		// Call 1B: Refine response with CALL1B_PROMPT
+		// Call 1B: Stream response with CALL1B_PROMPT
 		// Note: Call 1B receives the SAME context as Call 1A (for informed critique)
-		let call1BResponse: string;
-		let call1BTokens: { input: number; output: number };
 
 		if (conversationProvider === 'anthropic') {
-			// Use Anthropic API
-			const response = await createMessage({
-				model: conversationModel,
-				max_tokens: conversationParams.max_tokens,
-				temperature: conversationParams.temperature,
-				system: call1BSystemPrompt,
-				messages: [
-					{
-						role: 'user',
-						content: fullUserPrompt // Same context as Call 1A
-					},
-					{
-						role: 'assistant',
-						content: call1AMessage // Only the message, not the thinking
-					},
-					{
-						role: 'user',
-						content: CALL1B_PROMPT
+			// Set up SSE headers for streaming
+			const stream = new ReadableStream({
+				async start(controller) {
+					const encoder = new TextEncoder();
+
+					try {
+						// Start streaming from Anthropic API
+						const streamResponse = await createMessageStream({
+							model: conversationModel,
+							max_tokens: conversationParams.max_tokens,
+							temperature: conversationParams.temperature,
+							system: call1BSystemPrompt,
+							messages: [
+								{
+									role: 'user',
+									content: fullUserPrompt // Same context as Call 1A
+								},
+								{
+									role: 'assistant',
+									content: call1AMessage // Only the message, not the thinking
+								},
+								{
+									role: 'user',
+									content: CALL1B_PROMPT
+								}
+							]
+						});
+
+						let call1BResponse = '';
+
+						// Stream chunks to client
+						for await (const event of streamResponse) {
+							// Handle content delta events (actual text chunks)
+							if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+								const chunk = event.delta.text;
+								call1BResponse += chunk;
+
+								// Send chunk to client via SSE
+								const data = JSON.stringify({ type: 'chunk', content: chunk });
+								controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+							}
+						}
+
+						// Capture token counts AFTER loop completes (fixes race condition)
+						const finalMessage = await streamResponse.finalMessage();
+						const call1BTokens = {
+							input: finalMessage.usage.input_tokens,
+							output: finalMessage.usage.output_tokens
+						};
+
+						const call1BMessage = extractMessage(call1BResponse);
+
+						// Save to Superjournal
+						const { data: superjournalData, error: dbError } = await supabase
+							.from('superjournal')
+							.insert({
+								user_id: userId,
+								persona_name: persona,
+								user_message: message,
+								ai_response: call1BMessage,
+								model_identifier: conversationModel
+							})
+							.select('id')
+							.single();
+
+						if (dbError) {
+							console.error('Database error:', dbError);
+							const errorData = JSON.stringify({ type: 'error', message: 'Failed to save message' });
+							controller.enqueue(encoder.encode(`data: ${errorData}\n\n`));
+							controller.close();
+							return;
+						}
+
+						// Track token usage for this conversation turn
+						if (superjournalData?.id) {
+							try {
+								// Sum tokens from Call 1A + Call 1B
+								const totalInputTokens = call1ATokens.input + call1BTokens.input;
+								const totalOutputTokens = call1ATokens.output + call1BTokens.output;
+
+								// Fetch pricing for the conversation model
+								const { data: modelData, error: modelError } = await supabase
+									.from('models')
+									.select('input_price_per_million, output_price_per_million')
+									.eq('model_identifier', conversationModel)
+									.single();
+
+								if (modelError) {
+									console.error('[Token Tracking] Failed to fetch model pricing:', modelError);
+								} else if (modelData) {
+									// Calculate cost in USD
+									const inputCost = (totalInputTokens / 1_000_000) * modelData.input_price_per_million;
+									const outputCost = (totalOutputTokens / 1_000_000) * modelData.output_price_per_million;
+									const totalCost = inputCost + outputCost;
+
+									// Insert token usage record
+									const { error: tokenError } = await supabase.from('token_usage').insert({
+										user_id: userId,
+										conversation_id: superjournalData.id,
+										model_identifier: conversationModel,
+										total_input_tokens: totalInputTokens,
+										total_output_tokens: totalOutputTokens,
+										cost_usd: totalCost
+									});
+
+									if (tokenError) {
+										console.error('[Token Tracking] Failed to save token usage:', tokenError);
+									} else {
+										console.log(
+											`[Token Tracking] Saved: ${totalInputTokens} input, ${totalOutputTokens} output, $${totalCost.toFixed(6)} cost`
+										);
+									}
+								}
+							} catch (tokenTrackingError) {
+								console.error('[Token Tracking] Error:', tokenTrackingError);
+							}
+
+							// Trigger background compression
+							setTimeout(() => {
+								compressToJournal(superjournalData.id, userId, message, call1BMessage, persona);
+							}, 0);
+						}
+
+						// Send completion event
+						const doneData = JSON.stringify({
+							type: 'done',
+							timestamp: new Date().toISOString(),
+							model_identifier: conversationModel
+						});
+						controller.enqueue(encoder.encode(`data: ${doneData}\n\n`));
+						controller.close();
+
+					} catch (error) {
+						console.error('Streaming error:', error);
+						const errorData = JSON.stringify({ type: 'error', message: 'Failed to generate response' });
+						controller.enqueue(encoder.encode(`data: ${errorData}\n\n`));
+						controller.close();
 					}
-				]
+				}
 			});
-			call1BResponse = response.content[0]?.type === 'text' ? response.content[0].text : 'No response generated';
-			call1BTokens = {
-				input: response.usage.input_tokens,
-				output: response.usage.output_tokens
-			};
+
+			return new Response(stream, {
+				headers: {
+					'Content-Type': 'text/event-stream',
+					'Cache-Control': 'no-cache',
+					'Connection': 'keep-alive'
+				}
+			});
 		} else {
 			throw new Error(`Provider '${conversationProvider}' not implemented. Only 'anthropic' is currently supported.`);
 		}
-
-		const call1BMessage = extractMessage(call1BResponse);
-
-		// Save to Superjournal
-		const { data: superjournalData, error: dbError } = await supabase
-			.from('superjournal')
-			.insert({
-				user_id: userId,
-				persona_name: persona,
-				user_message: message,
-				ai_response: call1BMessage,
-					model_identifier: conversationModel
-			})
-			.select('id')
-			.single();
-
-		if (dbError) {
-			console.error('Database error:', dbError);
-			return json({ error: 'Failed to save message' }, { status: 500 });
-		}
-
-		// Track token usage for this conversation turn
-		if (superjournalData?.id) {
-			try {
-				// Sum tokens from Call 1A + Call 1B
-				const totalInputTokens = call1ATokens.input + call1BTokens.input;
-				const totalOutputTokens = call1ATokens.output + call1BTokens.output;
-
-				// Fetch pricing for the conversation model
-				const { data: modelData, error: modelError } = await supabase
-					.from('models')
-					.select('input_price_per_million, output_price_per_million')
-					.eq('model_identifier', conversationModel)
-					.single();
-
-				if (modelError) {
-					console.error('[Token Tracking] Failed to fetch model pricing:', modelError);
-				} else if (modelData) {
-					// Calculate cost in USD
-					const inputCost = (totalInputTokens / 1_000_000) * modelData.input_price_per_million;
-					const outputCost = (totalOutputTokens / 1_000_000) * modelData.output_price_per_million;
-					const totalCost = inputCost + outputCost;
-
-					// Insert token usage record
-					const { error: tokenError } = await supabase.from('token_usage').insert({
-						user_id: userId,
-						conversation_id: superjournalData.id,
-						model_identifier: conversationModel,
-						total_input_tokens: totalInputTokens,
-						total_output_tokens: totalOutputTokens,
-						cost_usd: totalCost
-					});
-
-					if (tokenError) {
-						console.error('[Token Tracking] Failed to save token usage:', tokenError);
-					} else {
-						console.log(
-							`[Token Tracking] Saved: ${totalInputTokens} input, ${totalOutputTokens} output, $${totalCost.toFixed(6)} cost`
-						);
-					}
-				}
-			} catch (tokenTrackingError) {
-				console.error('[Token Tracking] Error:', tokenTrackingError);
-			}
-
-			// Trigger background compression
-			setTimeout(() => {
-				compressToJournal(superjournalData.id, userId, message, call1BMessage, persona);
-			}, 0);
-		}
-
-		// Return simple JSON response
-		return json({
-			message: call1BMessage,
-			timestamp: new Date().toISOString(),
-			model_identifier: conversationModel
-		});
 	} catch (error) {
 		console.error('Chat API error:', error);
 		return json({ error: 'Failed to generate response' }, { status: 500 });

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Icon } from 'svelte-icons-pack';
 	import { LuStar, LuCopy, LuTrash2, LuArchive, LuRefreshCw, LuPaperclip, LuFolder, LuChevronDown, LuSettings, LuLogOut, LuCloudDownload, LuEllipsisVertical, LuArrowDown, LuArrowUp, LuMessageSquare, LuFlame, LuX, LuCircle } from 'svelte-icons-pack/lu';
-	import { currentMessage, isLoading, sendMessage } from '$lib/stores/chat';
+	import { currentMessage, isLoading, sendMessage, abortCurrentMessage } from '$lib/stores/chat';
 	import {
 		files,
 		error,
@@ -586,12 +586,9 @@
 	}
 
 	function handleAbortCurrentMessage() {
-		// Stop the streaming immediately
-		if ($isLoading) {
-			isLoading.set(false);
-			currentMessage.set(null);
-			console.log('[Abort] Current message aborted');
-		}
+		// Use the abort function from chat store (supports AbortController)
+		abortCurrentMessage();
+		console.log('[Abort] Current message aborted');
 	}
 
 	function triggerFileInput() {
