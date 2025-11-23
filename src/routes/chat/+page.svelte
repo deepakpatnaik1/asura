@@ -253,13 +253,13 @@
 		isPaused = false;
 		pauseProgress = 0;
 		scrollAccumulator = 0;
-		const container = document.querySelector('.chat-container');
+		const container = document.querySelector('.chat-container') as HTMLElement | null;
 		if (!container) return;
 
 		let scrollStartTime = Date.now();
 
 		function smoothScroll() {
-			if (!isAutoScrolling) return;
+			if (!isAutoScrolling || !container) return;
 
 			const maxScroll = container.scrollHeight - container.clientHeight;
 			const currentScroll = container.scrollTop;
@@ -460,7 +460,6 @@
 				// SSE will handle UI update automatically
 			} catch (err) {
 				console.error('[Message] Delete failed:', err);
-				error.set(`Delete failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
 			}
 		}
 	}
@@ -953,27 +952,6 @@
 		}
 	}
 
-	.model-select,
-	.persona-select {
-		background: hsl(var(--input));
-		color: hsl(var(--foreground));
-		border: 1px solid hsl(var(--border));
-		border-radius: 4px;
-		padding: 6px 12px;
-		cursor: pointer;
-	}
-
-	.control-icons {
-		display: flex;
-		gap: 8px;
-	}
-
-	.token-percentage {
-		color: hsl(var(--muted-foreground));
-		margin-left: auto;
-		padding-right: 8px;
-	}
-
 	.input-container {
 		display: flex;
 		gap: 12px;
@@ -1034,90 +1012,6 @@
 		color: hsl(var(--background));
 	}
 
-	/* User Controls - absolutely positioned top right */
-	.user-controls {
-		position: fixed;
-		top: 16px;
-		right: 16px;
-		z-index: var(--z-sticky);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-	}
-
-	/* Hide top-right logout on narrow screens */
-	@media (max-width: 900px) {
-		.user-controls {
-			display: none;
-		}
-	}
-
-	/* Inline logout button container */
-	.user-controls-inline {
-		display: none;
-		margin-left: auto;
-		padding-right: 2px;
-	}
-
-	/* Show inline logout on narrow screens */
-	@media (max-width: 900px) {
-		.user-controls-inline {
-			display: flex;
-			align-items: center;
-		}
-	}
-
-	/* Fixed Settings Button - Bottom Right (matches logout button style) */
-	.settings-btn-fixed {
-		position: fixed;
-		bottom: 16px;
-		right: 16px;
-		background: transparent;
-		border: none;
-		color: hsl(var(--chat-label));
-		cursor: pointer;
-		padding: 8px;
-		opacity: 0.7;
-		transition: all 0.2s;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		z-index: var(--z-sticky);
-	}
-
-	.settings-btn-fixed:hover {
-		opacity: 1;
-		color: rgb(239, 68, 68);
-	}
-
-	@media (max-width: 900px) {
-		.settings-btn-fixed {
-			display: none;
-		}
-	}
-
-	.logout-btn {
-		background: transparent;
-		border: none;
-		color: hsl(var(--chat-label));
-		cursor: pointer;
-		padding: 8px;
-		opacity: 0.7;
-		transition: all 0.2s;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-	}
-
-	.logout-btn-inline {
-		padding: 4px;
-	}
-
-	.logout-btn:hover {
-		opacity: 1;
-		color: rgb(239, 68, 68);
-	}
-
 	/* Hide scrollbar */
 	.messages-area::-webkit-scrollbar {
 		display: none;
@@ -1174,55 +1068,6 @@
 		color: hsl(var(--background));
 	}
 
-	/* Speed Control Panel */
-	.speed-control {
-		position: fixed;
-		bottom: 20px;
-		right: 20px;
-		background: hsl(var(--card));
-		border: 1px solid hsl(var(--chat-border));
-		border-radius: 8px;
-		padding: 16px;
-		z-index: var(--z-sticky);
-		display: flex;
-		flex-direction: column;
-		gap: 12px;
-		min-width: 250px;
-	}
-
-	.speed-control span {
-		font-size: 9pt;
-		color: var(--boss-accent);
-		font-weight: 500;
-	}
-
-	.speed-control input[type="range"] {
-		width: 100%;
-		cursor: pointer;
-	}
-
-	.speed-presets {
-		display: flex;
-		gap: 8px;
-		flex-wrap: wrap;
-	}
-
-	.speed-presets button {
-		background: transparent;
-		border: 1px solid hsl(var(--chat-border));
-		color: hsl(var(--foreground));
-		border-radius: 4px;
-		padding: 6px 12px;
-		font-size: 8pt;
-		cursor: pointer;
-		transition: all 0.2s;
-	}
-
-	.speed-presets button:hover {
-		border-color: var(--boss-accent);
-		color: var(--boss-accent);
-	}
-
 	/* Nuke Confirmation Modal */
 	.modal-overlay {
 		position: fixed;
@@ -1251,39 +1096,9 @@
 		text-align: center;
 	}
 
-	.progress-bar-container {
-		width: 100%;
-		height: 4px;
-		background: hsl(var(--border));
-		border-radius: 2px;
-		overflow: hidden;
-		margin-bottom: 24px;
-	}
-
-	.modal-content:has(.nuke-progress-bar) .progress-bar-container {
-		width: 100%;
-		height: 12px;
-	}
-
-	.progress-bar {
-		height: 100%;
-		background: var(--boss-accent);
-		transition: width 50ms linear;
-	}
-
 	.nuke-progress-bar {
 		height: 100%;
 		background: #991b1b;
-	}
-
-	.modal-actions {
-		display: flex;
-		gap: 12px;
-		justify-content: flex-end;
-	}
-
-	.nuke-modal-actions {
-		justify-content: flex-end;
 	}
 
 	.nuke-progress-container {
