@@ -33,9 +33,16 @@
 
     --prose-body: 0 0% 85%;
 
-    /* Boss message specific */
+    /* Boss message specific (Chat Mode) */
+    /* Source: src/lib/config/colors.ts - CHAT_ACCENT, CHAT_ACCENT_BG */
     --boss-bg: rgba(217, 133, 107, 0.08);
     --boss-accent: rgb(217, 133, 107);
+
+    /* E-Reader accent (applied when in reader mode) */
+    /* Source: src/lib/config/colors.ts - READER_ACCENT, READER_ACCENT_BG */
+    --reader-bg: rgba(16, 185, 129, 0.08);
+    --reader-accent: rgb(16, 185, 129);
+    --reader-accent-bg: rgba(16, 185, 129, 0.08); /* For progress pane active state */
 
     /* Layout system - Master variable: content text width */
     --content-text-width: 450px; /* Width of text field + send button combined */
