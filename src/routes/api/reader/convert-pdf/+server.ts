@@ -5,6 +5,7 @@ import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/publi
 import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
 import * as cheerio from 'cheerio';
 import puppeteer from 'puppeteer';
+import { uploadFileWithRetry } from '$lib/api/anthropic-client';
 
 // Use ANON_KEY for auth checks, SERVICE_ROLE_KEY for storage operations (storage policies require it)
 const supabaseAuth = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY);
@@ -250,11 +251,29 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 		);
 		console.log('[PDF Convert] Article PDF uploaded:', articlePdfPath);
 
-		// 7. UPDATE ARTICLE RECORD WITH PDF PATH
+		// 7. UPLOAD ARTICLE PDF TO ANTHROPIC FILES API
+		console.log('[PDF Convert] Uploading article PDF to Anthropic Files API...');
+		const anthropicUploadResult = await uploadFileWithRetry(articlePdfBuffer, 'article.pdf');
+
+		let anthropicFileId: string | null = null;
+		let anthropicFileCreatedAt: Date | null = null;
+
+		if (anthropicUploadResult) {
+			anthropicFileId = anthropicUploadResult.file_id;
+			anthropicFileCreatedAt = anthropicUploadResult.created_at;
+			console.log('[PDF Convert] Article PDF uploaded to Anthropic:', anthropicFileId);
+		} else {
+			console.warn('[PDF Convert] Failed to upload article PDF to Anthropic after retries');
+			// Continue anyway - graceful degradation
+		}
+
+		// 8. UPDATE ARTICLE RECORD WITH PDF PATH AND ANTHROPIC FILE ID
 		const { error: updateError } = await supabaseAuth
 			.from('articles')
 			.update({
-				pdf_storage_path: articlePdfPath
+				pdf_storage_path: articlePdfPath,
+				anthropic_file_id: anthropicFileId,
+				anthropic_file_created_at: anthropicFileCreatedAt?.toISOString()
 			})
 			.eq('id', article_id);
 
@@ -263,17 +282,19 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 			// Continue anyway - PDF is uploaded, just not linked in DB yet
 		}
 
-		// 8. EXTRACT ALL <img> TAGS
+		// 9. EXTRACT ALL <img> TAGS
 		console.log('[PDF Convert] Extracting images from HTML...');
 		const images = extractImages(html);
 		console.log(`[PDF Convert] Found ${images.length} images`);
 
-		// 9. CONVERT EACH IMAGE TO SEPARATE PDF AND UPLOAD
+		// 10. CONVERT EACH IMAGE TO SEPARATE PDF AND UPLOAD
 		const chartResults: Array<{
 			index: number;
 			storage_path: string;
 			pdf_size: number;
 			alt: string;
+			anthropic_file_id: string | null;
+			anthropic_file_created_at: Date | null;
 		}> = [];
 
 		for (const image of images) {
@@ -293,13 +314,39 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 					article_id,
 					`chart-${image.index}.pdf`
 				);
-				console.log(`[PDF Convert] Chart ${image.index} uploaded:`, chartPdfPath);
+				console.log(`[PDF Convert] Chart ${image.index} uploaded to storage:`, chartPdfPath);
+
+				// Upload chart PDF to Anthropic Files API
+				console.log(`[PDF Convert] Uploading chart ${image.index} to Anthropic Files API...`);
+				const chartAnthropicResult = await uploadFileWithRetry(
+					chartPdfBuffer,
+					`chart-${image.index}.pdf`
+				);
+
+				let chartAnthropicFileId: string | null = null;
+				let chartAnthropicFileCreatedAt: Date | null = null;
+
+				if (chartAnthropicResult) {
+					chartAnthropicFileId = chartAnthropicResult.file_id;
+					chartAnthropicFileCreatedAt = chartAnthropicResult.created_at;
+					console.log(
+						`[PDF Convert] Chart ${image.index} uploaded to Anthropic:`,
+						chartAnthropicFileId
+					);
+				} else {
+					console.warn(
+						`[PDF Convert] Failed to upload chart ${image.index} to Anthropic after retries`
+					);
+					// Continue anyway - graceful degradation
+				}
 
 				chartResults.push({
 					index: image.index,
 					storage_path: chartPdfPath,
 					pdf_size: chartPdfBuffer.length,
-					alt: image.alt
+					alt: image.alt,
+					anthropic_file_id: chartAnthropicFileId,
+					anthropic_file_created_at: chartAnthropicFileCreatedAt
 				});
 			} catch (error) {
 				console.error(`[PDF Convert] Failed to convert/upload image ${image.index}:`, error);
@@ -307,14 +354,16 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 			}
 		}
 
-		// 10. INSERT CHART RECORDS INTO DATABASE
+		// 11. INSERT CHART RECORDS INTO DATABASE
 		if (chartResults.length > 0) {
 			const chartRecords = chartResults.map((chart) => ({
 				article_id: article_id,
 				user_id: userId,
 				chart_index: chart.index,
-				storage_path: chart.storage_path
-				// anthropic_file_id and is_relevant will be set in later phases
+				storage_path: chart.storage_path,
+				anthropic_file_id: chart.anthropic_file_id,
+				anthropic_file_created_at: chart.anthropic_file_created_at?.toISOString()
+				// is_relevant will be set in Phase 2 (AI filtering)
 			}));
 
 			const { error: insertError } = await supabaseAuth
@@ -327,13 +376,20 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 			}
 		}
 
-		// 11. RETURN SUCCESS WITH STORAGE PATHS
+		// 12. RETURN SUCCESS WITH STORAGE PATHS AND ANTHROPIC FILE IDS
 		return json({
 			success: true,
 			article_id: article_id,
 			article_pdf_path: articlePdfPath,
 			article_pdf_size: articlePdfBuffer.length,
-			charts: chartResults,
+			article_anthropic_file_id: anthropicFileId,
+			charts: chartResults.map((chart) => ({
+				index: chart.index,
+				storage_path: chart.storage_path,
+				pdf_size: chart.pdf_size,
+				alt: chart.alt,
+				anthropic_file_id: chart.anthropic_file_id
+			})),
 			total_charts: chartResults.length
 		});
 	} catch (error) {
