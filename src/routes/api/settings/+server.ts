@@ -31,7 +31,7 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession } }) => {
 	// 2. QUERY USER SETTINGS
 	const { data, error } = await supabase
 		.from('user_settings')
-		.select('selected_conversation_model, selected_compression_model, selected_reader_model, selected_embedding_model')
+		.select('selected_conversation_model, selected_compression_model, selected_reader_model, selected_embedding_model, active_reader_article_id')
 		.eq('user_id', userId)
 		.single();
 
@@ -82,26 +82,32 @@ export const PUT: RequestHandler = async ({ request, locals: { safeGetSession } 
 	const userId = user.id;
 
 	// 2. PARSE REQUEST BODY
-	const { selected_conversation_model, selected_compression_model, selected_reader_model, selected_embedding_model } = await request.json();
+	const { selected_conversation_model, selected_compression_model, selected_reader_model, selected_embedding_model, active_reader_article_id } = await request.json();
 
 	console.log('[Settings PUT] User ID:', userId);
 	console.log('[Settings PUT] Body received:', {
 		selected_conversation_model,
 		selected_compression_model,
 		selected_reader_model,
-		selected_embedding_model
+		selected_embedding_model,
+		active_reader_article_id
 	});
 
 	// 3. UPDATE USER SETTINGS
+	const updateData: Record<string, any> = {
+		updated_at: new Date().toISOString()
+	};
+
+	// Only include fields that were provided (to support partial updates)
+	if (selected_conversation_model !== undefined) updateData.selected_conversation_model = selected_conversation_model;
+	if (selected_compression_model !== undefined) updateData.selected_compression_model = selected_compression_model;
+	if (selected_reader_model !== undefined) updateData.selected_reader_model = selected_reader_model;
+	if (selected_embedding_model !== undefined) updateData.selected_embedding_model = selected_embedding_model;
+	if (active_reader_article_id !== undefined) updateData.active_reader_article_id = active_reader_article_id;
+
 	const { data, error } = await supabase
 		.from('user_settings')
-		.update({
-			selected_conversation_model,
-			selected_compression_model,
-			selected_reader_model,
-			selected_embedding_model,
-			updated_at: new Date().toISOString()
-		})
+		.update(updateData)
 		.eq('user_id', userId)
 		.select();
 

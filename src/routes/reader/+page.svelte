@@ -61,18 +61,50 @@
 		{ id: '6', thumbnail_url: 'https://images.unsplash.com/photo-1504868584819-f8e8b4b6d7e3?w=150&h=150&fit=crop', full_url: 'https://images.unsplash.com/photo-1504868584819-f8e8b4b6d7e3?w=1200&h=800&fit=crop', alt: 'Business intelligence charts' }
 	];
 
+	// Save active article to user settings
+	async function saveActiveArticle(articleId: string | null) {
+		try {
+			const response = await fetch('/api/settings', {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ active_reader_article_id: articleId })
+			});
+
+			if (!response.ok) {
+				console.error('[Settings] Failed to save active article:', response.statusText);
+			}
+		} catch (error) {
+			console.error('[Settings] Error saving active article:', error);
+		}
+	}
+
+	// Load active article from user settings
+	async function loadActiveArticle() {
+		try {
+			const response = await fetch('/api/settings');
+			if (!response.ok) {
+				console.error('[Settings] Failed to load settings:', response.statusText);
+				return;
+			}
+
+			const data = await response.json();
+			if (data.active_reader_article_id) {
+				console.log('[Settings] Loading active article:', data.active_reader_article_id);
+				await switchToArticle(data.active_reader_article_id);
+			}
+		} catch (error) {
+			console.error('[Settings] Error loading active article:', error);
+		}
+	}
+
 	// Load initial data on mount
 	onMount(() => {
 		if (typeof window !== 'undefined') {
 			localStorage.setItem('asura_app_mode', 'reader');
 			// Load articles from database
 			loadArticles();
-			// Load mock charts (for demo)
-			setTimeout(() => {
-				charts = MOCK_CHARTS;
-				selectedChartIndex = null;
-				showLightbox = false;
-			}, 1000);
+			// Load active article from settings
+			loadActiveArticle();
 		}
 	});
 
@@ -147,15 +179,35 @@
 	}
 
 	// Abort processing
-	function abortProcessing() {
+	async function abortProcessing() {
 		if (abortController) {
 			abortController.abort();
 			abortController = null;
 		}
 		isProcessing = false;
 		processingStatus = '';
-		processingError = 'Processing cancelled by user';
+
+		// If we have a partial article, delete it from database
+		if (currentArticle?.id) {
+			console.log('[Abort] Deleting partial article:', currentArticle.id);
+			try {
+				await fetch('/api/reader/articles', {
+					method: 'DELETE',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ article_id: currentArticle.id })
+				});
+			} catch (error) {
+				console.error('[Abort] Failed to delete partial article:', error);
+			}
+		}
+
+		// Clear state and return to paste area
+		currentArticle = null;
+		streamingContent = '';
+		processingError = null;
 		showPasteArea = true;
+
+		console.log('[Abort] Processing cancelled, returning to paste area');
 	}
 
 	// Process article through the pipeline
@@ -291,8 +343,14 @@
 								// Load chat history for this article
 								await loadChatHistory(articleId);
 
+								// Load charts for this article
+								await loadCharts(articleId);
+
 								// Reload articles list to include the new article
 								await loadArticles();
+
+								// Save as active article
+								await saveActiveArticle(articleId);
 
 								return;
 							}
@@ -576,6 +634,9 @@
 				// Load charts for this article
 				await loadCharts(articleId);
 
+				// Save as active article
+				await saveActiveArticle(articleId);
+
 				// Scroll to top
 				setTimeout(() => {
 					if (messagesContainer) {
@@ -590,9 +651,23 @@
 
 	// Load charts for article
 	async function loadCharts(articleId: string) {
-		// TODO: Implement chart loading from database
-		// For now, use mock data
-		charts = MOCK_CHARTS;
+		try {
+			const response = await fetch(`/api/reader/charts?article_id=${articleId}`);
+			if (!response.ok) {
+				console.error('[Charts] Failed to load:', response.statusText);
+				charts = []; // Clear charts on error
+				return;
+			}
+
+			const data = await response.json();
+			if (data.charts && Array.isArray(data.charts)) {
+				charts = data.charts;
+				console.log('[Charts] Loaded', charts.length, 'charts');
+			}
+		} catch (error) {
+			console.error('[Charts] Error loading:', error);
+			charts = [];
+		}
 	}
 
 	// Delete article
