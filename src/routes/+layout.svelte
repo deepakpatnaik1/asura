@@ -63,10 +63,9 @@
 		</div>
 	</aside>
 
-	<!-- Article Pane (Library) - Appears in reader mode -->
-	{#if $page.url.pathname === '/reader'}
+	<!-- Article Pane (Library) - Temporarily removed, will reposition later -->
+	<!-- {#if $page.url.pathname === '/reader'}
 		<aside class="article-pane" class:collapsed={isArticlePaneCollapsed}>
-			<!-- Header with collapse toggle -->
 			<div class="article-pane-header">
 				<button
 					class="collapse-toggle"
@@ -80,22 +79,11 @@
 				{/if}
 			</div>
 
-			<!-- Article list -->
 			{#if !isArticlePaneCollapsed}
 				<div class="article-list">
-					<!-- This is where article cards would render -->
-					<!-- Example structure:
-					{#each notes as note}
-						<div class="article-card" class:selected={selectedNoteId === note.id}>
-							<div class="article-title">{note.title}</div>
-							<div class="article-preview">{note.preview_snippet}</div>
-						</div>
-					{/each}
-					-->
 				</div>
 			{/if}
 
-			<!-- New Article button -->
 			{#if !isArticlePaneCollapsed}
 				<button class="new-article-btn">
 					<Icon src={LuPlus} size="16" />
@@ -103,7 +91,7 @@
 				</button>
 			{/if}
 		</aside>
-	{/if}
+	{/if} -->
 
 	<!-- User controls (top-right) -->
 	<div class="user-controls">
@@ -154,7 +142,7 @@
 		flex-direction: column;
 		align-items: center;
 		justify-content: flex-start;
-		padding-top: 80vh;
+		padding-top: 16px;
 		z-index: 5;
 	}
 
