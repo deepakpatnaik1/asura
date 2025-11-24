@@ -90,10 +90,45 @@ export async function createMessageStream(params: CreateMessageParams) {
 }
 
 /**
+ * Detect MIME type from file buffer
+ */
+function detectMimeType(buffer: Buffer, filename: string): string {
+	// Check magic numbers (file signatures)
+	if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+		return 'image/jpeg';
+	}
+	if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) {
+		return 'image/png';
+	}
+	if (buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46) {
+		return 'image/gif';
+	}
+	if (buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46) {
+		return 'image/webp';
+	}
+	if (buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46) {
+		return 'application/pdf';
+	}
+
+	// Fallback to extension-based detection
+	const ext = filename.toLowerCase().split('.').pop();
+	const mimeMap: Record<string, string> = {
+		pdf: 'application/pdf',
+		jpg: 'image/jpeg',
+		jpeg: 'image/jpeg',
+		png: 'image/png',
+		gif: 'image/gif',
+		webp: 'image/webp'
+	};
+
+	return mimeMap[ext || ''] || 'application/octet-stream';
+}
+
+/**
  * Upload a file to Anthropic Files API
  *
- * @param fileBuffer - PDF file buffer
- * @param filename - Filename for the upload (e.g., 'article.pdf')
+ * @param fileBuffer - File buffer (PDF or image)
+ * @param filename - Filename for the upload (e.g., 'article.pdf', 'chart-1.jpg')
  * @returns Promise containing file_id and created_at timestamp
  *
  * @example
@@ -104,9 +139,14 @@ export async function uploadFileToAnthropic(
 	fileBuffer: Buffer,
 	filename: string
 ): Promise<{ file_id: string; created_at: Date }> {
+	// Detect MIME type from buffer or filename
+	const mimeType = detectMimeType(fileBuffer, filename);
+
 	// Anthropic SDK expects a File or Blob, convert Buffer to Blob
-	const blob = new Blob([fileBuffer], { type: 'application/pdf' });
-	const file = new File([blob], filename, { type: 'application/pdf' });
+	// Convert Buffer to Uint8Array to satisfy TypeScript's BlobPart type
+	const uint8Array = new Uint8Array(fileBuffer);
+	const blob = new Blob([uint8Array], { type: mimeType });
+	const file = new File([blob], filename, { type: mimeType });
 
 	// Use beta Files API (requires anthropic-beta header)
 	const response = await anthropic.beta.files.upload({
