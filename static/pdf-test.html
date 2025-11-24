@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDF Conversion Test - Asura</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #1a1a1a;
+      color: #e5e5e5;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 800px;
+      width: 100%;
+    }
+
+    h1 {
+      color: #10b981;
+      margin-bottom: 24px;
+      font-size: 28px;
+    }
+
+    .instructions {
+      background: #2a2a2a;
+      padding: 16px;
+      border-radius: 8px;
+      margin-bottom: 24px;
+      border-left: 3px solid #10b981;
+    }
+
+    .instructions strong {
+      display: block;
+      margin-bottom: 8px;
+      color: #10b981;
+    }
+
+    .instructions ol {
+      margin-left: 20px;
+    }
+
+    .instructions li {
+      margin: 4px 0;
+      line-height: 1.5;
+    }
+
+    .paste-area {
+      width: 100%;
+      min-height: 300px;
+      max-height: 500px;
+      padding: 16px;
+      background: #2a2a2a;
+      border: 2px solid #404040;
+      border-radius: 8px;
+      color: #e5e5e5;
+      font-size: 14px;
+      font-family: inherit;
+      margin-bottom: 16px;
+      transition: border-color 0.15s;
+      overflow-y: auto;
+      cursor: text;
+    }
+
+    .paste-area:focus {
+      outline: none;
+      border-color: #10b981;
+    }
+
+    .paste-area:empty:before {
+      content: attr(data-placeholder);
+      color: #666;
+    }
+
+    .paste-area img {
+      max-width: 100%;
+      height: auto;
+      display: block;
+      margin: 8px 0;
+    }
+
+    .convert-btn {
+      padding: 12px 24px;
+      background: transparent;
+      color: #10b981;
+      border: 1px solid #10b981;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.15s ease;
+    }
+
+    .convert-btn:hover:not(:disabled) {
+      background: #10b981;
+      color: white;
+    }
+
+    .convert-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid currentColor;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    .status {
+      margin-top: 16px;
+      padding: 12px;
+      border-radius: 6px;
+      display: none;
+    }
+
+    .status.show {
+      display: block;
+    }
+
+    .status.success {
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid #10b981;
+      color: #10b981;
+    }
+
+    .status.error {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid #ef4444;
+      color: #ef4444;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>PDF Conversion Test</h1>
+
+    <div class="instructions">
+      <strong>Instructions:</strong>
+      <ol>
+        <li>Open article in Firefox Reader Mode</li>
+        <li>Select all (Ctrl+A / Cmd+A)</li>
+        <li>Copy (Ctrl+C / Cmd+C)</li>
+        <li>Paste into the text area below</li>
+        <li>Click "Convert to PDF"</li>
+      </ol>
+    </div>
+
+    <div
+      id="articleContent"
+      class="paste-area"
+      contenteditable="true"
+      data-placeholder="Paste article content here (HTML from Firefox Reader Mode)..."
+    ></div>
+
+    <button id="convertBtn" class="convert-btn">
+      Convert to PDF
+    </button>
+
+    <div id="status" class="status"></div>
+  </div>
+
+  <script>
+    const contentDiv = document.getElementById('articleContent');
+    const btn = document.getElementById('convertBtn');
+    const statusEl = document.getElementById('status');
+
+    btn.addEventListener('click', async () => {
+      const content = contentDiv.innerHTML;
+
+      if (!content.trim()) {
+        showStatus('Please paste article content first', 'error');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Converting...';
+      showStatus('Converting to PDF...', 'success');
+
+      try {
+        const response = await fetch('/api/demo/convert-pdf', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ htmlContent: content })
+        });
+
+        if (!response.ok) {
+          throw new Error(`Conversion failed: ${response.statusText}`);
+        }
+
+        const blob = await response.blob();
+        const fileSizeMB = (blob.size / (1024 * 1024)).toFixed(2);
+
+        // Download the PDF
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'test-article.pdf';
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+
+        const warningMsg = parseFloat(fileSizeMB) > 32 ? ' ⚠️ Exceeds 32MB limit!' : '';
+        showStatus(`✓ PDF generated! File size: ${fileSizeMB} MB${warningMsg}`, 'success');
+      } catch (error) {
+        console.error(error);
+        showStatus(`Error: ${error.message}`, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = 'Convert to PDF';
+      }
+    });
+
+    function showStatus(message, type) {
+      statusEl.textContent = message;
+      statusEl.className = `status ${type} show`;
+    }
+  </script>
+</body>
+</html>
