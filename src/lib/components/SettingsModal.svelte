@@ -5,9 +5,9 @@
 	import {
 		DEFAULT_CONVERSATION_MODEL,
 		DEFAULT_COMPRESSION_MODEL,
+		DEFAULT_READER_MODEL,
 		EMBEDDING_MODEL
 	} from '$lib/config/models';
-	import { DEFAULT_PERSONA } from '$lib/config/personas';
 
 	// Props
 	let { open = $bindable(false), onClose }: { open?: boolean; onClose: () => void } = $props();
@@ -32,8 +32,8 @@
 	let models = $state<Model[]>([]);
 	let selectedConversationModel = $state<string>('');
 	let selectedCompressionModel = $state<string>('');
+	let selectedReaderModel = $state<string>('');
 	let selectedEmbeddingModel = $state<string>('');
-	let selectedPersona = $state<string>(DEFAULT_PERSONA);
 	let tokenUsage = $state<TokenUsage>({
 		total_input: 0,
 		total_output: 0,
@@ -62,10 +62,9 @@
 			selectedConversationModel =
 				settings.selected_conversation_model || DEFAULT_CONVERSATION_MODEL;
 			selectedCompressionModel =
-				settings.selected_compression_model ||
-				DEFAULT_COMPRESSION_MODEL;
+				settings.selected_compression_model || DEFAULT_COMPRESSION_MODEL;
+			selectedReaderModel = settings.selected_reader_model || DEFAULT_READER_MODEL;
 			selectedEmbeddingModel = settings.selected_embedding_model || EMBEDDING_MODEL;
-			selectedPersona = settings.selected_persona || DEFAULT_PERSONA;
 
 			// Fetch token usage
 			const tokenRes = await fetch('/api/token-usage');
@@ -93,8 +92,8 @@
 				body: JSON.stringify({
 					selected_conversation_model: selectedConversationModel,
 					selected_compression_model: selectedCompressionModel,
-					selected_embedding_model: selectedEmbeddingModel,
-					selected_persona: selectedPersona
+					selected_reader_model: selectedReaderModel,
+					selected_embedding_model: selectedEmbeddingModel
 				})
 			});
 
@@ -157,6 +156,18 @@
 						{/each}
 					</select>
 					<p class="help-text">Used for memory compression and file processing</p>
+				</div>
+
+				<div class="settings-section">
+					<label for="reader-model">E-Reader Model</label>
+					<select id="reader-model" bind:value={selectedReaderModel}>
+						{#each models.filter(m => m.model_type === 'text_generation') as model}
+							<option value={model.model_identifier}>
+								{model.model_name} ({model.provider})
+							</option>
+						{/each}
+					</select>
+					<p class="help-text">Used for article processing and summarization</p>
 				</div>
 
 				<div class="settings-section">

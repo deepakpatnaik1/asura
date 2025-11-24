@@ -6,9 +6,9 @@ import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 import {
 	DEFAULT_CONVERSATION_MODEL,
 	DEFAULT_COMPRESSION_MODEL,
+	DEFAULT_READER_MODEL,
 	EMBEDDING_MODEL
 } from '$lib/config/models';
-import { DEFAULT_PERSONA } from '$lib/config/personas';
 
 const supabase = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
@@ -31,7 +31,7 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession } }) => {
 	// 2. QUERY USER SETTINGS
 	const { data, error } = await supabase
 		.from('user_settings')
-		.select('selected_conversation_model, selected_compression_model, selected_embedding_model, selected_persona')
+		.select('selected_conversation_model, selected_compression_model, selected_reader_model, selected_embedding_model')
 		.eq('user_id', userId)
 		.single();
 
@@ -43,8 +43,8 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession } }) => {
 		const defaults = {
 			selected_conversation_model: DEFAULT_CONVERSATION_MODEL,
 			selected_compression_model: DEFAULT_COMPRESSION_MODEL,
-			selected_embedding_model: EMBEDDING_MODEL,
-			selected_persona: DEFAULT_PERSONA
+			selected_reader_model: DEFAULT_READER_MODEL,
+			selected_embedding_model: EMBEDDING_MODEL
 		};
 
 		// Try to create default settings for this user
@@ -82,14 +82,14 @@ export const PUT: RequestHandler = async ({ request, locals: { safeGetSession } 
 	const userId = user.id;
 
 	// 2. PARSE REQUEST BODY
-	const { selected_conversation_model, selected_compression_model, selected_embedding_model, selected_persona } = await request.json();
+	const { selected_conversation_model, selected_compression_model, selected_reader_model, selected_embedding_model } = await request.json();
 
 	console.log('[Settings PUT] User ID:', userId);
 	console.log('[Settings PUT] Body received:', {
 		selected_conversation_model,
 		selected_compression_model,
-		selected_embedding_model,
-		selected_persona
+		selected_reader_model,
+		selected_embedding_model
 	});
 
 	// 3. UPDATE USER SETTINGS
@@ -98,8 +98,8 @@ export const PUT: RequestHandler = async ({ request, locals: { safeGetSession } 
 		.update({
 			selected_conversation_model,
 			selected_compression_model,
+			selected_reader_model,
 			selected_embedding_model,
-			selected_persona,
 			updated_at: new Date().toISOString()
 		})
 		.eq('user_id', userId)

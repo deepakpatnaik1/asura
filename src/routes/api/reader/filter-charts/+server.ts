@@ -3,7 +3,7 @@ import type { RequestHandler } from './$types';
 import { createClient } from '@supabase/supabase-js';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
 import { createMessage, isAnthropicFileExpired } from '$lib/api/anthropic-client';
-import { DEFAULT_CONVERSATION_MODEL } from '$lib/config/models';
+import { DEFAULT_READER_MODEL } from '$lib/config/models';
 
 const supabase = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY);
 
@@ -96,7 +96,8 @@ function isProgrammaticallyRelevant(altText: string): boolean {
  * AI filter - uses Claude to analyze ambiguous images
  */
 async function filterChartsWithAI(
-	charts: Array<{ chart_index: number; alt: string; anthropic_file_id: string }>
+	charts: Array<{ chart_index: number; alt: string; anthropic_file_id: string }>,
+	model: string
 ): Promise<{ relevant: number[]; irrelevant: number[] }> {
 	// Build the content blocks with file attachments
 	const contentBlocks: Array<
@@ -144,7 +145,7 @@ Example:
 
 	// Call Claude with content blocks (including document attachments)
 	const response = await createMessage({
-		model: DEFAULT_CONVERSATION_MODEL,
+		model,
 		max_tokens: 1024,
 		temperature: 0,
 		system: 'You are a precise image classifier. Respond only with valid JSON.',
@@ -225,7 +226,17 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 	console.log('[Chart Filter] Article ID:', article_id);
 
 	try {
-		// 3. VERIFY ARTICLE OWNERSHIP
+		// 3. READ SELECTED READER MODEL FROM USER_SETTINGS
+		const { data: settings } = await supabase
+			.from('user_settings')
+			.select('selected_reader_model')
+			.eq('user_id', userId)
+			.single();
+
+		const readerModel = settings?.selected_reader_model || DEFAULT_READER_MODEL;
+		console.log('[Chart Filter] Using reader model:', readerModel);
+
+		// 4. VERIFY ARTICLE OWNERSHIP
 		const { data: article, error: fetchError } = await supabase
 			.from('articles')
 			.select('id, user_id, title')
@@ -353,7 +364,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 			console.log('[Chart Filter] Running AI filter on ambiguous charts...');
 
 			try {
-				const aiClassification = await filterChartsWithAI(ambiguousCharts);
+				const aiClassification = await filterChartsWithAI(ambiguousCharts, readerModel);
 
 				// Map AI results back to chart IDs
 				for (const chart of ambiguousCharts) {
