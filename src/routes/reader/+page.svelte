@@ -1446,7 +1446,7 @@
 		outline: none;
 		white-space: normal;
 		position: relative;
-		z-index: 1;
+		z-index: 20;
 	}
 
 	.paste-area:empty:before {
@@ -1484,7 +1484,8 @@
 		top: 50%;
 		left: 50%;
 		transform: translate(-50%, -50%);
-		z-index: 11; /* Above frosted glass overlay (z-index: 10) */
+		transform: translate(-50%, -50%);
+		z-index: 30; /* Above paste area (z-index: 20) */
 		pointer-events: none;
 		display: flex;
 		flex-direction: column;
