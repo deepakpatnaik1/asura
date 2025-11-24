@@ -15,15 +15,40 @@
 	let selectedNote = $state<any>(null);
 	let selectedPersona = $state<'gunnar' | 'kirby'>('gunnar');
 	let inputMessage = $state('');
+
+	// Paste area state
+	let showPasteArea = $state(false);
+	let pasteAreaContent = $state('');
+
+	// Toggle paste area
+	function handlePaperclipClick() {
+		showPasteArea = !showPasteArea;
+		if (showPasteArea) {
+			// Clear any existing article
+			selectedNote = null;
+		}
+	}
+
+	// Handle paste event
+	function handlePaste(event: ClipboardEvent) {
+		const html = event.clipboardData?.getData('text/html');
+		if (html) {
+			console.log('[Paste] HTML content received:', html.substring(0, 200));
+			// TODO: Start processing pipeline
+		}
+	}
 </script>
 
 <div class="reader-container">
 	<!-- Messages Area -->
 	<div class="messages-area">
 		<div class="messages-content">
-			<!-- Reader mode content would render here -->
-			<!-- Example structure when note is selected:
-			{#if selectedNote}
+			{#if showPasteArea}
+				<!-- Paste Area Card -->
+
+
+			{:else if selectedNote}
+				<!-- Article Display (future) -->
 				<div class="message-group" data-role="boss">
 					<div class="boss-message" data-mode="reader">
 						<div class="message-header">
@@ -45,15 +70,14 @@
 						</div>
 					</div>
 				</div>
+			{:else}
+				<!-- Placeholder content -->
+				<div class="placeholder-content">
+					<h1>E-Reader Mode</h1>
+					<p>The UI shell has been restored.</p>
+					<p>Library coming soon.</p>
+				</div>
 			{/if}
-			-->
-
-			<!-- Placeholder content -->
-			<div class="placeholder-content">
-				<h1>E-Reader Mode</h1>
-				<p>The UI shell has been restored.</p>
-				<p>Library coming soon.</p>
-			</div>
 		</div>
 	</div>
 
@@ -65,8 +89,8 @@
 		<div class="input-container">
 			<div class="input-field-wrapper">
 				<div class="input-controls">
-					<!-- Paperclip icon (decorative only) -->
-					<button class="control-btn" title="Attach file (disabled)" disabled>
+					<!-- Paperclip icon (active - triggers paste area) -->
+					<button class="control-btn" title="Paste article" onclick={handlePaperclipClick}>
 						<Icon src={LuPaperclip} size="11" />
 					</button>
 
@@ -235,14 +259,6 @@
 		max-width: var(--middle-section-width);
 		margin: 0 auto;
 		width: 100%;
-		padding: 0 24px;
-	}
-
-	/* Adjust input padding on narrow screens to account for reader-container padding */
-	@media (max-width: 900px) {
-		.input-container {
-			padding: 0;
-		}
 	}
 
 	.input-field-wrapper {
@@ -366,5 +382,68 @@
 	.send-button:hover:not(:disabled) {
 		background: var(--reader-accent);
 		color: hsl(var(--background));
+	}
+
+	/* Paste Area Card */
+	.paste-card {
+		width: 100%;
+		max-width: var(--middle-section-width);
+		margin: 0 auto;
+		padding: 0 24px;
+		box-sizing: border-box;
+		display: flex;
+		gap: 12px;
+		align-items: stretch;
+	}
+
+	@media (max-width: 900px) {
+		.paste-card {
+			padding: 0;
+		}
+	}
+
+	.paste-area {
+		flex: 1;
+		background: transparent;
+		border: 2px solid rgba(16, 185, 129, 0.4);
+		border-radius: 8px;
+		min-height: 300px;
+		padding: 24px;
+		transition: border-color 0.2s ease;
+		color: hsl(var(--foreground));
+		font-size: 16px;
+		line-height: 1.6;
+		outline: none;
+	}
+
+	.paste-spacer {
+		background: transparent;
+		color: transparent;
+		border: 1px solid transparent;
+		border-radius: 6px;
+		padding: 12px 24px;
+		font-weight: 500;
+		pointer-events: none;
+		user-select: none;
+		flex-shrink: 0;
+		min-width: fit-content;
+	}
+
+	.paste-area:hover {
+		border-color: rgba(16, 185, 129, 0.6);
+	}
+
+	.paste-area:focus {
+		border-color: rgba(16, 185, 129, 0.8);
+	}
+
+	.paste-area:empty:before {
+		content: attr(data-placeholder);
+		color: rgba(16, 185, 129, 0.5);
+		font-size: 18px;
+	}
+
+	.paste-area:not(:empty) {
+		color: hsl(var(--foreground));
 	}
 </style>
