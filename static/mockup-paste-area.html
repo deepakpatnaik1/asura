@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Paste Area Card Mockup</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #0a0a0a;
+            color: #e0e0e0;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        /* Simulated messages area (blue in your screenshot) */
+        .messages-area {
+            flex: 1;
+            background: rgba(0, 60, 255, 0.1); /* Light blue tint to show the area */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            position: relative;
+        }
+
+        /* Paste Area Card - floating above messages area */
+        .paste-card {
+            width: 100%;
+            max-width: 600px;
+            background: transparent;
+            border: 2px solid rgba(16, 185, 129, 0.4);
+            border-radius: 8px;
+            padding: 32px;
+            min-height: 300px;
+            transition: border-color 0.2s ease;
+        }
+
+        .paste-card:hover {
+            border-color: rgba(16, 185, 129, 0.6);
+        }
+
+        .paste-card:focus-within {
+            border-color: rgba(16, 185, 129, 0.8);
+        }
+
+        .paste-area {
+            min-height: 240px;
+            color: #e0e0e0;
+            font-size: 16px;
+            line-height: 1.6;
+            outline: none;
+        }
+
+        .paste-area:empty:before {
+            content: attr(data-placeholder);
+            color: rgba(16, 185, 129, 0.5);
+            font-size: 18px;
+        }
+
+        .paste-area:not(:empty) {
+            color: #e0e0e0;
+        }
+
+        /* Simulated input area at bottom */
+        .input-area {
+            background: #0a0a0a;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+        }
+
+        /* Demo label */
+        .demo-label {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 60, 255, 0.3);
+            color: rgba(255, 255, 255, 0.8);
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Messages Area (blue in your screenshot) -->
+    <div class="messages-area">
+        <div class="demo-label">MESSAGES AREA</div>
+
+        <!-- Paste Area Card (floating above) -->
+        <div class="paste-card">
+            <div
+                class="paste-area"
+                contenteditable="true"
+                data-placeholder="Paste article here..."
+                spellcheck="false"
+            ></div>
+        </div>
+    </div>
+
+    <!-- Input Area (bottom) -->
+    <div class="input-area">
+        Input area would be here
+    </div>
+</body>
+</html>

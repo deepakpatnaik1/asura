@@ -31,9 +31,30 @@
 
 	// Handle paste event
 	function handlePaste(event: ClipboardEvent) {
+		event.preventDefault();
+
 		const html = event.clipboardData?.getData('text/html');
 		if (html) {
 			console.log('[Paste] HTML content received:', html.substring(0, 200));
+
+			// Create a temporary div to parse the HTML
+			const temp = document.createElement('div');
+			temp.innerHTML = html;
+
+			// Remove all style attributes and color-related inline styles
+			const allElements = temp.querySelectorAll('*');
+			allElements.forEach((el) => {
+				el.removeAttribute('style');
+				el.removeAttribute('color');
+				el.removeAttribute('bgcolor');
+			});
+
+			// Insert the cleaned HTML
+			const pasteArea = event.target as HTMLElement;
+			if (pasteArea) {
+				pasteArea.innerHTML = temp.innerHTML;
+			}
+
 			// TODO: Start processing pipeline
 		}
 	}
@@ -43,11 +64,17 @@
 	<!-- Messages Area -->
 	<div class="messages-area">
 		<div class="messages-content">
-			{#if showPasteArea}
-				<!-- Paste Area Card -->
+			<!-- Paste Area Card -->
+			<div class="paste-box">
+				<div
+					class="paste-area"
+					contenteditable="true"
+					onpaste={handlePaste}
+					data-placeholder="Paste article here..."
+				></div>
+			</div>
 
-
-			{:else if selectedNote}
+			{#if selectedNote}
 				<!-- Article Display (future) -->
 				<div class="message-group" data-role="boss">
 					<div class="boss-message" data-mode="reader">
@@ -384,66 +411,60 @@
 		color: hsl(var(--background));
 	}
 
-	/* Paste Area Card */
-	.paste-card {
-		width: 100%;
-		max-width: var(--middle-section-width);
-		margin: 0 auto;
-		padding: 0 24px;
-		box-sizing: border-box;
-		display: flex;
-		gap: 12px;
-		align-items: stretch;
-	}
-
-	@media (max-width: 900px) {
-		.paste-card {
-			padding: 0;
-		}
-	}
-
-	.paste-area {
-		flex: 1;
-		background: transparent;
-		border: 2px solid rgba(16, 185, 129, 0.4);
-		border-radius: 8px;
+	/* Paste Area Box - styled for reader mode */
+	.paste-box {
+		background: rgba(10, 10, 10, 0.85);
+		backdrop-filter: blur(8px);
+		-webkit-backdrop-filter: blur(8px);
+		border: 1px solid var(--reader-accent);
+		padding: var(--boss-card-padding-y) var(--boss-card-padding-x);
+		margin-left: var(--boss-card-margin-x);
+		margin-right: var(--boss-card-margin-x);
+		border-radius: var(--boss-card-border-radius);
 		min-height: 300px;
-		padding: 24px;
-		transition: border-color 0.2s ease;
+		position: absolute;
+		bottom: 80px;
+		left: 24px;
+		right: 24px;
+	}
+
+	/* Paste Area - contenteditable div */
+	.paste-area {
+		height: 260px;
+		overflow-y: auto;
 		color: hsl(var(--foreground));
-		font-size: 16px;
+		font-size: 8pt;
 		line-height: 1.6;
 		outline: none;
-	}
-
-	.paste-spacer {
-		background: transparent;
-		color: transparent;
-		border: 1px solid transparent;
-		border-radius: 6px;
-		padding: 12px 24px;
-		font-weight: 500;
-		pointer-events: none;
-		user-select: none;
-		flex-shrink: 0;
-		min-width: fit-content;
-	}
-
-	.paste-area:hover {
-		border-color: rgba(16, 185, 129, 0.6);
-	}
-
-	.paste-area:focus {
-		border-color: rgba(16, 185, 129, 0.8);
+		white-space: normal;
 	}
 
 	.paste-area:empty:before {
 		content: attr(data-placeholder);
-		color: rgba(16, 185, 129, 0.5);
-		font-size: 18px;
+		color: hsl(var(--foreground));
+		opacity: 0.5;
+		font-size: 8pt;
 	}
 
-	.paste-area:not(:empty) {
-		color: hsl(var(--foreground));
+	/* Override all inline styles for pasted content */
+	.paste-area *,
+	.paste-area span,
+	.paste-area p,
+	.paste-area div,
+	.paste-area a {
+		color: hsl(var(--foreground)) !important;
+		background-color: transparent !important;
+		font-size: 8pt !important;
+		line-height: 1.6 !important;
+		font-family: "iA Writer Quattro V", system-ui, -apple-system, sans-serif !important;
+	}
+
+	/* Style pasted images */
+	.paste-area img {
+		max-width: 100%;
+		height: auto;
+		display: block;
+		margin: 12px 0;
+		border-radius: 4px;
 	}
 </style>
