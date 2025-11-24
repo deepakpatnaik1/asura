@@ -46,12 +46,13 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession } }) =
 
 	console.log('[Charts] Fetching for article:', articleId);
 
-	// 3. FETCH CHARTS FROM DATABASE
+	// 3. FETCH CHARTS FROM DATABASE (only relevant ones)
 	const { data: charts, error: fetchError } = await supabase
 		.from('article_charts')
 		.select('chart_index, thumbnail_url, full_url, alt_text')
 		.eq('article_id', articleId)
 		.eq('user_id', userId) // RLS check
+		.eq('is_relevant', true) // Only show AI-filtered relevant charts
 		.order('chart_index', { ascending: true });
 
 	if (fetchError) {

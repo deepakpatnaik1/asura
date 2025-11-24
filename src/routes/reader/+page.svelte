@@ -10,11 +10,7 @@
 		id: string;
 		title: string;
 		content: string;
-	} | null>({
-		id: '1',
-		title: 'The Future of AI: Large Language Models and Their Impact on Society',
-		content: '# Mock Article Content\n\nThis is a mock article to demonstrate the UI. Click the folder icon to see the article library dropdown!'
-	});
+	} | null>(null);
 
 	// Q&A state
 	type ChatTurn = {
@@ -773,10 +769,10 @@
 
 			<!-- Article Display -->
 			{#if currentArticle || streamingContent}
-				<div class="message-group" data-role="boss">
-					<div class="boss-message" data-mode="reader">
+				<div class="message-group">
+					<div class="boss-message">
 						<div class="message-header">
-							<span class="boss-label" data-mode="reader">BOSS</span>
+							<span class="message-label boss-label">Boss</span>
 						</div>
 						<div class="message-text">
 							Let's explore: {currentArticle?.title || 'Article'}
@@ -784,10 +780,10 @@
 					</div>
 				</div>
 
-				<div class="message-group" data-role="gunnar">
-					<div class="gunnar-message">
+				<div class="message-group">
+					<div class="ai-message">
 						<div class="message-header">
-							<span class="gunnar-label">GUNNAR</span>
+							<span class="message-label ai-label">Gunnar</span>
 						</div>
 						<div class="message-text">
 							{@html renderMarkdown(currentArticle?.content || streamingContent)}
@@ -798,10 +794,10 @@
 				<!-- Q&A History -->
 				{#each chatHistory as turn}
 					{#if turn.role === 'user'}
-						<div class="message-group" data-role="boss">
-							<div class="boss-message" data-mode="reader">
+						<div class="message-group">
+							<div class="boss-message">
 								<div class="message-header">
-									<span class="boss-label" data-mode="reader">BOSS</span>
+									<span class="message-label boss-label">Boss</span>
 								</div>
 								<div class="message-text">
 									{turn.content}
@@ -809,10 +805,10 @@
 							</div>
 						</div>
 					{:else}
-						<div class="message-group" data-role="gunnar">
-							<div class="gunnar-message">
+						<div class="message-group">
+							<div class="ai-message">
 								<div class="message-header">
-									<span class="gunnar-label">GUNNAR</span>
+									<span class="message-label ai-label">Gunnar</span>
 								</div>
 								<div class="message-text">
 									{@html renderMarkdown(turn.content)}
@@ -824,10 +820,10 @@
 
 				<!-- Current Q&A Turn (streaming) -->
 				{#if currentUserMessage}
-					<div class="message-group" data-role="boss">
-						<div class="boss-message" data-mode="reader">
+					<div class="message-group">
+						<div class="boss-message">
 							<div class="message-header">
-								<span class="boss-label" data-mode="reader">BOSS</span>
+								<span class="message-label boss-label">Boss</span>
 							</div>
 							<div class="message-text">
 								{currentUserMessage}
@@ -835,16 +831,17 @@
 						</div>
 					</div>
 
-					<div class="message-group" data-role="gunnar">
-						<div class="gunnar-message">
+					<div class="message-group">
+						<div class="ai-message">
 							<div class="message-header">
-								<span class="gunnar-label">GUNNAR</span>
-								{#if isLoadingChat && !streamingChatResponse}
-									<span class="loading-indicator">●</span>
-								{/if}
+								<span class="message-label ai-label">Gunnar</span>
 							</div>
 							<div class="message-text">
-								{@html renderMarkdown(streamingChatResponse || '')}
+								{#if isLoadingChat && !streamingChatResponse}
+									Thinking<span class="dots"><span>.</span><span>.</span><span>.</span></span>
+								{:else}
+									{@html renderMarkdown(streamingChatResponse)}
+								{/if}
 							</div>
 						</div>
 					</div>
@@ -1174,65 +1171,26 @@
 		margin: 8px 0;
 	}
 
-	/* Message Groups (for future use) */
+	/* Message Groups */
 	.message-group {
 		position: relative;
 		margin-bottom: 16px;
 	}
 
-	/* Boss Message - reader mode styling */
-	.boss-message[data-mode="reader"] {
-		background: var(--reader-bg);
+	/* Boss Message - with background card */
+	.boss-message {
+		background: var(--boss-bg);
 		padding: var(--boss-card-padding-y) var(--boss-card-padding-x);
 		margin-left: var(--boss-card-margin-x);
 		margin-right: var(--boss-card-margin-x);
 		border-radius: var(--boss-card-border-radius);
-		border-left: 3px solid var(--reader-accent);
+		position: relative;
 	}
 
-	/* Boss label - reader mode color */
-	.boss-label[data-mode="reader"] {
-		color: var(--reader-accent);
-		border-bottom: 1px solid var(--reader-accent);
-		font-size: 8pt;
-		font-weight: 600;
-		letter-spacing: 0.05em;
-		padding-bottom: 2px;
-	}
-
-	/* Gunnar Message - reader mode styling */
-	.gunnar-message {
-		background: transparent;
-		padding: var(--boss-card-padding-y) var(--boss-card-padding-x);
-		margin-left: var(--boss-card-margin-x);
-		margin-right: var(--boss-card-margin-x);
-	}
-
-	/* Gunnar label */
-	.gunnar-label {
-		color: var(--reader-accent);
-		border-bottom: 1px solid var(--reader-accent);
-		font-size: 8pt;
-		font-weight: 600;
-		letter-spacing: 0.05em;
-		padding-bottom: 2px;
-	}
-
-	/* Loading indicator for Q&A streaming */
-	.loading-indicator {
-		color: var(--reader-accent);
-		font-size: 12pt;
-		margin-left: 8px;
-		animation: pulse 1.5s ease-in-out infinite;
-	}
-
-	@keyframes pulse {
-		0%, 100% {
-			opacity: 0.3;
-		}
-		50% {
-			opacity: 1;
-		}
+	/* AI Message - no background */
+	.ai-message {
+		position: relative;
+		padding: var(--message-padding-y) var(--boss-card-padding-x);
 	}
 
 	/* Message Header */
@@ -1241,12 +1199,62 @@
 		align-items: center;
 		justify-content: space-between;
 		margin-bottom: 12px;
+		position: relative;
 	}
 
+	/* Message Labels */
+	.message-label {
+		font-weight: 500;
+		color: hsl(var(--chat-label));
+		display: block;
+		width: 100%;
+		padding-bottom: 2px;
+	}
+
+	.boss-label {
+		color: var(--reader-accent);
+		border-bottom: 1px solid var(--reader-accent);
+		position: relative;
+		top: -1px;
+	}
+
+	.ai-label {
+		color: hsl(var(--foreground));
+		border-bottom: 1px solid hsl(var(--border));
+	}
+
+	/* Message Text */
 	.message-text {
 		line-height: 1.6;
 		color: hsl(var(--foreground));
 		white-space: normal;
+	}
+
+	/* Loading animation for thinking dots */
+	.loading-text {
+		color: hsl(var(--muted-foreground));
+	}
+
+	.dots span {
+		animation: blink 1.4s infinite;
+		animation-fill-mode: both;
+	}
+
+	.dots span:nth-child(2) {
+		animation-delay: 0.2s;
+	}
+
+	.dots span:nth-child(3) {
+		animation-delay: 0.4s;
+	}
+
+	@keyframes blink {
+		0%, 80%, 100% {
+			opacity: 0;
+		}
+		40% {
+			opacity: 1;
+		}
 	}
 
 	/* Input Area - reader mode styling */
