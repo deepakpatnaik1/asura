@@ -11,22 +11,32 @@
 		}
 	});
 
-	// Placeholder state for future implementation
-	let selectedNote = $state<any>(null);
+	// Article state
+	let currentArticle = $state<{
+		id: string;
+		title: string;
+		content: string;
+	} | null>(null);
+
+	// UI state
 	let selectedPersona = $state<'gunnar' | 'kirby'>('gunnar');
 	let inputMessage = $state('');
-
-	// Paste area state
 	let showPasteArea = $state(false);
-	let pasteAreaContent = $state('');
-	let isProcessing = $state(true); // Set to true to show spinner for demo
+	let isProcessing = $state(false);
+	let processingStatus = $state('');
+	let processingError = $state<string | null>(null);
+	let streamingContent = $state('');
+	let currentRetryAttempt = $state(0);
+	let abortController: AbortController | null = null;
 
 	// Toggle paste area
 	function handlePaperclipClick() {
 		showPasteArea = !showPasteArea;
 		if (showPasteArea) {
 			// Clear any existing article
-			selectedNote = null;
+			currentArticle = null;
+			streamingContent = '';
+			processingError = null;
 		}
 	}
 
@@ -56,7 +66,213 @@
 				pasteArea.innerHTML = temp.innerHTML;
 			}
 
-			// TODO: Start processing pipeline
+			// Start processing pipeline automatically
+			processArticle(html);
+		}
+	}
+
+	// Retry utility with exponential backoff
+	async function retryWithBackoff<T>(
+		fn: () => Promise<T>,
+		maxRetries: number = 2,
+		baseDelay: number = 1000,
+		stepName: string = 'Operation'
+	): Promise<T> {
+		let lastError: Error | null = null;
+
+		for (let attempt = 0; attempt <= maxRetries; attempt++) {
+			try {
+				currentRetryAttempt = attempt;
+				return await fn();
+			} catch (error) {
+				lastError = error instanceof Error ? error : new Error(String(error));
+
+				if (attempt < maxRetries) {
+					const delay = baseDelay * Math.pow(2, attempt);
+					console.log(`[Retry] ${stepName} - Attempt ${attempt + 1} failed, retrying in ${delay}ms...`);
+					processingStatus = `${stepName} (Retry ${attempt + 2}/${maxRetries + 1})`;
+					await new Promise(resolve => setTimeout(resolve, delay));
+				}
+			}
+		}
+
+		throw lastError;
+	}
+
+	// Abort processing
+	function abortProcessing() {
+		if (abortController) {
+			abortController.abort();
+			abortController = null;
+		}
+		isProcessing = false;
+		processingStatus = '';
+		processingError = 'Processing cancelled by user';
+		showPasteArea = true;
+	}
+
+	// Process article through the pipeline
+	async function processArticle(html: string) {
+		isProcessing = true;
+		processingError = null;
+		streamingContent = '';
+		abortController = new AbortController();
+		currentRetryAttempt = 0;
+
+		try {
+			// Step 1: Upload article and extract title
+			processingStatus = 'Creating article...';
+			const uploadResult = await retryWithBackoff(async () => {
+				const response = await fetch('/api/reader/upload', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ html }),
+					signal: abortController?.signal
+				});
+
+				if (!response.ok) {
+					const error = await response.json();
+					throw new Error(error.error?.message || 'Upload failed');
+				}
+
+				return await response.json();
+			}, 2, 1000, 'Creating article...');
+
+			const articleId = uploadResult.article_id;
+			const articleTitle = uploadResult.title;
+			console.log('[Pipeline] Article created:', articleId, articleTitle);
+
+			// Step 2: Convert to PDF and extract images
+			processingStatus = 'Converting to PDF...';
+			await retryWithBackoff(async () => {
+				const response = await fetch('/api/reader/convert-pdf', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ article_id: articleId, html }),
+					signal: abortController?.signal
+				});
+
+				if (!response.ok) {
+					const error = await response.json();
+					throw new Error(error.error?.message || 'PDF conversion failed');
+				}
+
+				return await response.json();
+			}, 2, 1000, 'Converting to PDF...');
+
+			console.log('[Pipeline] PDF converted');
+
+			// Step 3: Filter charts
+			processingStatus = 'Filtering charts...';
+			await retryWithBackoff(async () => {
+				const response = await fetch('/api/reader/filter-charts', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ article_id: articleId }),
+					signal: abortController?.signal
+				});
+
+				if (!response.ok) {
+					const error = await response.json();
+					throw new Error(error.error?.message || 'Chart filtering failed');
+				}
+
+				return await response.json();
+			}, 2, 1000, 'Filtering charts...');
+
+			console.log('[Pipeline] Charts filtered');
+
+			// Step 4: Process article with AI (streaming)
+			processingStatus = 'Processing with AI...';
+			showPasteArea = false; // Hide paste area when streaming starts
+
+			const response = await fetch('/api/reader/process-article', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ article_id: articleId }),
+				signal: abortController?.signal
+			});
+
+			if (!response.ok) {
+				const error = await response.json();
+				throw new Error(error.error?.message || 'Article processing failed');
+			}
+
+			// Stream the response
+			const reader = response.body?.getReader();
+			const decoder = new TextDecoder();
+
+			if (reader) {
+				while (true) {
+					// Check if aborted
+					if (abortController?.signal.aborted) {
+						reader.cancel();
+						throw new Error('Processing cancelled by user');
+					}
+
+					const { done, value } = await reader.read();
+					if (done) break;
+
+					const chunk = decoder.decode(value);
+					const lines = chunk.split('\n');
+
+					for (const line of lines) {
+						if (line.startsWith('data: ')) {
+							const data = JSON.parse(line.slice(6));
+
+							if (data.text) {
+								streamingContent += data.text;
+							}
+
+							if (data.done) {
+								console.log('[Pipeline] Processing complete');
+
+								// Validate streaming content before display
+								if (streamingContent.trim().length === 0) {
+									throw new Error('AI returned empty response');
+								}
+
+								currentArticle = {
+									id: articleId,
+									title: articleTitle,
+									content: streamingContent
+								};
+								isProcessing = false;
+								processingStatus = '';
+								abortController = null;
+								return;
+							}
+
+							if (data.error) {
+								throw new Error(data.error);
+							}
+						}
+					}
+				}
+			}
+
+		} catch (error) {
+			console.error('[Pipeline] Error:', error);
+
+			// Handle abort separately
+			if (error instanceof Error && error.name === 'AbortError') {
+				processingError = 'Processing cancelled by user';
+			} else {
+				processingError = error instanceof Error ? error.message : 'Unknown error';
+			}
+
+			isProcessing = false;
+			processingStatus = '';
+			showPasteArea = true; // Show paste area again on error
+			abortController = null;
+		}
+	}
+
+	// Retry manually after error
+	function retryProcessing() {
+		const pasteArea = document.querySelector('.paste-area') as HTMLElement;
+		if (pasteArea && pasteArea.innerHTML) {
+			processArticle(pasteArea.innerHTML);
 		}
 	}
 </script>
@@ -66,43 +282,65 @@
 	<div class="messages-area">
 		<div class="messages-content">
 			<!-- Paste Area Card -->
-			<div class="paste-box">
-				{#if isProcessing}
-					<!-- Loading Spinner -->
-					<div class="spinner-container">
-						<div class="spinner">
-							<div class="spinner-bar" style="--bar-index: 0"></div>
-							<div class="spinner-bar" style="--bar-index: 1"></div>
-							<div class="spinner-bar" style="--bar-index: 2"></div>
-							<div class="spinner-bar" style="--bar-index: 3"></div>
-							<div class="spinner-bar" style="--bar-index: 4"></div>
-							<div class="spinner-bar" style="--bar-index: 5"></div>
-							<div class="spinner-bar" style="--bar-index: 6"></div>
-							<div class="spinner-bar" style="--bar-index: 7"></div>
-							<div class="spinner-bar" style="--bar-index: 8"></div>
-							<div class="spinner-bar" style="--bar-index: 9"></div>
-							<div class="spinner-bar" style="--bar-index: 10"></div>
-							<div class="spinner-bar" style="--bar-index: 11"></div>
+			{#if showPasteArea}
+				<div class="paste-box" class:has-error={processingError}>
+					{#if isProcessing}
+						<!-- Loading Spinner -->
+						<div class="spinner-container">
+							<div class="spinner">
+								<div class="spinner-bar" style="--bar-index: 0"></div>
+								<div class="spinner-bar" style="--bar-index: 1"></div>
+								<div class="spinner-bar" style="--bar-index: 2"></div>
+								<div class="spinner-bar" style="--bar-index: 3"></div>
+								<div class="spinner-bar" style="--bar-index: 4"></div>
+								<div class="spinner-bar" style="--bar-index: 5"></div>
+								<div class="spinner-bar" style="--bar-index: 6"></div>
+								<div class="spinner-bar" style="--bar-index: 7"></div>
+								<div class="spinner-bar" style="--bar-index: 8"></div>
+								<div class="spinner-bar" style="--bar-index: 9"></div>
+								<div class="spinner-bar" style="--bar-index: 10"></div>
+								<div class="spinner-bar" style="--bar-index: 11"></div>
+							</div>
+							{#if processingStatus}
+								<div class="processing-status">{processingStatus}</div>
+							{/if}
+							<button class="abort-button" onclick={abortProcessing}>
+								Cancel
+							</button>
 						</div>
-					</div>
-				{/if}
-				<div
-					class="paste-area"
-					contenteditable="true"
-					onpaste={handlePaste}
-					data-placeholder="Paste article here..."
-				></div>
-			</div>
+					{/if}
 
-			{#if selectedNote}
-				<!-- Article Display (future) -->
+					{#if processingError}
+						<!-- Error State -->
+						<div class="error-container">
+							<div class="error-message">
+								<strong>Error:</strong> {processingError}
+							</div>
+							<button class="retry-button" onclick={retryProcessing}>
+								Retry
+							</button>
+						</div>
+					{:else}
+						<!-- Paste Area -->
+						<div
+							class="paste-area"
+							contenteditable="true"
+							onpaste={handlePaste}
+							data-placeholder="Paste article here..."
+						></div>
+					{/if}
+				</div>
+			{/if}
+
+			<!-- Article Display -->
+			{#if currentArticle || streamingContent}
 				<div class="message-group" data-role="boss">
 					<div class="boss-message" data-mode="reader">
 						<div class="message-header">
 							<span class="boss-label" data-mode="reader">BOSS</span>
 						</div>
 						<div class="message-text">
-							Let's explore: {selectedNote.title}
+							Let's explore: {currentArticle?.title || 'Article'}
 						</div>
 					</div>
 				</div>
@@ -113,16 +351,15 @@
 							<span class="gunnar-label">GUNNAR</span>
 						</div>
 						<div class="message-text">
-							{@html renderMarkdown(selectedNote.transformed_content, 'reader')}
+							{@html renderMarkdown(currentArticle?.content || streamingContent)}
 						</div>
 					</div>
 				</div>
-			{:else}
+			{:else if !showPasteArea}
 				<!-- Placeholder content -->
 				<div class="placeholder-content">
 					<h1>E-Reader Mode</h1>
-					<p>The UI shell has been restored.</p>
-					<p>Library coming soon.</p>
+					<p>Click the paperclip to paste an article.</p>
 				</div>
 			{/if}
 		</div>
@@ -514,6 +751,18 @@
 		transform: translate(-50%, -50%);
 		z-index: 11; /* Above frosted glass overlay (z-index: 10) */
 		pointer-events: none;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 16px;
+	}
+
+	.processing-status {
+		color: var(--reader-accent);
+		font-size: 10pt;
+		font-weight: 500;
+		text-align: center;
+		white-space: nowrap;
 	}
 
 	.spinner {
@@ -559,4 +808,67 @@
 	.spinner-bar:nth-child(10) { opacity: 0.83; }
 	.spinner-bar:nth-child(11) { opacity: 0.90; }
 	.spinner-bar:nth-child(12) { opacity: 1.0; }
+
+	/* Error State */
+	.paste-box.has-error {
+		border-color: rgb(239, 68, 68);
+	}
+
+	.error-container {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 16px;
+		padding: 40px;
+		text-align: center;
+	}
+
+	.error-message {
+		color: rgb(239, 68, 68);
+		font-size: 10pt;
+		line-height: 1.6;
+	}
+
+	.error-message strong {
+		display: block;
+		margin-bottom: 8px;
+		font-size: 11pt;
+	}
+
+	.retry-button {
+		background: transparent;
+		color: var(--reader-accent);
+		border: 1px solid var(--reader-accent);
+		border-radius: 6px;
+		padding: 10px 24px;
+		font-weight: 500;
+		cursor: pointer;
+		transition: all 0.2s;
+	}
+
+	.retry-button:hover {
+		background: var(--reader-accent);
+		color: hsl(var(--background));
+	}
+
+	/* Abort Button */
+	.abort-button {
+		background: transparent;
+		color: rgb(239, 68, 68);
+		border: 1px solid rgb(239, 68, 68);
+		border-radius: 6px;
+		padding: 8px 20px;
+		font-size: 9pt;
+		font-weight: 500;
+		cursor: pointer;
+		transition: all 0.2s;
+		pointer-events: all;
+		margin-top: 8px;
+	}
+
+	.abort-button:hover {
+		background: rgb(239, 68, 68);
+		color: hsl(var(--background));
+	}
 </style>
