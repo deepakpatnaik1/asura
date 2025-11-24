@@ -47,38 +47,7 @@
 
 	// Article library state
 	let showArticleLibrary = $state(false);
-	let articles = $state<Array<{ id: string; title: string; preview_snippet: string }>>([
-		{
-			id: '1',
-			title: 'The Future of AI: Large Language Models and Their Impact on Society',
-			preview_snippet: 'Exploring how LLMs are transforming technology and what it means for the future of work, education, and human creativity. This technology is reshaping how we interact with computers and each other.'
-		},
-		{
-			id: '2',
-			title: 'Climate Change Solutions: Renewable Energy Breakthroughs',
-			preview_snippet: 'Recent advances in solar and wind technology are making clean energy more affordable and accessible than ever before. New battery storage systems are solving the intermittency problem.'
-		},
-		{
-			id: '3',
-			title: 'Quantum Computing: Breaking Through the Noise',
-			preview_snippet: 'Scientists achieve new milestone in quantum error correction, bringing us closer to practical quantum computers. This breakthrough could revolutionize drug discovery and cryptography.'
-		},
-		{
-			id: '4',
-			title: 'The Economics of Remote Work',
-			preview_snippet: 'How distributed teams are reshaping urban development, real estate markets, and corporate culture worldwide. Cities are adapting to the new reality of flexible work arrangements.'
-		},
-		{
-			id: '5',
-			title: 'CRISPR Gene Editing: Medical Breakthroughs and Ethical Considerations',
-			preview_snippet: 'New gene therapies show promise for treating genetic diseases, but raise important questions about human enhancement. The technology is advancing faster than regulatory frameworks can adapt.'
-		},
-		{
-			id: '6',
-			title: 'Web3 and Decentralization: Beyond the Hype',
-			preview_snippet: 'A critical look at blockchain technology, NFTs, and what decentralization actually means for internet users. Separating genuine innovation from speculative bubbles and marketing buzzwords.'
-		}
-	]);
+	let articles = $state<Array<{ id: string; title: string; preview_snippet: string }>>([]);
 	let libraryDropdownRef: HTMLDivElement | null = null;
 	let libraryButtonRef: HTMLButtonElement | null = null;
 
@@ -92,14 +61,15 @@
 		{ id: '6', thumbnail_url: 'https://images.unsplash.com/photo-1504868584819-f8e8b4b6d7e3?w=150&h=150&fit=crop', full_url: 'https://images.unsplash.com/photo-1504868584819-f8e8b4b6d7e3?w=1200&h=800&fit=crop', alt: 'Business intelligence charts' }
 	];
 
-	// Load mock charts on mount (for demo)
+	// Load initial data on mount
 	onMount(() => {
 		if (typeof window !== 'undefined') {
 			localStorage.setItem('asura_app_mode', 'reader');
-			// Load mock data after a short delay to simulate article processing
+			// Load articles from database
+			loadArticles();
+			// Load mock charts (for demo)
 			setTimeout(() => {
 				charts = MOCK_CHARTS;
-				// Don't auto-select any chart - let user click to view
 				selectedChartIndex = null;
 				showLightbox = false;
 			}, 1000);
@@ -320,6 +290,10 @@
 
 								// Load chat history for this article
 								await loadChatHistory(articleId);
+
+								// Reload articles list to include the new article
+								await loadArticles();
+
 								return;
 							}
 
@@ -559,11 +533,6 @@
 
 	// Load articles from database
 	async function loadArticles() {
-		// Skip loading from database for now (using mock data)
-		console.log('[Articles] Using mock data, skipping database load');
-		return;
-
-		/* REAL IMPLEMENTATION (uncomment when ready):
 		try {
 			const response = await fetch('/api/reader/articles');
 			if (!response.ok) {
@@ -579,7 +548,6 @@
 		} catch (error) {
 			console.error('[Articles] Error loading:', error);
 		}
-		*/
 	}
 
 	// Switch to different article
@@ -647,14 +615,17 @@
 				return;
 			}
 
-			// Reload articles list
-			await loadArticles();
+			console.log('[Articles] Successfully deleted article:', articleId);
 
 			// If we deleted the current article, clear it
 			if (currentArticle?.id === articleId) {
 				currentArticle = null;
 				chatHistory = [];
+				charts = [];
 			}
+
+			// Reload articles list
+			await loadArticles();
 		} catch (error) {
 			console.error('[Articles] Error deleting:', error);
 		}
