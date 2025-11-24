@@ -19,6 +19,7 @@
 	// Paste area state
 	let showPasteArea = $state(false);
 	let pasteAreaContent = $state('');
+	let isProcessing = $state(true); // Set to true to show spinner for demo
 
 	// Toggle paste area
 	function handlePaperclipClick() {
@@ -66,6 +67,25 @@
 		<div class="messages-content">
 			<!-- Paste Area Card -->
 			<div class="paste-box">
+				{#if isProcessing}
+					<!-- Loading Spinner -->
+					<div class="spinner-container">
+						<div class="spinner">
+							<div class="spinner-bar" style="--bar-index: 0"></div>
+							<div class="spinner-bar" style="--bar-index: 1"></div>
+							<div class="spinner-bar" style="--bar-index: 2"></div>
+							<div class="spinner-bar" style="--bar-index: 3"></div>
+							<div class="spinner-bar" style="--bar-index: 4"></div>
+							<div class="spinner-bar" style="--bar-index: 5"></div>
+							<div class="spinner-bar" style="--bar-index: 6"></div>
+							<div class="spinner-bar" style="--bar-index: 7"></div>
+							<div class="spinner-bar" style="--bar-index: 8"></div>
+							<div class="spinner-bar" style="--bar-index: 9"></div>
+							<div class="spinner-bar" style="--bar-index: 10"></div>
+							<div class="spinner-bar" style="--bar-index: 11"></div>
+						</div>
+					</div>
+				{/if}
 				<div
 					class="paste-area"
 					contenteditable="true"
@@ -428,6 +448,22 @@
 		right: 24px;
 	}
 
+	/* Frosted glass overlay */
+	.paste-box::before {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background: rgba(255, 255, 255, 0.03);
+		backdrop-filter: blur(20px);
+		-webkit-backdrop-filter: blur(20px);
+		border-radius: var(--boss-card-border-radius);
+		pointer-events: none;
+		z-index: 10;
+	}
+
 	/* Paste Area - contenteditable div */
 	.paste-area {
 		height: 260px;
@@ -437,6 +473,8 @@
 		line-height: 1.6;
 		outline: none;
 		white-space: normal;
+		position: relative;
+		z-index: 1;
 	}
 
 	.paste-area:empty:before {
@@ -467,4 +505,58 @@
 		margin: 12px 0;
 		border-radius: 4px;
 	}
+
+	/* Loading Spinner */
+	.spinner-container {
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
+		z-index: 11; /* Above frosted glass overlay (z-index: 10) */
+		pointer-events: none;
+	}
+
+	.spinner {
+		width: 36px;
+		height: 36px;
+		position: relative;
+		animation: spin 1.2s linear infinite;
+	}
+
+	@keyframes spin {
+		from {
+			transform: rotate(0deg);
+		}
+		to {
+			transform: rotate(360deg);
+		}
+	}
+
+	.spinner-bar {
+		position: absolute;
+		width: 2px;
+		height: 10px;
+		background: var(--reader-accent);
+		border-radius: 1.5px;
+		top: 5px;
+		left: 50%;
+		margin-left: -1px;
+		transform-origin: center 13px;
+		transform: rotate(calc(var(--bar-index) * 30deg));
+		opacity: calc(0.2 + (var(--bar-index) / 12) * 0.8);
+	}
+
+	/* Gradient effect through opacity */
+	.spinner-bar:nth-child(1) { opacity: 0.2; }
+	.spinner-bar:nth-child(2) { opacity: 0.27; }
+	.spinner-bar:nth-child(3) { opacity: 0.34; }
+	.spinner-bar:nth-child(4) { opacity: 0.41; }
+	.spinner-bar:nth-child(5) { opacity: 0.48; }
+	.spinner-bar:nth-child(6) { opacity: 0.55; }
+	.spinner-bar:nth-child(7) { opacity: 0.62; }
+	.spinner-bar:nth-child(8) { opacity: 0.69; }
+	.spinner-bar:nth-child(9) { opacity: 0.76; }
+	.spinner-bar:nth-child(10) { opacity: 0.83; }
+	.spinner-bar:nth-child(11) { opacity: 0.90; }
+	.spinner-bar:nth-child(12) { opacity: 1.0; }
 </style>
