@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { renderMarkdown } from '$lib/markdown-renderer';
 	import { Icon } from 'svelte-icons-pack';
-	import { LuPaperclip, LuFolder, LuCloudDownload, LuChevronDown, LuArrowDown, LuArrowUp, LuMessageSquare, LuFlame } from 'svelte-icons-pack/lu';
+	import { LuPaperclip, LuFolder, LuCloudDownload, LuChevronDown, LuArrowDown, LuArrowUp, LuMessageSquare, LuFlame, LuTrash2 } from 'svelte-icons-pack/lu';
 
 
 	// Article state
@@ -10,7 +10,11 @@
 		id: string;
 		title: string;
 		content: string;
-	} | null>(null);
+	} | null>({
+		id: '1',
+		title: 'The Future of AI: Large Language Models and Their Impact on Society',
+		content: '# Mock Article Content\n\nThis is a mock article to demonstrate the UI. Click the folder icon to see the article library dropdown!'
+	});
 
 	// Q&A state
 	type ChatTurn = {
@@ -40,6 +44,43 @@
 
 	// Messages container ref for auto-scroll
 	let messagesContainer: HTMLDivElement | null = null;
+
+	// Article library state
+	let showArticleLibrary = $state(false);
+	let articles = $state<Array<{ id: string; title: string; preview_snippet: string }>>([
+		{
+			id: '1',
+			title: 'The Future of AI: Large Language Models and Their Impact on Society',
+			preview_snippet: 'Exploring how LLMs are transforming technology and what it means for the future of work, education, and human creativity. This technology is reshaping how we interact with computers and each other.'
+		},
+		{
+			id: '2',
+			title: 'Climate Change Solutions: Renewable Energy Breakthroughs',
+			preview_snippet: 'Recent advances in solar and wind technology are making clean energy more affordable and accessible than ever before. New battery storage systems are solving the intermittency problem.'
+		},
+		{
+			id: '3',
+			title: 'Quantum Computing: Breaking Through the Noise',
+			preview_snippet: 'Scientists achieve new milestone in quantum error correction, bringing us closer to practical quantum computers. This breakthrough could revolutionize drug discovery and cryptography.'
+		},
+		{
+			id: '4',
+			title: 'The Economics of Remote Work',
+			preview_snippet: 'How distributed teams are reshaping urban development, real estate markets, and corporate culture worldwide. Cities are adapting to the new reality of flexible work arrangements.'
+		},
+		{
+			id: '5',
+			title: 'CRISPR Gene Editing: Medical Breakthroughs and Ethical Considerations',
+			preview_snippet: 'New gene therapies show promise for treating genetic diseases, but raise important questions about human enhancement. The technology is advancing faster than regulatory frameworks can adapt.'
+		},
+		{
+			id: '6',
+			title: 'Web3 and Decentralization: Beyond the Hype',
+			preview_snippet: 'A critical look at blockchain technology, NFTs, and what decentralization actually means for internet users. Separating genuine innovation from speculative bubbles and marketing buzzwords.'
+		}
+	]);
+	let libraryDropdownRef: HTMLDivElement | null = null;
+	let libraryButtonRef: HTMLButtonElement | null = null;
 
 	// Mock data for testing (TODO: fetch from database)
 	const MOCK_CHARTS = [
@@ -480,19 +521,154 @@
 
 	// Keyboard navigation
 	function handleKeydown(event: KeyboardEvent) {
-		if (!showLightbox) return;
+		if (showLightbox) {
+			if (event.key === 'Escape') {
+				closeLightbox();
+			} else if (event.key === 'ArrowLeft') {
+				navigateChart('prev');
+			} else if (event.key === 'ArrowRight') {
+				navigateChart('next');
+			}
+		}
 
-		if (event.key === 'Escape') {
-			closeLightbox();
-		} else if (event.key === 'ArrowLeft') {
-			navigateChart('prev');
-		} else if (event.key === 'ArrowRight') {
-			navigateChart('next');
+		// Close article library on Escape
+		if (event.key === 'Escape' && showArticleLibrary) {
+			showArticleLibrary = false;
+		}
+	}
+
+	// Toggle article library dropdown
+	function toggleArticleLibrary(event: MouseEvent) {
+		event.stopPropagation(); // Prevent click from bubbling to window
+		showArticleLibrary = !showArticleLibrary;
+		console.log('[Article Library] Toggled to:', showArticleLibrary);
+		console.log('[Article Library] Articles count:', articles.length);
+		if (showArticleLibrary) {
+			loadArticles();
+			// Position dropdown above button
+			setTimeout(() => {
+				if (libraryButtonRef && libraryDropdownRef) {
+					const buttonRect = libraryButtonRef.getBoundingClientRect();
+					const dropdownHeight = libraryDropdownRef.offsetHeight;
+					libraryDropdownRef.style.bottom = `${window.innerHeight - buttonRect.top + 8}px`;
+					libraryDropdownRef.style.left = `${buttonRect.left}px`;
+				}
+			}, 0);
+		}
+	}
+
+	// Load articles from database
+	async function loadArticles() {
+		// Skip loading from database for now (using mock data)
+		console.log('[Articles] Using mock data, skipping database load');
+		return;
+
+		/* REAL IMPLEMENTATION (uncomment when ready):
+		try {
+			const response = await fetch('/api/reader/articles');
+			if (!response.ok) {
+				console.error('[Articles] Failed to load:', response.statusText);
+				return;
+			}
+
+			const data = await response.json();
+			if (data.articles && Array.isArray(data.articles)) {
+				articles = data.articles;
+				console.log('[Articles] Loaded', articles.length, 'articles');
+			}
+		} catch (error) {
+			console.error('[Articles] Error loading:', error);
+		}
+		*/
+	}
+
+	// Switch to different article
+	async function switchToArticle(articleId: string) {
+		showArticleLibrary = false;
+
+		try {
+			// Fetch article details
+			const response = await fetch(`/api/reader/article?article_id=${articleId}`);
+			if (!response.ok) {
+				console.error('[Articles] Failed to load article:', response.statusText);
+				return;
+			}
+
+			const data = await response.json();
+			if (data.article) {
+				currentArticle = {
+					id: data.article.id,
+					title: data.article.title,
+					content: data.article.transformed_content
+				};
+
+				// Load chat history for this article
+				await loadChatHistory(articleId);
+
+				// Load charts for this article
+				await loadCharts(articleId);
+
+				// Scroll to top
+				setTimeout(() => {
+					if (messagesContainer) {
+						messagesContainer.scrollTo({ top: 0, behavior: 'smooth' });
+					}
+				}, 100);
+			}
+		} catch (error) {
+			console.error('[Articles] Error switching:', error);
+		}
+	}
+
+	// Load charts for article
+	async function loadCharts(articleId: string) {
+		// TODO: Implement chart loading from database
+		// For now, use mock data
+		charts = MOCK_CHARTS;
+	}
+
+	// Delete article
+	async function deleteArticle(articleId: string, event: MouseEvent) {
+		event.stopPropagation(); // Prevent switching to article
+
+		if (!confirm('Delete this article and all its Q&A history?')) {
+			return;
+		}
+
+		try {
+			const response = await fetch('/api/reader/articles', {
+				method: 'DELETE',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ article_id: articleId })
+			});
+
+			if (!response.ok) {
+				console.error('[Articles] Failed to delete:', response.statusText);
+				return;
+			}
+
+			// Reload articles list
+			await loadArticles();
+
+			// If we deleted the current article, clear it
+			if (currentArticle?.id === articleId) {
+				currentArticle = null;
+				chatHistory = [];
+			}
+		} catch (error) {
+			console.error('[Articles] Error deleting:', error);
+		}
+	}
+
+	// Handle clicks outside dropdown
+	function handleClickOutside(event: MouseEvent) {
+		if (showArticleLibrary && libraryDropdownRef && !libraryDropdownRef.contains(event.target as Node)) {
+			showArticleLibrary = false;
 		}
 	}
 </script>
 
-<svelte:window onkeydown={handleKeydown} />
+<svelte:window onkeydown={handleKeydown} onclick={handleClickOutside} />
 
 <div class="reader-container">
 	<!-- Messages Area -->
@@ -708,10 +884,52 @@
 						<Icon src={LuPaperclip} size="11" />
 					</button>
 
-					<!-- Folder icon (decorative only) -->
-					<button class="control-btn" title="Files (disabled)" disabled>
-						<Icon src={LuFolder} size="11" />
-					</button>
+					<!-- Folder icon (article library) -->
+					<div class="article-library-wrapper">
+						<button
+							bind:this={libraryButtonRef}
+							class="control-btn"
+							class:active={showArticleLibrary}
+							title="Article Library"
+							onclick={toggleArticleLibrary}
+						>
+							<Icon src={LuFolder} size="11" />
+						</button>
+
+					</div>
+
+					<!-- Article Library Dropdown (portal-style, outside wrapper) -->
+					{#if showArticleLibrary}
+						<div class="article-library-dropdown" bind:this={libraryDropdownRef}>
+							{#if articles.length === 0}
+								<div class="dropdown-empty">No articles yet</div>
+							{:else}
+								{#each articles as article}
+									<div
+										class="article-item"
+										class:active={currentArticle?.id === article.id}
+									>
+										<button
+											class="article-button"
+											onclick={() => switchToArticle(article.id)}
+										>
+											<div class="article-content">
+												<div class="article-title">{article.title}</div>
+												<div class="article-preview">{article.preview_snippet}</div>
+											</div>
+										</button>
+										<button
+											class="delete-btn"
+											onclick={(e) => deleteArticle(article.id, e)}
+											title="Delete article"
+										>
+											<Icon src={LuTrash2} size="12" />
+										</button>
+									</div>
+								{/each}
+							{/if}
+						</div>
+					{/if}
 
 					<button class="control-btn" title="Download from cloud"><Icon src={LuCloudDownload} size="11" /></button>
 
@@ -1011,6 +1229,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 8px;
+		overflow: visible;
 	}
 
 	.input-controls {
@@ -1020,6 +1239,7 @@
 		margin-bottom: 0px;
 		flex-wrap: nowrap;
 		overflow-x: auto;
+		overflow-y: visible;
 	}
 
 	.control-btn {
@@ -1447,5 +1667,125 @@
 
 	.chart-nav-next {
 		right: 16px;
+	}
+
+	/* Article Library Dropdown */
+	.article-library-wrapper {
+		position: relative;
+	}
+
+	.control-btn.active {
+		color: var(--reader-accent);
+	}
+
+	.article-library-dropdown {
+		position: fixed;
+		bottom: 140px;
+		left: 84px;
+		width: 320px;
+		max-height: 450px;
+		overflow-y: auto;
+		background: hsl(var(--card));
+		border: 1px solid hsl(var(--border));
+		border-radius: 6px;
+		z-index: 99999;
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+	}
+
+	.dropdown-empty {
+		padding: 24px 16px;
+		text-align: center;
+		color: hsl(var(--muted-foreground));
+		font-size: 1em;
+	}
+
+	.article-item {
+		width: 100%;
+		display: flex;
+		align-items: stretch;
+		justify-content: space-between;
+		border-left: 3px solid transparent;
+		transition: all 0.2s ease;
+		border-bottom: 1px solid hsl(var(--border) / 0.3);
+	}
+
+	.article-item:last-child {
+		border-bottom: none;
+	}
+
+	.article-item:hover {
+		background: hsl(var(--accent) / 0.5);
+		border-left-color: var(--reader-accent);
+	}
+
+	.article-item.active {
+		background: hsl(var(--accent) / 0.7);
+		border-left-color: var(--reader-accent);
+	}
+
+	.article-button {
+		flex: 1;
+		display: flex;
+		align-items: flex-start;
+		padding: 12px 16px;
+		background: transparent;
+		border: none;
+		color: hsl(var(--foreground));
+		text-align: left;
+		cursor: pointer;
+		min-width: 0;
+		transition: none;
+	}
+
+	.article-content {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+	}
+
+	.article-title {
+		font-size: 1em;
+		font-weight: 500;
+		color: hsl(var(--foreground));
+		line-height: 1.4;
+		display: -webkit-box;
+		-webkit-line-clamp: 2;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+	}
+
+	.article-preview {
+		font-size: 1em;
+		color: hsl(var(--muted-foreground));
+		line-height: 1.5;
+		display: -webkit-box;
+		-webkit-line-clamp: 3;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+	}
+
+	.delete-btn {
+		flex-shrink: 0;
+		width: 40px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: transparent;
+		border: none;
+		color: hsl(var(--muted-foreground));
+		cursor: pointer;
+		transition: all 0.2s ease;
+		opacity: 0;
+	}
+
+	.article-item:hover .delete-btn {
+		opacity: 1;
+	}
+
+	.delete-btn:hover {
+		background: rgba(239, 68, 68, 0.1);
+		color: rgb(239, 68, 68);
 	}
 </style>
