@@ -706,28 +706,39 @@
 		</div>
 	{/if}
 
+	<!-- Canvas Area - blank for now -->
+	<div class="canvas-area"></div>
+
 </div>
 
 <style>
-	/* Main Layout - Three-column grid */
+	/* Main Layout - Two-column grid (chat left, canvas right) */
 	.chat-container {
 		display: grid;
 		grid-template-rows: 1fr auto;
-		grid-template-columns: 1fr min(var(--middle-section-width), 100%) 1fr;
+		grid-template-columns: var(--middle-section-width) 1fr;
 		grid-template-areas:
-			'left-blank messages right-blank'
-			'input input input';
+			'messages canvas'
+			'input canvas';
 		height: 100vh;
+		margin-left: 60px; /* Account for sidebar */
 		overflow-y: auto;
 		background: hsl(var(--background));
 		color: hsl(var(--foreground));
 		position: relative;
 	}
 
+	/* Canvas area - blank for now */
+	.canvas-area {
+		grid-area: canvas;
+		background: hsl(var(--background));
+	}
+
 	/* Responsive adjustments for narrow screens */
 	@media (max-width: 900px) {
 		.chat-container {
-			grid-template-columns: 0 1fr 0;
+			grid-template-columns: 1fr 0;
+			margin-left: 0;
 			padding: 0 16px;
 		}
 
@@ -868,6 +879,7 @@
 		grid-area: input;
 		background: hsl(var(--card));
 		border-top: 1px solid hsl(var(--chat-border));
+		border-right: 1px solid hsl(var(--chat-border));
 		padding: 16px 24px;
 		position: sticky;
 		bottom: 0;
