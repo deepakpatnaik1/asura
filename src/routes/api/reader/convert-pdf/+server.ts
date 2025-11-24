@@ -361,6 +361,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 				user_id: userId,
 				chart_index: chart.index,
 				storage_path: chart.storage_path,
+				alt_text: chart.alt,
 				anthropic_file_id: chart.anthropic_file_id,
 				anthropic_file_created_at: chart.anthropic_file_created_at?.toISOString()
 				// is_relevant will be set in Phase 2 (AI filtering)

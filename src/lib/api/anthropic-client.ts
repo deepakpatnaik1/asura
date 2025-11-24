@@ -21,7 +21,7 @@ export interface CreateMessageParams {
 	system: string | Anthropic.Messages.TextBlockParam[];
 	messages: Array<{
 		role: 'user' | 'assistant';
-		content: string;
+		content: string | Anthropic.Messages.MessageParam['content'];
 	}>;
 }
 
@@ -50,7 +50,7 @@ export async function createMessage(params: CreateMessageParams): Promise<Anthro
 		messages: params.messages
 	}, {
 		headers: {
-			'anthropic-beta': 'prompt-caching-2024-07-31'
+			'anthropic-beta': 'prompt-caching-2024-07-31,files-api-2025-04-14'
 		}
 	});
 }
