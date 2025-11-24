@@ -4,12 +4,6 @@
 	import { Icon } from 'svelte-icons-pack';
 	import { LuPaperclip, LuFolder, LuCloudDownload, LuChevronDown, LuArrowDown, LuArrowUp, LuMessageSquare, LuFlame } from 'svelte-icons-pack/lu';
 
-	// Persist mode to localStorage
-	onMount(() => {
-		if (typeof window !== 'undefined') {
-			localStorage.setItem('asura_app_mode', 'reader');
-		}
-	});
 
 	// Article state
 	let currentArticle = $state<{
@@ -17,6 +11,16 @@
 		title: string;
 		content: string;
 	} | null>(null);
+
+	// Q&A state
+	type ChatTurn = {
+		role: 'user' | 'assistant';
+		content: string;
+	};
+	let chatHistory = $state<ChatTurn[]>([]);
+	let currentUserMessage = $state<string | null>(null);
+	let streamingChatResponse = $state('');
+	let isLoadingChat = $state(false);
 
 	// UI state
 	let selectedPersona = $state<'gunnar' | 'kirby'>('gunnar');
@@ -28,6 +32,38 @@
 	let streamingContent = $state('');
 	let currentRetryAttempt = $state(0);
 	let abortController: AbortController | null = null;
+
+	// Canvas carousel state
+	let charts = $state<Array<{ id: string; thumbnail_url: string; full_url: string; alt: string }>>([]);
+	let selectedChartIndex = $state<number | null>(null);
+	let showLightbox = $state(false);
+
+	// Messages container ref for auto-scroll
+	let messagesContainer: HTMLDivElement | null = null;
+
+	// Mock data for testing (TODO: fetch from database)
+	const MOCK_CHARTS = [
+		{ id: '1', thumbnail_url: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=150&h=150&fit=crop', full_url: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=1200&h=800&fit=crop', alt: 'Revenue growth analytics dashboard' },
+		{ id: '2', thumbnail_url: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=150&h=150&fit=crop', full_url: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=1200&h=800&fit=crop', alt: 'Market trends and projections' },
+		{ id: '3', thumbnail_url: 'https://images.unsplash.com/photo-1543286386-713bdd548da4?w=150&h=150&fit=crop', full_url: 'https://images.unsplash.com/photo-1543286386-713bdd548da4?w=1200&h=800&fit=crop', alt: 'Data visualization pie chart' },
+		{ id: '4', thumbnail_url: 'https://images.unsplash.com/photo-1579621970563-ebec7560ff3e?w=150&h=150&fit=crop', full_url: 'https://images.unsplash.com/photo-1579621970563-ebec7560ff3e?w=1200&h=800&fit=crop', alt: 'Statistical analysis graphs' },
+		{ id: '5', thumbnail_url: 'https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?w=150&h=150&fit=crop', full_url: 'https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?w=1200&h=800&fit=crop', alt: 'Performance metrics dashboard' },
+		{ id: '6', thumbnail_url: 'https://images.unsplash.com/photo-1504868584819-f8e8b4b6d7e3?w=150&h=150&fit=crop', full_url: 'https://images.unsplash.com/photo-1504868584819-f8e8b4b6d7e3?w=1200&h=800&fit=crop', alt: 'Business intelligence charts' }
+	];
+
+	// Load mock charts on mount (for demo)
+	onMount(() => {
+		if (typeof window !== 'undefined') {
+			localStorage.setItem('asura_app_mode', 'reader');
+			// Load mock data after a short delay to simulate article processing
+			setTimeout(() => {
+				charts = MOCK_CHARTS;
+				// Don't auto-select any chart - let user click to view
+				selectedChartIndex = null;
+				showLightbox = false;
+			}, 1000);
+		}
+	});
 
 	// Toggle paste area
 	function handlePaperclipClick() {
@@ -240,6 +276,9 @@
 								isProcessing = false;
 								processingStatus = '';
 								abortController = null;
+
+								// Load chat history for this article
+								await loadChatHistory(articleId);
 								return;
 							}
 
@@ -275,11 +314,189 @@
 			processArticle(pasteArea.innerHTML);
 		}
 	}
+
+	// Load chat history from database
+	async function loadChatHistory(articleId: string) {
+		try {
+			const response = await fetch(`/api/reader/chat-history?article_id=${articleId}`);
+			if (!response.ok) {
+				console.error('[Chat History] Failed to load:', response.statusText);
+				return;
+			}
+
+			const data = await response.json();
+			if (data.history && Array.isArray(data.history)) {
+				chatHistory = data.history;
+				console.log('[Chat History] Loaded', chatHistory.length, 'turns');
+
+				// Auto-scroll to bottom after loading history
+				setTimeout(() => scrollToBottom(), 100);
+			}
+		} catch (error) {
+			console.error('[Chat History] Error loading:', error);
+		}
+	}
+
+	// Auto-scroll to bottom of messages
+	function scrollToBottom() {
+		if (messagesContainer) {
+			messagesContainer.scrollTo({
+				top: messagesContainer.scrollHeight,
+				behavior: 'smooth'
+			});
+		}
+	}
+
+	// Q&A Submit Handler
+	async function handleSubmitQuestion() {
+		if (!inputMessage.trim() || !currentArticle?.id || isLoadingChat) {
+			return;
+		}
+
+		const userMessage = inputMessage.trim();
+		const articleId = currentArticle.id;
+
+		// Capture chart index at submit time
+		const chartIndexAtSubmit = showLightbox ? selectedChartIndex : null;
+
+		// Clear input immediately
+		inputMessage = '';
+
+		// Set current user message for display
+		currentUserMessage = userMessage;
+		streamingChatResponse = '';
+		isLoadingChat = true;
+
+		// Scroll to show user's message
+		setTimeout(() => scrollToBottom(), 100);
+
+		try {
+			const response = await fetch('/api/reader/chat', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					article_id: articleId,
+					message: userMessage,
+					chart_index: chartIndexAtSubmit
+				})
+			});
+
+			if (!response.ok) {
+				const error = await response.json();
+				throw new Error(error.error?.message || 'Chat request failed');
+			}
+
+			// Stream the response
+			const reader = response.body?.getReader();
+			const decoder = new TextDecoder();
+
+			if (reader) {
+				while (true) {
+					const { done, value } = await reader.read();
+					if (done) break;
+
+					const chunk = decoder.decode(value);
+					const lines = chunk.split('\n');
+
+					for (const line of lines) {
+						if (line.startsWith('data: ')) {
+							const data = JSON.parse(line.slice(6));
+
+							if (data.text) {
+								streamingChatResponse += data.text;
+							}
+
+							if (data.done) {
+								console.log('[Q&A] Response complete');
+
+								// Add completed turn to history
+								chatHistory = [
+									...chatHistory,
+									{ role: 'user', content: userMessage },
+									{ role: 'assistant', content: streamingChatResponse }
+								];
+
+								// Reset streaming state
+								currentUserMessage = null;
+								streamingChatResponse = '';
+								isLoadingChat = false;
+
+								// Auto-scroll to bottom
+								setTimeout(() => scrollToBottom(), 100);
+								return;
+							}
+
+							if (data.error) {
+								throw new Error(data.error);
+							}
+						}
+					}
+				}
+			}
+		} catch (error) {
+			console.error('[Q&A] Error:', error);
+
+			// Show error in chat
+			chatHistory = [
+				...chatHistory,
+				{ role: 'user', content: userMessage },
+				{ role: 'assistant', content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}` }
+			];
+
+			currentUserMessage = null;
+			streamingChatResponse = '';
+			isLoadingChat = false;
+		}
+	}
+
+	// Handle Enter key in input
+	function handleKeyPress(event: KeyboardEvent) {
+		if (event.key === 'Enter' && !event.shiftKey) {
+			event.preventDefault();
+			handleSubmitQuestion();
+		}
+	}
+
+	// Canvas carousel functions
+	function openLightbox(index: number) {
+		selectedChartIndex = index;
+		showLightbox = true;
+	}
+
+	function closeLightbox() {
+		showLightbox = false;
+		selectedChartIndex = null;
+	}
+
+	function navigateChart(direction: 'prev' | 'next') {
+		if (selectedChartIndex === null) return;
+
+		if (direction === 'prev') {
+			selectedChartIndex = selectedChartIndex > 0 ? selectedChartIndex - 1 : charts.length - 1;
+		} else {
+			selectedChartIndex = selectedChartIndex < charts.length - 1 ? selectedChartIndex + 1 : 0;
+		}
+	}
+
+	// Keyboard navigation
+	function handleKeydown(event: KeyboardEvent) {
+		if (!showLightbox) return;
+
+		if (event.key === 'Escape') {
+			closeLightbox();
+		} else if (event.key === 'ArrowLeft') {
+			navigateChart('prev');
+		} else if (event.key === 'ArrowRight') {
+			navigateChart('next');
+		}
+	}
 </script>
+
+<svelte:window onkeydown={handleKeydown} />
 
 <div class="reader-container">
 	<!-- Messages Area -->
-	<div class="messages-area">
+	<div class="messages-area" bind:this={messagesContainer}>
 		<div class="messages-content">
 			<!-- Paste Area Card -->
 			{#if showPasteArea}
@@ -355,6 +572,61 @@
 						</div>
 					</div>
 				</div>
+
+				<!-- Q&A History -->
+				{#each chatHistory as turn}
+					{#if turn.role === 'user'}
+						<div class="message-group" data-role="boss">
+							<div class="boss-message" data-mode="reader">
+								<div class="message-header">
+									<span class="boss-label" data-mode="reader">BOSS</span>
+								</div>
+								<div class="message-text">
+									{turn.content}
+								</div>
+							</div>
+						</div>
+					{:else}
+						<div class="message-group" data-role="gunnar">
+							<div class="gunnar-message">
+								<div class="message-header">
+									<span class="gunnar-label">GUNNAR</span>
+								</div>
+								<div class="message-text">
+									{@html renderMarkdown(turn.content)}
+								</div>
+							</div>
+						</div>
+					{/if}
+				{/each}
+
+				<!-- Current Q&A Turn (streaming) -->
+				{#if currentUserMessage}
+					<div class="message-group" data-role="boss">
+						<div class="boss-message" data-mode="reader">
+							<div class="message-header">
+								<span class="boss-label" data-mode="reader">BOSS</span>
+							</div>
+							<div class="message-text">
+								{currentUserMessage}
+							</div>
+						</div>
+					</div>
+
+					<div class="message-group" data-role="gunnar">
+						<div class="gunnar-message">
+							<div class="message-header">
+								<span class="gunnar-label">GUNNAR</span>
+								{#if isLoadingChat && !streamingChatResponse}
+									<span class="loading-indicator">●</span>
+								{/if}
+							</div>
+							<div class="message-text">
+								{@html renderMarkdown(streamingChatResponse || '')}
+							</div>
+						</div>
+					</div>
+				{/if}
 			{:else if !showPasteArea}
 				<!-- Placeholder content -->
 				<div class="placeholder-content">
@@ -365,8 +637,66 @@
 		</div>
 	</div>
 
-	<!-- Canvas Area - blank for now -->
-	<div class="canvas-area"></div>
+	<!-- Canvas Area - Chart Carousel -->
+	<div class="canvas-area">
+		{#if charts.length > 0}
+			{#if showLightbox && selectedChartIndex !== null}
+				<!-- Full-size chart view (takes remaining space above thumbnails) -->
+				<div class="canvas-chart-view">
+					<div class="chart-view-header">
+						<div class="chart-view-info">
+							<span class="chart-counter">{selectedChartIndex + 1} / {charts.length}</span>
+							<span class="chart-title">{charts[selectedChartIndex].alt}</span>
+						</div>
+						<button class="chart-view-close" onclick={closeLightbox} title="Close (Esc)">
+							<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+								<path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+							</svg>
+						</button>
+					</div>
+
+					<div class="chart-view-image">
+						<button class="chart-nav chart-nav-prev" onclick={() => navigateChart('prev')} title="Previous (←)">
+							<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+								<path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+							</svg>
+						</button>
+
+						<img src={charts[selectedChartIndex].full_url} alt={charts[selectedChartIndex].alt} />
+
+						<button class="chart-nav chart-nav-next" onclick={() => navigateChart('next')} title="Next (→)">
+							<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+								<path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+							</svg>
+						</button>
+					</div>
+				</div>
+			{/if}
+
+			<!-- Thumbnail grid (always visible when charts exist) -->
+			<div class="chart-grid">
+				{#each charts as chart, index}
+					<button
+						class="chart-thumbnail"
+						class:active={showLightbox && selectedChartIndex === index}
+						onclick={() => openLightbox(index)}
+						title={chart.alt}
+					>
+						<img src={chart.thumbnail_url} alt={chart.alt} />
+						<div class="chart-overlay">
+							<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+								<path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+							</svg>
+						</div>
+					</button>
+				{/each}
+			</div>
+		{:else}
+			<div class="canvas-empty">
+				<p>No charts found in this article</p>
+			</div>
+		{/if}
+	</div>
 
 	<!-- Input Area -->
 	<div class="input-area" data-mode="reader">
@@ -408,9 +738,11 @@
 					placeholder="Type your message..."
 					class="message-input"
 					bind:value={inputMessage}
+					onkeypress={handleKeyPress}
+					disabled={isLoadingChat}
 				/>
 			</div>
-			<button class="send-button">
+			<button class="send-button" onclick={handleSubmitQuestion} disabled={isLoadingChat || !inputMessage.trim()}>
 				Send
 			</button>
 		</div>
@@ -434,10 +766,100 @@
 		position: relative;
 	}
 
-	/* Canvas area - blank for now */
+	/* Canvas area - Chart carousel */
 	.canvas-area {
 		grid-area: canvas;
 		background: hsl(var(--background));
+		border-left: 1px solid hsl(var(--border) / 0.3);
+		display: flex;
+		flex-direction: column;
+		justify-content: flex-end; /* Push thumbnails to bottom */
+		overflow: hidden; /* Prevent overflow, let child containers handle scrolling */
+	}
+
+	/* Chart Grid - macOS style (fixed height container at bottom, aligned with input bar) */
+	.chart-grid {
+		display: flex;
+		flex-direction: row;
+		gap: 8px;
+		width: 100%;
+		padding: 12px 16px; /* Reduced top/bottom padding to align with input bar */
+		justify-content: center;
+		flex-wrap: nowrap;
+		overflow-x: auto;
+		flex-shrink: 0; /* Don't shrink this container */
+		height: 104px; /* Fixed height: 80px thumbnails + 12px padding top/bottom */
+		align-items: center;
+		background: hsl(var(--background));
+	}
+
+	.chart-thumbnail {
+		position: relative;
+		flex-shrink: 0;
+		width: auto;
+		height: 80px;
+		aspect-ratio: 1;
+		background: hsl(var(--card));
+		border: 1px solid hsl(var(--border) / 0.2);
+		border-radius: 8px;
+		overflow: hidden;
+		cursor: pointer;
+		transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 1px 1px rgba(0, 0, 0, 0.06);
+	}
+
+	.chart-thumbnail:hover {
+		transform: scale(1.05);
+		box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2), 0 4px 8px rgba(0, 0, 0, 0.15);
+		border-color: var(--reader-accent);
+	}
+
+	.chart-thumbnail:active {
+		transform: scale(0.98);
+	}
+
+	/* Active thumbnail state - highlighted when viewing full-size */
+	.chart-thumbnail.active {
+		border-color: var(--reader-accent);
+		border-width: 2px;
+		box-shadow: 0 0 0 2px var(--reader-accent-alpha);
+	}
+
+	.chart-thumbnail img {
+		width: 100%;
+		height: 100%;
+		object-fit: contain;
+		background: hsl(var(--background));
+	}
+
+	.chart-overlay {
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background: rgba(16, 185, 129, 0.9);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		opacity: 0;
+		transition: opacity 0.2s ease;
+		color: white;
+	}
+
+	.chart-thumbnail:hover .chart-overlay {
+		opacity: 1;
+	}
+
+	/* Empty state */
+	.canvas-empty {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		height: 200px;
+		color: hsl(var(--muted-foreground));
+		font-size: 10pt;
+		text-align: center;
 	}
 
 	/* Responsive adjustments for narrow screens */
@@ -508,6 +930,45 @@
 	.boss-label[data-mode="reader"] {
 		color: var(--reader-accent);
 		border-bottom: 1px solid var(--reader-accent);
+		font-size: 8pt;
+		font-weight: 600;
+		letter-spacing: 0.05em;
+		padding-bottom: 2px;
+	}
+
+	/* Gunnar Message - reader mode styling */
+	.gunnar-message {
+		background: transparent;
+		padding: var(--boss-card-padding-y) var(--boss-card-padding-x);
+		margin-left: var(--boss-card-margin-x);
+		margin-right: var(--boss-card-margin-x);
+	}
+
+	/* Gunnar label */
+	.gunnar-label {
+		color: var(--reader-accent);
+		border-bottom: 1px solid var(--reader-accent);
+		font-size: 8pt;
+		font-weight: 600;
+		letter-spacing: 0.05em;
+		padding-bottom: 2px;
+	}
+
+	/* Loading indicator for Q&A streaming */
+	.loading-indicator {
+		color: var(--reader-accent);
+		font-size: 12pt;
+		margin-left: 8px;
+		animation: pulse 1.5s ease-in-out infinite;
+	}
+
+	@keyframes pulse {
+		0%, 100% {
+			opacity: 0.3;
+		}
+		50% {
+			opacity: 1;
+		}
 	}
 
 	/* Message Header */
@@ -870,5 +1331,121 @@
 	.abort-button:hover {
 		background: rgb(239, 68, 68);
 		color: hsl(var(--background));
+	}
+
+	/* Canvas Chart View - Full-size image display (takes remaining space above thumbnails) */
+	.canvas-chart-view {
+		flex: 1; /* Take remaining vertical space */
+		width: 100%;
+		display: flex;
+		flex-direction: column;
+		animation: fadeIn 0.2s ease;
+		overflow: hidden;
+	}
+
+	@keyframes fadeIn {
+		from {
+			opacity: 0;
+		}
+		to {
+			opacity: 1;
+		}
+	}
+
+	.chart-view-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: 16px;
+		border-bottom: 1px solid hsl(var(--border) / 0.3);
+	}
+
+	.chart-view-info {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+
+	.chart-counter {
+		font-size: 9pt;
+		color: hsl(var(--muted-foreground));
+		font-weight: 500;
+	}
+
+	.chart-title {
+		font-size: 10pt;
+		color: hsl(var(--foreground));
+		font-weight: 500;
+	}
+
+	.chart-view-close {
+		background: transparent;
+		border: 1px solid hsl(var(--border) / 0.3);
+		border-radius: 6px;
+		width: 32px;
+		height: 32px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		cursor: pointer;
+		color: hsl(var(--muted-foreground));
+		transition: all 0.2s;
+	}
+
+	.chart-view-close:hover {
+		background: hsl(var(--accent));
+		border-color: hsl(var(--accent));
+		color: hsl(var(--accent-foreground));
+	}
+
+	.chart-view-image {
+		flex: 1;
+		position: relative;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 24px;
+		overflow: hidden;
+	}
+
+	.chart-view-image img {
+		max-width: 100%;
+		max-height: 100%;
+		object-fit: contain;
+		border-radius: 8px;
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+	}
+
+	.chart-nav {
+		position: absolute;
+		top: 50%;
+		transform: translateY(-50%);
+		width: 40px;
+		height: 40px;
+		background: hsl(var(--card));
+		border: 1px solid hsl(var(--border) / 0.3);
+		border-radius: 8px;
+		color: hsl(var(--foreground));
+		cursor: pointer;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		transition: all 0.2s;
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+	}
+
+	.chart-nav:hover {
+		background: hsl(var(--accent));
+		border-color: hsl(var(--accent));
+		color: hsl(var(--accent-foreground));
+		transform: translateY(-50%) scale(1.05);
+	}
+
+	.chart-nav-prev {
+		left: 16px;
+	}
+
+	.chart-nav-next {
+		right: 16px;
 	}
 </style>
