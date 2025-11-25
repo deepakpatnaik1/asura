@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { renderMarkdown } from '$lib/markdown-renderer';
 	import { Icon } from 'svelte-icons-pack';
 	import { LuPaperclip, LuFolder, LuCloudDownload, LuChevronDown, LuArrowDown, LuArrowUp, LuMessageSquare, LuFlame, LuTrash2 } from 'svelte-icons-pack/lu';
@@ -125,13 +125,17 @@
 	});
 
 	// Toggle paste area
-	function handlePaperclipClick() {
+	async function handlePaperclipClick() {
 		showPasteArea = !showPasteArea;
 		if (showPasteArea) {
 			// Clear any existing article
 			currentArticle = null;
 			streamingContent = '';
 			processingError = null;
+			// Focus the paste area after DOM updates
+			await tick();
+			const pasteArea = document.querySelector('.paste-area') as HTMLElement;
+			pasteArea?.focus();
 		}
 	}
 
@@ -299,7 +303,6 @@
 
 			// Step 4: Process article with AI (streaming)
 			processingStatus = 'Processing with AI...';
-			showPasteArea = false; // Hide paste area when streaming starts
 
 			const response = await fetch('/api/reader/process-article', {
 				method: 'POST',
@@ -336,6 +339,17 @@
 							const data = JSON.parse(line.slice(6));
 
 							if (data.text) {
+								// First text chunk arrives - Samara starts speaking
+								if (streamingContent.length === 0) {
+									console.log('[Streaming] First text chunk arrived');
+									showPasteArea = false; // Hide paste area now that content is streaming
+									isProcessing = false;
+									processingStatus = '';
+									if (!isAutoScrolling) {
+										console.log('[Auto-scroll] Starting auto-scroll');
+										handleAutoScroll();
+									}
+								}
 								streamingContent += data.text;
 							}
 
@@ -352,8 +366,6 @@
 									title: articleTitle,
 									content: streamingContent
 								};
-								isProcessing = false;
-								processingStatus = '';
 								abortController = null;
 
 								// Load chat history for this article
@@ -418,8 +430,10 @@
 				chatHistory = data.history;
 				console.log('[Chat History] Loaded', chatHistory.length, 'turns');
 
-				// Auto-scroll to bottom after loading history
-				setTimeout(() => scrollToBottom(), 100);
+				// Only scroll to bottom if there's existing chat history (not for new articles)
+				if (chatHistory.length > 0) {
+					setTimeout(() => scrollToBottom(), 100);
+				}
 			}
 		} catch (error) {
 			console.error('[Chat History] Error loading:', error);
@@ -872,16 +886,6 @@
 
 			const maxScroll = container.scrollHeight - container.clientHeight;
 			const currentScroll = container.scrollTop;
-
-			if (currentScroll >= maxScroll) {
-				// Reached bottom, stop scrolling
-				isAutoScrolling = false;
-				isPaused = false;
-				pauseProgress = 0;
-				scrollAccumulator = 0;
-				return;
-			}
-
 			const now = Date.now();
 
 			if (isPaused) {
@@ -897,7 +901,17 @@
 					scrollAccumulator = 0;
 				}
 			} else {
-				// Scrolling phase: scroll for 15 seconds
+				// Scrolling phase: scroll for 30 seconds
+				// Check if reached bottom (only during scroll phase, not pause)
+				if (maxScroll > 0 && currentScroll >= maxScroll) {
+					console.log('[Auto-scroll] Reached bottom, stopping');
+					isAutoScrolling = false;
+					isPaused = false;
+					pauseProgress = 0;
+					scrollAccumulator = 0;
+					return;
+				}
+
 				pauseProgress = 0;
 				const scrollElapsed = now - scrollStartTime;
 				if (scrollElapsed < TIMING.autoScrollDuration) {
