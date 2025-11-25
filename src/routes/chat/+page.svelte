@@ -238,6 +238,7 @@
 	}
 
 	// Custom auto-scroll with adjustable speed and pause pattern
+	// Pattern: Pause 60s → Scroll 15s → Repeat
 	function handleAutoScroll() {
 		if (isAutoScrolling) {
 			// If auto-scroll is active (either scrolling or paused), turn it off
@@ -248,15 +249,16 @@
 			return;
 		}
 
-		// Start scrolling
+		// Start with pause phase first
 		isAutoScrolling = true;
-		isPaused = false;
+		isPaused = true;
 		pauseProgress = 0;
 		scrollAccumulator = 0;
 		const container = document.querySelector('.chat-container') as HTMLElement | null;
 		if (!container) return;
 
 		let scrollStartTime = Date.now();
+		pauseStartTime = Date.now();
 
 		function smoothScroll() {
 			if (!isAutoScrolling || !container) return;
@@ -275,8 +277,22 @@
 
 			const now = Date.now();
 
-			if (!isPaused) {
-				// Scrolling phase: scroll for 5 seconds
+			if (isPaused) {
+				// Pause phase: pause for 60 seconds first
+				// During pause, user can manually scroll - we'll resume from their position
+				const pauseElapsed = now - pauseStartTime;
+				pauseProgress = Math.min(100, (pauseElapsed / TIMING.autoScrollPause) * 100);
+
+				if (pauseElapsed >= TIMING.autoScrollPause) {
+					// Switch to scrolling phase from current scroll position
+					isPaused = false;
+					scrollStartTime = now;
+					pauseProgress = 0;
+					scrollAccumulator = 0;
+				}
+				// Don't auto-scroll during pause, but keep checking
+			} else {
+				// Scrolling phase: scroll for 15 seconds
 				pauseProgress = 0;
 				const scrollElapsed = now - scrollStartTime;
 				if (scrollElapsed < TIMING.autoScrollDuration) {
@@ -288,25 +304,11 @@
 						scrollAccumulator -= pixelsToScroll;
 					}
 				} else {
-					// Switch to pause phase
+					// Switch back to pause phase
 					isPaused = true;
 					pauseStartTime = now;
 					scrollAccumulator = 0;
 				}
-			} else {
-				// Pause phase: pause for 1 minute
-				// During pause, user can manually scroll - we'll resume from their position
-				const pauseElapsed = now - pauseStartTime;
-				pauseProgress = Math.min(100, (pauseElapsed / TIMING.autoScrollPause) * 100);
-
-				if (pauseElapsed >= TIMING.autoScrollPause) {
-					// Switch back to scrolling phase from current scroll position
-					isPaused = false;
-					scrollStartTime = now;
-					pauseProgress = 0;
-					scrollAccumulator = 0;
-				}
-				// Don't auto-scroll during pause, but keep checking
 			}
 
 			// Continue the cycle
