@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import Anthropic from '@anthropic-ai/sdk';
 import { ANTHROPIC_API_KEY } from '$env/static/private';
-import { READER_GUNNAR_PROMPT } from '$lib/prompts';
+import { READER_SAMARA_PROMPT } from '$lib/prompts';
 import { DEFAULT_READER_MODEL } from '$lib/config/models';
 import { getModelParams } from '$lib/config/model-params';
 import { BRAVE_SEARCH_TOOL, executeBraveSearch } from '$lib/api/brave-search';
@@ -294,7 +294,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 							model: selectedModel,
 							max_tokens: modelParams.max_tokens,
 							temperature: modelParams.temperature,
-							system: READER_GUNNAR_PROMPT,
+							system: READER_SAMARA_PROMPT,
 							messages: conversationMessages,
 							tools: [BRAVE_SEARCH_TOOL]
 						},

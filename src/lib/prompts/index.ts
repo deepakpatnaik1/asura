@@ -19,4 +19,4 @@ export { CALL1_PROMPT } from './call1';
 export { CALL2_PROMPT } from './call2';
 
 // E-Reader Mode Prompts
-export { READER_GUNNAR_PROMPT } from './reader-gunnar';
+export { READER_SAMARA_PROMPT } from './reader-samara';

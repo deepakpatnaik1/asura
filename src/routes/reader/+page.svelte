@@ -23,7 +23,7 @@
 	let isLoadingChat = $state(false);
 
 	// UI state
-	let selectedPersona = $state<'gunnar' | 'kirby'>('gunnar');
+	let selectedPersona = $state<'samara'>('samara');
 	let inputMessage = $state('');
 	let showPasteArea = $state(false);
 	let isProcessing = $state(false);
@@ -905,7 +905,7 @@
 				<div class="message-group">
 					<div class="ai-message">
 						<div class="message-header">
-							<span class="message-label ai-label">Gunnar</span>
+							<span class="message-label ai-label">Samara</span>
 						</div>
 						<div class="message-text">
 							{@html renderMarkdown(currentArticle?.content || streamingContent, 'reader')}
@@ -930,7 +930,7 @@
 						<div class="message-group">
 							<div class="ai-message">
 								<div class="message-header">
-									<span class="message-label ai-label">Gunnar</span>
+									<span class="message-label ai-label">Samara</span>
 								</div>
 								<div class="message-text">
 									{@html renderMarkdown(turn.content, 'reader')}
@@ -956,7 +956,7 @@
 					<div class="message-group">
 						<div class="ai-message">
 							<div class="message-header">
-								<span class="message-label ai-label">Gunnar</span>
+								<span class="message-label ai-label">Samara</span>
 							</div>
 							<div class="message-text">
 								{#if isLoadingChat && !streamingChatResponse}

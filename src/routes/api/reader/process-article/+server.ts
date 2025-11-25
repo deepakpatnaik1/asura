@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import Anthropic from '@anthropic-ai/sdk';
 import { ANTHROPIC_API_KEY } from '$env/static/private';
-import { READER_GUNNAR_PROMPT } from '$lib/prompts';
+import { READER_SAMARA_PROMPT } from '$lib/prompts';
 import { DEFAULT_READER_MODEL } from '$lib/config/models';
 import { getModelParams } from '$lib/config/model-params';
 import { BRAVE_SEARCH_TOOL, executeBraveSearch } from '$lib/api/brave-search';
@@ -142,7 +142,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 							model: selectedModel,
 							max_tokens: modelParams.max_tokens,
 							temperature: modelParams.temperature,
-							system: READER_GUNNAR_PROMPT,
+							system: READER_SAMARA_PROMPT,
 							messages: conversationMessages,
 							tools: [BRAVE_SEARCH_TOOL]
 						},
@@ -233,6 +233,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 
 				console.log('[Process Article] Full response length:', fullResponse.length);
 				console.log('[Process Article] Preview snippet:', previewSnippet);
+			console.log('[Process Article] Raw content (first 2000 chars):', JSON.stringify(fullResponse.slice(0, 2000)));
 
 				// 9. SAVE TO DATABASE
 				const { error: updateError } = await supabase
