@@ -15,9 +15,8 @@ export { PERSONA_KIRBY } from './persona-kirby';
 // Call 1: Chat Response Generation
 export { CALL1_PROMPT } from './call1';
 
-// Call 2A/2B: Chat Compression & Verification
-export { CALL2A_PROMPT } from './call2a';
-export { CALL2B_PROMPT } from './call2b';
+// Call 2: Chat Compression
+export { CALL2_PROMPT } from './call2';
 
 // E-Reader Mode Prompts
 export { READER_GUNNAR_PROMPT } from './reader-gunnar';

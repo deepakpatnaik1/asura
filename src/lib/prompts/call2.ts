@@ -1,16 +1,12 @@
 /**
- * CALL 2B PROMPT (Chat Verification)
+ * CALL 2 PROMPT (Chat Compression)
  *
- * Location: src/routes/api/chat/+server.ts L206-213
- * Purpose: Verify Call 2A chat compression output
- * Input: CALL2A_PROMPT + Call 2A JSON output
- * Output: Verified/refined compression (saved to Journal with embedding)
+ * Purpose: Artisan cut compression for conversation turns into journal entries
+ * Input: Full conversation turn (user message + AI response)
+ * Output: Compressed JSON saved to journal with embedding
  */
 
-export const CALL2B_PROMPT = `You received the following instruction set and generated a JSON output:
-
-<earlier-instruction-set>
-ARTISAN CUT
+export const CALL2_PROMPT = `ARTISAN CUT
 
 You will receive a single conversation turn containing:
 1. My question or statement (the user input)
@@ -168,17 +164,4 @@ CRITICAL RULES:
 – decision_arc_summary: 50-150 chars, artisan cut style, NEVER null
 – salience_score: integer 1-10 based on tier criteria, NEVER null
 – Always provide both arc and score together - both are REQUIRED fields
-– Use punctuation ( . , ; : - ) to write efficiently but preserve content
-</earlier-instruction-set>
-
-<new-instruction-set>
-I'm giving you back your JSON output. Improve the parts that need work and output ONLY the final improved JSON:
-
-- Ensure boss_essence preserves all key information from the original message (explanations, details, decisions)
-- Verify persona_name is correct (gunnar or kirby, lowercase)
-- Ensure persona_essence captures strategic insights while compressing regenerable content
-- Refine decision_arc to accurately capture the decision-making pattern (50-150 chars)
-- Verify salience_score reflects emotional/strategic weight using tier criteria (1-10)
-
-Keep the overall structure. Only refine what needs refinement. Output the improved JSON directly without showing the original or explaining changes.
-</new-instruction-set>`;
+– Use punctuation ( . , ; : - ) to write efficiently but preserve content`;

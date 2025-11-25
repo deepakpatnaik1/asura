@@ -17,7 +17,7 @@ import {
 	PERSONA_GUNNAR,
 	PERSONA_KIRBY,
 	CALL1_PROMPT,
-	CALL2A_PROMPT
+	CALL2_PROMPT
 } from '$lib/prompts';
 import { createMessage, createMessageStream } from '$lib/api/anthropic-client';
 
@@ -183,7 +183,7 @@ async function compressToJournal(
 				system: [
 					{
 						type: 'text' as const,
-						text: CALL2A_PROMPT,
+						text: CALL2_PROMPT,
 						cache_control: { type: 'ephemeral' as const }
 					}
 				],
