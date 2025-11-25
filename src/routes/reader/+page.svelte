@@ -3,6 +3,7 @@
 	import { renderMarkdown } from '$lib/markdown-renderer';
 	import { Icon } from 'svelte-icons-pack';
 	import { LuPaperclip, LuFolder, LuCloudDownload, LuChevronDown, LuArrowDown, LuArrowUp, LuMessageSquare, LuFlame, LuTrash2 } from 'svelte-icons-pack/lu';
+	import { TIMING } from '$lib/config/timing';
 
 
 	// Article state
@@ -57,6 +58,14 @@
 	let showNukeModal = $state(false);
 	let nukeProgress = $state(0);
 	let nukeTimer: number | null = null;
+
+	// Auto-scroll state
+	let isAutoScrolling = $state(false);
+	let isPaused = $state(false);
+	let pauseProgress = $state(0);
+	let pauseStartTime = 0;
+	let scrollAccumulator = 0;
+	const scrollSpeed = 0.5; // pixels per frame
 
 	// Mock data for testing (TODO: fetch from database)
 	const MOCK_CHARTS = [
@@ -419,9 +428,10 @@
 
 	// Auto-scroll to bottom of messages
 	function scrollToBottom() {
-		if (messagesContainer) {
-			messagesContainer.scrollTo({
-				top: messagesContainer.scrollHeight,
+		const container = document.querySelector('.reader-container') as HTMLElement | null;
+		if (container) {
+			container.scrollTo({
+				top: container.scrollHeight,
 				behavior: 'smooth'
 			});
 		}
@@ -646,8 +656,9 @@
 
 				// Scroll to top
 				setTimeout(() => {
-					if (messagesContainer) {
-						messagesContainer.scrollTo({ top: 0, behavior: 'smooth' });
+					const container = document.querySelector('.reader-container') as HTMLElement | null;
+					if (container) {
+						container.scrollTo({ top: 0, behavior: 'smooth' });
 					}
 				}, 100);
 			}
@@ -826,6 +837,88 @@
 		if (showArticleLibrary && libraryDropdownRef && !libraryDropdownRef.contains(event.target as Node)) {
 			showArticleLibrary = false;
 		}
+	}
+
+	// Auto-scroll with pause-first pattern
+	// Pattern: Pause 60s → Scroll 15s → Repeat
+	function handleAutoScroll() {
+		console.log('[E-Reader Auto-scroll] Button clicked, isAutoScrolling:', isAutoScrolling);
+		if (isAutoScrolling) {
+			// If auto-scroll is active (either scrolling or paused), turn it off
+			isAutoScrolling = false;
+			isPaused = false;
+			pauseProgress = 0;
+			scrollAccumulator = 0;
+			return;
+		}
+
+		// Start with pause phase first
+		isAutoScrolling = true;
+		isPaused = true;
+		pauseProgress = 0;
+		scrollAccumulator = 0;
+		const container = document.querySelector('.reader-container') as HTMLElement | null;
+		console.log('[E-Reader Auto-scroll] Container:', container);
+		if (!container) {
+			console.log('[E-Reader Auto-scroll] No container found, aborting');
+			return;
+		}
+
+		let scrollStartTime = Date.now();
+		pauseStartTime = Date.now();
+
+		function smoothScroll() {
+			if (!isAutoScrolling || !container) return;
+
+			const maxScroll = container.scrollHeight - container.clientHeight;
+			const currentScroll = container.scrollTop;
+
+			if (currentScroll >= maxScroll) {
+				// Reached bottom, stop scrolling
+				isAutoScrolling = false;
+				isPaused = false;
+				pauseProgress = 0;
+				scrollAccumulator = 0;
+				return;
+			}
+
+			const now = Date.now();
+
+			if (isPaused) {
+				// Pause phase: pause for 60 seconds first
+				const pauseElapsed = now - pauseStartTime;
+				pauseProgress = Math.min(100, (pauseElapsed / TIMING.autoScrollPause) * 100);
+
+				if (pauseElapsed >= TIMING.autoScrollPause) {
+					// Switch to scrolling phase
+					isPaused = false;
+					scrollStartTime = now;
+					pauseProgress = 0;
+					scrollAccumulator = 0;
+				}
+			} else {
+				// Scrolling phase: scroll for 15 seconds
+				pauseProgress = 0;
+				const scrollElapsed = now - scrollStartTime;
+				if (scrollElapsed < TIMING.autoScrollDuration) {
+					scrollAccumulator += scrollSpeed;
+					const pixelsToScroll = Math.floor(scrollAccumulator);
+					if (pixelsToScroll > 0) {
+						container.scrollTop = currentScroll + pixelsToScroll;
+						scrollAccumulator -= pixelsToScroll;
+					}
+				} else {
+					// Switch back to pause phase
+					isPaused = true;
+					pauseStartTime = now;
+					scrollAccumulator = 0;
+				}
+			}
+
+			requestAnimationFrame(smoothScroll);
+		}
+
+		smoothScroll();
 	}
 </script>
 
@@ -1095,10 +1188,26 @@
 					</div>
 
 					<div class="icon-group">
-						<button class="control-btn" title="Auto-scroll">
+						<button class="control-btn" class:active={isAutoScrolling} title="Auto-scroll" onclick={handleAutoScroll} style="position: relative;">
 							<svg width="11" height="11" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+								<!-- Outer circle stroke -->
 								<circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none"/>
+								<!-- Filled portion (Harvey ball) -->
+								{#if pauseProgress > 0}
+									{@const angle = (pauseProgress / 100) * 2 * Math.PI}
+									{@const x = 12 + 10 * Math.sin(angle)}
+									{@const y = 12 - 10 * Math.cos(angle)}
+									{@const largeArc = pauseProgress > 50 ? 1 : 0}
+									<path
+										d="M12 2 A10 10 0 {largeArc} 1 {x} {y} L12 12 Z"
+										fill="var(--reader-accent)"
+									/>
+								{/if}
 							</svg>
+							<!-- Red X badge when auto-scrolling is active -->
+							{#if isAutoScrolling}
+								<span style="position: absolute; top: -2px; right: -2px; width: 6px; height: 6px; background: red; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 5px; color: white; font-weight: bold; line-height: 1;">×</span>
+							{/if}
 						</button>
 						<button class="control-btn" title="Next turn"><Icon src={LuArrowDown} size="11" /></button>
 						<button class="control-btn" title="Previous turn"><Icon src={LuArrowUp} size="11" /></button>

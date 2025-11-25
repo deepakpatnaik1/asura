@@ -20,13 +20,13 @@ export const TIMING = {
 
 	/**
 	 * Auto-scroll active phase duration (ms)
-	 * Chat scrolls continuously for 5 seconds.
+	 * Scrolls continuously for 30 seconds.
 	 */
-	autoScrollDuration: 5000,
+	autoScrollDuration: 30000,
 
 	/**
 	 * Auto-scroll pause duration (ms)
-	 * After scrolling for 5s, pause for 60s before next scroll.
+	 * Pause for 60s, then scroll for 30s, repeat.
 	 */
 	autoScrollPause: 60000,
 
