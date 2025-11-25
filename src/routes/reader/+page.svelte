@@ -720,6 +720,9 @@
 			{#if showPasteArea}
 				<div class="paste-box" class:has-error={processingError}>
 					{#if isProcessing}
+						<!-- Frosted Glass Overlay -->
+						<div class="processing-overlay"></div>
+
 						<!-- Loading Spinner -->
 						<div class="spinner-container">
 							<div class="spinner">
@@ -1405,9 +1408,7 @@
 
 	/* Paste Area Box - styled for reader mode */
 	.paste-box {
-		background: rgba(10, 10, 10, 0.85);
-		backdrop-filter: blur(8px);
-		-webkit-backdrop-filter: blur(8px);
+		background: rgb(0, 0, 0);
 		border: 1px solid var(--reader-accent);
 		padding: var(--boss-card-padding-y) var(--boss-card-padding-x);
 		margin-left: var(--boss-card-margin-x);
@@ -1418,22 +1419,6 @@
 		bottom: 80px;
 		left: 24px;
 		right: 24px;
-	}
-
-	/* Frosted glass overlay */
-	.paste-box::before {
-		content: '';
-		position: absolute;
-		top: 0;
-		left: 0;
-		right: 0;
-		bottom: 0;
-		background: rgba(255, 255, 255, 0.03);
-		backdrop-filter: blur(20px);
-		-webkit-backdrop-filter: blur(20px);
-		border-radius: var(--boss-card-border-radius);
-		pointer-events: none;
-		z-index: 10;
 	}
 
 	/* Paste Area - contenteditable div */
@@ -1476,6 +1461,20 @@
 		display: block;
 		margin: 12px 0;
 		border-radius: 4px;
+	}
+
+	/* Processing Overlay - Frosted Glass */
+	.processing-overlay {
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background: rgba(0, 0, 0, 0.7);
+		backdrop-filter: blur(8px);
+		-webkit-backdrop-filter: blur(8px);
+		border-radius: var(--boss-card-border-radius);
+		z-index: 25;
 	}
 
 	/* Loading Spinner */
