@@ -1,15 +1,11 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { createClient } from '@supabase/supabase-js';
-import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
-
-const supabase = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY);
 
 /**
  * Articles Management Endpoint
  *
  * GET: Fetch all articles for current user
- * DELETE: Delete an article and all related data
+ * DELETE: Delete an article and all related data (including storage files)
  *
  * GET /api/reader/articles
  * Response: { articles: Array<{ id, title, preview_snippet }> }
@@ -17,9 +13,16 @@ const supabase = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY);
  * DELETE /api/reader/articles
  * Body: { article_id: string }
  * Response: { success: true }
+ *
+ * DELETE performs full cleanup:
+ * 1. Fetches article and related charts to get file paths
+ * 2. Deletes files from Supabase Storage
+ * 3. Deletes from database (cascade handles article_charts and article_chat)
+ *
+ * Note: Anthropic Files API files are not deleted - they expire automatically.
  */
 
-export const GET: RequestHandler = async ({ locals: { safeGetSession } }) => {
+export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase } }) => {
 	// 1. AUTHENTICATION CHECK
 	const { user } = await safeGetSession();
 	if (!user) {
@@ -65,7 +68,7 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession } }) => {
 	});
 };
 
-export const DELETE: RequestHandler = async ({ request, locals: { safeGetSession } }) => {
+export const DELETE: RequestHandler = async ({ request, locals: { safeGetSession, supabase } }) => {
 	// 1. AUTHENTICATION CHECK
 	const { user } = await safeGetSession();
 	if (!user) {
@@ -98,18 +101,83 @@ export const DELETE: RequestHandler = async ({ request, locals: { safeGetSession
 
 	console.log('[Articles] Deleting article:', article_id);
 
-	// 3. DELETE ARTICLE (CASCADE WILL HANDLE RELATED DATA)
-	// The database has ON DELETE CASCADE for:
-	// - article_chat (Q&A history)
-	// - article_charts (charts and thumbnails)
+	// 3. FETCH ARTICLE AND CHARTS TO GET FILE PATHS (before deletion)
+	const { data: article, error: articleFetchError } = await supabase
+		.from('articles')
+		.select('pdf_storage_path, anthropic_file_id')
+		.eq('id', article_id)
+		.eq('user_id', userId)
+		.single();
+
+	if (articleFetchError) {
+		console.error('[Articles] Failed to fetch article for cleanup:', articleFetchError);
+		// Continue anyway - we still want to delete the database record
+	}
+
+	const { data: charts, error: chartsFetchError } = await supabase
+		.from('article_charts')
+		.select('storage_path, thumbnail_path, anthropic_file_id')
+		.eq('article_id', article_id)
+		.eq('user_id', userId);
+
+	if (chartsFetchError) {
+		console.error('[Articles] Failed to fetch charts for cleanup:', chartsFetchError);
+		// Continue anyway
+	}
+
+	// 4. DELETE FILES FROM SUPABASE STORAGE
+	const storagePaths: string[] = [];
+
+	// Add article PDF path
+	if (article?.pdf_storage_path) {
+		storagePaths.push(article.pdf_storage_path);
+	}
+
+	// Add chart image and thumbnail paths
+	if (charts && charts.length > 0) {
+		for (const chart of charts) {
+			if (chart.storage_path) storagePaths.push(chart.storage_path);
+			if (chart.thumbnail_path) storagePaths.push(chart.thumbnail_path);
+		}
+	}
+
+	if (storagePaths.length > 0) {
+		console.log('[Articles] Deleting', storagePaths.length, 'files from storage');
+
+		// Group by bucket (extract bucket name from path)
+		const pdfPaths = storagePaths.filter((p) => p.startsWith('article-pdfs/'));
+		const imagePaths = storagePaths.filter((p) => p.startsWith('article-images/'));
+		const thumbnailPaths = storagePaths.filter((p) => p.startsWith('article-thumbnails/'));
+
+		// Delete from each bucket
+		if (pdfPaths.length > 0) {
+			const { error } = await supabase.storage.from('article-pdfs').remove(pdfPaths.map((p) => p.replace('article-pdfs/', '')));
+			if (error) console.error('[Articles] Failed to delete PDFs from storage:', error);
+			else console.log('[Articles] Deleted', pdfPaths.length, 'PDFs from storage');
+		}
+
+		if (imagePaths.length > 0) {
+			const { error } = await supabase.storage.from('article-images').remove(imagePaths.map((p) => p.replace('article-images/', '')));
+			if (error) console.error('[Articles] Failed to delete images from storage:', error);
+			else console.log('[Articles] Deleted', imagePaths.length, 'images from storage');
+		}
+
+		if (thumbnailPaths.length > 0) {
+			const { error } = await supabase.storage.from('article-thumbnails').remove(thumbnailPaths.map((p) => p.replace('article-thumbnails/', '')));
+			if (error) console.error('[Articles] Failed to delete thumbnails from storage:', error);
+			else console.log('[Articles] Deleted', thumbnailPaths.length, 'thumbnails from storage');
+		}
+	}
+
+	// 5. DELETE ARTICLE FROM DATABASE (CASCADE handles article_charts and article_chat)
 	const { error: deleteError } = await supabase
 		.from('articles')
 		.delete()
 		.eq('id', article_id)
-		.eq('user_id', userId); // RLS check
+		.eq('user_id', userId);
 
 	if (deleteError) {
-		console.error('[Articles] Failed to delete:', deleteError);
+		console.error('[Articles] Failed to delete from database:', deleteError);
 		return json(
 			{
 				error: {
@@ -122,7 +190,7 @@ export const DELETE: RequestHandler = async ({ request, locals: { safeGetSession
 		);
 	}
 
-	console.log('[Articles] Successfully deleted article:', article_id);
+	console.log('[Articles] Successfully deleted article and all related data:', article_id);
 
 	return json({
 		success: true

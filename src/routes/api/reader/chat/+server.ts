@@ -1,7 +1,5 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { createClient } from '@supabase/supabase-js';
-import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
 import Anthropic from '@anthropic-ai/sdk';
 import { ANTHROPIC_API_KEY } from '$env/static/private';
 import { READER_GUNNAR_PROMPT } from '$lib/prompts';
@@ -9,7 +7,6 @@ import { DEFAULT_READER_MODEL } from '$lib/config/models';
 import { getModelParams } from '$lib/config/model-params';
 import { BRAVE_SEARCH_TOOL, executeBraveSearch } from '$lib/api/brave-search';
 
-const supabase = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY);
 const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 
 /**
@@ -25,7 +22,7 @@ const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
  * Body: { article_id: string, message: string, chart_index?: number | null }
  * Response: Server-Sent Events stream
  */
-export const POST: RequestHandler = async ({ request, locals: { safeGetSession } }) => {
+export const POST: RequestHandler = async ({ request, locals: { safeGetSession, supabase } }) => {
 	// 1. AUTHENTICATION CHECK
 	const { user } = await safeGetSession();
 	if (!user) {
@@ -180,7 +177,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 	console.log('[Reader Chat] Using model:', selectedModel);
 
 	// 8. GET MODEL PARAMETERS
-	const modelParams = await getModelParams(selectedModel);
+	const modelParams = await getModelParams(selectedModel, 'reader');
 
 	// 9. SAVE USER MESSAGE TO DATABASE FIRST
 	const { data: userMessageData, error: saveUserError } = await supabase

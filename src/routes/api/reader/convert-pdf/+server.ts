@@ -1,15 +1,14 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { createClient } from '@supabase/supabase-js';
-import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
+import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
 import * as cheerio from 'cheerio';
 import puppeteer from 'puppeteer';
 import sharp from 'sharp';
 import { uploadFileWithRetry } from '$lib/api/anthropic-client';
 
-// Use ANON_KEY for auth checks, SERVICE_ROLE_KEY for storage operations (storage policies require it)
-const supabaseAuth = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY);
+// SERVICE_ROLE_KEY for storage operations (storage policies require it)
 const supabaseStorage = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 /**
@@ -236,7 +235,7 @@ async function uploadThumbnailToStorage(
 	return storagePath;
 }
 
-export const POST: RequestHandler = async ({ request, locals: { safeGetSession } }) => {
+export const POST: RequestHandler = async ({ request, locals: { safeGetSession, supabase } }) => {
 	// 1. AUTHENTICATION CHECK
 	const { user } = await safeGetSession();
 	if (!user) {
@@ -302,7 +301,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 
 	try {
 		// 4. VERIFY ARTICLE OWNERSHIP
-		const { data: article, error: fetchError } = await supabaseAuth
+		const { data: article, error: fetchError } = await supabase
 			.from('articles')
 			.select('id, user_id, title')
 			.eq('id', article_id)
@@ -356,7 +355,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 		}
 
 		// 8. UPDATE ARTICLE RECORD WITH PDF PATH AND ANTHROPIC FILE ID
-		const { error: updateError } = await supabaseAuth
+		const { error: updateError } = await supabase
 			.from('articles')
 			.update({
 				pdf_storage_path: articlePdfPath,
@@ -481,7 +480,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 				// is_relevant will be set in Phase 2 (AI filtering)
 			}));
 
-			const { error: insertError } = await supabaseAuth
+			const { error: insertError } = await supabase
 				.from('article_charts')
 				.insert(chartRecords);
 

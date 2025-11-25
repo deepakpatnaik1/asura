@@ -1,9 +1,5 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { createClient } from '@supabase/supabase-js';
-import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
-
-const supabase = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY);
 
 /**
  * Chat History Endpoint
@@ -13,7 +9,7 @@ const supabase = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY);
  * GET /api/reader/chat-history?article_id={id}
  * Response: { history: Array<{ role: string, content: string }> }
  */
-export const GET: RequestHandler = async ({ url, locals: { safeGetSession } }) => {
+export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supabase } }) => {
 	// 1. AUTHENTICATION CHECK
 	const { user } = await safeGetSession();
 	if (!user) {

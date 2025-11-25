@@ -1,7 +1,5 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { createClient } from '@supabase/supabase-js';
-import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
 import Anthropic from '@anthropic-ai/sdk';
 import { ANTHROPIC_API_KEY } from '$env/static/private';
 import { READER_GUNNAR_PROMPT } from '$lib/prompts';
@@ -9,7 +7,6 @@ import { DEFAULT_READER_MODEL } from '$lib/config/models';
 import { getModelParams } from '$lib/config/model-params';
 import { BRAVE_SEARCH_TOOL, executeBraveSearch } from '$lib/api/brave-search';
 
-const supabase = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY);
 const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 
 /**
@@ -22,7 +19,7 @@ const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
  * Body: { article_id: string }
  * Response: Server-Sent Events stream
  */
-export const POST: RequestHandler = async ({ request, locals: { safeGetSession } }) => {
+export const POST: RequestHandler = async ({ request, locals: { safeGetSession, supabase } }) => {
 	// 1. AUTHENTICATION CHECK
 	const { user } = await safeGetSession();
 	if (!user) {
@@ -103,7 +100,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 	console.log('[Process Article] Using model:', selectedModel);
 
 	// 6. GET MODEL PARAMETERS
-	const modelParams = await getModelParams(selectedModel);
+	const modelParams = await getModelParams(selectedModel, 'reader');
 	console.log('[Process Article] Model params:', modelParams);
 
 	// 7. CREATE STREAMING RESPONSE
@@ -243,7 +240,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 					.update({
 						transformed_content: fullResponse,
 						preview_snippet: previewSnippet,
-						status: 'complete'
+						status: 'ready'
 					})
 					.eq('id', article_id)
 					.eq('user_id', userId);
@@ -264,13 +261,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 			} catch (error) {
 				console.error('[Process Article] Error during processing:', error);
 
-				// Update article status to 'error'
-				await supabase
-					.from('articles')
-					.update({ status: 'error' })
-					.eq('id', article_id)
-					.eq('user_id', userId);
-
+				// Article remains in 'processing' status on error
 				controller.enqueue(
 					encoder.encode(
 						`data: ${JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' })}\n\n`

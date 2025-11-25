@@ -1,11 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { createClient } from '@supabase/supabase-js';
-import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
 import { createMessage, isAnthropicFileExpired } from '$lib/api/anthropic-client';
 import { DEFAULT_READER_MODEL } from '$lib/config/models';
-
-const supabase = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY);
 
 /**
  * Programmatic filter - identifies obvious ads/irrelevant images using alt text patterns
@@ -176,7 +172,7 @@ Example:
 	};
 }
 
-export const POST: RequestHandler = async ({ request, locals: { safeGetSession } }) => {
+export const POST: RequestHandler = async ({ request, locals: { safeGetSession, supabase } }) => {
 	// 1. AUTHENTICATION CHECK
 	const { user } = await safeGetSession();
 	if (!user) {
