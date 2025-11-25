@@ -99,7 +99,38 @@ We will systematically test each component of the e-reader. Tests will be docume
 - Bug: Thumbnail/chart area scrolls during AI response streaming
 - Expected: Should be fixed in place like input bar
 - Severity: 🟡 MEDIUM
-- Status: ⏸️ PENDING
+- Status: ✅ FIXED (canvas now sticky)
+
+#### T-005: Charts Not Displaying
+- Bug: Article has images/charts but canvas area shows nothing
+- Expected: Charts extracted from article should appear in canvas carousel
+- Severity: 🔴 CRITICAL
+- Status: ✅ FIXED
+
+**Investigation Session 2 (2025-11-25):**
+
+Console logs revealed:
+```
+[Log] [Charts] Loaded – 6 – "charts"
+[Error] Failed to load resource: the server responded with a status of 400 () (chart-1.jpg)
+... (all 6 charts fail with 400)
+```
+
+**Root Cause:** URL construction in `charts/+server.ts` was missing the bucket name.
+
+```typescript
+// BUG: Missing bucket name
+`${PUBLIC_SUPABASE_URL}/storage/v1/object/public/${chart.thumbnail_path}`
+// Resulted in: .../object/public/article-thumbnails/...
+
+// FIX: Added bucket name 'articles'
+`${PUBLIC_SUPABASE_URL}/storage/v1/object/public/articles/${chart.thumbnail_path}`
+// Now produces: .../object/public/articles/article-thumbnails/...
+```
+
+**Additional Fix:** Made `articles` storage bucket public in Supabase Dashboard.
+
+**Result:** Thumbnails and image carousel now display correctly.
 
 #### T-003c: Database Save Failure
 - Bug: Red error box: "Failed to save results to database"
