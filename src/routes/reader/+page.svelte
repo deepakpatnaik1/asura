@@ -47,6 +47,17 @@
 	let libraryDropdownRef: HTMLDivElement | null = null;
 	let libraryButtonRef: HTMLButtonElement | null = null;
 
+	// Article delete confirmation state
+	let deleteArticleId = $state<string | null>(null);
+	let deleteArticleProgress = $state(0);
+	let deleteArticleTimer: number | null = null;
+	let isDeleting = $state(false);
+
+	// Nuke confirmation state
+	let showNukeModal = $state(false);
+	let nukeProgress = $state(0);
+	let nukeTimer: number | null = null;
+
 	// Mock data for testing (TODO: fetch from database)
 	const MOCK_CHARTS = [
 		{ id: '1', thumbnail_url: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=150&h=150&fit=crop', full_url: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=1200&h=800&fit=crop', alt: 'Revenue growth analytics dashboard' },
@@ -666,39 +677,147 @@
 		}
 	}
 
-	// Delete article
-	async function deleteArticle(articleId: string, event: MouseEvent) {
+	// Delete article - show confirmation modal with 3s countdown
+	function handleArticleDeleteClick(articleId: string, event: MouseEvent) {
 		event.stopPropagation(); // Prevent switching to article
+		// Keep dropdown open during delete so user can see articles disappear
+		deleteArticleId = articleId;
+		deleteArticleProgress = 0;
 
-		if (!confirm('Delete this article and all its Q&A history?')) {
-			return;
+		// Auto-confirm after 3 seconds
+		const duration = 3000;
+		const interval = 50;
+		const increment = (interval / duration) * 100;
+
+		deleteArticleTimer = window.setInterval(() => {
+			deleteArticleProgress += increment;
+			if (deleteArticleProgress >= 100) {
+				if (deleteArticleTimer) clearInterval(deleteArticleTimer);
+				handleArticleDeleteConfirm();
+			}
+		}, interval);
+	}
+
+	function handleArticleDeleteCancel() {
+		if (deleteArticleTimer) {
+			clearInterval(deleteArticleTimer);
+			deleteArticleTimer = null;
+		}
+		deleteArticleId = null;
+		deleteArticleProgress = 0;
+	}
+
+	async function handleArticleDeleteConfirm() {
+		if (deleteArticleTimer) {
+			clearInterval(deleteArticleTimer);
+			deleteArticleTimer = null;
+		}
+		const articleId = deleteArticleId;
+		deleteArticleId = null;
+		deleteArticleProgress = 0;
+
+		if (!articleId || isDeleting) return;
+
+		isDeleting = true;
+		const maxRetries = 3;
+		let lastError: Error | null = null;
+
+		for (let attempt = 1; attempt <= maxRetries; attempt++) {
+			try {
+				const response = await fetch('/api/reader/articles', {
+					method: 'DELETE',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ article_id: articleId })
+				});
+
+				if (response.ok) {
+					console.log('[Articles] Successfully deleted article:', articleId);
+
+					// If we deleted the current article, clear it
+					if (currentArticle?.id === articleId) {
+						currentArticle = null;
+						chatHistory = [];
+						charts = [];
+					}
+
+					// Reload articles list
+					await loadArticles();
+					isDeleting = false;
+					return;
+				}
+
+				lastError = new Error(response.statusText);
+				console.warn(`[Articles] Delete attempt ${attempt}/${maxRetries} failed:`, response.statusText);
+			} catch (error) {
+				lastError = error as Error;
+				console.warn(`[Articles] Delete attempt ${attempt}/${maxRetries} error:`, error);
+			}
+
+			// Wait before retry (exponential backoff: 500ms, 1000ms, 2000ms)
+			if (attempt < maxRetries) {
+				await new Promise((resolve) => setTimeout(resolve, 500 * Math.pow(2, attempt - 1)));
+			}
 		}
 
+		console.error('[Articles] Failed to delete after', maxRetries, 'attempts:', lastError);
+		isDeleting = false;
+	}
+
+	// Nuke all e-reader data - show confirmation modal with 3s countdown
+	function handleNukeClick() {
+		showNukeModal = true;
+		nukeProgress = 0;
+
+		const duration = 3000;
+		const interval = 50;
+		const increment = (interval / duration) * 100;
+
+		nukeTimer = window.setInterval(() => {
+			nukeProgress += increment;
+			if (nukeProgress >= 100) {
+				if (nukeTimer) clearInterval(nukeTimer);
+				handleNukeConfirm();
+			}
+		}, interval);
+	}
+
+	function handleNukeCancel() {
+		if (nukeTimer) {
+			clearInterval(nukeTimer);
+			nukeTimer = null;
+		}
+		showNukeModal = false;
+		nukeProgress = 0;
+	}
+
+	async function handleNukeConfirm() {
+		if (nukeTimer) {
+			clearInterval(nukeTimer);
+			nukeTimer = null;
+		}
+		showNukeModal = false;
+		nukeProgress = 0;
+
 		try {
-			const response = await fetch('/api/reader/articles', {
-				method: 'DELETE',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ article_id: articleId })
+			const response = await fetch('/api/reader/nuke', {
+				method: 'POST'
 			});
 
 			if (!response.ok) {
-				console.error('[Articles] Failed to delete:', response.statusText);
+				console.error('[Nuke] Failed:', response.statusText);
 				return;
 			}
 
-			console.log('[Articles] Successfully deleted article:', articleId);
+			const result = await response.json();
+			console.log('[Nuke] Successfully deleted', result.deleted, 'articles');
 
-			// If we deleted the current article, clear it
-			if (currentArticle?.id === articleId) {
-				currentArticle = null;
-				chatHistory = [];
-				charts = [];
-			}
-
-			// Reload articles list
-			await loadArticles();
+			// Clear all local state
+			articles = [];
+			currentArticle = null;
+			chatHistory = [];
+			charts = [];
 		} catch (error) {
-			console.error('[Articles] Error deleting:', error);
+			console.error('[Nuke] Error:', error);
 		}
 	}
 
@@ -913,10 +1032,6 @@
 					</button>
 				{/each}
 			</div>
-		{:else}
-			<div class="canvas-empty">
-				<p>No charts found in this article</p>
-			</div>
 		{/if}
 	</div>
 
@@ -966,8 +1081,9 @@
 										</button>
 										<button
 											class="delete-btn"
-											onclick={(e) => deleteArticle(article.id, e)}
+											onclick={(e) => handleArticleDeleteClick(article.id, e)}
 											title="Delete article"
+											disabled={isDeleting}
 										>
 											<Icon src={LuTrash2} size="12" />
 										</button>
@@ -995,7 +1111,7 @@
 						<button class="control-btn" title="Messages"><Icon src={LuMessageSquare} size="11" /></button>
 					</div>
 
-					<button class="control-btn settings-btn" title="Nuke all history"><Icon src={LuFlame} size="11" /></button>
+					<button class="control-btn settings-btn" title="Nuke all history" onclick={handleNukeClick}><Icon src={LuFlame} size="11" /></button>
 				</div>
 				<input
 					type="text"
@@ -1012,6 +1128,36 @@
 		</div>
 	</div>
 </div>
+
+<!-- Article Delete Confirmation Modal -->
+{#if deleteArticleId}
+	<div class="modal-overlay" onclick={handleArticleDeleteCancel}>
+		<div class="modal-content" onclick={(e) => e.stopPropagation()}>
+			<p class="modal-text">Hush... it'll all be over soon.</p>
+			<div class="delete-progress-container">
+				<div class="delete-progress-bar" style="width: {deleteArticleProgress}%"></div>
+			</div>
+			<div class="delete-actions">
+				<button class="delete-cancel-btn" onclick={handleArticleDeleteCancel}>Cancel</button>
+			</div>
+		</div>
+	</div>
+{/if}
+
+<!-- Nuke Confirmation Modal -->
+{#if showNukeModal}
+	<div class="modal-overlay" onclick={handleNukeCancel}>
+		<div class="modal-content" onclick={(e) => e.stopPropagation()}>
+			<p class="modal-text">Hush... it'll all be over soon.</p>
+			<div class="delete-progress-container">
+				<div class="delete-progress-bar" style="width: {nukeProgress}%"></div>
+			</div>
+			<div class="delete-actions">
+				<button class="delete-cancel-btn" onclick={handleNukeCancel}>Cancel</button>
+			</div>
+		</div>
+	</div>
+{/if}
 
 <style>
 	/* Main Layout - Two-column grid (reader left, canvas right) */
@@ -1039,6 +1185,10 @@
 		flex-direction: column;
 		justify-content: flex-end; /* Push thumbnails to bottom */
 		overflow: hidden; /* Prevent overflow, let child containers handle scrolling */
+		position: sticky;
+		top: 0;
+		height: 100vh;
+		align-self: start;
 	}
 
 	/* Chart Grid - macOS style (fixed height container at bottom, aligned with input bar) */
@@ -1116,15 +1266,6 @@
 	}
 
 	/* Empty state */
-	.canvas-empty {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		height: 200px;
-		color: hsl(var(--muted-foreground));
-		font-size: 10pt;
-		text-align: center;
-	}
 
 	/* Responsive adjustments for narrow screens */
 	@media (max-width: 900px) {
@@ -1841,5 +1982,73 @@
 	.delete-btn:hover {
 		background: rgba(239, 68, 68, 0.1);
 		color: rgb(239, 68, 68);
+	}
+
+	.delete-btn:disabled {
+		opacity: 0.3;
+		cursor: not-allowed;
+	}
+
+	/* Delete Confirmation Modal */
+	.modal-overlay {
+		position: fixed;
+		inset: 0;
+		background: rgba(0, 0, 0, 0.7);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		z-index: 1000;
+	}
+
+	.modal-content {
+		background: hsl(var(--background));
+		border: 1px solid hsl(var(--border));
+		border-radius: 8px;
+		padding: 24px;
+		min-width: 300px;
+		max-width: 400px;
+	}
+
+	.modal-text {
+		color: hsl(var(--foreground));
+		font-family: "iA Writer Quattro V", system-ui, -apple-system, sans-serif;
+		font-size: 8pt;
+		margin: 0 0 16px 0;
+		text-align: center;
+	}
+
+	.delete-progress-bar {
+		height: 100%;
+		background: var(--reader-accent);
+	}
+
+	.delete-progress-container {
+		width: 60%;
+		height: 6px;
+		background: hsl(var(--border));
+		border-radius: 2px;
+		overflow: hidden;
+		margin: 0 auto 24px auto;
+	}
+
+	.delete-actions {
+		display: flex;
+		justify-content: center;
+	}
+
+	.delete-cancel-btn {
+		background: transparent;
+		color: var(--reader-accent);
+		border: 1px solid var(--reader-accent);
+		border-radius: 6px;
+		padding: 12px 24px;
+		font-weight: 500;
+		cursor: pointer;
+		transition: all 0.2s;
+	}
+
+	.delete-cancel-btn:hover {
+		background: var(--reader-accent);
+		color: hsl(var(--background));
 	}
 </style>
