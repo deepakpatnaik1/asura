@@ -16,6 +16,18 @@ function normalizeEmDashes(text: string): string {
 }
 
 /**
+ * Fix missing spaces after tool calls.
+ * When AI uses tools mid-response, text chunks may be concatenated without spacing.
+ * Pattern: sentence-ending punctuation followed immediately by a capital letter.
+ * Example: "...summary.Perfect! Now..." → "...summary.\n\nPerfect! Now..."
+ */
+function fixToolCallSpacing(text: string): string {
+	// Match: sentence-ending punctuation, optional closing quotes/parens, then capital letter with no space
+	// Insert paragraph break (\n\n) to create visual separation
+	return text.replace(/([.!?]["')\]]?)([A-Z])/g, '$1\n\n$2');
+}
+
+/**
  * Custom markdown renderer with accent color styling.
  *
  * Transformations:
@@ -34,8 +46,9 @@ function normalizeEmDashes(text: string): string {
 export function renderMarkdown(markdown: string, mode: RenderMode = 'chat'): string {
 	const ACCENT_COLOR = mode === 'chat' ? CHAT_ACCENT : READER_ACCENT;
 
-	// Normalize em dashes to en dashes with spaces
-	const normalizedMarkdown = normalizeEmDashes(markdown);
+	// Fix missing spaces from tool call boundaries, then normalize em dashes
+	const spacedMarkdown = fixToolCallSpacing(markdown);
+	const normalizedMarkdown = normalizeEmDashes(spacedMarkdown);
 	// Configure marked with custom renderer
 	const renderer = new marked.Renderer();
 
