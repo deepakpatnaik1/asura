@@ -1,13 +1,12 @@
 /**
- * CALL 1A PROMPT (Initial Response)
+ * CALL 1 PROMPT (Chat Response Generation)
  *
- * Location: src/routes/api/chat/+server.ts (to be implemented)
- * Purpose: Initial persona response to user query
+ * Purpose: Generate persona response to user query
  * Input: BASE_INSTRUCTIONS + persona profile + memory context + user query
- * Output: Initial response (passed to Call 1B for refinement)
+ * Output: Streaming response to user
  */
 
-export const CALL1A_PROMPT = `You are receiving:
+export const CALL1_PROMPT = `You are receiving:
 - Base instructions for how to interact with me
 - Your persona-specific profile and role
 - Memory context from our conversation history

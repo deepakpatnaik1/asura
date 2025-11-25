@@ -16,7 +16,7 @@ import {
 	BASE_INSTRUCTIONS,
 	PERSONA_GUNNAR,
 	PERSONA_KIRBY,
-	CALL1A_PROMPT,
+	CALL1_PROMPT,
 	CALL2A_PROMPT
 } from '$lib/prompts';
 import { createMessage, createMessageStream } from '$lib/api/anthropic-client';
@@ -319,7 +319,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 		const personaPrompt = persona === 'kirby' ? PERSONA_KIRBY : PERSONA_GUNNAR;
 
 		// Construct system prompt with cache breakpoints
-		// Cache only stable behavioral instructions (BASE_INSTRUCTIONS + PERSONA + CALL1A_PROMPT)
+		// Cache only stable behavioral instructions (BASE_INSTRUCTIONS + PERSONA + CALL1_PROMPT)
 		// Context stays in user message to preserve proven prompt architecture
 		const systemPromptWithCache = [
 			{
@@ -329,7 +329,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 			},
 			{
 				type: 'text' as const,
-				text: CALL1A_PROMPT,
+				text: CALL1_PROMPT,
 				cache_control: { type: 'ephemeral' as const }
 			}
 		];

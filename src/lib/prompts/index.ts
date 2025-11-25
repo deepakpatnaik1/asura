@@ -12,9 +12,8 @@ export { BASE_INSTRUCTIONS } from './base-instructions';
 export { PERSONA_GUNNAR } from './persona-gunnar';
 export { PERSONA_KIRBY } from './persona-kirby';
 
-// Call 1A/1B: Chat Response Generation & Refinement
-export { CALL1A_PROMPT } from './call1a';
-export { CALL1B_PROMPT } from './call1b';
+// Call 1: Chat Response Generation
+export { CALL1_PROMPT } from './call1';
 
 // Call 2A/2B: Chat Compression & Verification
 export { CALL2A_PROMPT } from './call2a';
