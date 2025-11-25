@@ -13,13 +13,13 @@
  */
 
 /** Default conversation model (Call 1A/1B) - Claude 4.5 Haiku */
-export const DEFAULT_CONVERSATION_MODEL = 'claude-haiku-4-5' as const;
+export const DEFAULT_CONVERSATION_MODEL = 'claude-haiku-4-5-20251001' as const;
 
 /** Default compression model (Call 2A/2B, Call 3A/3B, Modified Call 2A/2B) - Claude 4.5 Haiku */
-export const DEFAULT_COMPRESSION_MODEL = 'claude-haiku-4-5' as const;
+export const DEFAULT_COMPRESSION_MODEL = 'claude-haiku-4-5-20251001' as const;
 
 /** Default e-reader model - Claude 4.5 Haiku */
-export const DEFAULT_READER_MODEL = 'claude-haiku-4-5' as const;
+export const DEFAULT_READER_MODEL = 'claude-haiku-4-5-20251001' as const;
 
 /** Default embedding model for vector search - Voyage AI v3 (1024 dimensions) */
 export const EMBEDDING_MODEL = 'voyage-3' as const;

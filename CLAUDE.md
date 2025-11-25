@@ -52,26 +52,22 @@ npm run preview                # Preview production build
 
 Asura implements a multi-phase AI call architecture:
 
-**Call 1A/1B** (Chat Response Generation)
-- **Call 1A**: Initial response generation with memory context injection (extended thinking enabled)
-- **Call 1B**: Refinement and critique of Call 1A output
-- Model: Claude Sonnet 4.5 (thinking variant)
+**Call 1** (Chat Response Generation)
+- Streaming response generation with memory context injection
+- System prompt: `BASE_INSTRUCTIONS` + `PERSONA` + `CALL1A_PROMPT`
+- User message: Context (superjournal + journal + vector search) + current query
+- Model: Claude Sonnet 4.5
 - Location: [src/routes/api/chat/+server.ts](src/routes/api/chat/+server.ts)
 
-**Call 2A/2B** (Chat Compression - "Artisan Cut")
-- Executes in background after Call 1B completes
-- **Call 2A**: Compress full conversation turn to Boss Essence + Persona Essence + Decision Arc + Salience Score
-  - Model: Claude Sonnet 4.5 (instruct variant)
-  - System prompt: `CALL2A_PROMPT`
-  - Input: Full message turn (user message + AI response)
-  - Output: JSON with `boss_essence`, `persona_essence`, `decision_arc_summary`, `salience_score`, `is_instruction`, `instruction_scope`
-- **Call 2B**: Verify and refine compression output
-  - Model: Claude Sonnet 4.5 (instruct variant)
-  - Messages: System (`CALL2A_PROMPT`) + Assistant (Call 2A JSON) + User (`CALL2B_PROMPT`)
-  - Output: Refined JSON with same structure
-- **Embedding**: Call 2B `decision_arc_summary` vectorized via Voyage AI `voyage-3` (1024 dimensions)
-- **Database Save**: Final Call 2B output + embedding saved to `journal` table for semantic retrieval
-- Location: [src/routes/api/chat/+server.ts:56-195](src/routes/api/chat/+server.ts#L56-L195)
+**Call 2** (Chat Compression - "Artisan Cut")
+- Executes in background after Call 1 completes
+- Compresses full conversation turn to Boss Essence + Persona Essence + Decision Arc + Salience Score
+- System prompt: `CALL2A_PROMPT`
+- Input: Full message turn (user message + AI response)
+- Output: JSON with `boss_essence`, `persona_essence`, `decision_arc_summary`, `salience_score`, `is_instruction`, `instruction_scope`
+- **Embedding**: `decision_arc_summary` vectorized via Voyage AI `voyage-3` (1024 dimensions)
+- **Database Save**: Compression output + embedding saved to `journal` table for semantic retrieval
+- Location: [src/routes/api/chat/+server.ts](src/routes/api/chat/+server.ts)
 
 ### System Prompts
 
@@ -79,15 +75,15 @@ All system prompts are located in [src/lib/prompts/](src/lib/prompts/) and expor
 
 - `BASE_INSTRUCTIONS`: Core behavioral rules
 - `PERSONA_GUNNAR`, `PERSONA_KIRBY`: Personality definitions
-- `CALL1A_PROMPT`, `CALL1B_PROMPT`: Chat generation
-- `CALL2A_PROMPT`, `CALL2B_PROMPT`: Chat compression
+- `CALL1A_PROMPT`: Chat generation (Call 1)
+- `CALL2A_PROMPT`: Chat compression (Call 2)
 
 ### Memory Architecture
 
 **Superjournal Table** (Working Memory)
 - Stores last 5 full, uncompressed conversation turns
 - Fields: `user_message`, `ai_response`, `persona_name`
-- Used for immediate context in Call 1A/1B
+- Used for immediate context in Call 1
 
 **Journal Table** (Compressed Memory)
 - Stores compressed conversation history (Artisan Cut format)
@@ -108,11 +104,12 @@ All system prompts are located in [src/lib/prompts/](src/lib/prompts/) and expor
 ### Model Configuration
 
 Centralized in [src/lib/config/models.ts](src/lib/config/models.ts):
-- `DEFAULT_CONVERSATION_MODEL`: Call 1A/1B - Claude Sonnet 4.5 (thinking variant with extended thinking)
-- `DEFAULT_COMPRESSION_MODEL`: Call 2A/2B - Claude Sonnet 4.5 (instruct variant)
+- `DEFAULT_CONVERSATION_MODEL`: Call 1 - Claude Haiku 4.5
+- `DEFAULT_COMPRESSION_MODEL`: Call 2 - Claude Haiku 4.5
+- `DEFAULT_READER_MODEL`: E-reader processing - Claude Haiku 4.5
 - `EMBEDDING_MODEL`: Voyage AI voyage-3 (1024 dimensions)
 
-All language model tasks use Claude Sonnet 4.5 to ensure consistent frontier-model quality across chat generation and memory compression.
+Models are user-selectable via Settings. Default is Claude Haiku 4.5 for cost efficiency.
 
 ## Database Schema
 
@@ -133,7 +130,7 @@ This function enables the system to retrieve relevant context from arbitrarily l
 ## API Endpoints
 
 ### Chat
-- `POST /api/chat`: Main chat endpoint (Call 1A/1B + background Call 2A/2B)
+- `POST /api/chat`: Main chat endpoint (Call 1 streaming + background Call 2 compression)
 
 ### Settings
 - `GET /api/settings`: Get user settings (selected models, persona)
