@@ -261,10 +261,10 @@
 			const articleTitle = uploadResult.title;
 			console.log('[Pipeline] Article created:', articleId, articleTitle);
 
-			// Step 2: Convert to PDF and extract images
-			processingStatus = 'Converting to PDF...';
+			// Step 2: Extract images from HTML
+			processingStatus = 'Extracting images...';
 			await retryWithBackoff(async () => {
-				const response = await fetch('/api/reader/convert-pdf', {
+				const response = await fetch('/api/reader/extract-images', {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify({ article_id: articleId, html }),
@@ -273,13 +273,13 @@
 
 				if (!response.ok) {
 					const error = await response.json();
-					throw new Error(error.error?.message || 'PDF conversion failed');
+					throw new Error(error.error?.message || 'Image extraction failed');
 				}
 
 				return await response.json();
-			}, 2, 1000, 'Converting to PDF...');
+			}, 2, 1000, 'Extracting images...');
 
-			console.log('[Pipeline] PDF converted');
+			console.log('[Pipeline] Images extracted');
 
 			// Step 3: Filter charts
 			processingStatus = 'Filtering charts...';
@@ -1330,19 +1330,16 @@
 		width: auto;
 		height: 80px;
 		aspect-ratio: 1;
-		background: hsl(var(--card));
-		border: 1px solid hsl(var(--border) / 0.2);
+		background: hsl(var(--background));
+		border: none;
 		border-radius: 8px;
 		overflow: hidden;
 		cursor: pointer;
 		transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 1px 1px rgba(0, 0, 0, 0.06);
 	}
 
 	.chart-thumbnail:hover {
 		transform: scale(1.05);
-		box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2), 0 4px 8px rgba(0, 0, 0, 0.15);
-		border-color: var(--reader-accent);
 	}
 
 	.chart-thumbnail:active {
@@ -1351,9 +1348,8 @@
 
 	/* Active thumbnail state - highlighted when viewing full-size */
 	.chart-thumbnail.active {
-		border-color: var(--reader-accent);
-		border-width: 2px;
-		box-shadow: 0 0 0 2px var(--reader-accent-alpha);
+		outline: 2px solid var(--reader-accent);
+		outline-offset: 2px;
 	}
 
 	.chart-thumbnail img {

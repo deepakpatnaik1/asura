@@ -53,10 +53,10 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 	console.log('[Process Article] User ID:', userId);
 	console.log('[Process Article] Article ID:', article_id);
 
-	// 3. FETCH ARTICLE FROM DATABASE
+	// 3. FETCH ARTICLE FROM DATABASE (including raw_html)
 	const { data: article, error: fetchError } = await supabase
 		.from('articles')
-		.select('id, title, anthropic_file_id, anthropic_file_created_at, status')
+		.select('id, title, raw_html, status')
 		.eq('id', article_id)
 		.eq('user_id', userId) // RLS check
 		.single();
@@ -75,13 +75,13 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		);
 	}
 
-	// 4. VALIDATE ARTICLE HAS ANTHROPIC FILE ID
-	if (!article.anthropic_file_id) {
-		console.error('[Process Article] Article missing anthropic_file_id');
+	// 4. VALIDATE ARTICLE HAS RAW HTML
+	if (!article.raw_html) {
+		console.error('[Process Article] Article missing raw_html');
 		return json(
 			{
 				error: {
-					message: 'Article has not been converted to PDF yet',
+					message: 'Article has no HTML content',
 					code: 'INVALID_STATE'
 				}
 			},
@@ -109,23 +109,15 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			const encoder = new TextEncoder();
 
 			try {
-				// Build messages array with article file
+				// Build messages array with raw HTML content (no PDF needed!)
 				const messages: Anthropic.MessageParam[] = [
 					{
 						role: 'user',
-						content: [
-							{
-								type: 'document',
-								source: {
-									type: 'file',
-									file_id: article.anthropic_file_id
-								}
-							},
-							{
-								type: 'text',
-								text: `Please provide an educational summary of this article titled "${article.title}". Use the web search tool as needed to understand recent context.`
-							}
-						]
+						content: `Here is an article titled "${article.title}". Please provide an educational summary. Use the web search tool as needed to understand recent context.
+
+<article>
+${article.raw_html}
+</article>`
 					}
 				];
 
@@ -137,21 +129,14 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				): Promise<void> {
 					console.log('[Process Article] Starting AI call...');
 
-					const stream = await anthropic.messages.stream(
-						{
-							model: selectedModel,
-							max_tokens: modelParams.max_tokens,
-							temperature: modelParams.temperature,
-							system: READER_SAMARA_PROMPT,
-							messages: conversationMessages,
-							tools: [BRAVE_SEARCH_TOOL]
-						},
-						{
-							headers: {
-								'anthropic-beta': 'prompt-caching-2024-07-31,files-api-2025-04-14'
-							}
-						}
-					);
+					const stream = await anthropic.messages.stream({
+						model: selectedModel,
+						max_tokens: modelParams.max_tokens,
+						temperature: modelParams.temperature,
+						system: READER_SAMARA_PROMPT,
+						messages: conversationMessages,
+						tools: [BRAVE_SEARCH_TOOL]
+					});
 
 					// Stream text deltas to client while accumulating
 					for await (const event of stream) {
