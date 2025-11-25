@@ -968,12 +968,6 @@
 						</div>
 					</div>
 				{/if}
-			{:else if !showPasteArea}
-				<!-- Placeholder content -->
-				<div class="placeholder-content">
-					<h1>E-Reader Mode</h1>
-					<p>Click the paperclip to paste an article.</p>
-				</div>
 			{/if}
 		</div>
 	</div>
