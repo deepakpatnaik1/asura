@@ -1,9 +1,25 @@
 import { marked } from 'marked';
 import DOMPurify from 'isomorphic-dompurify';
 
-// Accent color from send button border (--boss-accent in app.css)
-const ACCENT_COLOR = 'rgb(217, 133, 107)';
+// Accent colors for different modes
+const ACCENT_COLORS = {
+	chat: 'rgb(217, 133, 107)',     // Orange/salmon for chat mode
+	reader: 'rgb(52, 211, 153)'     // Emerald green for reader mode
+};
 const DIVIDER_COLOR = 'rgb(156, 163, 175)'; // Grey for horizontal rules (matches Gunnar border)
+
+export type RenderMode = 'chat' | 'reader';
+
+/**
+ * Replace em dashes with en dashes, ensuring single space on each side.
+ * Em dash: — (U+2014)
+ * En dash: – (U+2013)
+ */
+function normalizeEmDashes(text: string): string {
+	// Replace em dash with en dash, handling spaces carefully
+	// \s* matches zero or more spaces on each side, then we add exactly one space
+	return text.replace(/\s*—\s*/g, ' – ');
+}
 
 /**
  * Custom markdown renderer with accent color styling.
@@ -15,8 +31,17 @@ const DIVIDER_COLOR = 'rgb(156, 163, 175)'; // Grey for horizontal rules (matche
  * 4. Italic (*text*) → Accent italic
  * 5. Bullet lists → Indented accent bullets
  * 6. Numbered lists → Indented accent numbers
+ *
+ * Spacing Rules:
+ * - One line space after paragraphs
+ * - One line space before section headers
+ * - Maximum one line space between any two elements
  */
-export function renderMarkdown(markdown: string): string {
+export function renderMarkdown(markdown: string, mode: RenderMode = 'chat'): string {
+	const ACCENT_COLOR = ACCENT_COLORS[mode];
+
+	// Normalize em dashes to en dashes with spaces
+	const normalizedMarkdown = normalizeEmDashes(markdown);
 	// Configure marked with custom renderer
 	const renderer = new marked.Renderer();
 
@@ -25,9 +50,9 @@ export function renderMarkdown(markdown: string): string {
 	let listItemIndex = 0;
 
 	// 1. Headings → Accent Bold (all levels identical)
-	// Rule 2: One line space after section header
+	// One line space before section header (margin-top), no bottom margin
 	renderer.heading = ({ text }) => {
-		return `<div style="font-weight: bold; color: ${ACCENT_COLOR}; margin: 0 0 1.6em 0;">${text}</div>`;
+		return `<div style="font-weight: bold; color: ${ACCENT_COLOR}; margin: 1.6em 0 0 0;">${text}</div>`;
 	};
 
 	// 2. Horizontal Rules → Thin grey divider (matches Gunnar border)
@@ -46,27 +71,23 @@ export function renderMarkdown(markdown: string): string {
 		return text;
 	};
 
-	// Paragraph → Rule 6: One line space before AND after phrases ending in colon
+	// Paragraph → One line space after all paragraphs (margin-bottom only)
 	renderer.paragraph = ({ text }) => {
-		// Check if paragraph ends with colon (after stripping HTML tags)
-		const textContent = text.replace(/<[^>]*>/g, '').trim();
-		const endsWithColon = textContent.endsWith(':');
-		const margin = endsWithColon ? '1.6em 0' : '0';
-		return `<p style="margin: ${margin}; display: block;">${text}</p>`;
+		return `<p style="margin: 0 0 1.6em 0; display: block;">${text}</p>`;
 	};
 
 	// 5. Bullet lists → Indented accent bullets
 	// 6. Numbered lists → Indented accent numbers
-	// Rule 4 & 5: One line space before and after lists
+	// One line space after lists (margin-bottom only)
 	const originalList = renderer.list.bind(renderer);
 	renderer.list = (token) => {
 		isOrderedList = token.ordered;
 		listItemIndex = 0;
 		const listHtml = originalList(token);
-		// Add custom styling to the list - one line space before and after
+		// Add custom styling to the list - one line space after
 		return listHtml.replace(
 			/<(ul|ol)>/,
-			'<$1 style="margin: 1.6em 0; padding: 0 0 0 24px; list-style: none; display: block;">'
+			'<$1 style="margin: 0 0 1.6em 0; padding: 0 0 0 24px; list-style: none; display: block;">'
 		);
 	};
 
@@ -91,7 +112,7 @@ export function renderMarkdown(markdown: string): string {
 	});
 
 	// Parse markdown to HTML
-	const rawHtml = marked.parse(markdown) as string;
+	const rawHtml = marked.parse(normalizedMarkdown) as string;
 
 	// Sanitize HTML to prevent XSS
 	const cleanHtml = DOMPurify.sanitize(rawHtml, {

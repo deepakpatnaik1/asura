@@ -789,7 +789,7 @@
 							<span class="message-label ai-label">Gunnar</span>
 						</div>
 						<div class="message-text">
-							{@html renderMarkdown(currentArticle?.content || streamingContent)}
+							{@html renderMarkdown(currentArticle?.content || streamingContent, 'reader')}
 						</div>
 					</div>
 				</div>
@@ -814,7 +814,7 @@
 									<span class="message-label ai-label">Gunnar</span>
 								</div>
 								<div class="message-text">
-									{@html renderMarkdown(turn.content)}
+									{@html renderMarkdown(turn.content, 'reader')}
 								</div>
 							</div>
 						</div>
@@ -843,7 +843,7 @@
 								{#if isLoadingChat && !streamingChatResponse}
 									Thinking<span class="dots"><span>.</span><span>.</span><span>.</span></span>
 								{:else}
-									{@html renderMarkdown(streamingChatResponse)}
+									{@html renderMarkdown(streamingChatResponse, 'reader')}
 								{/if}
 							</div>
 						</div>
