@@ -1180,9 +1180,9 @@
 		margin-bottom: 16px;
 	}
 
-	/* Boss Message - with background card */
+	/* Boss Message - with background card (uses reader accent bg) */
 	.boss-message {
-		background: var(--boss-bg);
+		background: var(--reader-bg);
 		padding: var(--boss-card-padding-y) var(--boss-card-padding-x);
 		margin-left: var(--boss-card-margin-x);
 		margin-right: var(--boss-card-margin-x);

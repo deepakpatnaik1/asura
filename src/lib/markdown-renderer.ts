@@ -1,12 +1,6 @@
 import { marked } from 'marked';
 import DOMPurify from 'isomorphic-dompurify';
-
-// Accent colors for different modes
-const ACCENT_COLORS = {
-	chat: 'rgb(217, 133, 107)',     // Orange/salmon for chat mode
-	reader: 'rgb(52, 211, 153)'     // Emerald green for reader mode
-};
-const DIVIDER_COLOR = 'rgb(156, 163, 175)'; // Grey for horizontal rules (matches Gunnar border)
+import { CHAT_ACCENT, READER_ACCENT, DIVIDER_COLOR } from '$lib/config/colors';
 
 export type RenderMode = 'chat' | 'reader';
 
@@ -38,7 +32,7 @@ function normalizeEmDashes(text: string): string {
  * - Maximum one line space between any two elements
  */
 export function renderMarkdown(markdown: string, mode: RenderMode = 'chat'): string {
-	const ACCENT_COLOR = ACCENT_COLORS[mode];
+	const ACCENT_COLOR = mode === 'chat' ? CHAT_ACCENT : READER_ACCENT;
 
 	// Normalize em dashes to en dashes with spaces
 	const normalizedMarkdown = normalizeEmDashes(markdown);
