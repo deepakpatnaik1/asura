@@ -3,7 +3,8 @@
 	import { renderMarkdown } from '$lib/markdown-renderer';
 	import { Icon } from 'svelte-icons-pack';
 	import { LuPaperclip, LuFolder, LuCloudDownload, LuChevronDown, LuArrowDown, LuArrowUp, LuMessageSquare, LuFlame, LuTrash2 } from 'svelte-icons-pack/lu';
-	import { TIMING } from '$lib/config/timing';
+	import { READER_CONFIG, scrollToNextTurn, scrollToPreviousTurn, scrollToTurn, scrollToBottom, getTurnNavigationState, getTurns, updateSpacer } from '$lib/ui/scroll';
+	import { createAutoScroll } from '$lib/ui/auto-scroll.svelte';
 
 
 	// Article state
@@ -59,13 +60,11 @@
 	let nukeProgress = $state(0);
 	let nukeTimer: number | null = null;
 
-	// Auto-scroll state
-	let isAutoScrolling = $state(false);
-	let isPaused = $state(false);
-	let pauseProgress = $state(0);
-	let pauseStartTime = 0;
-	let scrollAccumulator = 0;
-	const scrollSpeed = 0.5; // pixels per frame
+	// Auto-scroll controller (shared utility)
+	const autoScroll = createAutoScroll(READER_CONFIG);
+
+	// Turn navigation state (for disabling buttons at boundaries)
+	let turnNavState = $derived(getTurnNavigationState(READER_CONFIG));
 
 	// Mock data for testing (TODO: fetch from database)
 	const MOCK_CHARTS = [
@@ -106,7 +105,7 @@
 			const data = await response.json();
 			if (data.active_reader_article_id) {
 				console.log('[Settings] Loading active article:', data.active_reader_article_id);
-				await switchToArticle(data.active_reader_article_id);
+				await switchToArticle(data.active_reader_article_id, false);
 			}
 		} catch (error) {
 			console.error('[Settings] Error loading active article:', error);
@@ -345,9 +344,9 @@
 									showPasteArea = false; // Hide paste area now that content is streaming
 									isProcessing = false;
 									processingStatus = '';
-									if (!isAutoScrolling) {
+									if (!autoScroll.isActive) {
 										console.log('[Auto-scroll] Starting auto-scroll');
-										handleAutoScroll();
+										autoScroll.start();
 									}
 								}
 								streamingContent += data.text;
@@ -429,46 +428,9 @@
 			if (data.history && Array.isArray(data.history)) {
 				chatHistory = data.history;
 				console.log('[Chat History] Loaded', chatHistory.length, 'turns');
-
-				// Only scroll to bottom if there's existing chat history (not for new articles)
-				if (chatHistory.length > 0) {
-					setTimeout(() => scrollToBottom(), 100);
-				}
 			}
 		} catch (error) {
 			console.error('[Chat History] Error loading:', error);
-		}
-	}
-
-	// Auto-scroll to bottom of messages
-	function scrollToBottom() {
-		const container = document.querySelector('.reader-container') as HTMLElement | null;
-		if (container) {
-			container.scrollTo({
-				top: container.scrollHeight,
-				behavior: 'smooth'
-			});
-		}
-	}
-
-	// Scroll to position the last Boss message at top with 40px offset
-	function scrollToLastBossMessage() {
-		const container = document.querySelector('.reader-container') as HTMLElement | null;
-		const bossMessages = document.querySelectorAll('.boss-message');
-		const lastBossMessage = bossMessages[bossMessages.length - 1] as HTMLElement | null;
-
-		if (container && lastBossMessage) {
-			// Get the position of the Boss message relative to the container
-			const containerRect = container.getBoundingClientRect();
-			const messageRect = lastBossMessage.getBoundingClientRect();
-
-			// Calculate scroll position: current scroll + message offset from container top - 40px
-			const scrollTarget = container.scrollTop + (messageRect.top - containerRect.top) - 40;
-
-			container.scrollTo({
-				top: scrollTarget,
-				behavior: 'smooth'
-			});
 		}
 	}
 
@@ -494,7 +456,14 @@
 
 		// Wait for Svelte to render the new Boss card, then scroll to it
 		await tick();
-		scrollToLastBossMessage();
+		requestAnimationFrame(() => {
+			requestAnimationFrame(() => {
+				const turns = getTurns(READER_CONFIG);
+				if (turns.length > 0) {
+					scrollToTurn(READER_CONFIG, turns[turns.length - 1]);
+				}
+			});
+		});
 
 		try {
 			const response = await fetch('/api/reader/chat', {
@@ -529,6 +498,10 @@
 							const data = JSON.parse(line.slice(6));
 
 							if (data.text) {
+								// Start auto-scroll on first token
+								if (!streamingChatResponse && !autoScroll.isActive) {
+									autoScroll.start();
+								}
 								streamingChatResponse += data.text;
 							}
 
@@ -659,7 +632,7 @@
 	}
 
 	// Switch to different article
-	async function switchToArticle(articleId: string) {
+	async function switchToArticle(articleId: string, scrollToTop: boolean = true) {
 		showArticleLibrary = false;
 
 		try {
@@ -687,13 +660,15 @@
 				// Save as active article
 				await saveActiveArticle(articleId);
 
-				// Scroll to top
-				setTimeout(() => {
-					const container = document.querySelector('.reader-container') as HTMLElement | null;
-					if (container) {
-						container.scrollTo({ top: 0, behavior: 'smooth' });
-					}
-				}, 100);
+				// Scroll to top (only when manually switching articles, not on initial load)
+				if (scrollToTop) {
+					setTimeout(() => {
+						const container = document.querySelector('.reader-container') as HTMLElement | null;
+						if (container) {
+							container.scrollTo({ top: 0, behavior: 'smooth' });
+						}
+					}, 100);
+				}
 			}
 		} catch (error) {
 			console.error('[Articles] Error switching:', error);
@@ -872,88 +847,7 @@
 		}
 	}
 
-	// Auto-scroll with pause-first pattern
-	// Pattern: Pause 60s → Scroll 15s → Repeat
-	function handleAutoScroll() {
-		console.log('[E-Reader Auto-scroll] Button clicked, isAutoScrolling:', isAutoScrolling);
-		if (isAutoScrolling) {
-			// If auto-scroll is active (either scrolling or paused), turn it off
-			isAutoScrolling = false;
-			isPaused = false;
-			pauseProgress = 0;
-			scrollAccumulator = 0;
-			return;
-		}
-
-		// Start with pause phase first
-		isAutoScrolling = true;
-		isPaused = true;
-		pauseProgress = 0;
-		scrollAccumulator = 0;
-		const container = document.querySelector('.reader-container') as HTMLElement | null;
-		console.log('[E-Reader Auto-scroll] Container:', container);
-		if (!container) {
-			console.log('[E-Reader Auto-scroll] No container found, aborting');
-			return;
-		}
-
-		let scrollStartTime = Date.now();
-		pauseStartTime = Date.now();
-
-		function smoothScroll() {
-			if (!isAutoScrolling || !container) return;
-
-			const maxScroll = container.scrollHeight - container.clientHeight;
-			const currentScroll = container.scrollTop;
-			const now = Date.now();
-
-			if (isPaused) {
-				// Pause phase: pause for 60 seconds first
-				const pauseElapsed = now - pauseStartTime;
-				pauseProgress = Math.min(100, (pauseElapsed / TIMING.autoScrollPause) * 100);
-
-				if (pauseElapsed >= TIMING.autoScrollPause) {
-					// Switch to scrolling phase
-					isPaused = false;
-					scrollStartTime = now;
-					pauseProgress = 0;
-					scrollAccumulator = 0;
-				}
-			} else {
-				// Scrolling phase: scroll for 30 seconds
-				// Check if reached bottom (only during scroll phase, not pause)
-				if (maxScroll > 0 && currentScroll >= maxScroll) {
-					console.log('[Auto-scroll] Reached bottom, stopping');
-					isAutoScrolling = false;
-					isPaused = false;
-					pauseProgress = 0;
-					scrollAccumulator = 0;
-					return;
-				}
-
-				pauseProgress = 0;
-				const scrollElapsed = now - scrollStartTime;
-				if (scrollElapsed < TIMING.autoScrollDuration) {
-					scrollAccumulator += scrollSpeed;
-					const pixelsToScroll = Math.floor(scrollAccumulator);
-					if (pixelsToScroll > 0) {
-						container.scrollTop = currentScroll + pixelsToScroll;
-						scrollAccumulator -= pixelsToScroll;
-					}
-				} else {
-					// Switch back to pause phase
-					isPaused = true;
-					pauseStartTime = now;
-					scrollAccumulator = 0;
-				}
-			}
-
-			requestAnimationFrame(smoothScroll);
-		}
-
-		smoothScroll();
-	}
-</script>
+	</script>
 
 <svelte:window onkeydown={handleKeydown} onclick={handleClickOutside} />
 
@@ -1221,16 +1115,17 @@
 					</div>
 
 					<div class="icon-group">
-						<button class="control-btn" class:active={isAutoScrolling} title="Auto-scroll" onclick={handleAutoScroll} style="position: relative;">
+						<button class="control-btn" class:active={autoScroll.isActive} title="Auto-scroll" onclick={autoScroll.toggle} style="position: relative;">
 							<svg width="11" height="11" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
 								<!-- Outer circle stroke -->
 								<circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none"/>
 								<!-- Filled portion (Harvey ball) -->
-								{#if pauseProgress > 0}
-									{@const angle = (pauseProgress / 100) * 2 * Math.PI}
+								{#if autoScroll.pauseProgress > 0}
+									{@const progressPercent = autoScroll.pauseProgress * 100}
+									{@const angle = autoScroll.pauseProgress * 2 * Math.PI}
 									{@const x = 12 + 10 * Math.sin(angle)}
 									{@const y = 12 - 10 * Math.cos(angle)}
-									{@const largeArc = pauseProgress > 50 ? 1 : 0}
+									{@const largeArc = progressPercent > 50 ? 1 : 0}
 									<path
 										d="M12 2 A10 10 0 {largeArc} 1 {x} {y} L12 12 Z"
 										fill="var(--reader-accent)"
@@ -1238,12 +1133,12 @@
 								{/if}
 							</svg>
 							<!-- Red X badge when auto-scrolling is active -->
-							{#if isAutoScrolling}
+							{#if autoScroll.isActive}
 								<span style="position: absolute; top: -2px; right: -2px; width: 6px; height: 6px; background: red; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 5px; color: white; font-weight: bold; line-height: 1;">×</span>
 							{/if}
 						</button>
-						<button class="control-btn" title="Next turn"><Icon src={LuArrowDown} size="11" /></button>
-						<button class="control-btn" title="Previous turn"><Icon src={LuArrowUp} size="11" /></button>
+						<button class="control-btn" title="Next turn" onclick={() => scrollToNextTurn(READER_CONFIG)} disabled={turnNavState.isAtLast}><Icon src={LuArrowDown} size="11" /></button>
+						<button class="control-btn" title="Previous turn" onclick={() => scrollToPreviousTurn(READER_CONFIG)} disabled={turnNavState.isAtFirst}><Icon src={LuArrowUp} size="11" /></button>
 						<button class="control-btn" title="Messages"><Icon src={LuMessageSquare} size="11" /></button>
 					</div>
 
