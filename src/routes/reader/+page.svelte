@@ -451,6 +451,27 @@
 		}
 	}
 
+	// Scroll to position the last Boss message at top with 40px offset
+	function scrollToLastBossMessage() {
+		const container = document.querySelector('.reader-container') as HTMLElement | null;
+		const bossMessages = document.querySelectorAll('.boss-message');
+		const lastBossMessage = bossMessages[bossMessages.length - 1] as HTMLElement | null;
+
+		if (container && lastBossMessage) {
+			// Get the position of the Boss message relative to the container
+			const containerRect = container.getBoundingClientRect();
+			const messageRect = lastBossMessage.getBoundingClientRect();
+
+			// Calculate scroll position: current scroll + message offset from container top - 40px
+			const scrollTarget = container.scrollTop + (messageRect.top - containerRect.top) - 40;
+
+			container.scrollTo({
+				top: scrollTarget,
+				behavior: 'smooth'
+			});
+		}
+	}
+
 	// Q&A Submit Handler
 	async function handleSubmitQuestion() {
 		if (!inputMessage.trim() || !currentArticle?.id || isLoadingChat) {
@@ -471,8 +492,9 @@
 		streamingChatResponse = '';
 		isLoadingChat = true;
 
-		// Scroll to show user's message
-		setTimeout(() => scrollToBottom(), 100);
+		// Wait for Svelte to render the new Boss card, then scroll to it
+		await tick();
+		scrollToLastBossMessage();
 
 		try {
 			const response = await fetch('/api/reader/chat', {
@@ -524,9 +546,6 @@
 								currentUserMessage = null;
 								streamingChatResponse = '';
 								isLoadingChat = false;
-
-								// Auto-scroll to bottom
-								setTimeout(() => scrollToBottom(), 100);
 								return;
 							}
 

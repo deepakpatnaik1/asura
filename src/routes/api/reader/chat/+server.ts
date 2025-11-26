@@ -70,10 +70,10 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 	console.log('[Reader Chat] Message:', message);
 	console.log('[Reader Chat] Chart Index:', chart_index);
 
-	// 3. FETCH ARTICLE FROM DATABASE
+	// 3. FETCH ARTICLE FROM DATABASE (including raw_html)
 	const { data: article, error: fetchError } = await supabase
 		.from('articles')
-		.select('id, title, anthropic_file_id, anthropic_file_created_at, transformed_content')
+		.select('id, title, raw_html, transformed_content')
 		.eq('id', article_id)
 		.eq('user_id', userId)
 		.single();
@@ -92,13 +92,13 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		);
 	}
 
-	// 4. VALIDATE ARTICLE HAS ANTHROPIC FILE ID
-	if (!article.anthropic_file_id) {
-		console.error('[Reader Chat] Article missing anthropic_file_id');
+	// 4. VALIDATE ARTICLE HAS RAW HTML
+	if (!article.raw_html) {
+		console.error('[Reader Chat] Article missing raw_html');
 		return json(
 			{
 				error: {
-					message: 'Article has not been processed yet',
+					message: 'Article has no content',
 					code: 'INVALID_STATE'
 				}
 			},
@@ -106,50 +106,44 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		);
 	}
 
-	// 4a. CHECK FILE ID EXPIRATION (7 days from creation)
-	const fileExpirationDays = 7;
-	const fileAgeMs = Date.now() - new Date(article.anthropic_file_created_at).getTime();
-	const fileAgeDays = fileAgeMs / (1000 * 60 * 60 * 24);
-
-	if (fileAgeDays >= fileExpirationDays) {
-		console.warn('[Reader Chat] Article file ID expired, needs re-upload');
-		return json(
-			{
-				error: {
-					message:
-						'Article file has expired. Please re-process the article by pasting it again.',
-					code: 'FILE_EXPIRED'
-				}
-			},
-			{ status: 400 }
-		);
-	}
-
 	// 5. FETCH CHART IF REFERENCED
-	let chartFileId: string | null = null;
+	let chartImageData: { base64: string; mediaType: string } | null = null;
 	if (chart_index !== null && chart_index !== undefined && typeof chart_index === 'number') {
 		const { data: chartData, error: chartError } = await supabase
 			.from('article_charts')
-			.select('anthropic_file_id, anthropic_file_created_at, chart_index')
+			.select('storage_path, chart_index')
 			.eq('article_id', article_id)
 			.eq('user_id', userId)
 			.eq('chart_index', chart_index + 1) // chart_index is 0-based in frontend, 1-based in DB
 			.single();
 
-		if (!chartError && chartData?.anthropic_file_id) {
-			// Check chart file expiration
-			const chartAgeMs = Date.now() - new Date(chartData.anthropic_file_created_at).getTime();
-			const chartAgeDays = chartAgeMs / (1000 * 60 * 60 * 24);
+		if (!chartError && chartData?.storage_path) {
+			console.log('[Reader Chat] Fetching chart image from storage:', chartData.storage_path);
 
-			if (chartAgeDays >= fileExpirationDays) {
-				console.warn('[Reader Chat] Chart file ID expired, proceeding without chart');
-				// Don't fail the request, just exclude the chart
+			// Download image from Supabase storage
+			const { data: imageBlob, error: downloadError } = await supabase.storage
+				.from('articles')
+				.download(chartData.storage_path);
+
+			if (!downloadError && imageBlob) {
+				// Convert blob to base64
+				const arrayBuffer = await imageBlob.arrayBuffer();
+				const base64 = Buffer.from(arrayBuffer).toString('base64');
+
+				// Detect media type from storage path
+				const ext = chartData.storage_path.split('.').pop()?.toLowerCase();
+				let mediaType = 'image/jpeg';
+				if (ext === 'png') mediaType = 'image/png';
+				else if (ext === 'gif') mediaType = 'image/gif';
+				else if (ext === 'webp') mediaType = 'image/webp';
+
+				chartImageData = { base64, mediaType };
+				console.log('[Reader Chat] Chart image loaded, size:', base64.length, 'bytes');
 			} else {
-				chartFileId = chartData.anthropic_file_id;
-				console.log('[Reader Chat] Including chart file ID:', chartFileId);
+				console.error('[Reader Chat] Failed to download chart image:', downloadError);
 			}
 		} else {
-			console.log('[Reader Chat] Chart not found or no file ID, proceeding without chart');
+			console.log('[Reader Chat] Chart not found, proceeding without chart');
 		}
 	}
 
@@ -214,33 +208,17 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				// Build conversation messages
 				const messages: Anthropic.MessageParam[] = [];
 
-				// First message: Article + original summary (if exists)
-				const firstMessageContent: Anthropic.MessageContent = [
-					{
-						type: 'document',
-						source: {
-							type: 'file',
-							file_id: article.anthropic_file_id
-						}
-					}
-				];
+				// First message: Article HTML + original summary (if exists)
+				let articleContext = `Here is an article titled "${article.title}":\n\n<article>\n${article.raw_html}\n</article>`;
 
 				// Add original summary as context if it exists
 				if (article.transformed_content) {
-					firstMessageContent.push({
-						type: 'text',
-						text: `Here is the article titled "${article.title}" and my previous summary:\n\n${article.transformed_content}`
-					});
-				} else {
-					firstMessageContent.push({
-						type: 'text',
-						text: `Here is the article titled "${article.title}".`
-					});
+					articleContext += `\n\nHere is my previous summary of this article:\n\n${article.transformed_content}`;
 				}
 
 				messages.push({
 					role: 'user',
-					content: firstMessageContent
+					content: articleContext
 				});
 
 				// Add conversation history (all previous Q&A turns)
@@ -254,15 +232,16 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				}
 
 				// Add current user question
-				const currentQuestionContent: Anthropic.MessageContent = [];
+				const currentQuestionContent: Anthropic.ContentBlockParam[] = [];
 
-				// Include chart if referenced
-				if (chartFileId) {
+				// Include chart image if referenced
+				if (chartImageData) {
 					currentQuestionContent.push({
-						type: 'document',
+						type: 'image',
 						source: {
-							type: 'file',
-							file_id: chartFileId
+							type: 'base64',
+							media_type: chartImageData.mediaType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
+							data: chartImageData.base64
 						}
 					});
 					currentQuestionContent.push({
@@ -289,21 +268,14 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				): Promise<void> {
 					console.log('[Reader Chat] Starting AI call...');
 
-					const stream = await anthropic.messages.stream(
-						{
-							model: selectedModel,
-							max_tokens: modelParams.max_tokens,
-							temperature: modelParams.temperature,
-							system: READER_SAMARA_PROMPT,
-							messages: conversationMessages,
-							tools: [BRAVE_SEARCH_TOOL]
-						},
-						{
-							headers: {
-								'anthropic-beta': 'prompt-caching-2024-07-31,files-api-2025-04-14'
-							}
-						}
-					);
+					const stream = await anthropic.messages.stream({
+						model: selectedModel,
+						max_tokens: modelParams.max_tokens,
+						temperature: modelParams.temperature,
+						system: READER_SAMARA_PROMPT,
+						messages: conversationMessages,
+						tools: [BRAVE_SEARCH_TOOL]
+					});
 
 					// Stream text deltas to client
 					for await (const event of stream) {
