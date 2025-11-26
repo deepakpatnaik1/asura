@@ -2,7 +2,7 @@
 	import { onMount, tick } from 'svelte';
 	import { renderMarkdown } from '$lib/markdown-renderer';
 	import { Icon } from 'svelte-icons-pack';
-	import { LuPaperclip, LuFolder, LuCloudDownload, LuChevronDown, LuArrowDown, LuArrowUp, LuMessageSquare, LuFlame, LuTrash2 } from 'svelte-icons-pack/lu';
+	import { LuPaperclip, LuFolder, LuCloudDownload, LuChevronDown, LuArrowDown, LuArrowUp, LuMessageSquare, LuFlame, LuTrash2, LuPlay } from 'svelte-icons-pack/lu';
 	import { READER_CONFIG, scrollToNextTurn, scrollToPreviousTurn, scrollToTurn, scrollToBottom, getTurnNavigationState, getTurns, updateSpacer } from '$lib/ui/scroll';
 	import { createAutoScroll } from '$lib/ui/auto-scroll.svelte';
 
@@ -60,8 +60,13 @@
 	let nukeProgress = $state(0);
 	let nukeTimer: number | null = null;
 
-	// Auto-scroll controller (shared utility)
-	const autoScroll = createAutoScroll(READER_CONFIG);
+	// Reading timer setting (loaded from user settings)
+	let readingTimerMinutes = $state(20);
+
+	// Auto-scroll controller with time-budget mode
+	const autoScroll = createAutoScroll(READER_CONFIG, {
+		getTimerMinutes: () => readingTimerMinutes
+	});
 
 	// Turn navigation state (for disabling buttons at boundaries)
 	// Note: Can't use $derived because it runs before DOM exists
@@ -126,6 +131,12 @@
 			}
 
 			const data = await response.json();
+
+			// Load reading timer setting
+			if (data.reading_timer_minutes) {
+				readingTimerMinutes = data.reading_timer_minutes;
+			}
+
 			if (data.active_reader_article_id) {
 				console.log('[Settings] Loading active article:', data.active_reader_article_id);
 				await switchToArticle(data.active_reader_article_id, false);
@@ -1138,26 +1149,11 @@
 					</div>
 
 					<div class="icon-group">
-						<button class="control-btn" class:active={autoScroll.isActive} title="Auto-scroll" onclick={autoScroll.toggle} style="position: relative;">
-							<svg width="11" height="11" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-								<!-- Outer circle stroke -->
-								<circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none"/>
-								<!-- Filled portion (Harvey ball) -->
-								{#if autoScroll.pauseProgress > 0}
-									{@const progressPercent = autoScroll.pauseProgress * 100}
-									{@const angle = autoScroll.pauseProgress * 2 * Math.PI}
-									{@const x = 12 + 10 * Math.sin(angle)}
-									{@const y = 12 - 10 * Math.cos(angle)}
-									{@const largeArc = progressPercent > 50 ? 1 : 0}
-									<path
-										d="M12 2 A10 10 0 {largeArc} 1 {x} {y} L12 12 Z"
-										fill="var(--reader-accent)"
-									/>
-								{/if}
-							</svg>
-							<!-- Red X badge when auto-scrolling is active -->
+						<button class="control-btn auto-scroll-btn" class:active={autoScroll.isActive} title="Auto-scroll" onclick={autoScroll.toggle}>
 							{#if autoScroll.isActive}
-								<span style="position: absolute; top: -2px; right: -2px; width: 6px; height: 6px; background: red; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 5px; color: white; font-weight: bold; line-height: 1;">×</span>
+								<span class="timer-display">{autoScroll.remainingFormatted}</span>
+							{:else}
+								<Icon src={LuPlay} size="11" />
 							{/if}
 						</button>
 						<button class="control-btn" title="Next turn" onclick={() => scrollToNextTurn(READER_CONFIG)} disabled={turnNavState.isAtLast}><Icon src={LuArrowDown} size="11" /></button>
@@ -1921,6 +1917,19 @@
 
 	.control-btn.active {
 		color: var(--reader-accent);
+	}
+
+	.auto-scroll-btn {
+		min-width: 50px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.timer-display {
+		font-size: 9px;
+		font-variant-numeric: tabular-nums;
+		font-family: Menlo, Monaco, 'Courier New', monospace;
 	}
 
 	.article-library-dropdown {

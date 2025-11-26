@@ -31,7 +31,7 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession } }) => {
 	// 2. QUERY USER SETTINGS
 	const { data, error } = await supabase
 		.from('user_settings')
-		.select('selected_conversation_model, selected_compression_model, selected_reader_model, selected_embedding_model, active_reader_article_id')
+		.select('selected_conversation_model, selected_compression_model, selected_reader_model, selected_embedding_model, active_reader_article_id, reading_timer_minutes')
 		.eq('user_id', userId)
 		.single();
 
@@ -82,7 +82,7 @@ export const PUT: RequestHandler = async ({ request, locals: { safeGetSession } 
 	const userId = user.id;
 
 	// 2. PARSE REQUEST BODY
-	const { selected_conversation_model, selected_compression_model, selected_reader_model, selected_embedding_model, active_reader_article_id } = await request.json();
+	const { selected_conversation_model, selected_compression_model, selected_reader_model, selected_embedding_model, active_reader_article_id, reading_timer_minutes } = await request.json();
 
 	console.log('[Settings PUT] User ID:', userId);
 	console.log('[Settings PUT] Body received:', {
@@ -90,7 +90,8 @@ export const PUT: RequestHandler = async ({ request, locals: { safeGetSession } 
 		selected_compression_model,
 		selected_reader_model,
 		selected_embedding_model,
-		active_reader_article_id
+		active_reader_article_id,
+		reading_timer_minutes
 	});
 
 	// 3. UPDATE USER SETTINGS
@@ -104,6 +105,7 @@ export const PUT: RequestHandler = async ({ request, locals: { safeGetSession } 
 	if (selected_reader_model !== undefined) updateData.selected_reader_model = selected_reader_model;
 	if (selected_embedding_model !== undefined) updateData.selected_embedding_model = selected_embedding_model;
 	if (active_reader_article_id !== undefined) updateData.active_reader_article_id = active_reader_article_id;
+	if (reading_timer_minutes !== undefined) updateData.reading_timer_minutes = reading_timer_minutes;
 
 	const { data, error } = await supabase
 		.from('user_settings')

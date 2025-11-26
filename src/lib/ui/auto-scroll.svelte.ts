@@ -2,34 +2,38 @@
  * Auto-Scroll Module
  *
  * Shared auto-scroll behavior for chat mode and e-reader mode.
- * Pattern: Pause 60s → Scroll 30s → Repeat until bottom reached.
+ * Supports two modes:
+ * - Time-budget mode: countdown from fixed duration (e.g., 20 minutes)
+ * - Distance mode: scroll until bottom reached (legacy behavior)
  */
 
-import { TIMING } from '$lib/config/timing';
 import { type ScrollConfig, getContainer } from './scroll';
 
-/** Scroll speed in pixels per animation frame */
-const SCROLL_SPEED = 0.5;
+/** Scroll speed in pixels per millisecond (0.01 = ~10 px/second) */
+const SCROLL_SPEED_PX_PER_MS = 0.01;
 
-export interface AutoScrollState {
-	/** Whether auto-scroll is active (either scrolling or paused) */
-	isActive: boolean;
-	/** Whether currently in pause phase */
-	isPaused: boolean;
-	/** Progress through pause phase (0-1) */
-	pauseProgress: number;
+/** Default timer duration in minutes */
+const DEFAULT_TIMER_MINUTES = 20;
+
+export interface AutoScrollOptions {
+	/** Function to get timer duration in minutes (for time-budget mode) */
+	getTimerMinutes?: () => number;
 }
 
 export interface AutoScrollController {
-	/** Current state (reactive) */
+	/** Whether auto-scroll is active */
 	readonly isActive: boolean;
-	readonly isPaused: boolean;
-	readonly pauseProgress: number;
 
-	/** Start auto-scroll (begins with pause phase) */
+	/** Remaining time in seconds */
+	readonly remainingSeconds: number;
+
+	/** Formatted remaining time (H:MM:SS) */
+	readonly remainingFormatted: string;
+
+	/** Start auto-scroll */
 	start: () => void;
 
-	/** Stop auto-scroll */
+	/** Stop auto-scroll (pauses timer, preserves remaining time) */
 	stop: () => void;
 
 	/** Toggle auto-scroll on/off */
@@ -38,105 +42,116 @@ export interface AutoScrollController {
 
 /**
  * Create an auto-scroll controller for a container.
- * Returns reactive state and control methods.
  *
  * Usage in Svelte 5:
  * ```
- * let autoScroll = createAutoScroll(CHAT_CONFIG);
+ * // Time-budget mode (reader)
+ * const autoScroll = createAutoScroll(READER_CONFIG, {
+ *   getTimerMinutes: () => readingTimerMinutes
+ * });
  *
  * // In template:
- * <button onclick={autoScroll.toggle} class:active={autoScroll.isActive}>
+ * <button onclick={autoScroll.toggle}>
+ *   {autoScroll.isActive ? autoScroll.remainingFormatted : 'Play'}
+ * </button>
  * ```
  */
-export function createAutoScroll(config: ScrollConfig): AutoScrollController {
+export function createAutoScroll(
+	config: ScrollConfig,
+	options: AutoScrollOptions = {}
+): AutoScrollController {
+	const { getTimerMinutes } = options;
+
 	// Reactive state
 	let isActive = $state(false);
-	let isPaused = $state(false);
-	let pauseProgress = $state(0);
+	let remainingSeconds = $state(0);
 
-	// Internal state
-	let scrollAccumulator = 0;
-	let pauseStartTime = 0;
-	let scrollStartTime = 0;
+	// Internal state (non-reactive)
+	let lastFrameTime: number | null = null;
 	let animationFrameId: number | null = null;
+	let accumulatedScroll = 0; // Track sub-pixel scroll to avoid rounding issues
+
+	// Format time as H:MM:SS
+	function formatTime(totalSeconds: number): string {
+		const hours = Math.floor(totalSeconds / 3600);
+		const mins = Math.floor((totalSeconds % 3600) / 60);
+		const secs = Math.floor(totalSeconds % 60);
+
+		return `${hours}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+	}
 
 	function stop() {
 		isActive = false;
-		isPaused = false;
-		pauseProgress = 0;
-		scrollAccumulator = 0;
+		lastFrameTime = null;
 
 		if (animationFrameId !== null && typeof cancelAnimationFrame !== 'undefined') {
 			cancelAnimationFrame(animationFrameId);
 			animationFrameId = null;
 		}
+		// Note: remainingSeconds is preserved for resume
 	}
 
 	function start() {
 		const container = getContainer(config);
 		if (!container) return;
 
-		// Start with pause phase
-		isActive = true;
-		isPaused = true;
-		pauseProgress = 0;
-		scrollAccumulator = 0;
-		pauseStartTime = Date.now();
-		scrollStartTime = Date.now();
+		// If no remaining time, initialize from settings
+		if (remainingSeconds <= 0) {
+			const minutes = getTimerMinutes?.() ?? DEFAULT_TIMER_MINUTES;
+			remainingSeconds = minutes * 60;
+		}
 
-		function tick() {
+		isActive = true;
+		lastFrameTime = null;
+		accumulatedScroll = 0;
+
+		function tick(timestamp: DOMHighResTimeStamp) {
 			if (!isActive) return;
 
 			const container = getContainer(config);
 			if (!container) {
 				stop();
+				remainingSeconds = 0; // Reset on error
 				return;
 			}
 
+			// Calculate delta time
+			if (lastFrameTime === null) {
+				lastFrameTime = timestamp;
+			}
+			const deltaMs = timestamp - lastFrameTime;
+			lastFrameTime = timestamp;
+
+			// Update remaining time
+			remainingSeconds = Math.max(0, remainingSeconds - deltaMs / 1000);
+
+			// Check stop conditions
 			const maxScroll = container.scrollHeight - container.clientHeight;
 			const currentScroll = container.scrollTop;
 
-			// Check if at bottom
-			if (currentScroll >= maxScroll - 1) {
+			// Stop if timer reached 0
+			if (remainingSeconds <= 0) {
 				stop();
+				remainingSeconds = 0;
 				return;
 			}
 
-			const now = Date.now();
-
-			if (isPaused) {
-				// Pause phase: update progress
-				const pauseElapsed = now - pauseStartTime;
-				pauseProgress = Math.min(1, pauseElapsed / TIMING.autoScrollPause);
-
-				if (pauseElapsed >= TIMING.autoScrollPause) {
-					// Switch to scroll phase
-					isPaused = false;
-					scrollStartTime = now;
-					scrollAccumulator = 0;
-				}
-			} else {
-				// Scroll phase
-				const scrollElapsed = now - scrollStartTime;
-
-				if (scrollElapsed < TIMING.autoScrollDuration) {
-					// Accumulate and scroll
-					scrollAccumulator += SCROLL_SPEED;
-					const pixelsToScroll = Math.floor(scrollAccumulator);
-
-					if (pixelsToScroll > 0) {
-						container.scrollTop = currentScroll + pixelsToScroll;
-						scrollAccumulator -= pixelsToScroll;
-					}
-				} else {
-					// Switch back to pause phase
-					isPaused = true;
-					pauseStartTime = now;
-					pauseProgress = 0;
-					scrollAccumulator = 0;
-				}
+			// Stop if at bottom (article ended)
+			if (currentScroll >= maxScroll - 1) {
+				stop();
+				remainingSeconds = 0;
+				return;
 			}
 
+			// Scroll - accumulate sub-pixels to avoid rounding issues
+			accumulatedScroll += SCROLL_SPEED_PX_PER_MS * deltaMs;
+			const wholePixels = Math.floor(accumulatedScroll);
+			if (wholePixels >= 1) {
+				container.scrollTop = currentScroll + wholePixels;
+				accumulatedScroll -= wholePixels;
+			}
+
+			// Continue animation
 			if (typeof requestAnimationFrame !== 'undefined') {
 				animationFrameId = requestAnimationFrame(tick);
 			}
@@ -159,11 +174,11 @@ export function createAutoScroll(config: ScrollConfig): AutoScrollController {
 		get isActive() {
 			return isActive;
 		},
-		get isPaused() {
-			return isPaused;
+		get remainingSeconds() {
+			return remainingSeconds;
 		},
-		get pauseProgress() {
-			return pauseProgress;
+		get remainingFormatted() {
+			return formatTime(remainingSeconds);
 		},
 		start,
 		stop,

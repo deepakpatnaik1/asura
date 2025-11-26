@@ -34,6 +34,7 @@
 	let selectedCompressionModel = $state<string>('');
 	let selectedReaderModel = $state<string>('');
 	let selectedEmbeddingModel = $state<string>('');
+	let readingTimerMinutes = $state<number>(20);
 	let tokenUsage = $state<TokenUsage>({
 		total_input: 0,
 		total_output: 0,
@@ -65,6 +66,7 @@
 				settings.selected_compression_model || DEFAULT_COMPRESSION_MODEL;
 			selectedReaderModel = settings.selected_reader_model || DEFAULT_READER_MODEL;
 			selectedEmbeddingModel = settings.selected_embedding_model || EMBEDDING_MODEL;
+			readingTimerMinutes = settings.reading_timer_minutes || 20;
 
 			// Fetch token usage
 			const tokenRes = await fetch('/api/token-usage');
@@ -93,7 +95,8 @@
 					selected_conversation_model: selectedConversationModel,
 					selected_compression_model: selectedCompressionModel,
 					selected_reader_model: selectedReaderModel,
-					selected_embedding_model: selectedEmbeddingModel
+					selected_embedding_model: selectedEmbeddingModel,
+					reading_timer_minutes: readingTimerMinutes
 				})
 			});
 
@@ -168,6 +171,18 @@
 						{/each}
 					</select>
 					<p class="help-text">Used for article processing and summarization</p>
+				</div>
+
+				<div class="settings-section">
+					<label for="reading-timer">Reading Timer (minutes)</label>
+					<input
+						type="number"
+						id="reading-timer"
+						bind:value={readingTimerMinutes}
+						min="1"
+						max="120"
+					/>
+					<p class="help-text">Auto-scroll session duration (1-120 minutes)</p>
 				</div>
 
 				<div class="settings-section">
@@ -294,6 +309,22 @@
 	}
 
 	.settings-section select:focus {
+		outline: none;
+		border-color: hsl(var(--border));
+	}
+
+	.settings-section input[type="number"] {
+		width: 100%;
+		padding: 6px 8px;
+		background: transparent;
+		border: 1px solid hsl(var(--border));
+		border-radius: 0;
+		color: hsl(var(--foreground));
+		font-family: Menlo, Monaco, 'Courier New', monospace;
+		font-size: 10px;
+	}
+
+	.settings-section input[type="number"]:focus {
 		outline: none;
 		border-color: hsl(var(--border));
 	}
