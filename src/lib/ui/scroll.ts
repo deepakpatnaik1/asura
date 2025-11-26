@@ -153,7 +153,7 @@ export function scrollToNextTurn(config: ScrollConfig): void {
 	// Find first turn below current viewport position
 	for (const turn of turns) {
 		const rect = turn.getBoundingClientRect();
-		const turnTop = rect.top - containerRect.top + container.scrollTop;
+		const turnTop = rect.top - containerRect.top + currentScrollTop;
 
 		if (turnTop > viewportThreshold) {
 			scrollToTurn(config, turn);

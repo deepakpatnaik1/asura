@@ -64,7 +64,30 @@
 	const autoScroll = createAutoScroll(READER_CONFIG);
 
 	// Turn navigation state (for disabling buttons at boundaries)
-	let turnNavState = $derived(getTurnNavigationState(READER_CONFIG));
+	// Note: Can't use $derived because it runs before DOM exists
+	let turnNavState = $state({ currentIndex: 0, totalTurns: 0, isAtFirst: true, isAtLast: true });
+
+	// Update turn nav state after mount and when content changes
+	$effect(() => {
+		// Reactive dependencies - re-run when these change
+		const _article = currentArticle;
+		const _history = chatHistory;
+		const _streaming = streamingChatResponse;
+
+		const container = document.querySelector(READER_CONFIG.containerSelector);
+		if (!container) return;
+
+		function updateNavState() {
+			turnNavState = getTurnNavigationState(READER_CONFIG);
+		}
+
+		// Initial update (use tick to ensure DOM is rendered)
+		tick().then(updateNavState);
+
+		// Update on scroll
+		container.addEventListener('scroll', updateNavState);
+		return () => container.removeEventListener('scroll', updateNavState);
+	});
 
 	// Mock data for testing (TODO: fetch from database)
 	const MOCK_CHARTS = [
