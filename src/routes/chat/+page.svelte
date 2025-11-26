@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Icon } from 'svelte-icons-pack';
-	import { LuStar, LuCopy, LuTrash2, LuArchive, LuRefreshCw, LuPaperclip, LuFolder, LuChevronDown, LuCloudDownload, LuEllipsisVertical, LuMessageSquare, LuFlame, LuX } from 'svelte-icons-pack/lu';
+	import { LuStar, LuCopy, LuTrash2, LuRefreshCw, LuPaperclip, LuFolder, LuChevronDown, LuCloudDownload, LuEllipsisVertical, LuMessageSquare, LuFlame, LuX } from 'svelte-icons-pack/lu';
 	import { currentMessage, isLoading, sendMessage, abortCurrentMessage } from '$lib/stores/chat';
 	import { tick, onMount } from 'svelte';
 	import { TIMING } from '$lib/config/timing';
@@ -340,7 +340,6 @@
 									<button class="action-btn" class:starred={starredIds.has(msg.id)} title={starredIds.has(msg.id) ? 'Unstar' : 'Star'} onclick={() => handleStarToggle(msg.id)}><Icon src={LuStar} size="11" /></button>
 									<button class="action-btn" class:copied={copiedMessageId === msg.id} title="Copy" onclick={() => handleCopyTurn(msg.id, msg.user_message, msg.ai_response, msg.persona_name)}><Icon src={LuCopy} size="11" /></button>
 									<button class="action-btn" title="Delete" onclick={() => handleMessageDeleteClick(msg.id)}><Icon src={LuTrash2} size="11" /></button>
-									<button class="action-btn" title="Archive"><Icon src={LuArchive} size="11" /></button>
 									<button class="action-btn" title="Refresh"><Icon src={LuRefreshCw} size="11" /></button>
 								</div>
 								<span class="timestamp">{msg.formatted_timestamp}</span>
@@ -377,7 +376,6 @@
 									<button class="action-btn" title="Star"><Icon src={LuStar} size="11" /></button>
 									<button class="action-btn" title="Copy"><Icon src={LuCopy} size="11" /></button>
 									<button class="action-btn" title="Abort" onclick={handleAbortCurrentMessage}><Icon src={LuTrash2} size="11" /></button>
-									<button class="action-btn" title="Archive"><Icon src={LuArchive} size="11" /></button>
 									<button class="action-btn" title="Refresh"><Icon src={LuRefreshCw} size="11" /></button>
 								</div>
 								<span class="timestamp">{$currentMessage.timestamp}</span>
