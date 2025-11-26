@@ -2,9 +2,7 @@
  * Auto-Scroll Module
  *
  * Shared auto-scroll behavior for chat mode and e-reader mode.
- * Supports two modes:
- * - Time-budget mode: countdown from fixed duration (e.g., 20 minutes)
- * - Distance mode: scroll until bottom reached (legacy behavior)
+ * Uses CSS transforms for buttery smooth sub-pixel scrolling.
  */
 
 import { type ScrollConfig, getContainer } from './scroll';
@@ -42,19 +40,7 @@ export interface AutoScrollController {
 
 /**
  * Create an auto-scroll controller for a container.
- *
- * Usage in Svelte 5:
- * ```
- * // Time-budget mode (reader)
- * const autoScroll = createAutoScroll(READER_CONFIG, {
- *   getTimerMinutes: () => readingTimerMinutes
- * });
- *
- * // In template:
- * <button onclick={autoScroll.toggle}>
- *   {autoScroll.isActive ? autoScroll.remainingFormatted : 'Play'}
- * </button>
- * ```
+ * Uses CSS transforms for smooth sub-pixel scrolling.
  */
 export function createAutoScroll(
 	config: ScrollConfig,
@@ -69,7 +55,8 @@ export function createAutoScroll(
 	// Internal state (non-reactive)
 	let lastFrameTime: number | null = null;
 	let animationFrameId: number | null = null;
-	let accumulatedScroll = 0; // Track sub-pixel scroll to avoid rounding issues
+	let transformOffset = 0; // Sub-pixel precise scroll position
+	let startScrollTop = 0; // Native scroll position when auto-scroll started
 
 	// Format time as H:MM:SS
 	function formatTime(totalSeconds: number): string {
@@ -80,7 +67,12 @@ export function createAutoScroll(
 		return `${hours}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 	}
 
+	function getContentContainer(container: HTMLElement): HTMLElement | null {
+		return container.querySelector(config.contentSelector) as HTMLElement | null;
+	}
+
 	function stop() {
+		const wasActive = isActive;
 		isActive = false;
 		lastFrameTime = null;
 
@@ -88,6 +80,21 @@ export function createAutoScroll(
 			cancelAnimationFrame(animationFrameId);
 			animationFrameId = null;
 		}
+
+		// Sync transform back to native scroll
+		if (wasActive) {
+			const container = getContainer(config);
+			const content = container ? getContentContainer(container) : null;
+			if (container && content) {
+				// Set final scroll position
+				container.scrollTop = startScrollTop + transformOffset;
+				// Remove transform
+				content.style.transform = '';
+				content.style.willChange = '';
+			}
+		}
+
+		transformOffset = 0;
 		// Note: remainingSeconds is preserved for resume
 	}
 
@@ -95,23 +102,33 @@ export function createAutoScroll(
 		const container = getContainer(config);
 		if (!container) return;
 
+		const content = getContentContainer(container);
+		if (!content) return;
+
 		// If no remaining time, initialize from settings
 		if (remainingSeconds <= 0) {
 			const minutes = getTimerMinutes?.() ?? DEFAULT_TIMER_MINUTES;
 			remainingSeconds = minutes * 60;
 		}
 
+		// Store starting scroll position
+		startScrollTop = container.scrollTop;
+		transformOffset = 0;
+
+		// Prepare for GPU-accelerated transform
+		content.style.willChange = 'transform';
+
 		isActive = true;
 		lastFrameTime = null;
-		accumulatedScroll = 0;
 
 		function tick(timestamp: DOMHighResTimeStamp) {
 			if (!isActive) return;
 
 			const container = getContainer(config);
-			if (!container) {
+			const content = container ? getContentContainer(container) : null;
+			if (!container || !content) {
 				stop();
-				remainingSeconds = 0; // Reset on error
+				remainingSeconds = 0;
 				return;
 			}
 
@@ -127,7 +144,7 @@ export function createAutoScroll(
 
 			// Check stop conditions
 			const maxScroll = container.scrollHeight - container.clientHeight;
-			const currentScroll = container.scrollTop;
+			const effectiveScroll = startScrollTop + transformOffset;
 
 			// Stop if timer reached 0
 			if (remainingSeconds <= 0) {
@@ -137,19 +154,17 @@ export function createAutoScroll(
 			}
 
 			// Stop if at bottom (article ended)
-			if (currentScroll >= maxScroll - 1) {
+			if (effectiveScroll >= maxScroll - 1) {
 				stop();
 				remainingSeconds = 0;
 				return;
 			}
 
-			// Scroll - accumulate sub-pixels to avoid rounding issues
-			accumulatedScroll += SCROLL_SPEED_PX_PER_MS * deltaMs;
-			const wholePixels = Math.floor(accumulatedScroll);
-			if (wholePixels >= 1) {
-				container.scrollTop = currentScroll + wholePixels;
-				accumulatedScroll -= wholePixels;
-			}
+			// Update transform offset (sub-pixel precision)
+			transformOffset += SCROLL_SPEED_PX_PER_MS * deltaMs;
+
+			// Apply transform (GPU-accelerated, sub-pixel smooth)
+			content.style.transform = `translateY(${-transformOffset}px)`;
 
 			// Continue animation
 			if (typeof requestAnimationFrame !== 'undefined') {
