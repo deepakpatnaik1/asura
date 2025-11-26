@@ -60,13 +60,8 @@
 	let nukeProgress = $state(0);
 	let nukeTimer: number | null = null;
 
-	// Reading timer setting (loaded from user settings)
-	let readingTimerMinutes = $state(20);
-
-	// Auto-scroll controller with time-budget mode
-	const autoScroll = createAutoScroll(READER_CONFIG, {
-		getTimerMinutes: () => readingTimerMinutes
-	});
+	// Auto-scroll controller
+	const autoScroll = createAutoScroll(READER_CONFIG);
 
 	// Turn navigation state (for disabling buttons at boundaries)
 	// Note: Can't use $derived because it runs before DOM exists
@@ -131,11 +126,6 @@
 			}
 
 			const data = await response.json();
-
-			// Load reading timer setting
-			if (data.reading_timer_minutes) {
-				readingTimerMinutes = data.reading_timer_minutes;
-			}
 
 			if (data.active_reader_article_id) {
 				console.log('[Settings] Loading active article:', data.active_reader_article_id);
@@ -1150,11 +1140,7 @@
 
 					<div class="icon-group">
 						<button class="control-btn auto-scroll-btn" class:active={autoScroll.isActive} title="Auto-scroll" onclick={autoScroll.toggle}>
-							{#if autoScroll.isActive}
-								<span class="timer-display">{autoScroll.remainingFormatted}</span>
-							{:else}
-								<Icon src={LuPlay} size="11" />
-							{/if}
+							<Icon src={LuPlay} size="11" />
 						</button>
 						<button class="control-btn" title="Next turn" onclick={() => scrollToNextTurn(READER_CONFIG)} disabled={turnNavState.isAtLast}><Icon src={LuArrowDown} size="11" /></button>
 						<button class="control-btn" title="Previous turn" onclick={() => scrollToPreviousTurn(READER_CONFIG)} disabled={turnNavState.isAtFirst}><Icon src={LuArrowUp} size="11" /></button>
@@ -1919,14 +1905,6 @@
 
 	.auto-scroll-btn svg {
 		display: block;
-	}
-
-	.timer-display {
-		font-size: 9px;
-		font-variant-numeric: tabular-nums;
-		font-family: Menlo, Monaco, 'Courier New', monospace;
-		min-width: 50px;
-		text-align: center;
 	}
 
 	.article-library-dropdown {

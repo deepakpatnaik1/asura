@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Icon } from 'svelte-icons-pack';
-	import { LuStar, LuCopy, LuTrash2, LuArchive, LuRefreshCw, LuPaperclip, LuFolder, LuChevronDown, LuCloudDownload, LuEllipsisVertical, LuArrowDown, LuArrowUp, LuMessageSquare, LuFlame, LuX, LuCircle } from 'svelte-icons-pack/lu';
+	import { LuStar, LuCopy, LuTrash2, LuArchive, LuRefreshCw, LuPaperclip, LuFolder, LuChevronDown, LuCloudDownload, LuEllipsisVertical, LuArrowDown, LuArrowUp, LuMessageSquare, LuFlame, LuX, LuPlay, LuPause } from 'svelte-icons-pack/lu';
 	import { currentMessage, isLoading, sendMessage, abortCurrentMessage } from '$lib/stores/chat';
 	import { tick, onMount } from 'svelte';
 	import { TIMING } from '$lib/config/timing';
@@ -390,27 +390,8 @@
 					</div>
 
 					<div class="icon-group">
-						<button class="control-btn auto-scroll-btn" class:active={autoScroll.isActive} title="Auto-scroll" onclick={autoScroll.toggle} style="position: relative;">
-							<svg width="11" height="11" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-								<!-- Outer circle stroke -->
-								<circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none"/>
-								<!-- Filled portion (Harvey ball) -->
-								{#if autoScroll.pauseProgress > 0}
-									{@const progressPercent = autoScroll.pauseProgress * 100}
-									{@const angle = autoScroll.pauseProgress * 2 * Math.PI}
-									{@const x = 12 + 10 * Math.sin(angle)}
-									{@const y = 12 - 10 * Math.cos(angle)}
-									{@const largeArc = progressPercent > 50 ? 1 : 0}
-									<path
-										d="M12 2 A10 10 0 {largeArc} 1 {x} {y} L12 12 Z"
-										fill="var(--boss-accent)"
-									/>
-								{/if}
-							</svg>
-							<!-- Red X badge when auto-scrolling is active -->
-							{#if autoScroll.isActive}
-								<span style="position: absolute; top: -2px; right: -2px; width: 6px; height: 6px; background: red; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 5px; color: white; font-weight: bold; line-height: 1;">×</span>
-							{/if}
+						<button class="control-btn auto-scroll-btn" class:active={autoScroll.isActive} title={autoScroll.isActive ? 'Stop auto-scroll' : 'Start auto-scroll'} onclick={autoScroll.toggle}>
+							<Icon src={autoScroll.isActive ? LuPause : LuPlay} size="11" />
 						</button>
 						<button class="control-btn" title="Next turn" onclick={() => scrollToNextTurn(CHAT_CONFIG)} disabled={turnNavState.isAtLast}><Icon src={LuArrowDown} size="11" /></button>
 						<button class="control-btn" title="Previous turn" onclick={() => scrollToPreviousTurn(CHAT_CONFIG)} disabled={turnNavState.isAtFirst}><Icon src={LuArrowUp} size="11" /></button>
@@ -670,10 +651,6 @@
 	.control-btn.active {
 		opacity: 1;
 		color: var(--boss-accent);
-	}
-
-	.auto-scroll-btn svg {
-		display: block;
 	}
 
 	.persona-dropdown {
