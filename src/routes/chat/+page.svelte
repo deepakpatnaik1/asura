@@ -1,13 +1,13 @@
 <script lang="ts">
 	import { Icon } from 'svelte-icons-pack';
-	import { LuStar, LuCopy, LuTrash2, LuArchive, LuRefreshCw, LuPaperclip, LuFolder, LuChevronDown, LuCloudDownload, LuEllipsisVertical, LuArrowDown, LuArrowUp, LuMessageSquare, LuFlame, LuX, LuPlay, LuPause } from 'svelte-icons-pack/lu';
+	import { LuStar, LuCopy, LuTrash2, LuArchive, LuRefreshCw, LuPaperclip, LuFolder, LuChevronDown, LuCloudDownload, LuEllipsisVertical, LuMessageSquare, LuFlame, LuX } from 'svelte-icons-pack/lu';
 	import { currentMessage, isLoading, sendMessage, abortCurrentMessage } from '$lib/stores/chat';
 	import { tick, onMount } from 'svelte';
 	import { TIMING } from '$lib/config/timing';
 	import { DEFAULT_PERSONA } from '$lib/config/personas';
 	import { renderMarkdown } from '$lib/markdown-renderer';
-	import { CHAT_CONFIG, scrollToNextTurn, scrollToPreviousTurn, scrollToTurn, scrollToBottom, getTurnNavigationState, getTurns, updateSpacer } from '$lib/ui/scroll';
-	import { createAutoScroll } from '$lib/ui/auto-scroll.svelte';
+	import { CHAT_CONFIG, scrollToTurn, scrollToBottom, getTurns } from '$lib/ui/scroll';
+	import ScrollControls from '$lib/components/ScrollControls.svelte';
 
 	// Receive loaded messages from server
 	let { data } = $props();
@@ -27,12 +27,6 @@
 	let deleteMessageId = $state<string | null>(null);
 	let deleteMessageProgress = $state(0);
 	let deleteMessageTimer: number | null = null;
-
-	// Auto-scroll controller (shared utility)
-	const autoScroll = createAutoScroll(CHAT_CONFIG);
-
-	// Turn navigation state (for disabling buttons at boundaries)
-	let turnNavState = $derived(getTurnNavigationState(CHAT_CONFIG));
 
 	// Load user settings on mount
 	onMount(async () => {
@@ -97,15 +91,13 @@
 		}
 	}
 
-	// Watch for new messages and scroll to boss card + start auto-scroll
+	// Watch for new messages and scroll to boss card
 	let lastScrolledMessageId: string | null = null;
-	let hasStartedStreaming = false;
 
 	$effect(() => {
 		if ($currentMessage && $currentMessage.id !== lastScrolledMessageId) {
 			// Only scroll once when boss card first appears
 			lastScrolledMessageId = $currentMessage.id;
-			hasStartedStreaming = false;
 
 			// Wait for DOM to render, then scroll to new boss card
 			tick().then(() => {
@@ -121,11 +113,6 @@
 			});
 		}
 
-		// Start auto-scroll when first streaming token arrives
-		if ($currentMessage?.ai && !hasStartedStreaming) {
-			hasStartedStreaming = true;
-			autoScroll.start();
-		}
 	});
 
 	// Scroll to bottom on initial load
@@ -390,11 +377,7 @@
 					</div>
 
 					<div class="icon-group">
-						<button class="control-btn auto-scroll-btn" class:active={autoScroll.isActive} title={autoScroll.isActive ? 'Stop auto-scroll' : 'Start auto-scroll'} onclick={autoScroll.toggle}>
-							<Icon src={autoScroll.isActive ? LuPause : LuPlay} size="11" />
-						</button>
-						<button class="control-btn" title="Next turn" onclick={() => scrollToNextTurn(CHAT_CONFIG)} disabled={turnNavState.isAtLast}><Icon src={LuArrowDown} size="11" /></button>
-						<button class="control-btn" title="Previous turn" onclick={() => scrollToPreviousTurn(CHAT_CONFIG)} disabled={turnNavState.isAtFirst}><Icon src={LuArrowUp} size="11" /></button>
+						<ScrollControls config={CHAT_CONFIG} />
 						<button class="control-btn" title="Messages"><Icon src={LuMessageSquare} size="11" /></button>
 					</div>
 

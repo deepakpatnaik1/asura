@@ -2,9 +2,9 @@
 	import { onMount, tick } from 'svelte';
 	import { renderMarkdown } from '$lib/markdown-renderer';
 	import { Icon } from 'svelte-icons-pack';
-	import { LuPaperclip, LuFolder, LuCloudDownload, LuChevronDown, LuArrowDown, LuArrowUp, LuMessageSquare, LuFlame, LuTrash2, LuPlay } from 'svelte-icons-pack/lu';
-	import { READER_CONFIG, scrollToNextTurn, scrollToPreviousTurn, scrollToTurn, scrollToBottom, getTurnNavigationState, getTurns, updateSpacer } from '$lib/ui/scroll';
-	import { createAutoScroll } from '$lib/ui/auto-scroll.svelte';
+	import { LuPaperclip, LuFolder, LuCloudDownload, LuChevronDown, LuMessageSquare, LuFlame, LuTrash2 } from 'svelte-icons-pack/lu';
+	import { READER_CONFIG, scrollToTurn, scrollToBottom, getTurns, updateSpacer } from '$lib/ui/scroll';
+	import ScrollControls from '$lib/components/ScrollControls.svelte';
 
 
 	// Article state
@@ -59,35 +59,6 @@
 	let showNukeModal = $state(false);
 	let nukeProgress = $state(0);
 	let nukeTimer: number | null = null;
-
-	// Auto-scroll controller
-	const autoScroll = createAutoScroll(READER_CONFIG);
-
-	// Turn navigation state (for disabling buttons at boundaries)
-	// Note: Can't use $derived because it runs before DOM exists
-	let turnNavState = $state({ currentIndex: 0, totalTurns: 0, isAtFirst: true, isAtLast: true });
-
-	// Update turn nav state after mount and when content changes
-	$effect(() => {
-		// Reactive dependencies - re-run when these change
-		const _article = currentArticle;
-		const _history = chatHistory;
-		const _streaming = streamingChatResponse;
-
-		const container = document.querySelector(READER_CONFIG.containerSelector);
-		if (!container) return;
-
-		function updateNavState() {
-			turnNavState = getTurnNavigationState(READER_CONFIG);
-		}
-
-		// Initial update (use tick to ensure DOM is rendered)
-		tick().then(updateNavState);
-
-		// Update on scroll
-		container.addEventListener('scroll', updateNavState);
-		return () => container.removeEventListener('scroll', updateNavState);
-	});
 
 	// Mock data for testing (TODO: fetch from database)
 	const MOCK_CHARTS = [
@@ -368,10 +339,6 @@
 									showPasteArea = false; // Hide paste area now that content is streaming
 									isProcessing = false;
 									processingStatus = '';
-									if (!autoScroll.isActive) {
-										console.log('[Auto-scroll] Starting auto-scroll');
-										autoScroll.start();
-									}
 								}
 								streamingContent += data.text;
 							}
@@ -522,10 +489,6 @@
 							const data = JSON.parse(line.slice(6));
 
 							if (data.text) {
-								// Start auto-scroll on first token
-								if (!streamingChatResponse && !autoScroll.isActive) {
-									autoScroll.start();
-								}
 								streamingChatResponse += data.text;
 							}
 
@@ -1139,11 +1102,7 @@
 					</div>
 
 					<div class="icon-group">
-						<button class="control-btn auto-scroll-btn" class:active={autoScroll.isActive} title="Auto-scroll" onclick={autoScroll.toggle}>
-							<Icon src={LuPlay} size="11" />
-						</button>
-						<button class="control-btn" title="Next turn" onclick={() => scrollToNextTurn(READER_CONFIG)} disabled={turnNavState.isAtLast}><Icon src={LuArrowDown} size="11" /></button>
-						<button class="control-btn" title="Previous turn" onclick={() => scrollToPreviousTurn(READER_CONFIG)} disabled={turnNavState.isAtFirst}><Icon src={LuArrowUp} size="11" /></button>
+						<ScrollControls config={READER_CONFIG} />
 						<button class="control-btn" title="Messages"><Icon src={LuMessageSquare} size="11" /></button>
 					</div>
 
@@ -1901,10 +1860,6 @@
 
 	.control-btn.active {
 		color: var(--reader-accent);
-	}
-
-	.auto-scroll-btn svg {
-		display: block;
 	}
 
 	.article-library-dropdown {
