@@ -6,6 +6,8 @@
 	import { TIMING } from '$lib/config/timing';
 	import { DEFAULT_PERSONA } from '$lib/config/personas';
 	import { renderMarkdown } from '$lib/markdown-renderer';
+	import { CHAT_CONFIG, scrollToNextTurn, scrollToPreviousTurn, scrollToTurn, scrollToBottom, getTurnNavigationState, getTurns, updateSpacer } from '$lib/ui/scroll';
+	import { createAutoScroll } from '$lib/ui/auto-scroll.svelte';
 
 	// Receive loaded messages from server
 	let { data } = $props();
@@ -26,13 +28,11 @@
 	let deleteMessageProgress = $state(0);
 	let deleteMessageTimer: number | null = null;
 
-	// Auto-scroll state
-	let isAutoScrolling = $state(false);
-	let scrollSpeed = $state(0.5); // pixels per frame - pattern: scroll 5s, pause 1min, repeat
-	let pauseProgress = $state(0); // 0-100, percentage of pause completed
-	let isPaused = $state(false); // Track if currently in pause phase
-	let pauseStartTime = $state(0); // Track when pause started
-	let scrollAccumulator = $state(0); // Accumulate fractional pixels for smooth low-speed scrolling
+	// Auto-scroll controller (shared utility)
+	const autoScroll = createAutoScroll(CHAT_CONFIG);
+
+	// Turn navigation state (for disabling buttons at boundaries)
+	let turnNavState = $derived(getTurnNavigationState(CHAT_CONFIG));
 
 	// Load user settings on mount
 	onMount(async () => {
@@ -97,285 +97,41 @@
 		}
 	}
 
-	// Auto-scroll to bottom
-	async function scrollToBottom() {
-		await tick();
-		messagesEndRef?.scrollIntoView({ behavior: 'smooth' });
-	}
-
-	// Scroll to next message turn
-	function scrollToNextTurn() {
-		console.log('scrollToNextTurn called');
-
-		const container = document.querySelector('.chat-container');
-		console.log('container:', container);
-		if (!container) {
-			console.log('No container found');
-			return;
-		}
-
-		// Get all turn indicators
-		const turnIndicators = document.querySelectorAll('.turn-indicator');
-		console.log('Found turn indicators:', turnIndicators.length);
-		if (turnIndicators.length === 0) {
-			console.log('No turn indicators found');
-			return;
-		}
-
-		// Get current scroll position (top of viewport)
-		const currentScrollTop = container.scrollTop;
-		// Look for turns that are below the current visible area
-		// Add 100px buffer to skip turns that are already near the top of viewport
-		const viewportTop = currentScrollTop + 100;
-		console.log('Current scroll top:', currentScrollTop, 'Viewport top threshold:', viewportTop);
-
-		// Find the first turn indicator that's below the viewport threshold
-		let nextTurn: Element | null = null;
-		for (const indicator of turnIndicators) {
-			const rect = indicator.getBoundingClientRect();
-			const containerRect = container.getBoundingClientRect();
-			const indicatorTopRelativeToContainer = rect.top - containerRect.top + container.scrollTop;
-
-			console.log('Checking turn indicator:', indicator.textContent, 'at position:', indicatorTopRelativeToContainer);
-
-			if (indicatorTopRelativeToContainer > viewportTop) {
-				nextTurn = indicator;
-				console.log('Found next turn:', indicator.textContent);
-				break;
-			}
-		}
-
-		// If no next turn found (we're at the end), do nothing
-		if (!nextTurn) {
-			console.log('No next turn found (at end)');
-			return;
-		}
-
-		// Calculate scroll position: position of turn indicator minus space for line above boss card
-		const rect = nextTurn.getBoundingClientRect();
-		const containerRect = container.getBoundingClientRect();
-		const turnTopRelativeToContainer = rect.top - containerRect.top + container.scrollTop;
-
-		// Add enough space to show the line space above the boss card (approximately 40px)
-		const spaceAbove = 40;
-		const targetScrollTop = turnTopRelativeToContainer - spaceAbove;
-
-		console.log('Scrolling to:', targetScrollTop);
-
-		// Scroll to position
-		container.scrollTo({
-			top: targetScrollTop,
-			behavior: 'smooth'
-		});
-	}
-
-	// Scroll to previous message turn
-	function scrollToPreviousTurn() {
-		console.log('scrollToPreviousTurn called');
-
-		const container = document.querySelector('.chat-container');
-		console.log('container:', container);
-		if (!container) {
-			console.log('No container found');
-			return;
-		}
-
-		// Get all turn indicators
-		const turnIndicators = document.querySelectorAll('.turn-indicator');
-		console.log('Found turn indicators:', turnIndicators.length);
-		if (turnIndicators.length === 0) {
-			console.log('No turn indicators found');
-			return;
-		}
-
-		// Get current scroll position (top of viewport)
-		const currentScrollTop = container.scrollTop;
-		// Look for turns that are above the current visible area
-		// Subtract 100px buffer to skip turns that are already near the top of viewport
-		const viewportTop = currentScrollTop - 100;
-		console.log('Current scroll top:', currentScrollTop, 'Viewport top threshold:', viewportTop);
-
-		// Find the last turn indicator that's above the viewport threshold
-		// (iterate backwards to find the previous one)
-		let previousTurn: Element | null = null;
-		for (let i = turnIndicators.length - 1; i >= 0; i--) {
-			const indicator = turnIndicators[i];
-			const rect = indicator.getBoundingClientRect();
-			const containerRect = container.getBoundingClientRect();
-			const indicatorTopRelativeToContainer = rect.top - containerRect.top + container.scrollTop;
-
-			console.log('Checking turn indicator:', indicator.textContent, 'at position:', indicatorTopRelativeToContainer);
-
-			if (indicatorTopRelativeToContainer < viewportTop) {
-				previousTurn = indicator;
-				console.log('Found previous turn:', indicator.textContent);
-				break;
-			}
-		}
-
-		// If no previous turn found (we're at the beginning), do nothing
-		if (!previousTurn) {
-			console.log('No previous turn found (at beginning)');
-			return;
-		}
-
-		// Calculate scroll position: position of turn indicator minus space for line above boss card
-		const rect = previousTurn.getBoundingClientRect();
-		const containerRect = container.getBoundingClientRect();
-		const turnTopRelativeToContainer = rect.top - containerRect.top + container.scrollTop;
-
-		// Add enough space to show the line space above the boss card (approximately 40px)
-		const spaceAbove = 40;
-		const targetScrollTop = turnTopRelativeToContainer - spaceAbove;
-
-		console.log('Scrolling to:', targetScrollTop);
-
-		// Scroll to position
-		container.scrollTo({
-			top: targetScrollTop,
-			behavior: 'smooth'
-		});
-	}
-
-	// Custom auto-scroll with adjustable speed and pause pattern
-	// Pattern: Pause 60s → Scroll 15s → Repeat
-	function handleAutoScroll() {
-		if (isAutoScrolling) {
-			// If auto-scroll is active (either scrolling or paused), turn it off
-			isAutoScrolling = false;
-			isPaused = false;
-			pauseProgress = 0;
-			scrollAccumulator = 0;
-			return;
-		}
-
-		// Start with pause phase first
-		isAutoScrolling = true;
-		isPaused = true;
-		pauseProgress = 0;
-		scrollAccumulator = 0;
-		const container = document.querySelector('.chat-container') as HTMLElement | null;
-		if (!container) return;
-
-		let scrollStartTime = Date.now();
-		pauseStartTime = Date.now();
-
-		function smoothScroll() {
-			if (!isAutoScrolling || !container) return;
-
-			const maxScroll = container.scrollHeight - container.clientHeight;
-			const currentScroll = container.scrollTop;
-
-			if (currentScroll >= maxScroll) {
-				// Reached bottom, stop scrolling
-				isAutoScrolling = false;
-				isPaused = false;
-				pauseProgress = 0;
-				scrollAccumulator = 0;
-				return;
-			}
-
-			const now = Date.now();
-
-			if (isPaused) {
-				// Pause phase: pause for 60 seconds first
-				// During pause, user can manually scroll - we'll resume from their position
-				const pauseElapsed = now - pauseStartTime;
-				pauseProgress = Math.min(100, (pauseElapsed / TIMING.autoScrollPause) * 100);
-
-				if (pauseElapsed >= TIMING.autoScrollPause) {
-					// Switch to scrolling phase from current scroll position
-					isPaused = false;
-					scrollStartTime = now;
-					pauseProgress = 0;
-					scrollAccumulator = 0;
-				}
-				// Don't auto-scroll during pause, but keep checking
-			} else {
-				// Scrolling phase: scroll for 15 seconds
-				pauseProgress = 0;
-				const scrollElapsed = now - scrollStartTime;
-				if (scrollElapsed < TIMING.autoScrollDuration) {
-					// Accumulate fractional pixels and scroll by whole pixels
-					scrollAccumulator += scrollSpeed;
-					const pixelsToScroll = Math.floor(scrollAccumulator);
-					if (pixelsToScroll > 0) {
-						container.scrollTop = currentScroll + pixelsToScroll;
-						scrollAccumulator -= pixelsToScroll;
-					}
-				} else {
-					// Switch back to pause phase
-					isPaused = true;
-					pauseStartTime = now;
-					scrollAccumulator = 0;
-				}
-			}
-
-			// Continue the cycle
-			requestAnimationFrame(smoothScroll);
-		}
-
-		smoothScroll();
-	}
-
-	// Watch for new messages and scroll
-	// Scroll to boss card when new message is submitted (anchor at top of viewport)
+	// Watch for new messages and scroll to boss card + start auto-scroll
 	let lastScrolledMessageId: string | null = null;
+	let hasStartedStreaming = false;
+
 	$effect(() => {
 		if ($currentMessage && $currentMessage.id !== lastScrolledMessageId) {
-			console.log('[Scroll Debug] New message detected, ID:', $currentMessage.id);
-			// Only scroll once when boss card first appears (not continuously as AI response updates)
+			// Only scroll once when boss card first appears
 			lastScrolledMessageId = $currentMessage.id;
+			hasStartedStreaming = false;
 
-			// Wait for DOM to fully render using multiple RAF cycles
+			// Wait for DOM to render, then scroll to new boss card
 			tick().then(() => {
 				requestAnimationFrame(() => {
 					requestAnimationFrame(() => {
-						const container = document.querySelector('.chat-container');
-						const turnIndicators = document.querySelectorAll('.turn-indicator');
+						const turns = getTurns(CHAT_CONFIG);
+						if (turns.length === 0) return;
 
-						console.log('[Scroll Debug] Container:', container);
-						console.log('[Scroll Debug] Turn indicators found:', turnIndicators.length);
-
-						if (!container || turnIndicators.length === 0) {
-							console.log('[Scroll Debug] Early exit - missing container or turn indicators');
-							return;
-						}
-
-						// Get the last turn indicator (newly created boss card)
-						const newBossCard = turnIndicators[turnIndicators.length - 1];
-						console.log('[Scroll Debug] New boss card element:', newBossCard);
-
-						// Calculate position relative to container
-						const rect = newBossCard.getBoundingClientRect();
-						const containerRect = container.getBoundingClientRect();
-						const turnTopRelativeToContainer = rect.top - containerRect.top + container.scrollTop;
-
-						// Scroll to position: turn indicator position minus 40px space above
-						const spaceAbove = 40;
-						const targetScrollTop = turnTopRelativeToContainer - spaceAbove;
-
-						console.log('[Scroll Debug] Scroll calculation:', {
-							turnTop: rect.top,
-							containerTop: containerRect.top,
-							containerScrollTop: container.scrollTop,
-							turnTopRelative: turnTopRelativeToContainer,
-							targetScrollTop
-						});
-
-						// Scroll with smooth behavior
-						container.scrollTo({ top: targetScrollTop, behavior: 'smooth' });
-						console.log('[Scroll Debug] Scroll command issued');
+						const lastTurn = turns[turns.length - 1];
+						scrollToTurn(CHAT_CONFIG, lastTurn);
 					});
 				});
 			});
 		}
+
+		// Start auto-scroll when first streaming token arrives
+		if ($currentMessage?.ai && !hasStartedStreaming) {
+			hasStartedStreaming = true;
+			autoScroll.start();
+		}
 	});
 
-	// Scroll to bottom on initial load ONLY (not on message updates)
+	// Scroll to bottom on initial load
 	onMount(() => {
-		if (allMessages.length > 0 && messagesEndRef) {
-			messagesEndRef.scrollIntoView({ behavior: 'instant' });
+		if (allMessages.length > 0) {
+			scrollToBottom(CHAT_CONFIG);
 		}
 	});
 
@@ -634,16 +390,17 @@
 					</div>
 
 					<div class="icon-group">
-						<button class="control-btn auto-scroll-btn" class:active={isAutoScrolling} title="Auto-scroll" onclick={handleAutoScroll} style="position: relative;">
+						<button class="control-btn auto-scroll-btn" class:active={autoScroll.isActive} title="Auto-scroll" onclick={autoScroll.toggle} style="position: relative;">
 							<svg width="11" height="11" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
 								<!-- Outer circle stroke -->
 								<circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none"/>
 								<!-- Filled portion (Harvey ball) -->
-								{#if pauseProgress > 0}
-									{@const angle = (pauseProgress / 100) * 2 * Math.PI}
+								{#if autoScroll.pauseProgress > 0}
+									{@const progressPercent = autoScroll.pauseProgress * 100}
+									{@const angle = autoScroll.pauseProgress * 2 * Math.PI}
 									{@const x = 12 + 10 * Math.sin(angle)}
 									{@const y = 12 - 10 * Math.cos(angle)}
-									{@const largeArc = pauseProgress > 50 ? 1 : 0}
+									{@const largeArc = progressPercent > 50 ? 1 : 0}
 									<path
 										d="M12 2 A10 10 0 {largeArc} 1 {x} {y} L12 12 Z"
 										fill="var(--boss-accent)"
@@ -651,12 +408,12 @@
 								{/if}
 							</svg>
 							<!-- Red X badge when auto-scrolling is active -->
-							{#if isAutoScrolling}
+							{#if autoScroll.isActive}
 								<span style="position: absolute; top: -2px; right: -2px; width: 6px; height: 6px; background: red; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 5px; color: white; font-weight: bold; line-height: 1;">×</span>
 							{/if}
 						</button>
-						<button class="control-btn" title="Next turn" onclick={scrollToNextTurn}><Icon src={LuArrowDown} size="11" /></button>
-						<button class="control-btn" title="Previous turn" onclick={scrollToPreviousTurn}><Icon src={LuArrowUp} size="11" /></button>
+						<button class="control-btn" title="Next turn" onclick={() => scrollToNextTurn(CHAT_CONFIG)} disabled={turnNavState.isAtLast}><Icon src={LuArrowDown} size="11" /></button>
+						<button class="control-btn" title="Previous turn" onclick={() => scrollToPreviousTurn(CHAT_CONFIG)} disabled={turnNavState.isAtFirst}><Icon src={LuArrowUp} size="11" /></button>
 						<button class="control-btn" title="Messages"><Icon src={LuMessageSquare} size="11" /></button>
 					</div>
 
