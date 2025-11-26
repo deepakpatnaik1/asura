@@ -31,8 +31,19 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession, supabase 
 
 	if (error) {
 		console.error('Error loading superjournal:', error);
-		return { messages: [], user };
+		return { messages: [], starredIds: [], user };
 	}
+
+	// Fetch starred journal entries to get their superjournal_ids
+	const { data: starredJournals } = await supabase
+		.from('journal')
+		.select('superjournal_id')
+		.eq('is_starred', true)
+		.eq('user_id', user.id);
+
+	const starredIds = (starredJournals || [])
+		.map((j) => j.superjournal_id)
+		.filter((id): id is string => id !== null);
 
 	// Format timestamps on the server to prevent hydration mismatch
 	const messagesWithFormattedTimestamps = (messages || []).map((msg) => ({
@@ -42,6 +53,7 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession, supabase 
 
 	return {
 		messages: messagesWithFormattedTimestamps,
+		starredIds,
 		user
 	};
 };

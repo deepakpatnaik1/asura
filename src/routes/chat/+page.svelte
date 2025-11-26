@@ -13,6 +13,8 @@
 	let { data } = $props();
 	// Reverse to show oldest first (most recent at bottom)
 	let allMessages = $state([...(data.messages || [])].reverse());
+	// Track starred message IDs
+	let starredIds = $state(new Set<string>(data.starredIds || []));
 
 	let inputMessage = $state('');
 	let messagesEndRef: HTMLDivElement;
@@ -215,6 +217,37 @@
 		console.log('[Abort] Current message aborted');
 	}
 
+	async function handleStarToggle(messageId: string) {
+		// Optimistic update - toggle immediately
+		const wasStarred = starredIds.has(messageId);
+		if (wasStarred) {
+			starredIds = new Set([...starredIds].filter(id => id !== messageId));
+		} else {
+			starredIds = new Set([...starredIds, messageId]);
+		}
+
+		// Fire and forget - API handles waiting for journal entry if needed
+		fetch(`/api/superjournal/${messageId}`, { method: 'PATCH' })
+			.then(response => response.json())
+			.then(result => {
+				// Sync with server state in case of mismatch
+				if (result.is_starred !== undefined) {
+					if (result.is_starred && !starredIds.has(messageId)) {
+						starredIds = new Set([...starredIds, messageId]);
+					} else if (!result.is_starred && starredIds.has(messageId)) {
+						starredIds = new Set([...starredIds].filter(id => id !== messageId));
+					}
+				}
+			})
+			.catch(() => {
+				// Revert on failure
+				if (wasStarred) {
+					starredIds = new Set([...starredIds, messageId]);
+				} else {
+					starredIds = new Set([...starredIds].filter(id => id !== messageId));
+				}
+			});
+	}
 
 	function handleNukeClick() {
 		showNukeConfirm = true;
@@ -286,7 +319,7 @@
 							<span class="message-label boss-label">Boss</span>
 							<div class="message-actions">
 								<div class="action-icons">
-									<button class="action-btn" title="Star"><Icon src={LuStar} size="11" /></button>
+									<button class="action-btn" class:starred={starredIds.has(msg.id)} title={starredIds.has(msg.id) ? 'Unstar' : 'Star'} onclick={() => handleStarToggle(msg.id)}><Icon src={LuStar} size="11" /></button>
 									<button class="action-btn" title="Copy"><Icon src={LuCopy} size="11" /></button>
 									<button class="action-btn" title="Delete" onclick={() => handleMessageDeleteClick(msg.id)}><Icon src={LuTrash2} size="11" /></button>
 									<button class="action-btn" title="Archive"><Icon src={LuArchive} size="11" /></button>
@@ -580,6 +613,15 @@
 
 	.action-btn:hover {
 		opacity: 1;
+	}
+
+	.action-btn.starred {
+		opacity: 1;
+		color: rgb(217, 133, 107);
+	}
+
+	.action-btn.starred :global(svg) {
+		fill: rgb(217, 133, 107);
 	}
 
 	.timestamp {
