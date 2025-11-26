@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Icon } from 'svelte-icons-pack';
-	import { LuStar, LuCopy, LuTrash2, LuRefreshCw, LuPaperclip, LuFolder, LuChevronDown, LuCloudDownload, LuEllipsisVertical, LuMessageSquare, LuFlame, LuX } from 'svelte-icons-pack/lu';
+	import { LuStar, LuCopy, LuTrash2, LuPaperclip, LuFolder, LuChevronDown, LuCloudDownload, LuEllipsisVertical, LuMessageSquare, LuFlame } from 'svelte-icons-pack/lu';
 	import { currentMessage, isLoading, sendMessage, abortCurrentMessage } from '$lib/stores/chat';
 	import { tick, onMount } from 'svelte';
 	import { TIMING } from '$lib/config/timing';
@@ -221,101 +221,6 @@
 	// Track which message is showing "copied" feedback
 	let copiedMessageId = $state<string | null>(null);
 
-	// Correction mode state
-	let correctionModeId = $state<string | null>(null);
-	let corrections = $state<Array<{
-		id: string;
-		selectedText: string;
-		instruction: string;
-		position: { x: number; y: number };
-	}>>([]);
-	let activeSelectionPosition = $state<{ x: number; y: number } | null>(null);
-	let activeSelectionText = $state<string>('');
-	let correctionInputValue = $state('');
-	let correctionInputRef: HTMLInputElement;
-
-	function handleCorrectionToggle(messageId: string) {
-		if (correctionModeId === messageId) {
-			correctionModeId = null;
-			corrections = [];
-			activeSelectionPosition = null;
-			activeSelectionText = '';
-			correctionInputValue = '';
-		} else {
-			correctionModeId = messageId;
-		}
-	}
-
-	// Handle text selection in correction mode (on mouseup, after selection complete)
-	function handleMouseUp() {
-		if (!correctionModeId) return;
-
-		// Small delay to ensure selection is finalized
-		setTimeout(() => {
-			const selection = window.getSelection();
-			if (!selection || selection.isCollapsed || !selection.toString().trim()) {
-				return;
-			}
-
-			const selectedText = selection.toString().trim();
-			const range = selection.getRangeAt(0);
-			const rect = range.getBoundingClientRect();
-
-			// Position the input below the selection
-			activeSelectionPosition = {
-				x: rect.left + rect.width / 2,
-				y: rect.bottom + 8
-			};
-			activeSelectionText = selectedText;
-			correctionInputValue = '';
-
-			// Focus the input after it appears
-			setTimeout(() => correctionInputRef?.focus(), 50);
-		}, 10);
-	}
-
-	// Add correction and clear input
-	function addCorrection() {
-		if (!activeSelectionText || !correctionInputValue.trim()) return;
-
-		corrections = [...corrections, {
-			id: crypto.randomUUID(),
-			selectedText: activeSelectionText,
-			instruction: correctionInputValue.trim(),
-			position: activeSelectionPosition!
-		}];
-
-		activeSelectionPosition = null;
-		activeSelectionText = '';
-		correctionInputValue = '';
-		window.getSelection()?.removeAllRanges();
-	}
-
-	// Remove a specific correction
-	function removeCorrection(id: string) {
-		corrections = corrections.filter(c => c.id !== id);
-	}
-
-	// Cancel current selection input
-	function cancelSelectionInput() {
-		activeSelectionPosition = null;
-		activeSelectionText = '';
-		correctionInputValue = '';
-		window.getSelection()?.removeAllRanges();
-	}
-
-	// Exit correction mode on Escape
-	function handleKeydown(event: KeyboardEvent) {
-		if (event.key === 'Escape') {
-			if (activeSelectionPosition) {
-				cancelSelectionInput();
-			} else if (correctionModeId) {
-				correctionModeId = null;
-				corrections = [];
-			}
-		}
-	}
-
 	async function handleCopyTurn(messageId: string, userMessage: string, aiResponse: string, personaName: string) {
 		// Clean up excessive newlines - collapse to single newline
 		const cleanResponse = aiResponse.replace(/\n{2,}/g, '\n').trim();
@@ -417,15 +322,13 @@
 
 </script>
 
-<svelte:window onkeydown={handleKeydown} onmouseup={handleMouseUp} />
-
 <div class="chat-container">
 	<!-- Messages Area -->
 	<div class="messages-area">
 		<div class="messages-content">
 			{#each allMessages as msg, index}
 				<!-- Boss Message -->
-				<div class="message-group" class:correction-mode={correctionModeId === msg.id}>
+				<div class="message-group">
 					<div class="boss-message">
 						<!-- Turn Indicator -->
 						<div class="turn-indicator">turn {index + 1}</div>
@@ -437,7 +340,6 @@
 									<button class="action-btn" class:starred={starredIds.has(msg.id)} title={starredIds.has(msg.id) ? 'Unstar' : 'Star'} onclick={() => handleStarToggle(msg.id)}><Icon src={LuStar} size="11" /></button>
 									<button class="action-btn" class:copied={copiedMessageId === msg.id} title="Copy" onclick={() => handleCopyTurn(msg.id, msg.user_message, msg.ai_response, msg.persona_name)}><Icon src={LuCopy} size="11" /></button>
 									<button class="action-btn" title="Delete" onclick={() => handleMessageDeleteClick(msg.id)}><Icon src={LuTrash2} size="11" /></button>
-									<button class="action-btn" class:active={correctionModeId === msg.id} title="Correct" onclick={() => handleCorrectionToggle(msg.id)}><Icon src={LuRefreshCw} size="11" /></button>
 								</div>
 								<span class="timestamp">{msg.formatted_timestamp}</span>
 							</div>
@@ -447,7 +349,7 @@
 				</div>
 
 				<!-- AI Response -->
-				<div class="message-group" class:correction-mode={correctionModeId === msg.id}>
+				<div class="message-group">
 					<div class="ai-message">
 						<div class="message-header">
 							<span class="message-label ai-label">{msg.persona_name.charAt(0).toUpperCase() + msg.persona_name.slice(1)}</span>
@@ -473,7 +375,6 @@
 									<button class="action-btn" title="Star"><Icon src={LuStar} size="11" /></button>
 									<button class="action-btn" title="Copy"><Icon src={LuCopy} size="11" /></button>
 									<button class="action-btn" title="Abort" onclick={handleAbortCurrentMessage}><Icon src={LuTrash2} size="11" /></button>
-									<button class="action-btn" title="Refresh"><Icon src={LuRefreshCw} size="11" /></button>
 								</div>
 								<span class="timestamp">{$currentMessage.timestamp}</span>
 							</div>
@@ -577,41 +478,6 @@
 
 	<!-- Canvas Area - blank for now -->
 	<div class="canvas-area"></div>
-
-	<!-- Floating Correction Input -->
-	{#if activeSelectionPosition}
-		<div
-			class="correction-input-container"
-			style="left: {activeSelectionPosition.x}px; top: {activeSelectionPosition.y}px;"
-		>
-			<div class="correction-input-box">
-				<span class="correction-selected-text">"{activeSelectionText.slice(0, 30)}{activeSelectionText.length > 30 ? '...' : ''}"</span>
-				<div class="correction-input-row">
-					<input
-						type="text"
-						bind:this={correctionInputRef}
-						bind:value={correctionInputValue}
-						placeholder="Correction..."
-						class="correction-input"
-						onkeydown={(e) => e.key === 'Enter' && addCorrection()}
-					/>
-					<button class="correction-close-btn" onclick={cancelSelectionInput}>
-						<Icon src={LuX} size="12" />
-					</button>
-				</div>
-			</div>
-		</div>
-	{/if}
-
-	<!-- Queued Corrections Indicator -->
-	{#if corrections.length > 0 && correctionModeId}
-		<div class="corrections-queue">
-			<span>{corrections.length} correction{corrections.length > 1 ? 's' : ''} queued</span>
-			<button class="corrections-submit-btn" onclick={() => console.log('Submit corrections:', corrections)}>
-				Submit
-			</button>
-		</div>
-	{/if}
 
 </div>
 
@@ -779,141 +645,6 @@
 
 	.action-btn.copied :global(svg) {
 		fill: rgb(217, 133, 107);
-	}
-
-	.action-btn.active {
-		opacity: 1;
-		color: rgb(217, 133, 107);
-	}
-
-	.action-btn.active :global(svg) {
-		fill: rgb(217, 133, 107);
-	}
-
-	/* Correction Mode - Visual Treatment */
-	.message-group.correction-mode {
-		position: relative;
-	}
-
-	.message-group.correction-mode .boss-message,
-	.message-group.correction-mode .ai-message {
-		/* Option A: Cream/sepia overlay */
-		background: rgba(255, 248, 240, 0.08);
-		box-shadow: 0 0 0 1px rgba(217, 133, 107, 0.3), 0 0 20px rgba(217, 133, 107, 0.1);
-		border-radius: var(--boss-card-border-radius);
-		cursor: text;
-	}
-
-	.message-group.correction-mode .message-text {
-		/* Make text selectable with visual cue */
-		user-select: text;
-		cursor: text;
-	}
-
-	.message-group.correction-mode .message-text::selection {
-		background: rgba(217, 133, 107, 0.4);
-	}
-
-	/* Floating Correction Input */
-	.correction-input-container {
-		position: fixed;
-		transform: translateX(-50%);
-		z-index: 1000;
-	}
-
-	.correction-input-box {
-		background: rgb(0, 0, 0);
-		border: 1px solid rgb(217, 133, 107);
-		border-radius: 8px;
-		padding: 8px 12px;
-		display: flex;
-		flex-direction: column;
-		gap: 6px;
-		box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-		min-width: 250px;
-	}
-
-	.correction-selected-text {
-		font-size: 10px;
-		color: rgb(217, 133, 107);
-		opacity: 0.8;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
-	.correction-input-row {
-		display: flex;
-		gap: 8px;
-		align-items: center;
-	}
-
-	.correction-input {
-		flex: 1;
-		background: transparent;
-		border: none;
-		color: hsl(var(--foreground));
-		font-size: 12px;
-		outline: none;
-		padding: 4px 0;
-	}
-
-	.correction-input::placeholder {
-		color: hsl(var(--foreground));
-		opacity: 0.4;
-	}
-
-	.correction-close-btn {
-		background: transparent;
-		border: none;
-		color: hsl(var(--foreground));
-		opacity: 0.5;
-		cursor: pointer;
-		padding: 2px;
-		display: flex;
-		align-items: center;
-	}
-
-	.correction-close-btn:hover {
-		opacity: 1;
-		color: rgb(217, 133, 107);
-	}
-
-	/* Corrections Queue Indicator */
-	.corrections-queue {
-		position: fixed;
-		bottom: 100px;
-		left: 50%;
-		transform: translateX(-50%);
-		background: rgb(0, 0, 0);
-		border: 1px solid rgb(217, 133, 107);
-		border-radius: 20px;
-		padding: 8px 16px;
-		display: flex;
-		gap: 12px;
-		align-items: center;
-		z-index: 1000;
-		box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-	}
-
-	.corrections-queue span {
-		font-size: 12px;
-		color: hsl(var(--foreground));
-	}
-
-	.corrections-submit-btn {
-		background: rgb(217, 133, 107);
-		border: none;
-		border-radius: 12px;
-		padding: 4px 12px;
-		font-size: 11px;
-		color: black;
-		cursor: pointer;
-		font-weight: 500;
-	}
-
-	.corrections-submit-btn:hover {
-		opacity: 0.9;
 	}
 
 	.timestamp {
