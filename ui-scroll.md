@@ -6,7 +6,9 @@ Keep all scrolling behavior in a separate file. Do not clutter `+page.svelte` wi
 
 ## 2. Initial Load Behavior
 
-On browser refresh or app start, snap to the end of the latest message turn. This is natural AI chat interface behavior - the user wants to pick up where they left off.
+**Reader mode**: On browser refresh or app start, stay at the top (beginning of first message turn). The user starts reading from the beginning.
+
+**Chat mode**: Snap to the end of the latest message turn. This is natural AI chat interface behavior - the user wants to pick up where they left off.
 
 ## 3. Question Submission Behavior
 
