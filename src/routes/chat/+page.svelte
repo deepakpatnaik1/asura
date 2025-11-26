@@ -204,7 +204,8 @@
 				});
 				if (!response.ok) throw new Error('Delete failed');
 				console.log('[Message] Deleted superjournal entry:', messageId);
-				// SSE will handle UI update automatically
+				// Remove from local state
+				allMessages = allMessages.filter(msg => msg.id !== messageId);
 			} catch (err) {
 				console.error('[Message] Delete failed:', err);
 			}
