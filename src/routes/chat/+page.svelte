@@ -217,6 +217,23 @@
 		console.log('[Abort] Current message aborted');
 	}
 
+	// Track which message is showing "copied" feedback
+	let copiedMessageId = $state<string | null>(null);
+
+	async function handleCopyTurn(messageId: string, userMessage: string, aiResponse: string, personaName: string) {
+		// Clean up excessive newlines - collapse to single newline
+		const cleanResponse = aiResponse.replace(/\n{2,}/g, '\n').trim();
+		const cleanMessage = userMessage.trim();
+		const text = `Boss: ${cleanMessage}\n\n${personaName.charAt(0).toUpperCase() + personaName.slice(1)}: ${cleanResponse}`;
+		await navigator.clipboard.writeText(text);
+
+		// Show visual feedback briefly
+		copiedMessageId = messageId;
+		setTimeout(() => {
+			if (copiedMessageId === messageId) copiedMessageId = null;
+		}, 1500);
+	}
+
 	async function handleStarToggle(messageId: string) {
 		// Optimistic update - toggle immediately
 		const wasStarred = starredIds.has(messageId);
@@ -320,7 +337,7 @@
 							<div class="message-actions">
 								<div class="action-icons">
 									<button class="action-btn" class:starred={starredIds.has(msg.id)} title={starredIds.has(msg.id) ? 'Unstar' : 'Star'} onclick={() => handleStarToggle(msg.id)}><Icon src={LuStar} size="11" /></button>
-									<button class="action-btn" title="Copy"><Icon src={LuCopy} size="11" /></button>
+									<button class="action-btn" class:copied={copiedMessageId === msg.id} title="Copy" onclick={() => handleCopyTurn(msg.id, msg.user_message, msg.ai_response, msg.persona_name)}><Icon src={LuCopy} size="11" /></button>
 									<button class="action-btn" title="Delete" onclick={() => handleMessageDeleteClick(msg.id)}><Icon src={LuTrash2} size="11" /></button>
 									<button class="action-btn" title="Archive"><Icon src={LuArchive} size="11" /></button>
 									<button class="action-btn" title="Refresh"><Icon src={LuRefreshCw} size="11" /></button>
@@ -621,6 +638,15 @@
 	}
 
 	.action-btn.starred :global(svg) {
+		fill: rgb(217, 133, 107);
+	}
+
+	.action-btn.copied {
+		opacity: 1;
+		color: rgb(217, 133, 107);
+	}
+
+	.action-btn.copied :global(svg) {
 		fill: rgb(217, 133, 107);
 	}
 
