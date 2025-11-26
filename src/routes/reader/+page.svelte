@@ -1473,7 +1473,6 @@
 		display: flex;
 		flex-direction: column;
 		gap: 8px;
-		overflow: visible;
 	}
 
 	.input-controls {
@@ -1483,7 +1482,6 @@
 		margin-bottom: 0px;
 		flex-wrap: nowrap;
 		overflow-x: auto;
-		overflow-y: visible;
 	}
 
 	.control-btn {
@@ -1919,17 +1917,16 @@
 		color: var(--reader-accent);
 	}
 
-	.auto-scroll-btn {
-		min-width: 50px;
-		display: flex;
-		align-items: center;
-		justify-content: center;
+	.auto-scroll-btn svg {
+		display: block;
 	}
 
 	.timer-display {
 		font-size: 9px;
 		font-variant-numeric: tabular-nums;
 		font-family: Menlo, Monaco, 'Courier New', monospace;
+		min-width: 50px;
+		text-align: center;
 	}
 
 	.article-library-dropdown {
