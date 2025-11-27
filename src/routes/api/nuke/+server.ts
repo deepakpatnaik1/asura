@@ -1,12 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { createClient } from '@supabase/supabase-js';
-import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
-import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 
-const supabase = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-
-export const POST: RequestHandler = async ({ locals: { safeGetSession } }) => {
+export const POST: RequestHandler = async ({ locals: { safeGetSession, supabase } }) => {
 	try {
 		// 1. AUTHENTICATION CHECK
 		const { user } = await safeGetSession();

@@ -1,15 +1,12 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { VoyageAIClient } from 'voyageai';
-import { VOYAGE_API_KEY, SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
-import { PUBLIC_SUPABASE_URL } from '$env/static/public';
-import { createClient } from '@supabase/supabase-js';
+import { VOYAGE_API_KEY } from '$env/static/private';
 import { DEFAULT_COMPRESSION_MODEL, EMBEDDING_MODEL } from '$lib/config/models';
 import { getModelParams } from '$lib/config/model-params';
 import { compress } from '$lib/calls';
 
 const voyage = new VoyageAIClient({ apiKey: VOYAGE_API_KEY });
-const supabase = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 /**
  * Orphan Recovery Endpoint
@@ -18,7 +15,7 @@ const supabase = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
  * Triggers compression for a superjournal entry that's missing its journal entry.
  * Called automatically on page load to recover failed compressions.
  */
-export const POST: RequestHandler = async ({ request, locals: { safeGetSession } }) => {
+export const POST: RequestHandler = async ({ request, locals: { safeGetSession, supabase } }) => {
 	const { user } = await safeGetSession();
 	if (!user) {
 		return json({ error: { message: 'Unauthorized', code: 'UNAUTHORIZED' } }, { status: 401 });

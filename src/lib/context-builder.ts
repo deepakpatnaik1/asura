@@ -1,12 +1,10 @@
-import { createClient } from '@supabase/supabase-js';
-import { SUPABASE_SERVICE_ROLE_KEY, VOYAGE_API_KEY } from '$env/static/private';
-import { PUBLIC_SUPABASE_URL } from '$env/static/public';
+import { VOYAGE_API_KEY } from '$env/static/private';
 import { VoyageAIClient } from 'voyageai';
 import { EMBEDDING_MODEL } from '$lib/config/models';
 import { MEMORY } from '$lib/config/memory';
 import { DEFAULT_PERSONA } from '$lib/config/personas';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
-const supabase = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 const voyage = new VoyageAIClient({ apiKey: VOYAGE_API_KEY });
 
 // Token estimation (rough approximation: 1 token ≈ 4 characters)
@@ -15,7 +13,7 @@ function estimateTokens(text: string): number {
 }
 
 // Fetch model context window from database
-async function getModelContextWindow(modelIdentifier: string): Promise<number> {
+async function getModelContextWindow(supabase: SupabaseClient, modelIdentifier: string): Promise<number> {
 	const { data, error } = await supabase
 		.from('models')
 		.select('context_window')
@@ -62,13 +60,14 @@ export interface StructuredContext {
  * Enforces 40% context window cap with priority-based truncation
  */
 export async function buildContextForCalls1A1B(
+	supabase: SupabaseClient,
 	userId: string,
 	personaName: string = DEFAULT_PERSONA,
 	modelIdentifier: string,
 	userQuery?: string // Optional: enables vector search (Priority 5)
 ): Promise<StructuredContext> {
 	// Get model's context window and calculate budget
-	const contextWindow = await getModelContextWindow(modelIdentifier);
+	const contextWindow = await getModelContextWindow(supabase, modelIdentifier);
 	const contextBudget = Math.floor(contextWindow * MEMORY.contextWindowCap); // 40% cap
 
 	// Initialize context components

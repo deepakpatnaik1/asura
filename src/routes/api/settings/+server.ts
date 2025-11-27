@@ -1,8 +1,5 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { createClient } from '@supabase/supabase-js';
-import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
-import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 import {
 	DEFAULT_CONVERSATION_MODEL,
 	DEFAULT_COMPRESSION_MODEL,
@@ -10,9 +7,7 @@ import {
 	EMBEDDING_MODEL
 } from '$lib/config/models';
 
-const supabase = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-
-export const GET: RequestHandler = async ({ locals: { safeGetSession } }) => {
+export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase } }) => {
 	// 1. AUTHENTICATION CHECK
 	const { user } = await safeGetSession();
 	if (!user) {
@@ -65,7 +60,7 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession } }) => {
 	return json(data);
 };
 
-export const PUT: RequestHandler = async ({ request, locals: { safeGetSession } }) => {
+export const PUT: RequestHandler = async ({ request, locals: { safeGetSession, supabase } }) => {
 	// 1. AUTHENTICATION CHECK
 	const { user } = await safeGetSession();
 	if (!user) {

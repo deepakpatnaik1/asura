@@ -17,7 +17,8 @@ import { converseStream, compress } from '$lib/calls';
 
 const voyage = new VoyageAIClient({ apiKey: VOYAGE_API_KEY });
 
-const supabase = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+// Service role client for background operations (after stream closes)
+const supabaseServiceRole = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 // Retry delays: 1 minute, 5 minutes, 10 minutes
 const RETRY_DELAYS = [60_000, 300_000, 600_000];
@@ -68,7 +69,7 @@ async function saveConversationToDatabase(
 	persona: string
 ) {
 	const saveToSuperjournal = async (): Promise<string | null> => {
-		const { data: superjournalData, error: dbError } = await supabase
+		const { data: superjournalData, error: dbError } = await supabaseServiceRole
 			.from('superjournal')
 			.insert({
 				user_id: userId,
@@ -120,7 +121,7 @@ async function compressToJournal(
 ) {
 	const doCompression = async () => {
 		// Read selected compression model from user_settings table
-		const { data: settings } = await supabase
+		const { data: settings } = await supabaseServiceRole
 			.from('user_settings')
 			.select('selected_compression_model')
 			.eq('user_id', userId)
@@ -151,7 +152,7 @@ async function compressToJournal(
 		console.log('[Compression] Call 2 output:', compressionJson);
 
 		// Save to Journal table (without embedding initially)
-		const { data: journalData, error: journalError } = await supabase
+		const { data: journalData, error: journalError } = await supabaseServiceRole
 			.from('journal')
 			.insert({
 				superjournal_id: superjournalId,
@@ -192,7 +193,7 @@ async function compressToJournal(
 		}
 
 		// Update Journal row with embedding
-		const { error: updateError } = await supabase
+		const { error: updateError } = await supabaseServiceRole
 			.from('journal')
 			.update({ embedding: JSON.stringify(embedding) })
 			.eq('id', journalData.id);
@@ -212,7 +213,7 @@ async function compressToJournal(
 	}
 }
 
-export const POST: RequestHandler = async ({ request, locals: { safeGetSession } }) => {
+export const POST: RequestHandler = async ({ request, locals: { safeGetSession, supabase } }) => {
 	try {
 		// 1. AUTHENTICATION CHECK
 		const { user } = await safeGetSession();
@@ -250,6 +251,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 
 		// Build context for Call 1A/1B (memory injection with vector search)
 		const { context, stats } = await buildContextForCalls1A1B(
+			supabase, // Session-scoped client (RLS enforced)
 			userId, // Authenticated user ID
 			persona, // current persona for instruction filtering
 			conversationModel,
