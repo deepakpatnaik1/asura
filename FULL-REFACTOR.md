@@ -364,6 +364,28 @@ Integration:
 - Modes declare which capabilities they support via `ModeCapabilities` interface
 - Pages/API routes can query capabilities via `modeHasCapability()`
 
-### Phase 5: Security & Cleanup - PENDING
+### Phase 5: Security & Cleanup - COMPLETE ✓
+
+**Commit:** `7963a82` - refactor: Phase 5 - Security module and confirmation composable integration
+
+**Security module created (`/lib/security/`):**
+- `auth.ts` - `requireAuth()` helper + `UNAUTHORIZED_RESPONSE` constant
+- `sanitize.ts` - `sanitizeHtml()`, `sanitizeText()` with DOMPurify, configurable allowed tags
+- `index.ts` - Central exports
+
+**Sanitization integration:**
+- `markdown-renderer.ts` now uses `sanitizeHtml()` from security module
+- Centralized allowed tags/attributes configuration
+
+**Confirmation composable integration:**
+- Chat page: nuke + message delete now use `createConfirmation()` from `/lib/composables`
+- Reader page: nuke + article delete now use `createConfirmation()`
+- Removed ~156 lines of duplicated timer state/handler code
+
+**Deferred items (by design):**
+- API route auth helper adoption: available for incremental use, existing routes unchanged
+- `stores/chat.ts` removal: still in use by chat page, migration to composables optional
+
+**Net result:** -45 lines overall (209 added, 254 removed)
 
 ### Phase 6: Feature Gaps - PENDING
