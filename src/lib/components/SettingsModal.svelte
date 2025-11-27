@@ -23,22 +23,11 @@
 		output_price_per_million: number;
 	}
 
-	interface TokenUsage {
-		total_input: number;
-		total_output: number;
-		total_cost_usd: number;
-	}
-
 	let models = $state<Model[]>([]);
 	let selectedConversationModel = $state<string>('');
 	let selectedCompressionModel = $state<string>('');
 	let selectedReaderModel = $state<string>('');
 	let selectedEmbeddingModel = $state<string>('');
-	let tokenUsage = $state<TokenUsage>({
-		total_input: 0,
-		total_output: 0,
-		total_cost_usd: 0.0
-	});
 	let isLoading = $state(true);
 	let isSaving = $state(false);
 	let errorMessage = $state<string | null>(null);
@@ -65,12 +54,6 @@
 				settings.selected_compression_model || DEFAULT_COMPRESSION_MODEL;
 			selectedReaderModel = settings.selected_reader_model || DEFAULT_READER_MODEL;
 			selectedEmbeddingModel = settings.selected_embedding_model || EMBEDDING_MODEL;
-
-			// Fetch token usage
-			const tokenRes = await fetch('/api/token-usage');
-			if (tokenRes.ok) {
-				tokenUsage = await tokenRes.json();
-			}
 
 			isLoading = false;
 		} catch (error) {
@@ -182,23 +165,6 @@
 					<p class="help-text">Used for vector embeddings (memory search & file chunks)</p>
 				</div>
 
-				<!-- Token Usage Stats -->
-				<div class="stats-section">
-					<h3>This Month's Usage</h3>
-					<div class="stat-row">
-						<span>Total spend:</span>
-						<span class="stat-value">${Number(tokenUsage.total_cost_usd).toFixed(2)}</span>
-					</div>
-					<div class="stat-row">
-						<span>Input tokens:</span>
-						<span class="stat-value">{Number(tokenUsage.total_input).toLocaleString()}</span>
-					</div>
-					<div class="stat-row">
-						<span>Output tokens:</span>
-						<span class="stat-value">{Number(tokenUsage.total_output).toLocaleString()}</span>
-					</div>
-				</div>
-
 				<!-- Save Button -->
 				<button class="save-btn" onclick={handleSave} disabled={isSaving}>
 					{isSaving ? 'Saving...' : 'Save Changes'}
@@ -303,33 +269,6 @@
 		color: hsl(var(--muted-foreground));
 		margin-top: 4px;
 		opacity: 0.5;
-	}
-
-	.stats-section {
-		border-top: 1px solid hsl(var(--border));
-		padding-top: 12px;
-		margin: 16px 0 12px 0;
-	}
-
-	.stats-section h3 {
-		font-size: 11px;
-		font-weight: 400;
-		color: hsl(var(--muted-foreground));
-		margin: 0 0 8px 0;
-	}
-
-	.stat-row {
-		display: flex;
-		justify-content: space-between;
-		padding: 4px 0;
-		font-size: 11px;
-		color: hsl(var(--muted-foreground));
-	}
-
-	.stat-value {
-		font-weight: 400;
-		color: hsl(var(--foreground));
-		font-variant-numeric: tabular-nums;
 	}
 
 	.save-btn {

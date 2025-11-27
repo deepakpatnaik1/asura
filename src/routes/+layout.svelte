@@ -96,13 +96,13 @@
 	<!-- User controls (top-right) -->
 	<div class="user-controls">
 		<button class="logout-btn" onclick={handleLogout} title="Sign out">
-			<Icon src={LuLogOut} size="16" />
+			<Icon src={LuLogOut} size="18" />
 		</button>
 	</div>
 
 	<!-- Settings button (bottom-right) -->
 	<button class="settings-btn-fixed" onclick={() => showSettings = true} title="Settings">
-		<Icon src={LuSettings} size="16" />
+		<Icon src={LuSettings} size="18" />
 	</button>
 
 	<!-- Main content -->
@@ -142,7 +142,7 @@
 		flex-direction: column;
 		align-items: center;
 		justify-content: flex-start;
-		padding-top: 16px;
+		padding-top: 24px;
 		z-index: 5;
 	}
 
@@ -192,54 +192,44 @@
 	/* User controls (top-right) */
 	.user-controls {
 		position: fixed;
-		top: 16px;
-		right: 16px;
+		top: 24px;
+		right: 24px;
 		z-index: 100;
 	}
 
 	.logout-btn {
 		display: flex;
 		align-items: center;
-		gap: 8px;
-		padding: 8px;
-		border-radius: 6px;
-		border: 1px solid hsl(var(--border));
-		background: hsl(var(--card));
+		padding: 4px;
+		border: none;
+		background: transparent;
 		color: hsl(var(--foreground));
 		cursor: pointer;
-		transition: all 0.15s ease;
-		opacity: 0.7;
+		transition: opacity 0.15s ease;
+		opacity: 0.5;
 	}
 
 	.logout-btn:hover {
 		opacity: 1;
-		background: hsl(var(--accent));
-		border-color: hsl(var(--accent-foreground));
 	}
 
 	/* Settings button (bottom-right) */
 	.settings-btn-fixed {
 		position: fixed;
-		bottom: 16px;
-		right: 16px;
-		width: 48px;
-		height: 48px;
-		border-radius: 50%;
-		background: hsl(var(--card));
-		border: 1px solid hsl(var(--border));
-		display: flex;
-		align-items: center;
-		justify-content: center;
+		bottom: 24px;
+		right: 24px;
+		padding: 4px;
+		border: none;
+		background: transparent;
+		color: hsl(var(--foreground));
 		cursor: pointer;
-		transition: all 0.15s ease;
+		transition: opacity 0.15s ease;
 		z-index: 100;
-		opacity: 0.7;
+		opacity: 0.5;
 	}
 
 	.settings-btn-fixed:hover {
 		opacity: 1;
-		background: hsl(var(--accent));
-		border-color: hsl(var(--accent-foreground));
 	}
 
 	/* Article Pane (Library) */

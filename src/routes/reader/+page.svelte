@@ -120,10 +120,12 @@
 	async function handlePaperclipClick() {
 		showPasteArea = !showPasteArea;
 		if (showPasteArea) {
-			// Clear any existing article
+			// Clear any existing article and charts
 			currentArticle = null;
 			streamingContent = '';
 			processingError = null;
+			charts = [];
+			chatHistory = [];
 			// Focus the paste area after DOM updates
 			await tick();
 			const pasteArea = document.querySelector('.paste-area') as HTMLElement;
@@ -898,11 +900,6 @@
 							<span class="chart-counter">{selectedChartIndex + 1} / {charts.length}</span>
 							<span class="chart-title">{charts[selectedChartIndex].alt}</span>
 						</div>
-						<button class="chart-view-close" onclick={closeLightbox} title="Close (Esc)">
-							<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-								<path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-							</svg>
-						</button>
 					</div>
 
 					<div class="chart-view-image">
@@ -926,17 +923,26 @@
 			<!-- Thumbnail grid (always visible when charts exist) -->
 			<div class="chart-grid">
 				{#each charts as chart, index}
+					{@const isActive = showLightbox && selectedChartIndex === index}
 					<button
 						class="chart-thumbnail"
-						class:active={showLightbox && selectedChartIndex === index}
-						onclick={() => openLightbox(index)}
-						title={chart.alt}
+						class:active={isActive}
+						onclick={() => isActive ? closeLightbox() : openLightbox(index)}
+						title={isActive ? "Collapse (Esc)" : chart.alt}
 					>
 						<img src={chart.thumbnail_url} alt={chart.alt} />
 						<div class="chart-overlay">
-							<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-								<path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-							</svg>
+							{#if isActive}
+								<!-- Shrink/collapse icon (arrows pointing inward) -->
+								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+									<path d="M4 14h6v6M20 10h-6V4M10 14l-7 7M14 10l7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+								</svg>
+							{:else}
+								<!-- Expand icon (arrows pointing outward) -->
+								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+									<path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+								</svg>
+							{/if}
 						</div>
 					</button>
 				{/each}
@@ -1134,20 +1140,19 @@
 
 	.chart-overlay {
 		position: absolute;
-		top: 0;
-		left: 0;
-		right: 0;
-		bottom: 0;
-		background: rgba(16, 185, 129, 0.9);
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		opacity: 0;
 		transition: opacity 0.2s ease;
-		color: white;
+		color: var(--reader-accent);
 	}
 
-	.chart-thumbnail:hover .chart-overlay {
+	.chart-thumbnail:hover .chart-overlay,
+	.chart-thumbnail.active .chart-overlay {
 		opacity: 1;
 	}
 
@@ -1683,26 +1688,6 @@
 		font-size: 10pt;
 		color: hsl(var(--foreground));
 		font-weight: 500;
-	}
-
-	.chart-view-close {
-		background: transparent;
-		border: 1px solid hsl(var(--border) / 0.3);
-		border-radius: 6px;
-		width: 32px;
-		height: 32px;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		cursor: pointer;
-		color: hsl(var(--muted-foreground));
-		transition: all 0.2s;
-	}
-
-	.chart-view-close:hover {
-		background: hsl(var(--accent));
-		border-color: hsl(var(--accent));
-		color: hsl(var(--accent-foreground));
 	}
 
 	.chart-view-image {
