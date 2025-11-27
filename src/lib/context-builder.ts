@@ -55,6 +55,21 @@ export interface StructuredContext {
 	stats: ContextStats;
 }
 
+// Type for vector search RPC results
+interface VectorSearchResult {
+	id: string;
+	boss_essence: string;
+	persona_essence: string;
+	decision_arc_summary: string;
+	salience_score: number;
+	created_at: string;
+	similarity: number;
+}
+
+interface RankedVectorResult extends VectorSearchResult {
+	weighted_score: number;
+}
+
 /**
  * Builds complete context for Call 1A and Call 1B
  * Enforces 40% context window cap with priority-based truncation
@@ -179,19 +194,35 @@ export async function buildContextForCalls1A1B(
 				queryVector = queryEmbedding.data?.[0]?.embedding ?? null;
 
 				// Collect IDs to exclude (already loaded in Priorities 1-4)
+				// Run queries in parallel for better performance
+				const [superjournalIdsResult, last100IdsResult] = await Promise.all([
+					// Get last N Superjournal IDs
+					supabase
+						.from('superjournal')
+						.select('id')
+						.eq('user_id', userId)
+						.order('created_at', { ascending: false })
+						.limit(MEMORY.superjournalLimit),
+					// Get last N Journal IDs
+					supabase
+						.from('journal')
+						.select('id')
+						.eq('is_instruction', false)
+						.eq('user_id', userId)
+						.order('created_at', { ascending: false })
+						.limit(MEMORY.lastNJournalEntries)
+				]);
+
 				const excludeIds: string[] = [];
 
-				// Get last N Superjournal IDs
-				const { data: superjournalIds } = await supabase
-					.from('superjournal')
-					.select('id')
-					.eq('user_id', userId)
-					.order('created_at', { ascending: false})
-					.limit(MEMORY.superjournalLimit);
+				// Add last N journal IDs
+				if (last100IdsResult.data) {
+					excludeIds.push(...last100IdsResult.data.map(j => j.id));
+				}
 
-				// Get corresponding Journal IDs via Superjournal IDs
-				if (superjournalIds && superjournalIds.length > 0) {
-					const sjIds = superjournalIds.map(s => s.id);
+				// Get corresponding Journal IDs via Superjournal IDs (depends on first query)
+				if (superjournalIdsResult.data && superjournalIdsResult.data.length > 0) {
+					const sjIds = superjournalIdsResult.data.map(s => s.id);
 					const { data: journalFromSj } = await supabase
 						.from('journal')
 						.select('id')
@@ -200,19 +231,6 @@ export async function buildContextForCalls1A1B(
 					if (journalFromSj) {
 						excludeIds.push(...journalFromSj.map(j => j.id));
 					}
-				}
-
-				// Get last N Journal IDs
-				const { data: last100Ids } = await supabase
-					.from('journal')
-					.select('id')
-					.eq('is_instruction', false)
-					.eq('user_id', userId)
-					.order('created_at', { ascending: false })
-					.limit(MEMORY.lastNJournalEntries);
-
-				if (last100Ids) {
-					excludeIds.push(...last100Ids.map(j => j.id));
 				}
 
 				// Perform vector search with salience weighting
@@ -227,12 +245,12 @@ export async function buildContextForCalls1A1B(
 
 				if (vectorResults && vectorResults.length > 0) {
 					// Re-rank by weighted score: similarity × (salience/10)
-					const reranked = vectorResults
-						.map((entry: any) => ({
+					const reranked: RankedVectorResult[] = (vectorResults as VectorSearchResult[])
+						.map((entry) => ({
 							...entry,
 							weighted_score: entry.similarity * (entry.salience_score / 10.0)
 						}))
-						.sort((a: any, b: any) => b.weighted_score - a.weighted_score)
+						.sort((a, b) => b.weighted_score - a.weighted_score)
 						.slice(0, 10); // Top 10
 
 					// Format vector search results

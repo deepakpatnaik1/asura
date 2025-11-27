@@ -65,6 +65,10 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 
 	return json({
 		articles: articles || []
+	}, {
+		headers: {
+			'Cache-Control': 'private, max-age=60, stale-while-revalidate=30' // 1 min cache
+		}
 	});
 };
 

@@ -41,5 +41,11 @@ export const MEMORY = {
 	 * Maximum number of full conversation turns to keep in superjournal
 	 * Oldest turns are automatically pruned to maintain this limit.
 	 */
-	superjournalLimit: 5
+	superjournalLimit: 5,
+
+	/**
+	 * Maximum recursion depth for tool use in AI calls
+	 * Prevents runaway tool chains from consuming unbounded memory.
+	 */
+	maxToolUseDepth: 5
 } as const;

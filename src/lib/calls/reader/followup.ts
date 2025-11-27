@@ -10,6 +10,8 @@ import { ANTHROPIC_API_KEY } from '$env/static/private';
 import { PERSONA_SAMARA } from '$lib/prompts';
 import { followupArticleContext, followupChartPrefix } from '$lib/prompts/templates';
 import { BRAVE_SEARCH_TOOL, executeBraveSearch } from '$lib/api/brave-search';
+import { MEMORY } from '$lib/config/memory';
+import { TIMING } from '$lib/config/timing';
 
 const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 
@@ -92,10 +94,16 @@ export async function* followupStream(
 
 	let fullResponse = '';
 
-	// Recursive function to handle tool use
+	// Recursive function to handle tool use (with depth limit)
 	async function* processWithTools(
-		conversationMessages: Anthropic.MessageParam[]
+		conversationMessages: Anthropic.MessageParam[],
+		depth: number = 0
 	): AsyncGenerator<string, void, unknown> {
+		// Prevent unbounded recursion
+		if (depth >= MEMORY.maxToolUseDepth) {
+			console.warn(`[Followup] Tool use depth limit (${MEMORY.maxToolUseDepth}) reached, stopping recursion`);
+			return;
+		}
 		const stream = await anthropic.messages.stream({
 			model,
 			max_tokens: maxTokens,
@@ -103,6 +111,8 @@ export async function* followupStream(
 			system: PERSONA_SAMARA,
 			messages: conversationMessages,
 			tools: [BRAVE_SEARCH_TOOL]
+		}, {
+			timeout: TIMING.streamingTimeout
 		});
 
 		// Stream text deltas
@@ -148,8 +158,8 @@ export async function* followupStream(
 			});
 			conversationMessages.push(...toolResults);
 
-			// Recurse
-			yield* processWithTools(conversationMessages);
+			// Recurse (increment depth)
+			yield* processWithTools(conversationMessages, depth + 1);
 		}
 	}
 

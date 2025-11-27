@@ -3,6 +3,10 @@ import type { RequestHandler } from './$types';
 import { DEFAULT_READER_MODEL } from '$lib/config/models';
 import { getModelParams } from '$lib/config/model-params';
 import { followupStream } from '$lib/calls';
+import { parseRequestJson } from '$lib/api/parse-json';
+import { requireAuth } from '$lib/api/require-auth';
+import { waitForRateLimit, RATE_LIMITS } from '$lib/api/rate-limit';
+import { createLogger } from '$lib/api/logger';
 
 /**
  * Reader Chat Endpoint (Phase 5 - Q&A System)
@@ -19,22 +23,21 @@ import { followupStream } from '$lib/calls';
  */
 export const POST: RequestHandler = async ({ request, locals: { safeGetSession, supabase } }) => {
 	// 1. AUTHENTICATION CHECK
-	const { user } = await safeGetSession();
-	if (!user) {
-		return json(
-			{
-				error: {
-					message: 'Unauthorized - must be logged in',
-					code: 'UNAUTHORIZED'
-				}
-			},
-			{ status: 401 }
-		);
-	}
-	const userId = user.id;
+	const auth = await requireAuth(safeGetSession);
+	if (!auth.success) return auth.error;
+	const { userId } = auth;
 
-	// 2. PARSE REQUEST BODY
-	const { article_id, message, chart_index } = await request.json();
+	// 2. RATE LIMIT (1 request per minute - waits silently if needed)
+	await waitForRateLimit(userId, RATE_LIMITS.ai);
+
+	// 3. PARSE REQUEST BODY
+	const parseResult = await parseRequestJson<{
+		article_id?: string;
+		message?: string;
+		chart_index?: number | null;
+	}>(request);
+	if (!parseResult.success) return parseResult.error;
+	const { article_id, message, chart_index } = parseResult.data;
 
 	if (!article_id || typeof article_id !== 'string') {
 		return json(
@@ -60,10 +63,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		);
 	}
 
-	console.log('[Reader Chat] User ID:', userId);
-	console.log('[Reader Chat] Article ID:', article_id);
-	console.log('[Reader Chat] Message:', message);
-	console.log('[Reader Chat] Chart Index:', chart_index);
+	const log = createLogger('ReaderChat', userId);
+	log.info('Request received', { articleId: article_id, chartIndex: chart_index, messageLength: message.length });
 
 	// 3. FETCH ARTICLE FROM DATABASE (including raw_html)
 	const { data: article, error: fetchError } = await supabase
@@ -74,7 +75,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		.single();
 
 	if (fetchError || !article) {
-		console.error('[Reader Chat] Failed to fetch article:', fetchError);
+		log.error('Failed to fetch article', { error: fetchError?.message });
 		return json(
 			{
 				error: {
@@ -89,7 +90,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 
 	// 4. VALIDATE ARTICLE HAS RAW HTML
 	if (!article.raw_html) {
-		console.error('[Reader Chat] Article missing raw_html');
+		log.error('Article missing raw_html', { articleId: article_id });
 		return json(
 			{
 				error: {
@@ -113,7 +114,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			.single();
 
 		if (!chartError && chartData?.storage_path) {
-			console.log('[Reader Chat] Fetching chart image from storage:', chartData.storage_path);
+			log.debug('Fetching chart image', { storagePath: chartData.storage_path });
 
 			// Download image from Supabase storage
 			const { data: imageBlob, error: downloadError } = await supabase.storage
@@ -133,12 +134,12 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				else if (ext === 'webp') mediaType = 'image/webp';
 
 				chartImageData = { base64, mediaType };
-				console.log('[Reader Chat] Chart image loaded, size:', base64.length, 'bytes');
+				log.debug('Chart image loaded', { sizeBytes: base64.length });
 			} else {
-				console.error('[Reader Chat] Failed to download chart image:', downloadError);
+				log.error('Failed to download chart image', { error: downloadError?.message });
 			}
 		} else {
-			console.log('[Reader Chat] Chart not found, proceeding without chart');
+			log.debug('Chart not found, proceeding without chart');
 		}
 	}
 
@@ -151,8 +152,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		.order('created_at', { ascending: true });
 
 	if (historyError) {
-		console.error('[Reader Chat] Failed to fetch chat history:', historyError);
-		// Don't fail - continue without history
+		log.warn('Failed to fetch chat history, continuing without', { error: historyError.message });
 	}
 
 	// 7. GET USER'S SELECTED E-READER MODEL (OR DEFAULT)
@@ -163,7 +163,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		.single();
 
 	const selectedModel = settings?.selected_reader_model || DEFAULT_READER_MODEL;
-	console.log('[Reader Chat] Using model:', selectedModel);
+	log.info('Starting AI call', { model: selectedModel, historyLength: chatHistory?.length ?? 0 });
 
 	// 8. GET MODEL PARAMETERS
 	const modelParams = await getModelParams(selectedModel, 'reader');
@@ -181,7 +181,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		.single();
 
 	if (saveUserError) {
-		console.error('[Reader Chat] Failed to save user message:', saveUserError);
+		log.error('Failed to save user message', { error: saveUserError.message });
 		return json(
 			{
 				error: {
@@ -200,7 +200,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			const encoder = new TextEncoder();
 
 			try {
-				console.log('[Reader Chat] Starting AI call...');
+				log.debug('Starting stream');
 
 				// Build chat history for the call
 				const history: Array<{ role: 'user' | 'assistant'; content: string }> = [];
@@ -247,20 +247,20 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				});
 
 				if (saveAssistantError) {
-					console.error('[Reader Chat] Failed to save assistant response:', saveAssistantError);
+					log.error('Failed to save assistant response', { error: saveAssistantError.message });
 					controller.enqueue(
 						encoder.encode(
 							`data: ${JSON.stringify({ error: 'Failed to save response to database' })}\n\n`
 						)
 					);
 				} else {
-					console.log('[Reader Chat] Successfully saved response to database');
+					log.info('Response saved');
 					controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true })}\n\n`));
 				}
 
 				controller.close();
 			} catch (error) {
-				console.error('[Reader Chat] Error during processing:', error);
+				log.error('Error during processing', { error: error instanceof Error ? error.message : 'Unknown' });
 
 				controller.enqueue(
 					encoder.encode(

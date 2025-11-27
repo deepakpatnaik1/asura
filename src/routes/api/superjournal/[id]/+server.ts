@@ -1,9 +1,10 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 // Helper to wait for journal entry to exist (Call 2 compression creates it)
 async function waitForJournalEntry(
-	supabase: any,
+	supabase: SupabaseClient,
 	superjournalId: string,
 	userId: string,
 	maxAttempts = 20,

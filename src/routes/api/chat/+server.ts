@@ -14,6 +14,10 @@ import { getModelParams } from '$lib/config/model-params';
 import { DEFAULT_PERSONA } from '$lib/config/personas';
 import { PERSONA_GUNNAR, PERSONA_KIRBY } from '$lib/prompts';
 import { converseStream, compress } from '$lib/calls';
+import { parseRequestJson } from '$lib/api/parse-json';
+import { requireAuth } from '$lib/api/require-auth';
+import { waitForRateLimit, RATE_LIMITS } from '$lib/api/rate-limit';
+import { createLogger, createSimpleLogger } from '$lib/api/logger';
 
 const voyage = new VoyageAIClient({ apiKey: VOYAGE_API_KEY });
 
@@ -23,19 +27,24 @@ const supabaseServiceRole = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_R
 // Retry delays: 1 minute, 5 minutes, 10 minutes
 const RETRY_DELAYS = [60_000, 300_000, 600_000];
 
+// Background logger (no request context)
+const bgLog = createSimpleLogger('ChatBackground');
+
 // Retry wrapper for database operations
 function scheduleRetries(
 	fn: () => Promise<void>,
 	label: string,
+	userId: string,
 	delays: number[] = RETRY_DELAYS
 ) {
+	const log = createLogger('ChatRetry', userId);
 	for (const delay of delays) {
 		setTimeout(async () => {
 			try {
 				await fn();
-				console.log(`[${label}] Retry succeeded after ${delay / 1000}s`);
+				log.info('Retry succeeded', { label, delaySeconds: delay / 1000 });
 			} catch (error) {
-				console.error(`[${label}] Retry at ${delay / 1000}s failed:`, error);
+				log.error('Retry failed', { label, delaySeconds: delay / 1000, error: error instanceof Error ? error.message : 'Unknown' });
 			}
 		}, delay);
 	}
@@ -68,6 +77,8 @@ async function saveConversationToDatabase(
 	conversationModel: string,
 	persona: string
 ) {
+	const log = createLogger('ChatSave', userId);
+
 	const saveToSuperjournal = async (): Promise<string | null> => {
 		const { data: superjournalData, error: dbError } = await supabaseServiceRole
 			.from('superjournal')
@@ -92,14 +103,14 @@ async function saveConversationToDatabase(
 		const superjournalId = await saveToSuperjournal();
 
 		if (superjournalId) {
-			console.log(`[Database] Saved to superjournal: ${superjournalId}`);
+			log.info('Saved to superjournal', { superjournalId });
 			// Trigger background compression
 			setTimeout(() => {
 				compressToJournal(superjournalId, userId, message, aiResponse, persona);
 			}, 0);
 		}
 	} catch (error) {
-		console.error('[Database] Initial save failed, scheduling retries:', error);
+		log.error('Initial save failed, scheduling retries', { error: error instanceof Error ? error.message : 'Unknown' });
 		// Schedule retries at 1min, 5min, 10min
 		scheduleRetries(async () => {
 			const superjournalId = await saveToSuperjournal();
@@ -107,7 +118,7 @@ async function saveConversationToDatabase(
 				// Trigger compression after successful retry
 				compressToJournal(superjournalId, userId, message, aiResponse, persona);
 			}
-		}, 'Superjournal Save');
+		}, 'SuperjournalSave', userId);
 	}
 }
 
@@ -119,6 +130,8 @@ async function compressToJournal(
 	aiResponse: string,
 	personaName: string
 ) {
+	const log = createLogger('Compression', userId);
+
 	const doCompression = async () => {
 		// Read selected compression model from user_settings table
 		const { data: settings } = await supabaseServiceRole
@@ -132,7 +145,7 @@ async function compressToJournal(
 		// Fetch compression parameters from database
 		const compressionParams = await getModelParams(compressionModel, 'compression');
 
-		console.log(`[Compression] Starting Call 2 for superjournal_id: ${superjournalId}`);
+		log.info('Starting compression', { superjournalId, model: compressionModel });
 
 		const compressionProvider = getProviderType(compressionModel);
 
@@ -149,7 +162,7 @@ async function compressToJournal(
 			maxTokens: compressionParams.max_tokens,
 			temperature: compressionParams.temperature
 		});
-		console.log('[Compression] Call 2 output:', compressionJson);
+		log.debug('Compression output', { salienceScore: compressionJson.salience_score, isInstruction: compressionJson.is_instruction });
 
 		// Save to Journal table (without embedding initially)
 		const { data: journalData, error: journalError } = await supabaseServiceRole
@@ -176,11 +189,11 @@ async function compressToJournal(
 			throw new Error(`Journal insert failed: ${journalError.message}`);
 		}
 
-		console.log('[Compression] Successfully saved to Journal');
+		log.info('Saved to journal', { journalId: journalData.id });
 
 		// Generate embedding for decision_arc_summary
 		const decisionArc = compressionJson.decision_arc_summary || 'No arc generated';
-		console.log('[Embedding] Generating embedding for arc:', decisionArc);
+		log.debug('Generating embedding', { arcLength: decisionArc.length });
 
 		const embeddingResponse = await voyage.embed({
 			input: decisionArc,
@@ -202,35 +215,30 @@ async function compressToJournal(
 			throw new Error(`Embedding update failed: ${updateError.message}`);
 		}
 
-		console.log('[Embedding] Successfully generated and saved embedding');
+		log.info('Embedding saved', { journalId: journalData.id });
 	};
 
 	try {
 		await doCompression();
 	} catch (error) {
-		console.error('[Compression] Initial attempt failed, scheduling retries:', error);
-		scheduleRetries(doCompression, `Compression ${superjournalId}`);
+		log.error('Compression failed, scheduling retries', { superjournalId, error: error instanceof Error ? error.message : 'Unknown' });
+		scheduleRetries(doCompression, `Compression-${superjournalId}`, userId);
 	}
 }
 
 export const POST: RequestHandler = async ({ request, locals: { safeGetSession, supabase } }) => {
 	try {
 		// 1. AUTHENTICATION CHECK
-		const { user } = await safeGetSession();
-		if (!user) {
-			return json(
-				{
-					error: {
-						message: 'Unauthorized - must be logged in',
-						code: 'UNAUTHORIZED'
-					}
-				},
-				{ status: 401 }
-			);
-		}
-		const userId = user.id;
+		const auth = await requireAuth(safeGetSession);
+		if (!auth.success) return auth.error;
+		const { userId } = auth;
 
-		// 2. Read selected conversation model and persona from user_settings table
+		const log = createLogger('ChatAPI', userId);
+
+		// 2. RATE LIMIT (1 request per minute - waits silently if needed)
+		await waitForRateLimit(userId, RATE_LIMITS.ai);
+
+		// 3. Read selected conversation model and persona from user_settings table
 		const { data: settings } = await supabase
 			.from('user_settings')
 			.select('selected_conversation_model, selected_persona')
@@ -243,10 +251,20 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		// Fetch conversation parameters from database
 		const conversationParams = await getModelParams(conversationModel, 'conversation');
 
-		const { message, persona = selectedPersona } = await request.json();
+		const parseResult = await parseRequestJson<{ message?: string; persona?: string }>(request);
+		if (!parseResult.success) return parseResult.error;
+		const { message, persona = selectedPersona } = parseResult.data;
 
-		if (!message) {
-			return json({ error: 'Message is required' }, { status: 400 });
+		if (!message || typeof message !== 'string') {
+			return json(
+				{
+					error: {
+						message: 'Message is required and must be a string',
+						code: 'INVALID_INPUT'
+					}
+				},
+				{ status: 400 }
+			);
 		}
 
 		// Build context for Call 1A/1B (memory injection with vector search)
@@ -258,7 +276,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			message // user query for vector search (Priority 5)
 		);
 
-		console.log('[Chat API] Context stats:', stats);
+		log.info('Context built', { ...stats, model: conversationModel, persona });
 
 		// Select persona prompt based on selected persona
 		const personaPrompt = persona === 'kirby' ? PERSONA_KIRBY : PERSONA_GUNNAR;
@@ -320,7 +338,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 					);
 
 				} catch (error) {
-					console.error('Streaming error:', error);
+					log.error('Streaming error', { error: error instanceof Error ? error.message : 'Unknown' });
 					const errorData = JSON.stringify({ type: 'error', message: 'Failed to generate response' });
 					controller.enqueue(encoder.encode(`data: ${errorData}\n\n`));
 					controller.close();
@@ -337,7 +355,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			}
 		});
 	} catch (error) {
-		console.error('Chat API error:', error);
+		bgLog.error('Chat API error', { error: error instanceof Error ? error.message : 'Unknown' });
 		return json({ error: 'Failed to generate response' }, { status: 500 });
 	}
 };

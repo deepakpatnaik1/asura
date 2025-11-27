@@ -11,6 +11,8 @@ import { ANTHROPIC_API_KEY } from '$env/static/private';
 import { CONVERSE_PROMPT } from '$lib/prompts';
 import { converseUserPrompt } from '$lib/prompts/templates';
 import { BRAVE_SEARCH_TOOL, executeBraveSearch } from '$lib/api/brave-search';
+import { MEMORY } from '$lib/config/memory';
+import { TIMING } from '$lib/config/timing';
 
 const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 
@@ -73,10 +75,16 @@ export async function* converseStream(
 	let totalInputTokens = 0;
 	let totalOutputTokens = 0;
 
-	// Recursive function to handle tool use
+	// Recursive function to handle tool use (with depth limit)
 	async function* processWithTools(
-		conversationMessages: Anthropic.MessageParam[]
+		conversationMessages: Anthropic.MessageParam[],
+		depth: number = 0
 	): AsyncGenerator<string, void, unknown> {
+		// Prevent unbounded recursion
+		if (depth >= MEMORY.maxToolUseDepth) {
+			console.warn(`[Converse] Tool use depth limit (${MEMORY.maxToolUseDepth}) reached, stopping recursion`);
+			return;
+		}
 		const stream = await anthropic.messages.stream(
 			{
 				model,
@@ -89,7 +97,8 @@ export async function* converseStream(
 			{
 				headers: {
 					'anthropic-beta': 'prompt-caching-2024-07-31'
-				}
+				},
+				timeout: TIMING.streamingTimeout
 			}
 		);
 
@@ -140,8 +149,8 @@ export async function* converseStream(
 			});
 			conversationMessages.push(...toolResults);
 
-			// Recurse to continue after tool use
-			yield* processWithTools(conversationMessages);
+			// Recurse to continue after tool use (increment depth)
+			yield* processWithTools(conversationMessages, depth + 1);
 		}
 	}
 

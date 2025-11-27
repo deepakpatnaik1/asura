@@ -210,11 +210,12 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 	console.log('[Extract Images] HTML length:', html.length);
 
 	try {
-		// 3. VERIFY ARTICLE OWNERSHIP
+		// 3. VERIFY ARTICLE OWNERSHIP (explicit user_id filter for defense-in-depth)
 		const { data: article, error: fetchError } = await supabase
 			.from('articles')
 			.select('id, user_id, title')
 			.eq('id', article_id)
+			.eq('user_id', userId)
 			.single();
 
 		if (fetchError || !article) {

@@ -41,5 +41,12 @@ export const TIMING = {
 	 * Error message display duration (ms)
 	 * Error messages auto-clear after 5 seconds.
 	 */
-	errorDisplayDuration: 5000
+	errorDisplayDuration: 5000,
+
+	/**
+	 * AI streaming timeout (ms)
+	 * Maximum time to wait for AI response chunks before aborting.
+	 * Prevents indefinite hangs on slow/stalled connections.
+	 */
+	streamingTimeout: 120_000 // 2 minutes
 } as const;

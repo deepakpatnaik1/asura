@@ -78,5 +78,9 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supab
 
 	return json({
 		charts: transformedCharts
+	}, {
+		headers: {
+			'Cache-Control': 'private, max-age=3600, stale-while-revalidate=300' // 1 hour cache
+		}
 	});
 };

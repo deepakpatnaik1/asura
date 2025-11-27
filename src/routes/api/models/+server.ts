@@ -1,20 +1,11 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
+import { requireAuth } from '$lib/api/require-auth';
 
 export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase } }) => {
 	// 1. AUTHENTICATION CHECK
-	const { user } = await safeGetSession();
-	if (!user) {
-		return json(
-			{
-				error: {
-					message: 'Unauthorized - must be logged in',
-					code: 'UNAUTHORIZED'
-				}
-			},
-			{ status: 401 }
-		);
-	}
+	const auth = await requireAuth(safeGetSession);
+	if (!auth.success) return auth.error;
 
 	// 2. FETCH ACTIVE MODELS
 	const { data, error } = await supabase
@@ -32,5 +23,9 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 		return json({ error: error.message }, { status: 500 });
 	}
 
-	return json(data || []);
+	return json(data || [], {
+		headers: {
+			'Cache-Control': 'private, max-age=300, stale-while-revalidate=60' // 5 min cache
+		}
+	});
 };

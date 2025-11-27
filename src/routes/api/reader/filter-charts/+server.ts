@@ -251,11 +251,12 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			);
 		}
 
-		// 4. FETCH ALL CHARTS FOR THIS ARTICLE
+		// 4. FETCH ALL CHARTS FOR THIS ARTICLE (with user_id filter for defense-in-depth)
 		const { data: charts, error: chartsError } = await supabase
 			.from('article_charts')
 			.select('id, chart_index, storage_path, alt_text, anthropic_file_id, anthropic_file_created_at')
 			.eq('article_id', article_id)
+			.eq('user_id', userId)
 			.order('chart_index', { ascending: true });
 
 		if (chartsError) {
@@ -397,7 +398,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				.update({
 					is_relevant: result.is_relevant
 				})
-				.eq('id', result.id);
+				.eq('id', result.id)
+				.eq('user_id', userId); // Defense-in-depth: ensure user owns this chart
 
 			if (updateError) {
 				console.error(`[Chart Filter] Failed to update chart ${result.chart_index}:`, updateError);

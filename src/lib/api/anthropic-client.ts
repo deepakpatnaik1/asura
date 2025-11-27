@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { ANTHROPIC_API_KEY } from '$env/static/private';
+import { TIMING } from '$lib/config/timing';
 
 /**
  * Anthropic API Client Wrapper
@@ -85,7 +86,8 @@ export async function createMessageStream(params: CreateMessageParams) {
 	}, {
 		headers: {
 			'anthropic-beta': 'prompt-caching-2024-07-31'
-		}
+		},
+		timeout: TIMING.streamingTimeout
 	});
 }
 
