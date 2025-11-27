@@ -8,6 +8,7 @@ import sharp from 'sharp';
 import { uploadFileWithRetry } from '$lib/api/anthropic-client';
 import { requireAuth } from '$lib/api/require-auth';
 import { parseRequestJson } from '$lib/api/parse-json';
+import { extractImagesSchema, validateSchema } from '$lib/schemas';
 
 // SERVICE_ROLE_KEY for storage operations (storage policies require it)
 const supabaseStorage = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -167,22 +168,14 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 	if (!auth.success) return auth.error;
 	const { userId } = auth;
 
-	// 2. PARSE REQUEST BODY
-	const parseResult = await parseRequestJson<{ article_id: string; html: string }>(request);
+	// 2. PARSE AND VALIDATE REQUEST BODY
+	const parseResult = await parseRequestJson<unknown>(request);
 	if (!parseResult.success) return parseResult.error;
-	const { article_id, html } = parseResult.data;
 
-	if (!article_id || !html || typeof html !== 'string') {
-		return json(
-			{
-				error: {
-					message: 'Missing article_id or html',
-					code: 'INVALID_INPUT'
-				}
-			},
-			{ status: 400 }
-		);
-	}
+	const validation = validateSchema(extractImagesSchema, parseResult.data);
+	if (!validation.success) return validation.error;
+
+	const { article_id, html } = validation.data;
 
 	try {
 		// 3. VERIFY ARTICLE OWNERSHIP (explicit user_id filter for defense-in-depth)

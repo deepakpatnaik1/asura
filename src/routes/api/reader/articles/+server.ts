@@ -2,6 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { requireAuth } from '$lib/api/require-auth';
 import { parseRequestJson } from '$lib/api/parse-json';
+import { deleteArticleSchema, validateSchema } from '$lib/schemas';
 
 /**
  * Articles Management Endpoint
@@ -65,22 +66,14 @@ export const DELETE: RequestHandler = async ({ request, locals: { safeGetSession
 	if (!auth.success) return auth.error;
 	const { userId } = auth;
 
-	// 2. PARSE REQUEST BODY
-	const parseResult = await parseRequestJson<{ article_id: string }>(request);
+	// 2. PARSE AND VALIDATE REQUEST BODY
+	const parseResult = await parseRequestJson<unknown>(request);
 	if (!parseResult.success) return parseResult.error;
-	const { article_id } = parseResult.data;
 
-	if (!article_id || typeof article_id !== 'string') {
-		return json(
-			{
-				error: {
-					message: 'Missing or invalid article_id',
-					code: 'INVALID_INPUT'
-				}
-			},
-			{ status: 400 }
-		);
-	}
+	const validation = validateSchema(deleteArticleSchema, parseResult.data);
+	if (!validation.success) return validation.error;
+
+	const { article_id } = validation.data;
 
 	// 3. FETCH ARTICLE AND CHARTS TO GET FILE PATHS (before deletion)
 	const { data: article, error: articleFetchError } = await supabase

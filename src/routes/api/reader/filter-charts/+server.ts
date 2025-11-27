@@ -4,6 +4,7 @@ import { createMessage, isAnthropicFileExpired } from '$lib/api/anthropic-client
 import { DEFAULT_READER_MODEL } from '$lib/config/models';
 import { requireAuth } from '$lib/api/require-auth';
 import { parseRequestJson } from '$lib/api/parse-json';
+import { filterChartsSchema, validateSchema } from '$lib/schemas';
 
 /**
  * Programmatic filter - identifies obvious ads/irrelevant images using alt text patterns
@@ -180,22 +181,14 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 	if (!auth.success) return auth.error;
 	const { userId } = auth;
 
-	// 2. PARSE REQUEST BODY
-	const parseResult = await parseRequestJson<{ article_id: string }>(request);
+	// 2. PARSE AND VALIDATE REQUEST BODY
+	const parseResult = await parseRequestJson<unknown>(request);
 	if (!parseResult.success) return parseResult.error;
-	const { article_id } = parseResult.data;
 
-	if (!article_id) {
-		return json(
-			{
-				error: {
-					message: 'Missing article_id',
-					code: 'INVALID_INPUT'
-				}
-			},
-			{ status: 400 }
-		);
-	}
+	const validation = validateSchema(filterChartsSchema, parseResult.data);
+	if (!validation.success) return validation.error;
+
+	const { article_id } = validation.data;
 
 	try {
 		// 3. READ SELECTED READER MODEL FROM USER_SETTINGS

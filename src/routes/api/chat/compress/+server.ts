@@ -7,6 +7,7 @@ import { getModelParams } from '$lib/config/model-params';
 import { compress } from '$lib/calls';
 import { requireAuth } from '$lib/api/require-auth';
 import { parseRequestJson } from '$lib/api/parse-json';
+import { compressSchema, validateSchema } from '$lib/schemas';
 
 const voyage = new VoyageAIClient({ apiKey: VOYAGE_API_KEY });
 
@@ -22,19 +23,14 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 	const auth = await requireAuth(safeGetSession);
 	if (!auth.success) return auth.error;
 
-	// 2. PARSE REQUEST BODY
-	const parseResult = await parseRequestJson<{
-		superjournal_id: string;
-		user_message: string;
-		ai_response: string;
-		persona_name: string;
-	}>(request);
+	// 2. PARSE AND VALIDATE REQUEST BODY
+	const parseResult = await parseRequestJson<unknown>(request);
 	if (!parseResult.success) return parseResult.error;
-	const { superjournal_id, user_message, ai_response, persona_name } = parseResult.data;
 
-	if (!superjournal_id || !user_message || !ai_response || !persona_name) {
-		return json({ error: { message: 'Missing required fields', code: 'INVALID_INPUT' } }, { status: 400 });
-	}
+	const validation = validateSchema(compressSchema, parseResult.data);
+	if (!validation.success) return validation.error;
+
+	const { superjournal_id, user_message, ai_response, persona_name } = validation.data;
 
 	// Verify this superjournal entry belongs to the user and doesn't have a journal entry
 	const { data: entry, error: fetchError } = await supabase

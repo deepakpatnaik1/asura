@@ -2,9 +2,15 @@ import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 import { PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
 import { createServerClient } from '@supabase/ssr';
 import type { Handle } from '@sveltejs/kit';
+import { validateCsrf, requiresCsrfProtection } from '$lib/api/csrf';
 
 /**
- * Server-side authentication hook
+ * Server-side authentication hook with security hardening
+ *
+ * Security features:
+ * - CSRF protection for state-changing requests (POST, PUT, PATCH, DELETE)
+ * - Security headers (CSP, X-Frame-Options, etc.)
+ * - Session-scoped Supabase client with RLS
  *
  * IMPORTANT: Uses PUBLIC_SUPABASE_ANON_KEY (NOT SERVICE_ROLE_KEY)
  * - ANON_KEY respects Row-Level Security (RLS) policies
@@ -17,21 +23,34 @@ import type { Handle } from '@sveltejs/kit';
  * - Service role bypasses RLS for admin operations
  */
 export const handle: Handle = async ({ event, resolve }) => {
-	// Create Supabase client with automatic cookie handling
-	event.locals.supabase = createServerClient(
-		PUBLIC_SUPABASE_URL,
-		PUBLIC_SUPABASE_ANON_KEY,
-		{
-			cookies: {
-				getAll: () => event.cookies.getAll(),
-				setAll: (cookiesToSet) => {
-					cookiesToSet.forEach(({ name, value, options }) => {
-						event.cookies.set(name, value, { ...options, path: '/' });
-					});
-				}
+	// =========================================================================
+	// CSRF Protection for state-changing requests
+	// =========================================================================
+	if (requiresCsrfProtection(event.request.method)) {
+		// Skip CSRF for auth callbacks (they come from OAuth providers)
+		const isAuthCallback = event.url.pathname.startsWith('/auth/');
+
+		if (!isAuthCallback) {
+			const csrf = validateCsrf(event.request);
+			if (!csrf.valid) {
+				return csrf.error;
 			}
 		}
-	);
+	}
+
+	// =========================================================================
+	// Supabase Client Setup
+	// =========================================================================
+	event.locals.supabase = createServerClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY, {
+		cookies: {
+			getAll: () => event.cookies.getAll(),
+			setAll: (cookiesToSet) => {
+				cookiesToSet.forEach(({ name, value, options }) => {
+					event.cookies.set(name, value, { ...options, path: '/' });
+				});
+			}
+		}
+	});
 
 	/**
 	 * Safe session retrieval with JWT validation
@@ -59,10 +78,58 @@ export const handle: Handle = async ({ event, resolve }) => {
 		return { session, user };
 	};
 
-	return resolve(event, {
+	// =========================================================================
+	// Resolve with Security Headers
+	// =========================================================================
+	const response = await resolve(event, {
 		filterSerializedResponseHeaders(name) {
 			// Required for Supabase auth to work correctly
 			return name === 'content-range' || name === 'x-supabase-api-version';
 		}
 	});
+
+	// Add security headers to all responses
+	// These headers protect against common web vulnerabilities
+
+	// Prevent clickjacking attacks
+	response.headers.set('X-Frame-Options', 'DENY');
+
+	// Prevent MIME type sniffing
+	response.headers.set('X-Content-Type-Options', 'nosniff');
+
+	// Control referrer information sent with requests
+	response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+
+	// Only allow HTTPS in production (HSTS)
+	// Note: Only set this in production after confirming HTTPS works correctly
+	if (event.url.protocol === 'https:') {
+		response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+	}
+
+	// Permissions Policy - restrict sensitive browser features
+	response.headers.set(
+		'Permissions-Policy',
+		'camera=(), microphone=(), geolocation=(), payment=()'
+	);
+
+	// Content Security Policy
+	// Note: Inline scripts/styles are allowed for SvelteKit compatibility
+	// In production, consider using nonces or hashes for stricter CSP
+	response.headers.set(
+		'Content-Security-Policy',
+		[
+			"default-src 'self'",
+			"script-src 'self' 'unsafe-inline' https://accounts.google.com",
+			"style-src 'self' 'unsafe-inline'",
+			"img-src 'self' data: https: blob:",
+			"font-src 'self'",
+			"connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.anthropic.com https://api.voyageai.com",
+			"frame-src https://accounts.google.com",
+			"frame-ancestors 'none'",
+			"form-action 'self'",
+			"base-uri 'self'"
+		].join('; ')
+	);
+
+	return response;
 };

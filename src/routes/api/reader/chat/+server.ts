@@ -7,6 +7,7 @@ import { parseRequestJson } from '$lib/api/parse-json';
 import { requireAuth } from '$lib/api/require-auth';
 import { waitForRateLimit, RATE_LIMITS } from '$lib/api/rate-limit';
 import { createLogger } from '$lib/api/logger';
+import { readerChatSchema, validateSchema } from '$lib/schemas';
 
 /**
  * Reader Chat Endpoint (Phase 5 - Q&A System)
@@ -30,38 +31,14 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 	// 2. RATE LIMIT (1 request per minute - waits silently if needed)
 	await waitForRateLimit(userId, RATE_LIMITS.ai);
 
-	// 3. PARSE REQUEST BODY
-	const parseResult = await parseRequestJson<{
-		article_id?: string;
-		message?: string;
-		chart_index?: number | null;
-	}>(request);
+	// 3. PARSE AND VALIDATE REQUEST BODY
+	const parseResult = await parseRequestJson<unknown>(request);
 	if (!parseResult.success) return parseResult.error;
-	const { article_id, message, chart_index } = parseResult.data;
 
-	if (!article_id || typeof article_id !== 'string') {
-		return json(
-			{
-				error: {
-					message: 'Missing or invalid article_id',
-					code: 'INVALID_INPUT'
-				}
-			},
-			{ status: 400 }
-		);
-	}
+	const validation = validateSchema(readerChatSchema, parseResult.data);
+	if (!validation.success) return validation.error;
 
-	if (!message || typeof message !== 'string' || message.trim().length === 0) {
-		return json(
-			{
-				error: {
-					message: 'Missing or invalid message',
-					code: 'INVALID_INPUT'
-				}
-			},
-			{ status: 400 }
-		);
-	}
+	const { article_id, message, chart_index } = validation.data;
 
 	const log = createLogger('ReaderChat', userId);
 	log.info('Request received', { articleId: article_id, chartIndex: chart_index, messageLength: message.length });

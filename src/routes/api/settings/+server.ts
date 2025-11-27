@@ -8,6 +8,7 @@ import {
 } from '$lib/config/models';
 import { requireAuth } from '$lib/api/require-auth';
 import { parseRequestJson } from '$lib/api/parse-json';
+import { settingsUpdateSchema, validateSchema } from '$lib/schemas';
 
 export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase } }) => {
 	// 1. AUTHENTICATION CHECK
@@ -51,16 +52,14 @@ export const PUT: RequestHandler = async ({ request, locals: { safeGetSession, s
 	if (!auth.success) return auth.error;
 	const { userId } = auth;
 
-	// 2. PARSE REQUEST BODY
-	const parseResult = await parseRequestJson<{
-		selected_conversation_model?: string;
-		selected_compression_model?: string;
-		selected_reader_model?: string;
-		selected_embedding_model?: string;
-		active_reader_article_id?: string;
-	}>(request);
+	// 2. PARSE AND VALIDATE REQUEST BODY
+	const parseResult = await parseRequestJson<unknown>(request);
 	if (!parseResult.success) return parseResult.error;
-	const { selected_conversation_model, selected_compression_model, selected_reader_model, selected_embedding_model, active_reader_article_id } = parseResult.data;
+
+	const validation = validateSchema(settingsUpdateSchema, parseResult.data);
+	if (!validation.success) return validation.error;
+
+	const { selected_conversation_model, selected_compression_model, selected_reader_model, selected_embedding_model, active_reader_article_id } = validation.data;
 
 	// 3. UPDATE USER SETTINGS
 	const updateData: Record<string, any> = {

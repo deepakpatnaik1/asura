@@ -3,6 +3,7 @@ import type { RequestHandler } from './$types';
 import { validateHtmlSize, extractTitleFromHtml } from '$lib/capabilities';
 import { requireAuth } from '$lib/api/require-auth';
 import { parseRequestJson } from '$lib/api/parse-json';
+import { readerUploadSchema, validateSchema } from '$lib/schemas';
 
 export const POST: RequestHandler = async ({ request, locals: { safeGetSession, supabase } }) => {
 	// 1. AUTHENTICATION CHECK
@@ -10,30 +11,22 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 	if (!auth.success) return auth.error;
 	const { userId } = auth;
 
-	// 2. PARSE REQUEST BODY
-	const parseResult = await parseRequestJson<{ html: string }>(request);
+	// 2. PARSE AND VALIDATE REQUEST BODY
+	const parseResult = await parseRequestJson<unknown>(request);
 	if (!parseResult.success) return parseResult.error;
-	const { html } = parseResult.data;
 
-	if (!html || typeof html !== 'string') {
-		return json(
-			{
-				error: {
-					message: 'Missing or invalid HTML content',
-					code: 'INVALID_INPUT'
-				}
-			},
-			{ status: 400 }
-		);
-	}
+	const validation = validateSchema(readerUploadSchema, parseResult.data);
+	if (!validation.success) return validation.error;
+
+	const { html } = validation.data;
 
 	// 3. VALIDATE HTML SIZE (using file-reader capability)
-	const validation = validateHtmlSize(html);
-	if (!validation.valid) {
+	const sizeValidation = validateHtmlSize(html);
+	if (!sizeValidation.valid) {
 		return json(
 			{
 				error: {
-					message: validation.error,
+					message: sizeValidation.error,
 					code: 'INPUT_TOO_LARGE'
 				}
 			},

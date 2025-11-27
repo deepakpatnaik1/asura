@@ -18,6 +18,7 @@ import { parseRequestJson } from '$lib/api/parse-json';
 import { requireAuth } from '$lib/api/require-auth';
 import { waitForRateLimit, RATE_LIMITS } from '$lib/api/rate-limit';
 import { createLogger, createSimpleLogger } from '$lib/api/logger';
+import { chatMessageSchema, validateSchema } from '$lib/schemas';
 
 const voyage = new VoyageAIClient({ apiKey: VOYAGE_API_KEY });
 
@@ -251,21 +252,14 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		// Fetch conversation parameters from database
 		const conversationParams = await getModelParams(conversationModel, 'conversation');
 
-		const parseResult = await parseRequestJson<{ message?: string; persona?: string }>(request);
+		const parseResult = await parseRequestJson<unknown>(request);
 		if (!parseResult.success) return parseResult.error;
-		const { message, persona = selectedPersona } = parseResult.data;
 
-		if (!message || typeof message !== 'string') {
-			return json(
-				{
-					error: {
-						message: 'Message is required and must be a string',
-						code: 'INVALID_INPUT'
-					}
-				},
-				{ status: 400 }
-			);
-		}
+		// Validate with Zod schema
+		const validation = validateSchema(chatMessageSchema, parseResult.data);
+		if (!validation.success) return validation.error;
+
+		const { message, persona = selectedPersona } = validation.data;
 
 		// Build context for Call 1A/1B (memory injection with vector search)
 		const { context, stats } = await buildContextForCalls1A1B(

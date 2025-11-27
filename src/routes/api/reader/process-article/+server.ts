@@ -5,6 +5,7 @@ import { getModelParams } from '$lib/config/model-params';
 import { describeStream } from '$lib/calls';
 import { requireAuth } from '$lib/api/require-auth';
 import { parseRequestJson } from '$lib/api/parse-json';
+import { processArticleSchema, validateSchema } from '$lib/schemas';
 
 /**
  * Process Article Endpoint (Phase 2, Group D - Chunks 6-8)
@@ -22,22 +23,14 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 	if (!auth.success) return auth.error;
 	const { userId } = auth;
 
-	// 2. PARSE REQUEST BODY
-	const parseResult = await parseRequestJson<{ article_id: string }>(request);
+	// 2. PARSE AND VALIDATE REQUEST BODY
+	const parseResult = await parseRequestJson<unknown>(request);
 	if (!parseResult.success) return parseResult.error;
-	const { article_id } = parseResult.data;
 
-	if (!article_id || typeof article_id !== 'string') {
-		return json(
-			{
-				error: {
-					message: 'Missing or invalid article_id',
-					code: 'INVALID_INPUT'
-				}
-			},
-			{ status: 400 }
-		);
-	}
+	const validation = validateSchema(processArticleSchema, parseResult.data);
+	if (!validation.success) return validation.error;
+
+	const { article_id } = validation.data;
 
 	// 3. FETCH ARTICLE FROM DATABASE (including raw_html)
 	const { data: article, error: fetchError } = await supabase
