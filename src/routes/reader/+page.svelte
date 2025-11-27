@@ -86,7 +86,6 @@
 			const data = await response.json();
 
 			if (data.active_reader_article_id) {
-				console.log('[Settings] Loading active article:', data.active_reader_article_id);
 				await switchToArticle(data.active_reader_article_id, false);
 			}
 		} catch (error) {
@@ -140,7 +139,6 @@
 
 				if (attempt < maxRetries) {
 					const delay = baseDelay * Math.pow(2, attempt);
-					console.log(`[Retry] ${stepName} - Attempt ${attempt + 1} failed, retrying in ${delay}ms...`);
 					processingStatus = `${stepName} (Retry ${attempt + 2}/${maxRetries + 1})`;
 					await new Promise(resolve => setTimeout(resolve, delay));
 				}
@@ -161,7 +159,6 @@
 
 		// If we have a partial article, delete it from database
 		if (currentArticle?.id) {
-			console.log('[Abort] Deleting partial article:', currentArticle.id);
 			try {
 				await fetch('/api/reader/articles', {
 					method: 'DELETE',
@@ -178,8 +175,6 @@
 		streamingContent = '';
 		processingError = null;
 		showPasteArea = true;
-
-		console.log('[Abort] Processing cancelled, returning to paste area');
 	}
 
 	// Process article through the pipeline
@@ -211,7 +206,6 @@
 
 			const articleId = uploadResult.article_id;
 			const articleTitle = uploadResult.title;
-			console.log('[Pipeline] Article created:', articleId, articleTitle);
 
 			// Step 2: Extract images from HTML
 			processingStatus = 'Extracting images...';
@@ -231,8 +225,6 @@
 				return await response.json();
 			}, 2, 1000, 'Extracting images...');
 
-			console.log('[Pipeline] Images extracted');
-
 			// Step 3: Filter charts
 			processingStatus = 'Filtering charts...';
 			await retryWithBackoff(async () => {
@@ -250,8 +242,6 @@
 
 				return await response.json();
 			}, 2, 1000, 'Filtering charts...');
-
-			console.log('[Pipeline] Charts filtered');
 
 			// Step 4: Process article with AI (streaming)
 			processingStatus = 'Processing with AI...';
@@ -293,7 +283,6 @@
 							if (data.text) {
 								// First text chunk arrives - Samara starts speaking
 								if (streamingContent.length === 0) {
-									console.log('[Streaming] First text chunk arrived');
 									showPasteArea = false; // Hide paste area now that content is streaming
 									isProcessing = false;
 									processingStatus = '';
@@ -302,8 +291,6 @@
 							}
 
 							if (data.done) {
-								console.log('[Pipeline] Processing complete');
-
 								// Validate streaming content before display
 								if (streamingContent.trim().length === 0) {
 									throw new Error('AI returned empty response');
@@ -376,7 +363,6 @@
 			const data = await response.json();
 			if (data.history && Array.isArray(data.history)) {
 				chatHistory = data.history;
-				console.log('[Chat History] Loaded', chatHistory.length, 'turns');
 			}
 		} catch (error) {
 			console.error('[Chat History] Error loading:', error);
@@ -452,8 +438,6 @@
 							}
 
 							if (data.done) {
-								console.log('[Q&A] Response complete');
-
 								// Add completed turn to history
 								chatHistory = [
 									...chatHistory,
@@ -546,7 +530,6 @@
 			const data = await response.json();
 			if (data.articles && Array.isArray(data.articles)) {
 				articles = data.articles;
-				console.log('[Articles] Loaded', articles.length, 'articles');
 			}
 		} catch (error) {
 			console.error('[Articles] Error loading:', error);
@@ -610,7 +593,6 @@
 			const data = await response.json();
 			if (data.charts && Array.isArray(data.charts)) {
 				charts = data.charts;
-				console.log('[Charts] Loaded', charts.length, 'charts');
 			}
 		} catch (error) {
 			console.error('[Charts] Error loading:', error);
@@ -638,8 +620,6 @@
 					});
 
 					if (response.ok) {
-						console.log('[Articles] Successfully deleted article:', articleId);
-
 						// If we deleted the current article, clear it
 						if (currentArticle?.id === articleId) {
 							currentArticle = null;
@@ -685,7 +665,6 @@
 				}
 
 				const result = await response.json();
-				console.log('[Nuke] Successfully deleted', result.deleted, 'articles');
 
 				// Clear all local state
 				articles = [];

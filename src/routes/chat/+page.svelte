@@ -50,7 +50,6 @@
 
 		// Trigger orphan recovery for any failed compressions
 		if (data.orphans && data.orphans.length > 0) {
-			console.log(`[Orphan Recovery] Recovering ${data.orphans.length} orphan entries...`);
 			for (const orphan of data.orphans) {
 				try {
 					await fetch('/api/chat/compress', {
@@ -197,7 +196,6 @@
 					method: 'DELETE'
 				});
 				if (!response.ok) throw new Error('Delete failed');
-				console.log('[Message] Deleted superjournal entry:', messageId);
 				// Remove from local state
 				allMessages = allMessages.filter(msg => msg.id !== messageId);
 			} catch (err) {
@@ -209,7 +207,6 @@
 	function handleAbortCurrentMessage() {
 		// Use the abort function from chat store (supports AbortController)
 		abortCurrentMessage();
-		console.log('[Abort] Current message aborted');
 	}
 
 	// Track which message is showing "copied" feedback

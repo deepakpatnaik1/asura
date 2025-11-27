@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit';
 import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 import type { RequestHandler } from './$types';
+import { requireAuth } from '$lib/api/require-auth';
 
 /**
  * Charts Endpoint
@@ -12,19 +13,9 @@ import type { RequestHandler } from './$types';
  */
 export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supabase } }) => {
 	// 1. AUTHENTICATION CHECK
-	const { user } = await safeGetSession();
-	if (!user) {
-		return json(
-			{
-				error: {
-					message: 'Unauthorized - must be logged in',
-					code: 'UNAUTHORIZED'
-				}
-			},
-			{ status: 401 }
-		);
-	}
-	const userId = user.id;
+	const auth = await requireAuth(safeGetSession);
+	if (!auth.success) return auth.error;
+	const { userId } = auth;
 
 	// 2. GET ARTICLE ID FROM QUERY PARAMS
 	const articleId = url.searchParams.get('article_id');

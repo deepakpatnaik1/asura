@@ -5,6 +5,8 @@ import { VOYAGE_API_KEY } from '$env/static/private';
 import { DEFAULT_COMPRESSION_MODEL, EMBEDDING_MODEL } from '$lib/config/models';
 import { getModelParams } from '$lib/config/model-params';
 import { compress } from '$lib/calls';
+import { requireAuth } from '$lib/api/require-auth';
+import { parseRequestJson } from '$lib/api/parse-json';
 
 const voyage = new VoyageAIClient({ apiKey: VOYAGE_API_KEY });
 
@@ -16,12 +18,19 @@ const voyage = new VoyageAIClient({ apiKey: VOYAGE_API_KEY });
  * Called automatically on page load to recover failed compressions.
  */
 export const POST: RequestHandler = async ({ request, locals: { safeGetSession, supabase } }) => {
-	const { user } = await safeGetSession();
-	if (!user) {
-		return json({ error: { message: 'Unauthorized', code: 'UNAUTHORIZED' } }, { status: 401 });
-	}
+	// 1. AUTHENTICATION CHECK
+	const auth = await requireAuth(safeGetSession);
+	if (!auth.success) return auth.error;
 
-	const { superjournal_id, user_message, ai_response, persona_name } = await request.json();
+	// 2. PARSE REQUEST BODY
+	const parseResult = await parseRequestJson<{
+		superjournal_id: string;
+		user_message: string;
+		ai_response: string;
+		persona_name: string;
+	}>(request);
+	if (!parseResult.success) return parseResult.error;
+	const { superjournal_id, user_message, ai_response, persona_name } = parseResult.data;
 
 	if (!superjournal_id || !user_message || !ai_response || !persona_name) {
 		return json({ error: { message: 'Missing required fields', code: 'INVALID_INPUT' } }, { status: 400 });
@@ -32,7 +41,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		.from('superjournal')
 		.select('id')
 		.eq('id', superjournal_id)
-		.eq('user_id', user.id)
+		.eq('user_id', auth.userId)
 		.single();
 
 	if (fetchError || !entry) {
@@ -55,7 +64,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		const { data: settings } = await supabase
 			.from('user_settings')
 			.select('selected_compression_model')
-			.eq('user_id', user.id)
+			.eq('user_id', auth.userId)
 			.single();
 
 		const compressionModel = settings?.selected_compression_model || DEFAULT_COMPRESSION_MODEL;
@@ -75,7 +84,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			.from('journal')
 			.insert({
 				superjournal_id: superjournal_id,
-				user_id: user.id,
+				user_id: auth.userId,
 				persona_name: compressionJson.persona_name || persona_name,
 				boss_essence: compressionJson.boss_essence || user_message,
 				persona_essence: compressionJson.persona_essence || ai_response,

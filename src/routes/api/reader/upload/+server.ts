@@ -1,25 +1,19 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { validateHtmlSize, extractTitleFromHtml } from '$lib/capabilities';
+import { requireAuth } from '$lib/api/require-auth';
+import { parseRequestJson } from '$lib/api/parse-json';
 
 export const POST: RequestHandler = async ({ request, locals: { safeGetSession, supabase } }) => {
 	// 1. AUTHENTICATION CHECK
-	const { user } = await safeGetSession();
-	if (!user) {
-		return json(
-			{
-				error: {
-					message: 'Unauthorized - must be logged in',
-					code: 'UNAUTHORIZED'
-				}
-			},
-			{ status: 401 }
-		);
-	}
-	const userId = user.id;
+	const auth = await requireAuth(safeGetSession);
+	if (!auth.success) return auth.error;
+	const { userId } = auth;
 
 	// 2. PARSE REQUEST BODY
-	const { html } = await request.json();
+	const parseResult = await parseRequestJson<{ html: string }>(request);
+	if (!parseResult.success) return parseResult.error;
+	const { html } = parseResult.data;
 
 	if (!html || typeof html !== 'string') {
 		return json(

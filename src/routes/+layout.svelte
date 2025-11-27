@@ -44,7 +44,6 @@
 		// Trigger mounted state for CSS transition (prevents FOUC)
 		await tick();
 		mounted = true;
-		console.log('[Mount] Layout mounted, FOUC prevention active');
 	});
 </script>
 

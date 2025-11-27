@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { requireAuth } from '$lib/api/require-auth';
 
 // Helper to wait for journal entry to exist (Call 2 compression creates it)
 async function waitForJournalEntry(
@@ -29,19 +30,9 @@ async function waitForJournalEntry(
 // Toggle starred status for a superjournal entry (updates linked journal entry)
 export const PATCH: RequestHandler = async ({ params, locals: { supabase, safeGetSession } }) => {
 	// 1. AUTHENTICATION CHECK
-	const { user } = await safeGetSession();
-	if (!user) {
-		return json(
-			{
-				error: {
-					message: 'Unauthorized - must be logged in',
-					code: 'UNAUTHORIZED'
-				}
-			},
-			{ status: 401 }
-		);
-	}
-	const userId = user.id;
+	const auth = await requireAuth(safeGetSession);
+	if (!auth.success) return auth.error;
+	const { userId } = auth;
 	const { id } = params;
 
 	try {
@@ -72,20 +63,9 @@ export const PATCH: RequestHandler = async ({ params, locals: { supabase, safeGe
 
 export const DELETE: RequestHandler = async ({ params, locals: { supabase, safeGetSession } }) => {
 	// 1. AUTHENTICATION CHECK
-	const { user } = await safeGetSession();
-	if (!user) {
-		return json(
-			{
-				error: {
-					message: 'Unauthorized - must be logged in',
-					code: 'UNAUTHORIZED'
-				}
-			},
-			{ status: 401 }
-		);
-	}
-	const userId = user.id;
-
+	const auth = await requireAuth(safeGetSession);
+	if (!auth.success) return auth.error;
+	const { userId } = auth;
 	const { id } = params;
 
 	try {

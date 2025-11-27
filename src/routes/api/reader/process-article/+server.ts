@@ -3,6 +3,8 @@ import type { RequestHandler } from './$types';
 import { DEFAULT_READER_MODEL } from '$lib/config/models';
 import { getModelParams } from '$lib/config/model-params';
 import { describeStream } from '$lib/calls';
+import { requireAuth } from '$lib/api/require-auth';
+import { parseRequestJson } from '$lib/api/parse-json';
 
 /**
  * Process Article Endpoint (Phase 2, Group D - Chunks 6-8)
@@ -16,22 +18,14 @@ import { describeStream } from '$lib/calls';
  */
 export const POST: RequestHandler = async ({ request, locals: { safeGetSession, supabase } }) => {
 	// 1. AUTHENTICATION CHECK
-	const { user } = await safeGetSession();
-	if (!user) {
-		return json(
-			{
-				error: {
-					message: 'Unauthorized - must be logged in',
-					code: 'UNAUTHORIZED'
-				}
-			},
-			{ status: 401 }
-		);
-	}
-	const userId = user.id;
+	const auth = await requireAuth(safeGetSession);
+	if (!auth.success) return auth.error;
+	const { userId } = auth;
 
 	// 2. PARSE REQUEST BODY
-	const { article_id } = await request.json();
+	const parseResult = await parseRequestJson<{ article_id: string }>(request);
+	if (!parseResult.success) return parseResult.error;
+	const { article_id } = parseResult.data;
 
 	if (!article_id || typeof article_id !== 'string') {
 		return json(

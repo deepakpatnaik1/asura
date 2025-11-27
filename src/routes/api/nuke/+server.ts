@@ -1,22 +1,13 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
+import { requireAuth } from '$lib/api/require-auth';
 
 export const POST: RequestHandler = async ({ locals: { safeGetSession, supabase } }) => {
 	try {
 		// 1. AUTHENTICATION CHECK
-		const { user } = await safeGetSession();
-		if (!user) {
-			return json(
-				{
-					error: {
-						message: 'Unauthorized - must be logged in',
-						code: 'UNAUTHORIZED'
-					}
-				},
-				{ status: 401 }
-			);
-		}
-		const userId = user.id;
+		const auth = await requireAuth(safeGetSession);
+		if (!auth.success) return auth.error;
+		const { userId } = auth;
 
 		// 2. Delete user data
 		const { error: superjournalError } = await supabase

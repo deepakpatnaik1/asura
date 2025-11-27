@@ -1,5 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
+import { requireAuth } from '$lib/api/require-auth';
 
 /**
  * E-Reader Nuke Endpoint
@@ -15,19 +16,9 @@ import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = async ({ locals: { safeGetSession, supabase } }) => {
 	// 1. AUTHENTICATION CHECK
-	const { user } = await safeGetSession();
-	if (!user) {
-		return json(
-			{
-				error: {
-					message: 'Unauthorized - must be logged in',
-					code: 'UNAUTHORIZED'
-				}
-			},
-			{ status: 401 }
-		);
-	}
-	const userId = user.id;
+	const auth = await requireAuth(safeGetSession);
+	if (!auth.success) return auth.error;
+	const { userId } = auth;
 
 	// 2. FETCH ALL ARTICLES TO GET FILE PATHS
 	const { data: articles, error: articlesFetchError } = await supabase

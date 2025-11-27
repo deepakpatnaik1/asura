@@ -2,6 +2,8 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { createMessage, isAnthropicFileExpired } from '$lib/api/anthropic-client';
 import { DEFAULT_READER_MODEL } from '$lib/config/models';
+import { requireAuth } from '$lib/api/require-auth';
+import { parseRequestJson } from '$lib/api/parse-json';
 
 /**
  * Programmatic filter - identifies obvious ads/irrelevant images using alt text patterns
@@ -174,37 +176,14 @@ Example:
 
 export const POST: RequestHandler = async ({ request, locals: { safeGetSession, supabase } }) => {
 	// 1. AUTHENTICATION CHECK
-	const { user } = await safeGetSession();
-	if (!user) {
-		return json(
-			{
-				error: {
-					message: 'Unauthorized - must be logged in',
-					code: 'UNAUTHORIZED'
-				}
-			},
-			{ status: 401 }
-		);
-	}
-	const userId = user.id;
+	const auth = await requireAuth(safeGetSession);
+	if (!auth.success) return auth.error;
+	const { userId } = auth;
 
 	// 2. PARSE REQUEST BODY
-	let body;
-	try {
-		body = await request.json();
-	} catch (error) {
-		return json(
-			{
-				error: {
-					message: 'Invalid JSON body',
-					code: 'INVALID_JSON'
-				}
-			},
-			{ status: 400 }
-		);
-	}
-
-	const { article_id } = body;
+	const parseResult = await parseRequestJson<{ article_id: string }>(request);
+	if (!parseResult.success) return parseResult.error;
+	const { article_id } = parseResult.data;
 
 	if (!article_id) {
 		return json(

@@ -6,22 +6,14 @@ import {
 	DEFAULT_READER_MODEL,
 	EMBEDDING_MODEL
 } from '$lib/config/models';
+import { requireAuth } from '$lib/api/require-auth';
+import { parseRequestJson } from '$lib/api/parse-json';
 
 export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase } }) => {
 	// 1. AUTHENTICATION CHECK
-	const { user } = await safeGetSession();
-	if (!user) {
-		return json(
-			{
-				error: {
-					message: 'Unauthorized - must be logged in',
-					code: 'UNAUTHORIZED'
-				}
-			},
-			{ status: 401 }
-		);
-	}
-	const userId = user.id;
+	const auth = await requireAuth(safeGetSession);
+	if (!auth.success) return auth.error;
+	const { userId } = auth;
 
 	// 2. QUERY USER SETTINGS
 	const { data, error } = await supabase
@@ -55,22 +47,20 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 
 export const PUT: RequestHandler = async ({ request, locals: { safeGetSession, supabase } }) => {
 	// 1. AUTHENTICATION CHECK
-	const { user } = await safeGetSession();
-	if (!user) {
-		return json(
-			{
-				error: {
-					message: 'Unauthorized - must be logged in',
-					code: 'UNAUTHORIZED'
-				}
-			},
-			{ status: 401 }
-		);
-	}
-	const userId = user.id;
+	const auth = await requireAuth(safeGetSession);
+	if (!auth.success) return auth.error;
+	const { userId } = auth;
 
 	// 2. PARSE REQUEST BODY
-	const { selected_conversation_model, selected_compression_model, selected_reader_model, selected_embedding_model, active_reader_article_id } = await request.json();
+	const parseResult = await parseRequestJson<{
+		selected_conversation_model?: string;
+		selected_compression_model?: string;
+		selected_reader_model?: string;
+		selected_embedding_model?: string;
+		active_reader_article_id?: string;
+	}>(request);
+	if (!parseResult.success) return parseResult.error;
+	const { selected_conversation_model, selected_compression_model, selected_reader_model, selected_embedding_model, active_reader_article_id } = parseResult.data;
 
 	// 3. UPDATE USER SETTINGS
 	const updateData: Record<string, any> = {

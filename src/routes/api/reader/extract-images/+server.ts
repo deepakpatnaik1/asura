@@ -6,6 +6,8 @@ import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
 import * as cheerio from 'cheerio';
 import sharp from 'sharp';
 import { uploadFileWithRetry } from '$lib/api/anthropic-client';
+import { requireAuth } from '$lib/api/require-auth';
+import { parseRequestJson } from '$lib/api/parse-json';
 
 // SERVICE_ROLE_KEY for storage operations (storage policies require it)
 const supabaseStorage = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -161,37 +163,14 @@ async function uploadThumbnailToStorage(
  */
 export const POST: RequestHandler = async ({ request, locals: { safeGetSession, supabase } }) => {
 	// 1. AUTHENTICATION CHECK
-	const { user } = await safeGetSession();
-	if (!user) {
-		return json(
-			{
-				error: {
-					message: 'Unauthorized - must be logged in',
-					code: 'UNAUTHORIZED'
-				}
-			},
-			{ status: 401 }
-		);
-	}
-	const userId = user.id;
+	const auth = await requireAuth(safeGetSession);
+	if (!auth.success) return auth.error;
+	const { userId } = auth;
 
 	// 2. PARSE REQUEST BODY
-	let body;
-	try {
-		body = await request.json();
-	} catch (error) {
-		return json(
-			{
-				error: {
-					message: 'Invalid JSON body',
-					code: 'INVALID_JSON'
-				}
-			},
-			{ status: 400 }
-		);
-	}
-
-	const { article_id, html } = body;
+	const parseResult = await parseRequestJson<{ article_id: string; html: string }>(request);
+	if (!parseResult.success) return parseResult.error;
+	const { article_id, html } = parseResult.data;
 
 	if (!article_id || !html || typeof html !== 'string') {
 		return json(
