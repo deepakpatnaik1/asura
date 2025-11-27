@@ -2,12 +2,15 @@
  * Integration Tests for /api/settings
  *
  * Tests the settings API endpoint for GET and PUT operations.
+ * Uses mocked Supabase client to test endpoint logic in isolation.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { GET, PUT } from '$routes/api/settings/+server';
-import { createMockLocals, mockUser } from '../mocks/supabase';
+import { createMockLocals } from '../mocks/supabase';
 import { testUserSettings } from '../fixtures/messages';
+
+// Dynamically import the server module to avoid type generation issues
+const { GET, PUT } = await import('../../src/routes/api/settings/+server');
 
 describe('GET /api/settings', () => {
 	beforeEach(() => {
@@ -152,8 +155,7 @@ describe('PUT /api/settings', () => {
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify({
 						selected_conversation_model: 'claude-sonnet-4-5-20250929',
-						selected_compression_model: 'claude-haiku-3-5-20241022',
-						active_reader_article_id: 'article-123'
+						selected_compression_model: 'claude-haiku-3-5-20241022'
 					})
 				})
 			} as any);
@@ -161,7 +163,7 @@ describe('PUT /api/settings', () => {
 			expect(response.status).toBe(200);
 		});
 
-		it('updates active_reader_article_id', async () => {
+		it('updates active_reader_article_id with valid UUID', async () => {
 			const locals = createMockLocals({
 				authenticated: true,
 				queryData: { success: true }
@@ -172,7 +174,7 @@ describe('PUT /api/settings', () => {
 				request: new Request('http://localhost/api/settings', {
 					method: 'PUT',
 					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ active_reader_article_id: 'new-article-id' })
+					body: JSON.stringify({ active_reader_article_id: '550e8400-e29b-41d4-a716-446655440000' })
 				})
 			} as any);
 

@@ -2,14 +2,16 @@
  * Tests for lib/api/rate-limit.ts
  *
  * Tests the rate limiting utility with sliding window algorithm.
+ * These tests run against the in-memory implementation (no Redis in test env).
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { checkRateLimit, waitForRateLimit, RATE_LIMITS } from '$lib/api/rate-limit';
+import { checkRateLimit, waitForRateLimit, RATE_LIMITS, _resetMemoryStore } from '$lib/api/rate-limit';
 
 describe('checkRateLimit', () => {
 	beforeEach(() => {
 		vi.useFakeTimers();
+		_resetMemoryStore();
 	});
 
 	afterEach(() => {
@@ -17,29 +19,29 @@ describe('checkRateLimit', () => {
 	});
 
 	describe('under limit', () => {
-		it('allows first request', () => {
-			const result = checkRateLimit('user-1', RATE_LIMITS.ai);
+		it('allows first request', async () => {
+			const result = await checkRateLimit('user-1', RATE_LIMITS.ai);
 
 			expect(result.allowed).toBe(true);
 		});
 
-		it('allows requests up to the limit', () => {
+		it('allows requests up to the limit', async () => {
 			const config = { maxRequests: 3, windowMs: 60000 };
 
-			const result1 = checkRateLimit('user-2', config);
-			const result2 = checkRateLimit('user-2', config);
-			const result3 = checkRateLimit('user-2', config);
+			const result1 = await checkRateLimit('user-2', config);
+			const result2 = await checkRateLimit('user-2', config);
+			const result3 = await checkRateLimit('user-2', config);
 
 			expect(result1.allowed).toBe(true);
 			expect(result2.allowed).toBe(true);
 			expect(result3.allowed).toBe(true);
 		});
 
-		it('tracks requests per user separately', () => {
+		it('tracks requests per user separately', async () => {
 			const config = { maxRequests: 1, windowMs: 60000 };
 
-			const resultA = checkRateLimit('user-a', config);
-			const resultB = checkRateLimit('user-b', config);
+			const resultA = await checkRateLimit('user-a', config);
+			const resultB = await checkRateLimit('user-b', config);
 
 			expect(resultA.allowed).toBe(true);
 			expect(resultB.allowed).toBe(true);
@@ -47,20 +49,20 @@ describe('checkRateLimit', () => {
 	});
 
 	describe('at limit', () => {
-		it('blocks request when at limit', () => {
+		it('blocks request when at limit', async () => {
 			const config = { maxRequests: 1, windowMs: 60000 };
 
-			checkRateLimit('user-3', config); // First request allowed
-			const result = checkRateLimit('user-3', config); // Second blocked
+			await checkRateLimit('user-3', config); // First request allowed
+			const result = await checkRateLimit('user-3', config); // Second blocked
 
 			expect(result.allowed).toBe(false);
 		});
 
-		it('returns 429 status code', () => {
+		it('returns 429 status code', async () => {
 			const config = { maxRequests: 1, windowMs: 60000 };
 
-			checkRateLimit('user-4', config);
-			const result = checkRateLimit('user-4', config);
+			await checkRateLimit('user-4', config);
+			const result = await checkRateLimit('user-4', config);
 
 			expect(result.allowed).toBe(false);
 			if (!result.allowed) {
@@ -71,8 +73,8 @@ describe('checkRateLimit', () => {
 		it('returns RATE_LIMITED error code', async () => {
 			const config = { maxRequests: 1, windowMs: 60000 };
 
-			checkRateLimit('user-5', config);
-			const result = checkRateLimit('user-5', config);
+			await checkRateLimit('user-5', config);
+			const result = await checkRateLimit('user-5', config);
 
 			expect(result.allowed).toBe(false);
 			if (!result.allowed) {
@@ -84,8 +86,8 @@ describe('checkRateLimit', () => {
 		it('includes Retry-After header', async () => {
 			const config = { maxRequests: 1, windowMs: 60000 };
 
-			checkRateLimit('user-6', config);
-			const result = checkRateLimit('user-6', config);
+			await checkRateLimit('user-6', config);
+			const result = await checkRateLimit('user-6', config);
 
 			expect(result.allowed).toBe(false);
 			if (!result.allowed) {
@@ -95,15 +97,15 @@ describe('checkRateLimit', () => {
 			}
 		});
 
-		it('calculates correct retry time', () => {
+		it('calculates correct retry time', async () => {
 			const config = { maxRequests: 1, windowMs: 60000 };
 
-			checkRateLimit('user-7', config);
+			await checkRateLimit('user-7', config);
 
 			// Advance time by 30 seconds
 			vi.advanceTimersByTime(30000);
 
-			const result = checkRateLimit('user-7', config);
+			const result = await checkRateLimit('user-7', config);
 
 			expect(result.allowed).toBe(false);
 			if (!result.allowed) {
@@ -115,36 +117,36 @@ describe('checkRateLimit', () => {
 	});
 
 	describe('window expiration', () => {
-		it('allows request after window expires', () => {
+		it('allows request after window expires', async () => {
 			const config = { maxRequests: 1, windowMs: 60000 };
 
-			checkRateLimit('user-8', config);
+			await checkRateLimit('user-8', config);
 
 			// Advance time past the window
 			vi.advanceTimersByTime(61000);
 
-			const result = checkRateLimit('user-8', config);
+			const result = await checkRateLimit('user-8', config);
 
 			expect(result.allowed).toBe(true);
 		});
 
-		it('uses sliding window (oldest request expires first)', () => {
+		it('uses sliding window (oldest request expires first)', async () => {
 			const config = { maxRequests: 2, windowMs: 60000 };
 
-			checkRateLimit('user-9', config); // t=0
+			await checkRateLimit('user-9', config); // t=0
 
 			vi.advanceTimersByTime(30000); // t=30s
 
-			checkRateLimit('user-9', config); // t=30s
+			await checkRateLimit('user-9', config); // t=30s
 
 			// At t=30s, both requests are in window, limit reached
-			const blockedResult = checkRateLimit('user-9', config);
+			const blockedResult = await checkRateLimit('user-9', config);
 			expect(blockedResult.allowed).toBe(false);
 
 			vi.advanceTimersByTime(31000); // t=61s - first request expired
 
 			// Now only the t=30s request is in window
-			const allowedResult = checkRateLimit('user-9', config);
+			const allowedResult = await checkRateLimit('user-9', config);
 			expect(allowedResult.allowed).toBe(true);
 		});
 	});
@@ -170,6 +172,7 @@ describe('checkRateLimit', () => {
 describe('waitForRateLimit', () => {
 	beforeEach(() => {
 		vi.useFakeTimers();
+		_resetMemoryStore();
 	});
 
 	afterEach(() => {
@@ -193,7 +196,6 @@ describe('waitForRateLimit', () => {
 		await waitForRateLimit('wait-user-2', config);
 
 		// Second request should wait
-		const startTime = Date.now();
 		const promise = waitForRateLimit('wait-user-2', config);
 
 		// Advance time
@@ -211,7 +213,7 @@ describe('waitForRateLimit', () => {
 		await waitForRateLimit('wait-user-3', config);
 
 		// After first wait, should have used the limit
-		const checkResult = checkRateLimit('wait-user-3', config);
+		const checkResult = await checkRateLimit('wait-user-3', config);
 		expect(checkResult.allowed).toBe(false);
 	});
 });
