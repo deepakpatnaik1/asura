@@ -389,6 +389,8 @@ Integration:
 
 ### Phase 6: Feature Gaps - COMPLETE ✓
 
+**Commit:** `a1bc48c` - feat: Phase 6 - Add web search capability to chat mode
+
 **6.1 Add web search to chat mode:**
 
 Files modified:
