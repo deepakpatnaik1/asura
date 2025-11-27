@@ -274,3 +274,46 @@ Add missing capabilities to modes.
 - [ ] No console errors
 - [ ] Build succeeds with no type errors
 - [ ] Adding a test mode takes < 1 hour
+
+---
+
+## Implementation Log
+
+### Phase 1: Foundation - COMPLETE ✓
+
+**Commit:** `2e7862b` - refactor: Extract MessageGroup + add foundation for shared architecture
+
+Files created:
+- `/lib/api/stream-protocol.ts` - SSE event helpers (`emitChunk`, `emitDone`, `emitError`, `sseHeaders`)
+- `/lib/api/parse-sse.ts` - Async generator SSE parser for client-side streaming
+- `/lib/modes/types.ts` - `ModeConfig` interface with personas, capabilities, scroll config
+- `/lib/composables/message-stream.svelte.ts` - Streaming state using Svelte 5 `$state` runes
+- `/lib/composables/confirmation.svelte.ts` - Countdown confirmation state
+- `/lib/composables/index.ts` - Re-exports
+
+### Phase 2: Extract UI Components - COMPLETE ✓
+
+**Commit:** `5097e4f` - refactor: Extract ConfirmationModal, PersonaDropdown, create InputBar
+
+Files created:
+- `/lib/components/MessageGroup.svelte` - Boss + AI message pair with mode-aware accent colors
+- `/lib/components/ConfirmationModal.svelte` - Countdown modal for destructive actions
+- `/lib/components/PersonaDropdown.svelte` - Persona selector with interactive/static modes
+- `/lib/components/InputBar.svelte` - Auto-expanding textarea + send button
+
+Integration:
+- Chat page updated to use `MessageGroup`, `ConfirmationModal`, `PersonaDropdown`
+- Reader page updated to use `MessageGroup`, `ConfirmationModal`, `PersonaDropdown`
+- `InputBar` created but not integrated (layout differences between modes)
+
+**Bug fix:** `0da7489` - fix: Correct Q&A history message pairing in reader mode
+- Changed from index-based pairing to role-based iteration
+- Fixes display bug where boss/Samara messages were swapped
+
+### Phase 3: Reorganize Backend - PENDING
+
+### Phase 4: Wire Up Capabilities & Modes - PENDING
+
+### Phase 5: Security & Cleanup - PENDING
+
+### Phase 6: Feature Gaps - PENDING
