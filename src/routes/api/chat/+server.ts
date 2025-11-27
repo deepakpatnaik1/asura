@@ -203,7 +203,11 @@ async function compressToJournal(
 				model: EMBEDDING_MODEL // 1024 dimensions (default)
 			});
 
-			const embedding = embeddingResponse.data[0].embedding;
+			const embedding = embeddingResponse.data?.[0]?.embedding;
+			if (!embedding) {
+				console.error('[Embedding] No embedding data returned');
+				return;
+			}
 
 			// Update Journal row with embedding
 			const { error: updateError } = await supabase

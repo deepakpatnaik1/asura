@@ -18,7 +18,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		// Launch Puppeteer
 		const browser = await puppeteer.launch({
-			headless: 'new',
+			headless: true,
 			args: ['--no-sandbox', '--disable-setuid-sandbox']
 		});
 
@@ -61,8 +61,8 @@ export const POST: RequestHandler = async ({ request }) => {
 			console.warn('[PDF Demo] ⚠️  Warning: File exceeds 32MB limit for Anthropic Files API');
 		}
 
-		// Return PDF as binary response
-		return new Response(pdfBuffer, {
+		// Return PDF as binary response (convert Uint8Array to Buffer for Response compatibility)
+		return new Response(Buffer.from(pdfBuffer), {
 			status: 200,
 			headers: {
 				'Content-Type': 'application/pdf',

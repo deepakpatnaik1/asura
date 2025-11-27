@@ -96,9 +96,9 @@ async function filterChartsWithAI(
 	model: string
 ): Promise<{ relevant: number[]; irrelevant: number[] }> {
 	// Build the content blocks with file attachments
-	const contentBlocks: Array<
-		{ type: 'document'; source: { type: 'file'; file_id: string } } | { type: 'text'; text: string }
-	> = [];
+	// Note: Files API file source type is in beta, SDK types don't include it yet
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	const contentBlocks: any[] = [];
 
 	// Add each chart PDF as a document block
 	for (const chart of charts) {

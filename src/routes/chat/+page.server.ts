@@ -39,7 +39,7 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession, supabase 
 		.from('journal')
 		.select('superjournal_id')
 		.eq('is_starred', true)
-		.eq('user_id', user.id);
+		.eq('user_id', user!.id);
 
 	const starredIds = (starredJournals || [])
 		.map((j) => j.superjournal_id)

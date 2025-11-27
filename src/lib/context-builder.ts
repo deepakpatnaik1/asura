@@ -177,7 +177,7 @@ export async function buildContextForCalls1A1B(
 					model: EMBEDDING_MODEL // 1024 dimensions
 				});
 
-				queryVector = queryEmbedding.data[0].embedding;
+				queryVector = queryEmbedding.data?.[0]?.embedding ?? null;
 
 				// Collect IDs to exclude (already loaded in Priorities 1-4)
 				const excludeIds: string[] = [];
