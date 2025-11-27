@@ -1,12 +1,12 @@
 /**
- * CALL 1 PROMPT (Chat Response Generation)
+ * CONVERSE PROMPT (Chat Response Generation)
  *
  * Purpose: Generate persona response to user query
  * Input: Persona profile + memory context + user query
  * Output: Streaming response to user
  */
 
-export const CALL1_PROMPT = `You are receiving:
+export const CONVERSE_PROMPT = `You are receiving:
 - Base instructions for how to interact with me
 - Your persona-specific profile and role
 - Memory context from our conversation history

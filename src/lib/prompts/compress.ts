@@ -1,12 +1,12 @@
 /**
- * CALL 2 PROMPT (Chat Compression)
+ * COMPRESS PROMPT (Artisan Cut)
  *
  * Purpose: Artisan cut compression for conversation turns into journal entries
  * Input: Full conversation turn (user message + AI response)
  * Output: Compressed JSON saved to journal with embedding
  */
 
-export const CALL2_PROMPT = `ARTISAN CUT
+export const COMPRESS_PROMPT = `ARTISAN CUT
 
 You will receive a single conversation turn containing:
 1. My question or statement (the user input)

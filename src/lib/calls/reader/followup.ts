@@ -8,6 +8,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { ANTHROPIC_API_KEY } from '$env/static/private';
 import { PERSONA_SAMARA } from '$lib/prompts';
+import { followupArticleContext, followupChartPrefix } from '$lib/prompts/templates';
 import { BRAVE_SEARCH_TOOL, executeBraveSearch } from '$lib/api/brave-search';
 
 const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
@@ -53,10 +54,7 @@ export async function* followupStream(
 	const messages: Anthropic.MessageParam[] = [];
 
 	// First message: Article HTML + original summary
-	let articleContext = `Here is an article titled "${articleTitle}":\n\n<article>\n${articleHtml}\n</article>`;
-	if (previousSummary) {
-		articleContext += `\n\nHere is my previous summary of this article:\n\n${previousSummary}`;
-	}
+	const articleContext = followupArticleContext(articleTitle, articleHtml, previousSummary);
 	messages.push({ role: 'user', content: articleContext });
 
 	// Add conversation history
@@ -81,7 +79,7 @@ export async function* followupStream(
 		});
 		currentQuestionContent.push({
 			type: 'text',
-			text: `[Referring to chart ${(chartIndex ?? 0) + 1}] ${message}`
+			text: followupChartPrefix(chartIndex ?? 0, message)
 		});
 	} else {
 		currentQuestionContent.push({

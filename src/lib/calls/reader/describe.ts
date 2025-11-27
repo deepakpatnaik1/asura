@@ -8,6 +8,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { ANTHROPIC_API_KEY } from '$env/static/private';
 import { PERSONA_SAMARA } from '$lib/prompts';
+import { describeUserPrompt } from '$lib/prompts/templates';
 import { BRAVE_SEARCH_TOOL, executeBraveSearch } from '$lib/api/brave-search';
 
 const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
@@ -36,11 +37,7 @@ export async function* describeStream(
 	const messages: Anthropic.MessageParam[] = [
 		{
 			role: 'user',
-			content: `Here is an article titled "${articleTitle}". Please provide an educational summary. Use the web search tool as needed to understand recent context.
-
-<article>
-${articleHtml}
-</article>`
+			content: describeUserPrompt(articleTitle, articleHtml)
 		}
 	];
 

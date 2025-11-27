@@ -8,7 +8,8 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { ANTHROPIC_API_KEY } from '$env/static/private';
-import { CALL1_PROMPT } from '$lib/prompts';
+import { CONVERSE_PROMPT } from '$lib/prompts';
+import { converseUserPrompt } from '$lib/prompts/templates';
 import { BRAVE_SEARCH_TOOL, executeBraveSearch } from '$lib/api/brave-search';
 
 const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
@@ -52,14 +53,13 @@ export async function* converseStream(
 		},
 		{
 			type: 'text',
-			text: CALL1_PROMPT,
+			text: CONVERSE_PROMPT,
 			cache_control: { type: 'ephemeral' }
 		}
 	];
 
 	// Build user prompt with context
-	const fullUserPrompt =
-		context.length > 0 ? `${context}--- CURRENT QUERY ---\n${message}` : message;
+	const fullUserPrompt = converseUserPrompt(context, message);
 
 	// Initial messages
 	const messages: Anthropic.MessageParam[] = [

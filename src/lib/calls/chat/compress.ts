@@ -6,7 +6,8 @@
  */
 
 import { createMessage } from '$lib/api/anthropic-client';
-import { CALL2_PROMPT } from '$lib/prompts';
+import { COMPRESS_PROMPT } from '$lib/prompts';
+import { compressUserFormat } from '$lib/prompts/templates';
 
 export interface CompressParams {
 	userMessage: string;
@@ -62,14 +63,14 @@ export async function compress(params: CompressParams): Promise<CompressResult> 
 		system: [
 			{
 				type: 'text' as const,
-				text: CALL2_PROMPT,
+				text: COMPRESS_PROMPT,
 				cache_control: { type: 'ephemeral' as const }
 			}
 		],
 		messages: [
 			{
 				role: 'user',
-				content: `User message: ${userMessage}\n\nPersona (${personaName}) response: ${aiResponse}`
+				content: compressUserFormat(userMessage, personaName, aiResponse)
 			}
 		]
 	});

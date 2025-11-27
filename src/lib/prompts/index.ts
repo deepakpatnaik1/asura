@@ -9,8 +9,6 @@ export { PERSONA_GUNNAR } from './personas/gunnar';
 export { PERSONA_KIRBY } from './personas/kirby';
 export { PERSONA_SAMARA } from './personas/samara';
 
-// Call 1: Chat Response Generation
-export { CALL1_PROMPT } from './call1';
-
-// Call 2: Chat Compression
-export { CALL2_PROMPT } from './call2';
+// Chat prompts
+export { CONVERSE_PROMPT } from './converse';
+export { COMPRESS_PROMPT } from './compress';
