@@ -927,17 +927,18 @@
 					mode="reader"
 				/>
 
-				<!-- Q&A History -->
-				{#each Array.from({ length: Math.floor(chatHistory.length / 2) }, (_, i) => i) as turnIndex}
-					{@const userTurn = chatHistory[turnIndex * 2]}
-					{@const assistantTurn = chatHistory[turnIndex * 2 + 1]}
-					{#if userTurn && assistantTurn}
-						<MessageGroup
-							userMessage={userTurn.content}
-							aiResponse={assistantTurn.content}
-							personaName="samara"
-							mode="reader"
-						/>
+				<!-- Q&A History - render as pairs based on role -->
+				{#each chatHistory as turn, i}
+					{#if turn.role === 'user'}
+						{@const nextTurn = chatHistory[i + 1]}
+						{#if nextTurn && nextTurn.role === 'assistant'}
+							<MessageGroup
+								userMessage={turn.content}
+								aiResponse={nextTurn.content}
+								personaName="samara"
+								mode="reader"
+							/>
+						{/if}
 					{/if}
 				{/each}
 
