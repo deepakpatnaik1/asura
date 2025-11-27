@@ -144,3 +144,21 @@ Use the web search tool as needed to understand recent context.
 - [x] Extract `followupChartPrefix()` template
 - [x] Extract `compressUserFormat()` template
 - [x] Extract `converseUserPrompt()` template
+
+---
+
+## Review 2: Prompt Text Audit
+
+**Objective:** Manual review of all prompt text for quality, consistency, and effectiveness.
+
+**Status:** IN PROGRESS
+
+**Files to Review:**
+- [ ] `/lib/prompts/converse.ts` - Memory context instructions
+- [ ] `/lib/prompts/compress.ts` - Artisan cut rules
+- [ ] `/lib/prompts/personas/gunnar.ts` - Startup mentor persona
+- [ ] `/lib/prompts/personas/kirby.ts` - Guerrilla marketer persona
+- [ ] `/lib/prompts/personas/samara.ts` - E-reader companion persona
+- [ ] `/lib/prompts/templates/index.ts` - Reusable prompt fragments
+
+**Notes:**
