@@ -4,14 +4,14 @@
 
 | Category | Initial | Current | Target | Gap |
 |----------|---------|---------|--------|-----|
-| Test Coverage | 0/10 | 7/10 | 10/10 | Medium (161 tests, need E2E) |
+| Test Coverage | 0/10 | 7.5/10 | 10/10 | Medium (193 tests, need E2E) |
 | Maintainability | 3/10 | 6/10 | 10/10 | Medium (37% size reduction) |
 | Consistency | 5/10 | 8/10 | 10/10 | Low (standardized auth, JSON parsing, removed debug logs) |
-| Reliability | 6/10 | 6/10 | 10/10 | Medium |
+| Reliability | 6/10 | 8/10 | 10/10 | Low (error boundary, retry, offline detection, timeouts) |
 | Security | 7.5/10 | 7.5/10 | 10/10 | Low |
 | API Quality | 7/10 | 7/10 | 10/10 | Low |
 
-**Overall Score: 4.6/10 → 7.1/10** (after Phase 1, 2 & 3)
+**Overall Score: 4.6/10 → 7.5/10** (after Phase 1, 2, 3 & 4)
 
 ---
 
@@ -321,95 +321,49 @@ export function logError(context: string, message: string, error?: unknown) {
 
 ---
 
-## Phase 4: Reliability Improvements
+## Phase 4: Reliability Improvements ✅ COMPLETE
 
 **Goal:** Handle edge cases and improve error recovery
 
-### 4.1 Error Boundary Components
+**Results:**
+- Created `ErrorBoundary.svelte` component with mode-specific styling
+- Created `fetchWithRetry` utility with exponential backoff
+- Created `fetchWithTimeout` utility for streaming requests
+- Created `connectivity` store with online/offline detection and API health checks
+- Integrated offline banner into layout
+- Wrapped main content with ErrorBoundary
+- Updated chat store to use timeout handling
+- Added 32 new tests for reliability utilities (193 total)
 
-```svelte
-<!-- src/lib/components/ErrorBoundary.svelte -->
-<script lang="ts">
-  import { onMount } from 'svelte';
+### 4.1 Error Boundary Components ✅
 
-  let { children, fallback } = $props();
-  let hasError = $state(false);
-  let error = $state<Error | null>(null);
+Created `src/lib/components/ErrorBoundary.svelte`:
+- Catches window errors and unhandled rejections
+- Provides mode-specific styling (chat/reader)
+- Includes retry functionality
+- Supports custom fallback rendering
 
-  onMount(() => {
-    const handler = (event: ErrorEvent) => {
-      hasError = true;
-      error = event.error;
-    };
-    window.addEventListener('error', handler);
-    return () => window.removeEventListener('error', handler);
-  });
-</script>
+### 4.2 Retry Logic for Client-Side Fetches ✅
 
-{#if hasError}
-  {@render fallback(error)}
-{:else}
-  {@render children()}
-{/if}
-```
+Created `src/lib/utils/fetch-with-retry.ts`:
+- `fetchWithRetry()` - retries on 502, 503, 504 with exponential backoff
+- `fetchWithTimeout()` - wraps fetch with configurable timeout
+- Properly handles abort signals
+- Respects user cancellation
 
-### 4.2 Retry Logic for Client-Side Fetches
+### 4.3 Offline Detection ✅
 
-```typescript
-// src/lib/utils/fetch-with-retry.ts
-export async function fetchWithRetry(
-  url: string,
-  options: RequestInit,
-  maxRetries = 3
-): Promise<Response> {
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      const response = await fetch(url, options);
-      if (response.ok || response.status < 500) {
-        return response;
-      }
-      // Server error, retry
-    } catch (error) {
-      if (attempt === maxRetries) throw error;
-    }
-    // Exponential backoff
-    await new Promise(r => setTimeout(r, Math.pow(2, attempt) * 1000));
-  }
-  throw new Error('Max retries exceeded');
-}
-```
+Created `src/lib/stores/connectivity.ts`:
+- `isOnline` - tracks browser online/offline status
+- `isApiReachable` - tracks API health via `/api/health`
+- `isConnected` - derived store (both must be true)
+- `checkApiConnectivity()` - manual health check
 
-### 4.3 Offline Detection
+### 4.4 Request Timeout Handling ✅
 
-```typescript
-// src/lib/stores/connectivity.ts
-import { writable } from 'svelte/store';
-
-export const isOnline = writable(true);
-
-if (typeof window !== 'undefined') {
-  window.addEventListener('online', () => isOnline.set(true));
-  window.addEventListener('offline', () => isOnline.set(false));
-}
-```
-
-### 4.4 Request Timeout Handling
-
-Add explicit timeouts to all client-side fetches:
-
-```typescript
-const controller = new AbortController();
-const timeoutId = setTimeout(() => controller.abort(), 30000);
-
-try {
-  const response = await fetch(url, {
-    ...options,
-    signal: controller.signal
-  });
-} finally {
-  clearTimeout(timeoutId);
-}
-```
+- Chat streaming requests: 2-minute timeout
+- API health checks: 5-second timeout
+- Logout requests: retry with 30-second timeout
 
 ---
 
@@ -705,12 +659,14 @@ Document migration guidelines:
 
 | Metric | Initial | Current | Target |
 |--------|---------|---------|--------|
-| Test coverage | 0% | 161 tests passing | >80% |
+| Test coverage | 0% | 193 tests passing | >80% |
 | Largest component | 1921 lines | 1162 lines | <300 lines |
-| API consistency | 5/10 | 5/10 | 10/10 |
+| API consistency | 5/10 | 8/10 | 10/10 |
 | Security headers | 0 | 0 | 5+ |
 | E2E test count | 0 | 0 | 10+ |
 | Documented endpoints | 0 | 0 | 100% |
+| Error handling | None | ErrorBoundary + retry | Full |
+| Offline support | None | Detection + banner | Full |
 
 ---
 
@@ -721,12 +677,12 @@ Document migration guidelines:
 | Phase 1: Tests | 40 hours | None | ✅ Complete |
 | Phase 2: Refactor | 30 hours | Phase 1 (for safety) | ✅ Complete |
 | Phase 3: Consistency | 8 hours | None | ✅ Complete |
-| Phase 4: Reliability | 12 hours | Phase 2 | Pending |
+| Phase 4: Reliability | 12 hours | Phase 2 | ✅ Complete |
 | Phase 5: Security | 16 hours | Phase 3 | Pending |
 | Phase 6: API Quality | 12 hours | Phase 5 | Pending |
 | Phase 7: Schema | 8 hours | None | Pending |
 
-**Total: ~126 hours** (~78 hours completed, ~48 hours remaining)
+**Total: ~126 hours** (~90 hours completed, ~36 hours remaining)
 
 ---
 

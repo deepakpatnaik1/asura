@@ -1,4 +1,5 @@
 import { writable } from 'svelte/store';
+import { fetchWithTimeout } from '$lib/utils/fetch-with-retry';
 
 interface Message {
 	id: string;
@@ -13,6 +14,9 @@ export const isLoading = writable(false);
 
 // AbortController for canceling streaming requests
 let currentAbortController: AbortController | null = null;
+
+// Streaming timeout: 2 minutes (streaming can be slow)
+const STREAMING_TIMEOUT_MS = 120000;
 
 export async function sendMessage(userMessage: string, persona?: string): Promise<void> {
 	// Create new abort controller for this request
@@ -37,12 +41,12 @@ export async function sendMessage(userMessage: string, persona?: string): Promis
 	isLoading.set(true);
 
 	try {
-		const response = await fetch('/api/chat', {
+		const response = await fetchWithTimeout('/api/chat', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ message: userMessage, persona }),
 			signal: currentAbortController.signal
-		});
+		}, STREAMING_TIMEOUT_MS);
 
 		if (!response.ok) {
 			throw new Error('Failed to send message');

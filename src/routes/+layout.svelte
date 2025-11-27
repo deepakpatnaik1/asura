@@ -3,8 +3,11 @@
 	import { onMount, tick } from 'svelte';
 	import { page } from '$app/stores';
 	import { Icon } from 'svelte-icons-pack';
-	import { LuMessageSquare, LuBook, LuLogOut, LuSettings, LuChevronDown, LuPlus } from 'svelte-icons-pack/lu';
+	import { LuMessageSquare, LuBook, LuLogOut, LuSettings, LuChevronDown, LuPlus, LuWifiOff } from 'svelte-icons-pack/lu';
 	import SettingsModal from '$lib/components/SettingsModal.svelte';
+	import ErrorBoundary from '$lib/components/ErrorBoundary.svelte';
+	import { isConnected, checkApiConnectivity } from '$lib/stores/connectivity';
+	import { fetchWithRetry } from '$lib/utils/fetch-with-retry';
 
 	let { children } = $props();
 	let showSettings = $state(false);
@@ -21,25 +24,25 @@
 	// Logout handler (moved from +page.svelte)
 	async function handleLogout() {
 		try {
-			const response = await fetch('/api/auth/logout', {
+			const { response } = await fetchWithRetry('/api/auth/logout', {
 				method: 'POST'
-			});
+			}, { maxRetries: 2 });
 
 			if (response.ok || response.redirected) {
-				// Redirect will be handled by the server
 				window.location.href = '/login';
 			} else {
-				console.error('Logout failed:', response.statusText);
+				// Still redirect even on error - session may already be invalid
+				window.location.href = '/login';
 			}
-		} catch (error) {
-			console.error('Logout error:', error);
+		} catch {
 			// Still redirect to login page even if API fails
 			window.location.href = '/login';
 		}
 	}
 
 	onMount(async () => {
-		// Icon library initialization
+		// Check API connectivity on mount
+		checkApiConnectivity();
 
 		// Trigger mounted state for CSS transition (prevents FOUC)
 		await tick();
@@ -106,9 +109,19 @@
 	</button>
 	{/if}
 
+	<!-- Offline indicator -->
+	{#if !$isConnected && !isLoginPage}
+		<div class="offline-banner">
+			<Icon src={LuWifiOff} size="14" />
+			<span>You're offline</span>
+		</div>
+	{/if}
+
 	<!-- Main content -->
 	<div class="main-content">
-		{@render children()}
+		<ErrorBoundary mode={$page.url.pathname === '/reader' ? 'reader' : 'chat'}>
+			{@render children()}
+		</ErrorBoundary>
 	</div>
 
 	<!-- Settings Modal (accessible from all routes) -->
@@ -364,5 +377,25 @@
 		.article-pane {
 			display: none;
 		}
+	}
+
+	/* Offline banner */
+	.offline-banner {
+		position: fixed;
+		top: 0;
+		left: 50%;
+		transform: translateX(-50%);
+		background: hsl(var(--destructive));
+		color: hsl(var(--destructive-foreground));
+		padding: 8px 16px;
+		border-radius: 0 0 8px 8px;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		font-family: "iA Writer Quattro V", system-ui, -apple-system, sans-serif;
+		font-size: 12px;
+		font-weight: 500;
+		z-index: 1000;
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 	}
 </style>
