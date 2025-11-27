@@ -1,5 +1,6 @@
 import { defineConfig } from 'vitest/config';
 import { sveltekit } from '@sveltejs/kit/vite';
+import path from 'path';
 
 export default defineConfig({
 	plugins: [sveltekit()],
@@ -64,10 +65,10 @@ export default defineConfig({
 
 	resolve: {
 		alias: {
-			// Ensure $lib alias works in tests (SvelteKit convention)
-			$lib: '/Users/d.patnaik/code/asura/src/lib',
-			$app: '/Users/d.patnaik/code/asura/.svelte-kit/runtime/app',
-			$routes: '/Users/d.patnaik/code/asura/src/routes'
+			// Ensure aliases work in tests (SvelteKit convention)
+			$lib: path.resolve(__dirname, './src/lib'),
+			$app: path.resolve(__dirname, './.svelte-kit/runtime/app'),
+			$routes: path.resolve(__dirname, './src/routes')
 		}
 	}
 });

@@ -1,0 +1,739 @@
+# Roadmap: 4.6/10 → 10/10
+
+## Current State Summary
+
+| Category | Initial | Current | Target | Gap |
+|----------|---------|---------|--------|-----|
+| Test Coverage | 0/10 | 7/10 | 10/10 | Medium (161 tests, need E2E) |
+| Maintainability | 3/10 | 6/10 | 10/10 | Medium (37% size reduction) |
+| Consistency | 5/10 | 5/10 | 10/10 | Medium |
+| Reliability | 6/10 | 6/10 | 10/10 | Medium |
+| Security | 7.5/10 | 7.5/10 | 10/10 | Low |
+| API Quality | 7/10 | 7/10 | 10/10 | Low |
+
+**Overall Score: 4.6/10 → 6.4/10** (after Phase 1 & 2)
+
+---
+
+## Phase 1: Foundation (Test Infrastructure) ✅ COMPLETE
+
+**Goal:** Establish testing infrastructure and critical path coverage
+
+### 1.1 Unit Test Setup
+- [x] Configure Vitest with proper SvelteKit aliases
+- [x] Add test utilities for mocking Supabase client
+- [x] Add test utilities for mocking Anthropic client
+- [x] Create test fixtures for common data shapes
+
+**Files to create:**
+```
+src/tests/
+├── setup.ts              # Global test setup
+├── mocks/
+│   ├── supabase.ts       # Mock Supabase client
+│   ├── anthropic.ts      # Mock Anthropic client
+│   └── voyage.ts         # Mock Voyage client
+└── fixtures/
+    ├── messages.ts       # Sample chat messages
+    ├── articles.ts       # Sample articles
+    └── users.ts          # Sample user data
+```
+
+### 1.2 Unit Tests for Utilities (Priority: High)
+Target: 100% coverage on pure functions
+
+| File | Functions | Tests Needed |
+|------|-----------|--------------|
+| `lib/api/parse-json.ts` | `parseRequestJson` | Valid JSON, invalid JSON, empty body |
+| `lib/api/require-auth.ts` | `requireAuth` | Authenticated, unauthenticated |
+| `lib/api/rate-limit.ts` | `waitForRateLimit`, `checkRateLimit` | Under limit, at limit, over limit, cleanup |
+| `lib/api/logger.ts` | `createLogger`, `createSimpleLogger` | Log levels, user context |
+| `lib/markdown-renderer.ts` | `renderMarkdown` | Basic markdown, code blocks, XSS prevention |
+| `lib/security/sanitize.ts` | Sanitization functions | XSS vectors, allowed HTML |
+| `lib/config/model-params.ts` | `getModelParams` | Valid model, invalid model, defaults |
+
+### 1.3 Integration Tests for API Endpoints (Priority: Critical)
+
+**Chat API tests:**
+```typescript
+// src/routes/api/chat/+server.test.ts
+describe('POST /api/chat', () => {
+  it('returns 401 when unauthenticated')
+  it('returns 400 when message is missing')
+  it('returns 400 when message is not a string')
+  it('streams response chunks via SSE')
+  it('saves conversation to database after stream completes')
+  it('respects rate limiting')
+  it('uses correct persona based on settings')
+})
+```
+
+**Reader API tests:**
+```typescript
+// src/routes/api/reader/upload/+server.test.ts
+describe('POST /api/reader/upload', () => {
+  it('returns 401 when unauthenticated')
+  it('returns 400 when HTML is missing')
+  it('returns 413 when HTML exceeds size limit')
+  it('creates article with processing status')
+  it('extracts title from HTML')
+})
+```
+
+**Settings API tests:**
+```typescript
+// src/routes/api/settings/+server.test.ts
+describe('GET /api/settings', () => {
+  it('returns 401 when unauthenticated')
+  it('returns user settings')
+  it('creates defaults for new user')
+})
+
+describe('PUT /api/settings', () => {
+  it('returns 401 when unauthenticated')
+  it('updates only provided fields')
+  it('handles invalid JSON gracefully')
+})
+```
+
+### 1.4 E2E Tests (Priority: High)
+
+**Critical user flows:**
+```typescript
+// e2e/chat.spec.ts
+test('complete chat flow', async ({ page }) => {
+  // Login
+  // Send message
+  // Verify streaming response appears
+  // Verify message saved in history
+  // Switch persona
+  // Send another message
+})
+
+// e2e/reader.spec.ts
+test('complete reader flow', async ({ page }) => {
+  // Login
+  // Paste article HTML
+  // Wait for processing
+  // Verify summary appears
+  // Ask follow-up question
+  // Verify response
+})
+
+// e2e/auth.spec.ts
+test('authentication flow', async ({ page }) => {
+  // Visit protected route unauthenticated
+  // Redirect to login
+  // Complete OAuth (mock)
+  // Redirect back to app
+  // Logout
+  // Verify session cleared
+})
+```
+
+---
+
+## Phase 2: Refactor Monoliths ✅ COMPLETE
+
+**Goal:** Break 1921-line and 861-line components into maintainable pieces
+
+**Results:**
+| File | Before | After | Reduction |
+|------|--------|-------|-----------|
+| `reader/+page.svelte` | 1921 lines | 1162 lines | **40%** |
+| `chat/+page.svelte` | 861 lines | 588 lines | **32%** |
+| **Combined** | 2782 lines | 1750 lines | **37%** |
+
+See `docs/PHASE-2-COMPONENT-REFACTORING.md` for full details.
+
+### 2.1 Reader Page Decomposition
+
+Current: `src/routes/reader/+page.svelte` (1921 lines)
+
+**Extract these components:**
+
+```
+src/lib/components/reader/
+├── ArticlePasteArea.svelte      # HTML paste input + processing UI
+├── ArticleHeader.svelte         # Title, status, action buttons
+├── ArticleSummary.svelte        # Rendered summary content
+├── ChartCarousel.svelte         # Canvas carousel + lightbox
+├── ReaderChatHistory.svelte     # Q&A message list
+├── ReaderInputBar.svelte        # Question input + send
+├── ArticleLibrary.svelte        # Article list dropdown
+└── ProcessingOverlay.svelte     # Processing status + progress
+```
+
+**State management:**
+```typescript
+// src/lib/stores/reader.ts
+export const readerStore = {
+  currentArticle: writable<Article | null>(null),
+  chatHistory: writable<ChatTurn[]>([]),
+  isProcessing: writable(false),
+  processingStatus: writable(''),
+  charts: writable<Chart[]>([]),
+  // ... etc
+}
+```
+
+**Target:** `reader/+page.svelte` reduced to ~200 lines (orchestration only)
+
+### 2.2 Chat Page Decomposition
+
+Current: `src/routes/chat/+page.svelte` (861 lines)
+
+**Extract these components:**
+
+```
+src/lib/components/chat/
+├── ChatHistory.svelte           # Message list with grouping
+├── ChatInputBar.svelte          # Message input + persona toggle
+├── OrphanRecovery.svelte        # Background recovery logic
+└── ChatControls.svelte          # Nuke, scroll controls
+```
+
+**Reuse existing:**
+- `MessageGroup.svelte` (already extracted)
+- `PersonaDropdown.svelte` (already extracted)
+- `ScrollControls.svelte` (already extracted)
+- `ConfirmationModal.svelte` (already extracted)
+
+**Target:** `chat/+page.svelte` reduced to ~150 lines
+
+### 2.3 Shared Component Consolidation
+
+**Identify duplication between chat and reader:**
+- Input bar logic (textarea auto-resize, Enter to send)
+- Streaming response display
+- Confirmation dialogs
+- Scroll behavior
+
+**Create shared abstractions:**
+```
+src/lib/components/shared/
+├── StreamingMessage.svelte      # Renders streaming AI response
+├── AutoResizeTextarea.svelte    # Self-sizing textarea
+└── ActionButton.svelte          # Icon button with tooltip
+```
+
+---
+
+## Phase 3: Consistency Fixes
+
+**Goal:** Standardize patterns across all endpoints
+
+### 3.1 Auth Pattern Standardization
+
+**Current state:**
+- 4 endpoints use `requireAuth()`
+- Others have inline auth checks
+
+**Action:** Update ALL endpoints to use `requireAuth()`
+
+```typescript
+// Before (inline)
+const { user } = await safeGetSession();
+if (!user) {
+  return json({ error: { message: 'Unauthorized', code: 'UNAUTHORIZED' }}, { status: 401 });
+}
+const userId = user.id;
+
+// After (standardized)
+const auth = await requireAuth(safeGetSession);
+if (!auth.success) return auth.error;
+const { userId } = auth;
+```
+
+**Endpoints to update:**
+- [ ] `api/reader/upload/+server.ts`
+- [ ] `api/reader/articles/+server.ts` (GET and DELETE)
+- [ ] `api/reader/article/+server.ts`
+- [ ] `api/reader/charts/+server.ts`
+- [ ] `api/reader/chat/+server.ts`
+- [ ] `api/reader/chat-history/+server.ts`
+- [ ] `api/reader/extract-images/+server.ts`
+- [ ] `api/reader/filter-charts/+server.ts`
+- [ ] `api/reader/nuke/+server.ts`
+- [ ] `api/reader/process-article/+server.ts`
+- [ ] `api/settings/+server.ts` (GET and PUT)
+- [ ] `api/models/+server.ts`
+- [ ] `api/nuke/+server.ts`
+- [ ] `api/superjournal/[id]/+server.ts`
+
+### 3.2 JSON Parsing Standardization
+
+**Current state:**
+- 7 endpoints use raw `request.json()`
+- 4 endpoints use `parseRequestJson()`
+
+**Action:** Update ALL POST/PUT/DELETE endpoints to use `parseRequestJson()`
+
+```typescript
+// Before (unsafe)
+const { article_id } = await request.json();
+
+// After (safe)
+const parseResult = await parseRequestJson<{ article_id: string }>(request);
+if (!parseResult.success) return parseResult.error;
+const { article_id } = parseResult.data;
+```
+
+**Endpoints to update:**
+- [ ] `api/reader/upload/+server.ts`
+- [ ] `api/reader/articles/+server.ts` (DELETE)
+- [ ] `api/reader/chat/+server.ts`
+- [ ] `api/reader/extract-images/+server.ts`
+- [ ] `api/reader/filter-charts/+server.ts`
+- [ ] `api/reader/process-article/+server.ts`
+- [ ] `api/settings/+server.ts` (PUT)
+
+### 3.3 Remove Client Console Logs
+
+**Current state:** 25 console.log statements in client code
+
+**Action:** Replace with either:
+1. Remove entirely (debug statements)
+2. Replace with structured client logger for important events
+
+```typescript
+// Create client logger
+// src/lib/utils/client-logger.ts
+export function logInfo(context: string, message: string, data?: object) {
+  if (import.meta.env.DEV) {
+    console.log(`[${context}]`, message, data || '');
+  }
+}
+
+export function logError(context: string, message: string, error?: unknown) {
+  console.error(`[${context}]`, message, error);
+  // In production, could send to error tracking service
+}
+```
+
+**Files to update:**
+- [ ] `routes/chat/+page.svelte` (3 console.log)
+- [ ] `routes/reader/+page.svelte` (18 console.log)
+- [ ] `routes/+layout.svelte` (1 console.log)
+- [ ] `lib/api/anthropic-client.ts` (2 console.log - in examples, acceptable)
+
+---
+
+## Phase 4: Reliability Improvements
+
+**Goal:** Handle edge cases and improve error recovery
+
+### 4.1 Error Boundary Components
+
+```svelte
+<!-- src/lib/components/ErrorBoundary.svelte -->
+<script lang="ts">
+  import { onMount } from 'svelte';
+
+  let { children, fallback } = $props();
+  let hasError = $state(false);
+  let error = $state<Error | null>(null);
+
+  onMount(() => {
+    const handler = (event: ErrorEvent) => {
+      hasError = true;
+      error = event.error;
+    };
+    window.addEventListener('error', handler);
+    return () => window.removeEventListener('error', handler);
+  });
+</script>
+
+{#if hasError}
+  {@render fallback(error)}
+{:else}
+  {@render children()}
+{/if}
+```
+
+### 4.2 Retry Logic for Client-Side Fetches
+
+```typescript
+// src/lib/utils/fetch-with-retry.ts
+export async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  maxRetries = 3
+): Promise<Response> {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch(url, options);
+      if (response.ok || response.status < 500) {
+        return response;
+      }
+      // Server error, retry
+    } catch (error) {
+      if (attempt === maxRetries) throw error;
+    }
+    // Exponential backoff
+    await new Promise(r => setTimeout(r, Math.pow(2, attempt) * 1000));
+  }
+  throw new Error('Max retries exceeded');
+}
+```
+
+### 4.3 Offline Detection
+
+```typescript
+// src/lib/stores/connectivity.ts
+import { writable } from 'svelte/store';
+
+export const isOnline = writable(true);
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => isOnline.set(true));
+  window.addEventListener('offline', () => isOnline.set(false));
+}
+```
+
+### 4.4 Request Timeout Handling
+
+Add explicit timeouts to all client-side fetches:
+
+```typescript
+const controller = new AbortController();
+const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+try {
+  const response = await fetch(url, {
+    ...options,
+    signal: controller.signal
+  });
+} finally {
+  clearTimeout(timeoutId);
+}
+```
+
+---
+
+## Phase 5: Security Hardening
+
+**Goal:** Close remaining security gaps
+
+### 5.1 Input Validation with Zod
+
+Add schema validation to all API endpoints:
+
+```typescript
+// src/lib/schemas/chat.ts
+import { z } from 'zod';
+
+export const chatMessageSchema = z.object({
+  message: z.string().min(1).max(10000),
+  persona: z.enum(['gunnar', 'kirby']).optional()
+});
+
+// Usage in endpoint
+const parseResult = await parseRequestJson<unknown>(request);
+if (!parseResult.success) return parseResult.error;
+
+const validation = chatMessageSchema.safeParse(parseResult.data);
+if (!validation.success) {
+  return json({
+    error: { message: 'Invalid input', code: 'VALIDATION_ERROR', details: validation.error.issues }
+  }, { status: 400 });
+}
+const { message, persona } = validation.data;
+```
+
+### 5.2 CSRF Protection
+
+Verify origin on state-changing requests:
+
+```typescript
+// src/lib/api/csrf.ts
+export function validateOrigin(request: Request): boolean {
+  const origin = request.headers.get('origin');
+  const host = request.headers.get('host');
+
+  if (!origin) return true; // Same-origin requests don't send origin
+
+  const originHost = new URL(origin).host;
+  return originHost === host;
+}
+```
+
+### 5.3 Security Headers
+
+```typescript
+// src/hooks.server.ts - add to response
+return resolve(event, {
+  filterSerializedResponseHeaders(name) {
+    return name === 'content-range' || name === 'x-supabase-api-version';
+  },
+  transformPageChunk: ({ html }) => html,
+  preload: ({ type }) => type === 'js' || type === 'css',
+});
+
+// Add security headers in svelte.config.js or via adapter
+// Content-Security-Policy
+// X-Frame-Options: DENY
+// X-Content-Type-Options: nosniff
+// Referrer-Policy: strict-origin-when-cross-origin
+```
+
+### 5.4 Rate Limit Redis Migration
+
+Replace in-memory rate limiter with Redis for multi-instance support:
+
+```typescript
+// src/lib/api/rate-limit-redis.ts
+import { Redis } from '@upstash/redis';
+
+const redis = new Redis({
+  url: UPSTASH_REDIS_URL,
+  token: UPSTASH_REDIS_TOKEN
+});
+
+export async function checkRateLimitRedis(
+  userId: string,
+  config: RateLimitConfig
+): Promise<RateLimitResult> {
+  const key = `ratelimit:${userId}`;
+  const now = Date.now();
+
+  // Use Redis sorted set for sliding window
+  await redis.zremrangebyscore(key, 0, now - config.windowMs);
+  const count = await redis.zcard(key);
+
+  if (count >= config.maxRequests) {
+    const oldest = await redis.zrange(key, 0, 0, { withScores: true });
+    const retryAfterMs = oldest[0].score + config.windowMs - now;
+    return { allowed: false, retryAfterMs, error: ... };
+  }
+
+  await redis.zadd(key, { score: now, member: `${now}` });
+  await redis.expire(key, Math.ceil(config.windowMs / 1000));
+
+  return { allowed: true };
+}
+```
+
+---
+
+## Phase 6: API Quality Improvements
+
+**Goal:** Improve API consistency and documentation
+
+### 6.1 Standardized Error Responses
+
+```typescript
+// src/lib/api/errors.ts
+export interface ApiError {
+  error: {
+    message: string;
+    code: string;
+    details?: unknown;
+    retryAfter?: number;
+  }
+}
+
+export function errorResponse(
+  code: string,
+  message: string,
+  status: number,
+  details?: unknown
+): Response {
+  return json({ error: { message, code, details } }, { status });
+}
+
+// Standard error codes
+export const ERROR_CODES = {
+  UNAUTHORIZED: { status: 401, message: 'Must be logged in' },
+  FORBIDDEN: { status: 403, message: 'Access denied' },
+  NOT_FOUND: { status: 404, message: 'Resource not found' },
+  VALIDATION_ERROR: { status: 400, message: 'Invalid input' },
+  RATE_LIMITED: { status: 429, message: 'Too many requests' },
+  INTERNAL_ERROR: { status: 500, message: 'Internal server error' }
+} as const;
+```
+
+### 6.2 OpenAPI Specification
+
+Generate OpenAPI spec for API documentation:
+
+```yaml
+# openapi.yaml
+openapi: 3.0.3
+info:
+  title: Asura API
+  version: 1.0.0
+paths:
+  /api/chat:
+    post:
+      summary: Send chat message
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                message:
+                  type: string
+                  minLength: 1
+                  maxLength: 10000
+                persona:
+                  type: string
+                  enum: [gunnar, kirby]
+      responses:
+        '200':
+          description: SSE stream of response chunks
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+```
+
+### 6.3 API Versioning Strategy
+
+Prepare for future breaking changes:
+
+```typescript
+// Version in URL: /api/v1/chat
+// Or version in header: Accept: application/vnd.asura.v1+json
+
+// src/lib/api/versioning.ts
+export function getApiVersion(request: Request): number {
+  const accept = request.headers.get('accept') || '';
+  const match = accept.match(/vnd\.asura\.v(\d+)/);
+  return match ? parseInt(match[1]) : 1;
+}
+```
+
+---
+
+## Phase 7: Schema Consolidation
+
+**Goal:** Clean up migration history and document schema
+
+### 7.1 Squash Migrations
+
+Create a single baseline migration from current state:
+
+```sql
+-- supabase/migrations/00000000000000_baseline.sql
+-- Generated from: pg_dump --schema-only
+
+-- This replaces all 40 previous migrations
+-- Only apply to fresh databases
+```
+
+### 7.2 Schema Documentation
+
+```sql
+-- supabase/schema.sql (reference documentation)
+
+-- Core tables
+CREATE TABLE superjournal (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id),
+  persona_name TEXT NOT NULL,
+  user_message TEXT NOT NULL,
+  ai_response TEXT NOT NULL,
+  model_identifier TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  -- Indexes, RLS policies documented inline
+);
+
+-- ... full schema with comments
+```
+
+### 7.3 Migration Best Practices
+
+Document migration guidelines:
+
+```markdown
+# Migration Guidelines
+
+1. One change per migration
+2. Always include rollback (DOWN migration)
+3. Test on staging before production
+4. Never modify existing migrations
+5. Use descriptive names: YYYYMMDDHHMMSS_action_target.sql
+```
+
+---
+
+## Implementation Order
+
+### Sprint 1: Test Foundation (Week 1-2)
+1. Set up Vitest with mocks
+2. Unit tests for all utilities
+3. Integration tests for critical endpoints (chat, settings)
+
+### Sprint 2: Component Refactor (Week 3-4)
+1. Extract reader page components
+2. Extract chat page components
+3. Create shared components
+
+### Sprint 3: Consistency (Week 5)
+1. Standardize auth patterns
+2. Standardize JSON parsing
+3. Remove console.logs
+
+### Sprint 4: Reliability (Week 6)
+1. Error boundaries
+2. Client retry logic
+3. Offline handling
+
+### Sprint 5: Security (Week 7)
+1. Zod validation
+2. CSRF protection
+3. Security headers
+
+### Sprint 6: Polish (Week 8)
+1. Redis rate limiting
+2. API documentation
+3. Schema consolidation
+
+---
+
+## Success Metrics
+
+| Metric | Initial | Current | Target |
+|--------|---------|---------|--------|
+| Test coverage | 0% | 161 tests passing | >80% |
+| Largest component | 1921 lines | 1162 lines | <300 lines |
+| API consistency | 5/10 | 5/10 | 10/10 |
+| Security headers | 0 | 0 | 5+ |
+| E2E test count | 0 | 0 | 10+ |
+| Documented endpoints | 0 | 0 | 100% |
+
+---
+
+## Estimated Effort
+
+| Phase | Effort | Dependencies | Status |
+|-------|--------|--------------|--------|
+| Phase 1: Tests | 40 hours | None | ✅ Complete |
+| Phase 2: Refactor | 30 hours | Phase 1 (for safety) | ✅ Complete |
+| Phase 3: Consistency | 8 hours | None | Pending |
+| Phase 4: Reliability | 12 hours | Phase 2 | Pending |
+| Phase 5: Security | 16 hours | Phase 3 | Pending |
+| Phase 6: API Quality | 12 hours | Phase 5 | Pending |
+| Phase 7: Schema | 8 hours | None | Pending |
+
+**Total: ~126 hours** (~70 hours completed, ~56 hours remaining)
+
+---
+
+## Quick Wins (Can Do Today)
+
+1. **Remove console.logs** - 30 minutes
+2. **Standardize requireAuth** - 2 hours
+3. **Standardize parseRequestJson** - 1 hour
+4. **Add basic Vitest config** - 1 hour
+5. **Write first 5 unit tests** - 2 hours
+
+**Day 1 total: ~6 hours for immediate improvements**

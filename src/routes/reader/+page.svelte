@@ -1,13 +1,14 @@
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
 	import { Icon } from 'svelte-icons-pack';
-	import { LuPaperclip, LuFolder, LuCloudDownload, LuFlame, LuTrash2 } from 'svelte-icons-pack/lu';
-	import { READER_CONFIG, scrollToTurn, scrollToBottom, getTurns, updateSpacer } from '$lib/ui/scroll';
+	import { LuPaperclip, LuFolder, LuCloudDownload, LuFlame } from 'svelte-icons-pack/lu';
+	import { READER_CONFIG, scrollToTurn, getTurns } from '$lib/ui/scroll';
 	import { createConfirmation } from '$lib/composables';
 	import ScrollControls from '$lib/components/ScrollControls.svelte';
 	import MessageGroup from '$lib/components/MessageGroup.svelte';
 	import ConfirmationModal from '$lib/components/ConfirmationModal.svelte';
 	import PersonaDropdown from '$lib/components/PersonaDropdown.svelte';
+	import { ArticlePasteArea, ArticleLibrary, ChartCarousel } from '$lib/components/reader';
 
 
 	// Article state
@@ -50,8 +51,6 @@
 	// Article library state
 	let showArticleLibrary = $state(false);
 	let articles = $state<Array<{ id: string; title: string; preview_snippet: string }>>([]);
-	let libraryDropdownRef: HTMLDivElement | null = null;
-	let libraryButtonRef: HTMLButtonElement | null = null;
 
 	// Confirmation composables (replaces manual timer state)
 	const deleteConfirm = createConfirmation();
@@ -120,37 +119,6 @@
 			await tick();
 			const pasteArea = document.querySelector('.paste-area') as HTMLElement;
 			pasteArea?.focus();
-		}
-	}
-
-	// Handle paste event
-	function handlePaste(event: ClipboardEvent) {
-		event.preventDefault();
-
-		const html = event.clipboardData?.getData('text/html');
-		if (html) {
-			console.log('[Paste] HTML content received:', html.substring(0, 200));
-
-			// Create a temporary div to parse the HTML
-			const temp = document.createElement('div');
-			temp.innerHTML = html;
-
-			// Remove all style attributes and color-related inline styles
-			const allElements = temp.querySelectorAll('*');
-			allElements.forEach((el) => {
-				el.removeAttribute('style');
-				el.removeAttribute('color');
-				el.removeAttribute('bgcolor');
-			});
-
-			// Insert the cleaned HTML
-			const pasteArea = event.target as HTMLElement;
-			if (pasteArea) {
-				pasteArea.innerHTML = temp.innerHTML;
-			}
-
-			// Start processing pipeline automatically
-			processArticle(html);
 		}
 	}
 
@@ -544,39 +512,8 @@
 		textareaRef.style.height = 'auto';
 	}
 
-	// Canvas carousel functions
-	function openLightbox(index: number) {
-		selectedChartIndex = index;
-		showLightbox = true;
-	}
-
-	function closeLightbox() {
-		showLightbox = false;
-		selectedChartIndex = null;
-	}
-
-	function navigateChart(direction: 'prev' | 'next') {
-		if (selectedChartIndex === null) return;
-
-		if (direction === 'prev') {
-			selectedChartIndex = selectedChartIndex > 0 ? selectedChartIndex - 1 : charts.length - 1;
-		} else {
-			selectedChartIndex = selectedChartIndex < charts.length - 1 ? selectedChartIndex + 1 : 0;
-		}
-	}
-
-	// Keyboard navigation
+	// Keyboard navigation (lightbox nav handled by ChartCarousel component)
 	function handleKeydown(event: KeyboardEvent) {
-		if (showLightbox) {
-			if (event.key === 'Escape') {
-				closeLightbox();
-			} else if (event.key === 'ArrowLeft') {
-				navigateChart('prev');
-			} else if (event.key === 'ArrowRight') {
-				navigateChart('next');
-			}
-		}
-
 		// Close article library on Escape
 		if (event.key === 'Escape' && showArticleLibrary) {
 			showArticleLibrary = false;
@@ -590,21 +527,10 @@
 
 	// Toggle article library dropdown
 	function toggleArticleLibrary(event: MouseEvent) {
-		event.stopPropagation(); // Prevent click from bubbling to window
+		event.stopPropagation();
 		showArticleLibrary = !showArticleLibrary;
-		console.log('[Article Library] Toggled to:', showArticleLibrary);
-		console.log('[Article Library] Articles count:', articles.length);
 		if (showArticleLibrary) {
 			loadArticles();
-			// Position dropdown above button
-			setTimeout(() => {
-				if (libraryButtonRef && libraryDropdownRef) {
-					const buttonRect = libraryButtonRef.getBoundingClientRect();
-					const dropdownHeight = libraryDropdownRef.offsetHeight;
-					libraryDropdownRef.style.bottom = `${window.innerHeight - buttonRect.top + 8}px`;
-					libraryDropdownRef.style.left = `${buttonRect.left}px`;
-				}
-			}, 0);
 		}
 	}
 
@@ -774,7 +700,9 @@
 
 	// Handle clicks outside dropdown
 	function handleClickOutside(event: MouseEvent) {
-		if (showArticleLibrary && libraryDropdownRef && !libraryDropdownRef.contains(event.target as Node)) {
+		if (!showArticleLibrary) return;
+		const dropdown = document.querySelector('.article-library-dropdown');
+		if (dropdown && !dropdown.contains(event.target as Node)) {
 			showArticleLibrary = false;
 		}
 	}
@@ -789,56 +717,14 @@
 		<div class="messages-content">
 			<!-- Paste Area Card -->
 			{#if showPasteArea}
-				<div class="paste-box" class:has-error={processingError}>
-					{#if isProcessing}
-						<!-- Frosted Glass Overlay -->
-						<div class="processing-overlay"></div>
-
-						<!-- Loading Spinner -->
-						<div class="spinner-container">
-							<div class="spinner">
-								<div class="spinner-bar" style="--bar-index: 0"></div>
-								<div class="spinner-bar" style="--bar-index: 1"></div>
-								<div class="spinner-bar" style="--bar-index: 2"></div>
-								<div class="spinner-bar" style="--bar-index: 3"></div>
-								<div class="spinner-bar" style="--bar-index: 4"></div>
-								<div class="spinner-bar" style="--bar-index: 5"></div>
-								<div class="spinner-bar" style="--bar-index: 6"></div>
-								<div class="spinner-bar" style="--bar-index: 7"></div>
-								<div class="spinner-bar" style="--bar-index: 8"></div>
-								<div class="spinner-bar" style="--bar-index: 9"></div>
-								<div class="spinner-bar" style="--bar-index: 10"></div>
-								<div class="spinner-bar" style="--bar-index: 11"></div>
-							</div>
-							{#if processingStatus}
-								<div class="processing-status">{processingStatus}</div>
-							{/if}
-							<button class="abort-button" onclick={abortProcessing}>
-								Cancel
-							</button>
-						</div>
-					{/if}
-
-					{#if processingError}
-						<!-- Error State -->
-						<div class="error-container">
-							<div class="error-message">
-								<strong>Error:</strong> {processingError}
-							</div>
-							<button class="retry-button" onclick={retryProcessing}>
-								Retry
-							</button>
-						</div>
-					{:else}
-						<!-- Paste Area -->
-						<div
-							class="paste-area"
-							contenteditable="true"
-							onpaste={handlePaste}
-							data-placeholder="Paste article here..."
-						></div>
-					{/if}
-				</div>
+				<ArticlePasteArea
+					{isProcessing}
+					{processingStatus}
+					{processingError}
+					onPaste={processArticle}
+					onAbort={abortProcessing}
+					onRetry={retryProcessing}
+				/>
 			{/if}
 
 			<!-- Article Display -->
@@ -880,65 +766,7 @@
 	</div>
 
 	<!-- Canvas Area - Chart Carousel -->
-	<div class="canvas-area">
-		{#if charts.length > 0}
-			{#if showLightbox && selectedChartIndex !== null}
-				<!-- Full-size chart view (takes remaining space above thumbnails) -->
-				<div class="canvas-chart-view">
-					<div class="chart-view-header">
-						<div class="chart-view-info">
-							<span class="chart-counter">{selectedChartIndex + 1} / {charts.length}</span>
-							<span class="chart-title">{charts[selectedChartIndex].alt}</span>
-						</div>
-					</div>
-
-					<div class="chart-view-image">
-						<button class="chart-nav chart-nav-prev" onclick={() => navigateChart('prev')} title="Previous (←)">
-							<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-								<path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-							</svg>
-						</button>
-
-						<img src={charts[selectedChartIndex].full_url} alt={charts[selectedChartIndex].alt} />
-
-						<button class="chart-nav chart-nav-next" onclick={() => navigateChart('next')} title="Next (→)">
-							<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-								<path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-							</svg>
-						</button>
-					</div>
-				</div>
-			{/if}
-
-			<!-- Thumbnail grid (always visible when charts exist) -->
-			<div class="chart-grid">
-				{#each charts as chart, index}
-					{@const isActive = showLightbox && selectedChartIndex === index}
-					<button
-						class="chart-thumbnail"
-						class:active={isActive}
-						onclick={() => isActive ? closeLightbox() : openLightbox(index)}
-						title={isActive ? "Collapse (Esc)" : chart.alt}
-					>
-						<img src={chart.thumbnail_url} alt={chart.alt} />
-						<div class="chart-overlay">
-							{#if isActive}
-								<!-- Shrink/collapse icon (arrows pointing inward) -->
-								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-									<path d="M4 14h6v6M20 10h-6V4M10 14l-7 7M14 10l7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-								</svg>
-							{:else}
-								<!-- Expand icon (arrows pointing outward) -->
-								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-									<path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-								</svg>
-							{/if}
-						</div>
-					</button>
-				{/each}
-			</div>
-		{/if}
-	</div>
+	<ChartCarousel {charts} bind:selectedChartIndex bind:showLightbox />
 
 	<!-- Input Area -->
 	<div class="input-area" data-mode="reader">
@@ -953,7 +781,6 @@
 					<!-- Folder icon (article library) -->
 					<div class="article-library-wrapper">
 						<button
-							bind:this={libraryButtonRef}
 							class="control-btn"
 							class:active={showArticleLibrary}
 							title="Article Library"
@@ -961,41 +788,17 @@
 						>
 							<Icon src={LuFolder} size="11" />
 						</button>
-
 					</div>
 
-					<!-- Article Library Dropdown (portal-style, outside wrapper) -->
+					<!-- Article Library Dropdown -->
 					{#if showArticleLibrary}
-						<div class="article-library-dropdown" bind:this={libraryDropdownRef}>
-							{#if articles.length === 0}
-								<div class="dropdown-empty">No articles yet</div>
-							{:else}
-								{#each articles as article}
-									<div
-										class="article-item"
-										class:active={currentArticle?.id === article.id}
-									>
-										<button
-											class="article-button"
-											onclick={() => switchToArticle(article.id)}
-										>
-											<div class="article-content">
-												<div class="article-title">{article.title}</div>
-												<div class="article-preview">{article.preview_snippet}</div>
-											</div>
-										</button>
-										<button
-											class="delete-btn"
-											onclick={(e) => handleArticleDeleteClick(article.id, e)}
-											title="Delete article"
-											disabled={isDeleting}
-										>
-											<Icon src={LuTrash2} size="12" />
-										</button>
-									</div>
-								{/each}
-							{/if}
-						</div>
+						<ArticleLibrary
+							{articles}
+							currentArticleId={currentArticle?.id ?? null}
+							{isDeleting}
+							onSelect={(id) => switchToArticle(id)}
+							onDelete={handleArticleDeleteClick}
+						/>
 					{/if}
 
 					<button class="control-btn" title="Download from cloud"><Icon src={LuCloudDownload} size="11" /></button>
@@ -1061,92 +864,6 @@
 		color: hsl(var(--foreground));
 		position: relative;
 	}
-
-	/* Canvas area - Chart carousel */
-	.canvas-area {
-		grid-area: canvas;
-		background: hsl(var(--background));
-		border-left: 1px solid hsl(var(--border) / 0.3);
-		display: flex;
-		flex-direction: column;
-		justify-content: flex-end; /* Push thumbnails to bottom */
-		overflow: hidden; /* Prevent overflow, let child containers handle scrolling */
-		position: sticky;
-		top: 0;
-		height: 100vh;
-		align-self: start;
-	}
-
-	/* Chart Grid - macOS style (fixed height container at bottom, aligned with input bar) */
-	.chart-grid {
-		display: flex;
-		flex-direction: row;
-		gap: 8px;
-		width: 100%;
-		padding: 12px 16px; /* Reduced top/bottom padding to align with input bar */
-		justify-content: center;
-		flex-wrap: nowrap;
-		overflow-x: auto;
-		flex-shrink: 0; /* Don't shrink this container */
-		height: 104px; /* Fixed height: 80px thumbnails + 12px padding top/bottom */
-		align-items: center;
-		background: hsl(var(--background));
-	}
-
-	.chart-thumbnail {
-		position: relative;
-		flex-shrink: 0;
-		width: auto;
-		height: 80px;
-		aspect-ratio: 1;
-		background: hsl(var(--background));
-		border: none;
-		border-radius: 8px;
-		overflow: hidden;
-		cursor: pointer;
-		transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-	}
-
-	.chart-thumbnail:hover {
-		transform: scale(1.05);
-	}
-
-	.chart-thumbnail:active {
-		transform: scale(0.98);
-	}
-
-	/* Active thumbnail state - highlighted when viewing full-size */
-	.chart-thumbnail.active {
-		outline: 2px solid var(--reader-accent);
-		outline-offset: 2px;
-	}
-
-	.chart-thumbnail img {
-		width: 100%;
-		height: 100%;
-		object-fit: contain;
-		background: hsl(var(--background));
-	}
-
-	.chart-overlay {
-		position: absolute;
-		top: 50%;
-		left: 50%;
-		transform: translate(-50%, -50%);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		opacity: 0;
-		transition: opacity 0.2s ease;
-		color: var(--reader-accent);
-	}
-
-	.chart-thumbnail:hover .chart-overlay,
-	.chart-thumbnail.active .chart-overlay {
-		opacity: 1;
-	}
-
-	/* Empty state */
 
 	/* Responsive adjustments for narrow screens */
 	@media (max-width: 900px) {
@@ -1434,488 +1151,12 @@
 		color: hsl(var(--background));
 	}
 
-	/* Paste Area Box - styled for reader mode */
-	.paste-box {
-		background: rgb(0, 0, 0);
-		border: 1px solid var(--reader-accent);
-		padding: var(--boss-card-padding-y) var(--boss-card-padding-x);
-		margin-left: var(--boss-card-margin-x);
-		margin-right: var(--boss-card-margin-x);
-		border-radius: var(--boss-card-border-radius);
-		min-height: 300px;
-		position: absolute;
-		bottom: 80px;
-		left: 24px;
-		right: 24px;
-	}
-
-	/* Paste Area - contenteditable div */
-	.paste-area {
-		height: 260px;
-		overflow-y: auto;
-		color: hsl(var(--foreground));
-		font-size: 8pt;
-		line-height: 1.6;
-		outline: none;
-		white-space: normal;
-		position: relative;
-		z-index: 20;
-	}
-
-	.paste-area:empty:before {
-		content: attr(data-placeholder);
-		color: hsl(var(--foreground));
-		opacity: 0.5;
-		font-size: 8pt;
-	}
-
-	/* Override all inline styles for pasted content */
-	.paste-area *,
-	.paste-area span,
-	.paste-area p,
-	.paste-area div,
-	.paste-area a {
-		color: hsl(var(--foreground)) !important;
-		background-color: transparent !important;
-		font-size: 8pt !important;
-		line-height: 1.6 !important;
-		font-family: "iA Writer Quattro V", system-ui, -apple-system, sans-serif !important;
-	}
-
-	/* Style pasted images */
-	.paste-area img {
-		max-width: 100%;
-		height: auto;
-		display: block;
-		margin: 12px 0;
-		border-radius: 4px;
-	}
-
-	/* Processing Overlay - Frosted Glass */
-	.processing-overlay {
-		position: absolute;
-		top: 0;
-		left: 0;
-		right: 0;
-		bottom: 0;
-		background: rgba(0, 0, 0, 0.7);
-		backdrop-filter: blur(8px);
-		-webkit-backdrop-filter: blur(8px);
-		border-radius: var(--boss-card-border-radius);
-		z-index: 25;
-	}
-
-	/* Loading Spinner */
-	.spinner-container {
-		position: absolute;
-		top: 50%;
-		left: 50%;
-		transform: translate(-50%, -50%);
-		transform: translate(-50%, -50%);
-		z-index: 30; /* Above paste area (z-index: 20) */
-		pointer-events: none;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 16px;
-	}
-
-	.processing-status {
-		color: var(--reader-accent);
-		font-size: 10pt;
-		font-weight: 500;
-		text-align: center;
-		white-space: nowrap;
-	}
-
-	.spinner {
-		width: 36px;
-		height: 36px;
-		position: relative;
-		animation: spin 1.2s linear infinite;
-	}
-
-	@keyframes spin {
-		from {
-			transform: rotate(0deg);
-		}
-		to {
-			transform: rotate(360deg);
-		}
-	}
-
-	.spinner-bar {
-		position: absolute;
-		width: 2px;
-		height: 10px;
-		background: var(--reader-accent);
-		border-radius: 1.5px;
-		top: 5px;
-		left: 50%;
-		margin-left: -1px;
-		transform-origin: center 13px;
-		transform: rotate(calc(var(--bar-index) * 30deg));
-		opacity: calc(0.2 + (var(--bar-index) / 12) * 0.8);
-	}
-
-	/* Gradient effect through opacity */
-	.spinner-bar:nth-child(1) { opacity: 0.2; }
-	.spinner-bar:nth-child(2) { opacity: 0.27; }
-	.spinner-bar:nth-child(3) { opacity: 0.34; }
-	.spinner-bar:nth-child(4) { opacity: 0.41; }
-	.spinner-bar:nth-child(5) { opacity: 0.48; }
-	.spinner-bar:nth-child(6) { opacity: 0.55; }
-	.spinner-bar:nth-child(7) { opacity: 0.62; }
-	.spinner-bar:nth-child(8) { opacity: 0.69; }
-	.spinner-bar:nth-child(9) { opacity: 0.76; }
-	.spinner-bar:nth-child(10) { opacity: 0.83; }
-	.spinner-bar:nth-child(11) { opacity: 0.90; }
-	.spinner-bar:nth-child(12) { opacity: 1.0; }
-
-	/* Error State */
-	.paste-box.has-error {
-		border-color: rgb(239, 68, 68);
-	}
-
-	.error-container {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		gap: 16px;
-		padding: 40px;
-		text-align: center;
-	}
-
-	.error-message {
-		color: rgb(239, 68, 68);
-		font-size: 10pt;
-		line-height: 1.6;
-	}
-
-	.error-message strong {
-		display: block;
-		margin-bottom: 8px;
-		font-size: 11pt;
-	}
-
-	.retry-button {
-		background: transparent;
-		color: var(--reader-accent);
-		border: 1px solid var(--reader-accent);
-		border-radius: 6px;
-		padding: 10px 24px;
-		font-weight: 500;
-		cursor: pointer;
-		transition: all 0.2s;
-	}
-
-	.retry-button:hover {
-		background: var(--reader-accent);
-		color: hsl(var(--background));
-	}
-
-	/* Abort Button */
-	.abort-button {
-		background: transparent;
-		color: rgb(239, 68, 68);
-		border: 1px solid rgb(239, 68, 68);
-		border-radius: 6px;
-		padding: 8px 20px;
-		font-size: 9pt;
-		font-weight: 500;
-		cursor: pointer;
-		transition: all 0.2s;
-		pointer-events: all;
-		margin-top: 8px;
-	}
-
-	.abort-button:hover {
-		background: rgb(239, 68, 68);
-		color: hsl(var(--background));
-	}
-
-	/* Canvas Chart View - Full-size image display (takes remaining space above thumbnails) */
-	.canvas-chart-view {
-		flex: 1; /* Take remaining vertical space */
-		width: 100%;
-		display: flex;
-		flex-direction: column;
-		animation: fadeIn 0.2s ease;
-		overflow: hidden;
-	}
-
-	@keyframes fadeIn {
-		from {
-			opacity: 0;
-		}
-		to {
-			opacity: 1;
-		}
-	}
-
-	.chart-view-header {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		padding: 16px;
-		border-bottom: 1px solid hsl(var(--border) / 0.3);
-	}
-
-	.chart-view-info {
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
-	}
-
-	.chart-counter {
-		font-size: 9pt;
-		color: hsl(var(--muted-foreground));
-		font-weight: 500;
-	}
-
-	.chart-title {
-		font-size: 10pt;
-		color: hsl(var(--foreground));
-		font-weight: 500;
-	}
-
-	.chart-view-image {
-		flex: 1;
-		position: relative;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		padding: 24px;
-		overflow: hidden;
-	}
-
-	.chart-view-image img {
-		max-width: 100%;
-		max-height: 100%;
-		object-fit: contain;
-		border-radius: 8px;
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-	}
-
-	.chart-nav {
-		position: absolute;
-		top: 50%;
-		transform: translateY(-50%);
-		width: 40px;
-		height: 40px;
-		background: hsl(var(--card));
-		border: 1px solid hsl(var(--border) / 0.3);
-		border-radius: 8px;
-		color: hsl(var(--foreground));
-		cursor: pointer;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		transition: all 0.2s;
-		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-	}
-
-	.chart-nav:hover {
-		background: hsl(var(--accent));
-		border-color: hsl(var(--accent));
-		color: hsl(var(--accent-foreground));
-		transform: translateY(-50%) scale(1.05);
-	}
-
-	.chart-nav-prev {
-		left: 16px;
-	}
-
-	.chart-nav-next {
-		right: 16px;
-	}
-
-	/* Article Library Dropdown */
+	/* Article Library */
 	.article-library-wrapper {
 		position: relative;
 	}
 
 	.control-btn.active {
 		color: var(--reader-accent);
-	}
-
-	.article-library-dropdown {
-		position: fixed;
-		bottom: 140px;
-		left: 84px;
-		width: 320px;
-		max-height: 450px;
-		overflow-y: auto;
-		background: hsl(var(--card));
-		border: 1px solid hsl(var(--border));
-		border-radius: 6px;
-		z-index: 99999;
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-	}
-
-	.dropdown-empty {
-		padding: 24px 16px;
-		text-align: center;
-		color: hsl(var(--muted-foreground));
-		font-size: 1em;
-	}
-
-	.article-item {
-		width: 100%;
-		display: flex;
-		align-items: stretch;
-		justify-content: space-between;
-		border-left: 3px solid transparent;
-		transition: all 0.2s ease;
-		border-bottom: 1px solid hsl(var(--border) / 0.3);
-	}
-
-	.article-item:last-child {
-		border-bottom: none;
-	}
-
-	.article-item:hover {
-		background: hsl(var(--accent) / 0.5);
-		border-left-color: var(--reader-accent);
-	}
-
-	.article-item.active {
-		background: hsl(var(--accent) / 0.7);
-		border-left-color: var(--reader-accent);
-	}
-
-	.article-button {
-		flex: 1;
-		display: flex;
-		align-items: flex-start;
-		padding: 12px 16px;
-		background: transparent;
-		border: none;
-		color: hsl(var(--foreground));
-		text-align: left;
-		cursor: pointer;
-		min-width: 0;
-		transition: none;
-	}
-
-	.article-content {
-		flex: 1;
-		min-width: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 6px;
-	}
-
-	.article-title {
-		font-size: 1em;
-		font-weight: 500;
-		color: hsl(var(--foreground));
-		line-height: 1.4;
-		display: -webkit-box;
-		-webkit-line-clamp: 2;
-		-webkit-box-orient: vertical;
-		overflow: hidden;
-	}
-
-	.article-preview {
-		font-size: 1em;
-		color: hsl(var(--muted-foreground));
-		line-height: 1.5;
-		display: -webkit-box;
-		-webkit-line-clamp: 3;
-		-webkit-box-orient: vertical;
-		overflow: hidden;
-	}
-
-	.delete-btn {
-		flex-shrink: 0;
-		width: 40px;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		background: transparent;
-		border: none;
-		color: hsl(var(--muted-foreground));
-		cursor: pointer;
-		transition: all 0.2s ease;
-		opacity: 0;
-	}
-
-	.article-item:hover .delete-btn {
-		opacity: 1;
-	}
-
-	.delete-btn:hover {
-		background: rgba(239, 68, 68, 0.1);
-		color: rgb(239, 68, 68);
-	}
-
-	.delete-btn:disabled {
-		opacity: 0.3;
-		cursor: not-allowed;
-	}
-
-	/* Delete Confirmation Modal */
-	.modal-overlay {
-		position: fixed;
-		inset: 0;
-		background: rgba(0, 0, 0, 0.7);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		z-index: 1000;
-	}
-
-	.modal-content {
-		background: hsl(var(--background));
-		border: 1px solid hsl(var(--border));
-		border-radius: 8px;
-		padding: 24px;
-		min-width: 300px;
-		max-width: 400px;
-	}
-
-	.modal-text {
-		color: hsl(var(--foreground));
-		font-family: "iA Writer Quattro V", system-ui, -apple-system, sans-serif;
-		font-size: 8pt;
-		margin: 0 0 16px 0;
-		text-align: center;
-	}
-
-	.delete-progress-bar {
-		height: 100%;
-		background: var(--reader-accent);
-	}
-
-	.delete-progress-container {
-		width: 60%;
-		height: 6px;
-		background: hsl(var(--border));
-		border-radius: 2px;
-		overflow: hidden;
-		margin: 0 auto 24px auto;
-	}
-
-	.delete-actions {
-		display: flex;
-		justify-content: center;
-	}
-
-	.delete-cancel-btn {
-		background: transparent;
-		color: var(--reader-accent);
-		border: 1px solid var(--reader-accent);
-		border-radius: 6px;
-		padding: 12px 24px;
-		font-weight: 500;
-		cursor: pointer;
-		transition: all 0.2s;
-	}
-
-	.delete-cancel-btn:hover {
-		background: var(--reader-accent);
-		color: hsl(var(--background));
 	}
 </style>
