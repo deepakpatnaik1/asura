@@ -30,7 +30,7 @@
 	const nukeConfirm = createConfirmation();
 	const deleteConfirm = createConfirmation();
 
-	// Load user settings on mount
+	// Load user settings on mount and trigger orphan recovery
 	onMount(async () => {
 		// Persist mode to localStorage
 		if (typeof window !== 'undefined') {
@@ -40,12 +40,28 @@
 		try {
 			const response = await fetch('/api/settings');
 			if (response.ok) {
-				const data = await response.json();
-				selectedPersona = data.selected_persona || DEFAULT_PERSONA;
+				const settingsData = await response.json();
+				selectedPersona = settingsData.selected_persona || DEFAULT_PERSONA;
 			}
 		} catch (error) {
 			console.error('Failed to load settings:', error);
 			// Fallback to defaults if database read fails
+		}
+
+		// Trigger orphan recovery for any failed compressions
+		if (data.orphans && data.orphans.length > 0) {
+			console.log(`[Orphan Recovery] Recovering ${data.orphans.length} orphan entries...`);
+			for (const orphan of data.orphans) {
+				try {
+					await fetch('/api/chat/compress', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify(orphan)
+					});
+				} catch (error) {
+					console.error('[Orphan Recovery] Failed to recover:', orphan.superjournal_id, error);
+				}
+			}
 		}
 	});
 

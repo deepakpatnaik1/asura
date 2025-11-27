@@ -19,6 +19,27 @@ const voyage = new VoyageAIClient({ apiKey: VOYAGE_API_KEY });
 
 const supabase = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+// Retry delays: 1 minute, 5 minutes, 10 minutes
+const RETRY_DELAYS = [60_000, 300_000, 600_000];
+
+// Retry wrapper for database operations
+function scheduleRetries(
+	fn: () => Promise<void>,
+	label: string,
+	delays: number[] = RETRY_DELAYS
+) {
+	for (const delay of delays) {
+		setTimeout(async () => {
+			try {
+				await fn();
+				console.log(`[${label}] Retry succeeded after ${delay / 1000}s`);
+			} catch (error) {
+				console.error(`[${label}] Retry at ${delay / 1000}s failed:`, error);
+			}
+		}, delay);
+	}
+}
+
 // Helper function to extract message content (everything outside <think> tags)
 function extractMessage(text: string): string {
 	return text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
@@ -43,12 +64,10 @@ async function saveConversationToDatabase(
 	userId: string,
 	message: string,
 	aiResponse: string,
-	tokens: { input: number; output: number },
 	conversationModel: string,
 	persona: string
 ) {
-	try {
-		// Save to Superjournal
+	const saveToSuperjournal = async (): Promise<string | null> => {
 		const { data: superjournalData, error: dbError } = await supabase
 			.from('superjournal')
 			.insert({
@@ -62,60 +81,32 @@ async function saveConversationToDatabase(
 			.single();
 
 		if (dbError) {
-			console.error('[Database] Failed to save to superjournal:', dbError);
-			return;
+			throw new Error(`Superjournal insert failed: ${dbError.message}`);
 		}
 
-		// Track token usage for this conversation turn
-		if (superjournalData?.id) {
-			try {
-				const totalInputTokens = tokens.input;
-				const totalOutputTokens = tokens.output;
+		return superjournalData?.id || null;
+	};
 
-				// Fetch pricing for the conversation model
-				const { data: modelData, error: modelError } = await supabase
-					.from('models')
-					.select('input_price_per_million, output_price_per_million')
-					.eq('model_identifier', conversationModel)
-					.single();
+	try {
+		const superjournalId = await saveToSuperjournal();
 
-				if (modelError) {
-					console.error('[Token Tracking] Failed to fetch model pricing:', modelError);
-				} else if (modelData) {
-					// Calculate cost in USD
-					const inputCost = (totalInputTokens / 1_000_000) * modelData.input_price_per_million;
-					const outputCost = (totalOutputTokens / 1_000_000) * modelData.output_price_per_million;
-					const totalCost = inputCost + outputCost;
-
-					// Insert token usage record
-					const { error: tokenError } = await supabase.from('token_usage').insert({
-						user_id: userId,
-						conversation_id: superjournalData.id,
-						model_identifier: conversationModel,
-						total_input_tokens: totalInputTokens,
-						total_output_tokens: totalOutputTokens,
-						cost_usd: totalCost
-					});
-
-					if (tokenError) {
-						console.error('[Token Tracking] Failed to save token usage:', tokenError);
-					} else {
-						console.log(
-							`[Token Tracking] Saved: ${totalInputTokens} input, ${totalOutputTokens} output, $${totalCost.toFixed(6)} cost`
-						);
-					}
-				}
-			} catch (tokenTrackingError) {
-				console.error('[Token Tracking] Error:', tokenTrackingError);
-			}
-
+		if (superjournalId) {
+			console.log(`[Database] Saved to superjournal: ${superjournalId}`);
 			// Trigger background compression
 			setTimeout(() => {
-				compressToJournal(superjournalData.id, userId, message, aiResponse, persona);
+				compressToJournal(superjournalId, userId, message, aiResponse, persona);
 			}, 0);
 		}
 	} catch (error) {
-		console.error('[Database] Error saving conversation:', error);
+		console.error('[Database] Initial save failed, scheduling retries:', error);
+		// Schedule retries at 1min, 5min, 10min
+		scheduleRetries(async () => {
+			const superjournalId = await saveToSuperjournal();
+			if (superjournalId) {
+				// Trigger compression after successful retry
+				compressToJournal(superjournalId, userId, message, aiResponse, persona);
+			}
+		}, 'Superjournal Save');
 	}
 }
 
@@ -127,7 +118,7 @@ async function compressToJournal(
 	aiResponse: string,
 	personaName: string
 ) {
-	try {
+	const doCompression = async () => {
 		// Read selected compression model from user_settings table
 		const { data: settings } = await supabase
 			.from('user_settings')
@@ -149,21 +140,15 @@ async function compressToJournal(
 		}
 
 		// Call 2: Artisan Cut compression
-		let compressionJson;
-		try {
-			compressionJson = await compress({
-				userMessage,
-				aiResponse,
-				personaName,
-				model: compressionModel,
-				maxTokens: compressionParams.max_tokens,
-				temperature: compressionParams.temperature
-			});
-			console.log('[Compression] Call 2 output:', compressionJson);
-		} catch (parseError) {
-			console.error('[Compression] Compression error:', parseError);
-			return;
-		}
+		const compressionJson = await compress({
+			userMessage,
+			aiResponse,
+			personaName,
+			model: compressionModel,
+			maxTokens: compressionParams.max_tokens,
+			temperature: compressionParams.temperature
+		});
+		console.log('[Compression] Call 2 output:', compressionJson);
 
 		// Save to Journal table (without embedding initially)
 		const { data: journalData, error: journalError } = await supabase
@@ -187,44 +172,43 @@ async function compressToJournal(
 			.single();
 
 		if (journalError) {
-			console.error('[Compression] Journal insert error:', journalError);
-			return;
+			throw new Error(`Journal insert failed: ${journalError.message}`);
 		}
 
 		console.log('[Compression] Successfully saved to Journal');
 
 		// Generate embedding for decision_arc_summary
-		try {
-			const decisionArc = compressionJson.decision_arc_summary || 'No arc generated';
-			console.log('[Embedding] Generating embedding for arc:', decisionArc);
+		const decisionArc = compressionJson.decision_arc_summary || 'No arc generated';
+		console.log('[Embedding] Generating embedding for arc:', decisionArc);
 
-			const embeddingResponse = await voyage.embed({
-				input: decisionArc,
-				model: EMBEDDING_MODEL // 1024 dimensions (default)
-			});
+		const embeddingResponse = await voyage.embed({
+			input: decisionArc,
+			model: EMBEDDING_MODEL // 1024 dimensions (default)
+		});
 
-			const embedding = embeddingResponse.data?.[0]?.embedding;
-			if (!embedding) {
-				console.error('[Embedding] No embedding data returned');
-				return;
-			}
-
-			// Update Journal row with embedding
-			const { error: updateError } = await supabase
-				.from('journal')
-				.update({ embedding: JSON.stringify(embedding) })
-				.eq('id', journalData.id);
-
-			if (updateError) {
-				console.error('[Embedding] Failed to update embedding:', updateError);
-			} else {
-				console.log('[Embedding] Successfully generated and saved embedding');
-			}
-		} catch (embeddingError) {
-			console.error('[Embedding] Failed to generate embedding:', embeddingError);
+		const embedding = embeddingResponse.data?.[0]?.embedding;
+		if (!embedding) {
+			throw new Error('No embedding data returned from Voyage');
 		}
+
+		// Update Journal row with embedding
+		const { error: updateError } = await supabase
+			.from('journal')
+			.update({ embedding: JSON.stringify(embedding) })
+			.eq('id', journalData.id);
+
+		if (updateError) {
+			throw new Error(`Embedding update failed: ${updateError.message}`);
+		}
+
+		console.log('[Embedding] Successfully generated and saved embedding');
+	};
+
+	try {
+		await doCompression();
 	} catch (error) {
-		console.error('[Compression] Background compression error:', error);
+		console.error('[Compression] Initial attempt failed, scheduling retries:', error);
+		scheduleRetries(doCompression, `Compression ${superjournalId}`);
 	}
 }
 
@@ -329,12 +313,9 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 						userId,
 						message,
 						aiResponse,
-						result.tokens,
 						conversationModel,
 						persona
-					).catch((error) => {
-						console.error('[Background] Failed to save conversation:', error);
-					});
+					);
 
 				} catch (error) {
 					console.error('Streaming error:', error);

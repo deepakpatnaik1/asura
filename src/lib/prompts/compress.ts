@@ -158,7 +158,7 @@ You MUST return a JSON object with this EXACT structure:
 CRITICAL RULES:
 – Output ONLY the JSON object above
 – No additional text, analysis, or commentary
-– boss_essence: preserve my actual information and explanations
+– boss_essence: preserve my actual words and perspective (first-person)
 – persona_essence: compress strategically based on regenerability
 – persona_name must be lowercase and exact (gunnar or kirby)
 – decision_arc_summary: 50-150 chars, artisan cut style, NEVER null
