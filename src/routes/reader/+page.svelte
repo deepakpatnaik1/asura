@@ -577,6 +577,11 @@
 		if (event.key === 'Escape' && showArticleLibrary) {
 			showArticleLibrary = false;
 		}
+
+		// Close paste area on Escape
+		if (event.key === 'Escape' && showPasteArea) {
+			showPasteArea = false;
+		}
 	}
 
 	// Toggle article library dropdown
