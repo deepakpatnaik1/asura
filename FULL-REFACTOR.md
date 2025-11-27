@@ -252,7 +252,6 @@ Add missing capabilities to modes.
 | Step | Task | Files |
 |------|------|-------|
 | 6.1 | Add web search to chat mode | `/lib/calls/chat/converse.ts`, `/lib/modes/chat.ts` |
-| 6.2 | Add rich context injection to reader | `/lib/calls/reader/followup.ts`, `/lib/modes/reader.ts` |
 
 ---
 
@@ -388,4 +387,18 @@ Integration:
 
 **Net result:** -45 lines overall (209 added, 254 removed)
 
-### Phase 6: Feature Gaps - PENDING
+### Phase 6: Feature Gaps - COMPLETE ✓
+
+**6.1 Add web search to chat mode:**
+
+Files modified:
+- `/lib/calls/chat/converse.ts` - Added Brave Search tool support with recursive tool use handling
+- `/lib/modes/chat.ts` - Set `webSearch: true` in capabilities
+
+Implementation details:
+- Changed from `createMessageStream` helper to direct Anthropic SDK usage (required for `tools` array)
+- Added recursive `processWithTools()` generator for handling tool use loops
+- Accumulates token counts across tool use iterations
+- Maintains prompt caching via `anthropic-beta` header
+- AI decides when to search (no user toggle)
+- Both personas (Gunnar and Kirby) have search capability

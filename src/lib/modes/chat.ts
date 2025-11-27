@@ -16,7 +16,7 @@ export const CHAT_MODE: ModeConfig = {
 	accentColor: '--boss-accent',
 	bgColor: '--boss-bg',
 	capabilities: {
-		webSearch: false,
+		webSearch: true,
 		contextInjection: 'rich',
 		compression: true,
 		fileReading: false
