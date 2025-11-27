@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { requireAuth } from '$lib/api/require-auth';
+import { databaseError, internalError } from '$lib/api/errors';
 
 export const POST: RequestHandler = async ({ locals: { safeGetSession, supabase } }) => {
 	try {
@@ -16,7 +17,7 @@ export const POST: RequestHandler = async ({ locals: { safeGetSession, supabase 
 			.eq('user_id', userId);
 
 		if (superjournalError) {
-			return json({ error: 'Failed to delete superjournal data' }, { status: 500 });
+			return databaseError('Failed to delete superjournal data');
 		}
 
 		const { error: journalError } = await supabase
@@ -25,7 +26,7 @@ export const POST: RequestHandler = async ({ locals: { safeGetSession, supabase 
 			.eq('user_id', userId);
 
 		if (journalError) {
-			return json({ error: 'Failed to delete journal data' }, { status: 500 });
+			return databaseError('Failed to delete journal data');
 		}
 
 		// Delete user settings
@@ -35,7 +36,7 @@ export const POST: RequestHandler = async ({ locals: { safeGetSession, supabase 
 			.eq('user_id', userId);
 
 		if (settingsError) {
-			return json({ error: 'Failed to delete settings' }, { status: 500 });
+			return databaseError('Failed to delete settings');
 		}
 
 		return json({
@@ -43,6 +44,6 @@ export const POST: RequestHandler = async ({ locals: { safeGetSession, supabase 
 			message: 'All your data has been deleted'
 		});
 	} catch (error) {
-		return json({ error: 'Unexpected error during nuke operation' }, { status: 500 });
+		return internalError('Unexpected error during nuke operation');
 	}
 };

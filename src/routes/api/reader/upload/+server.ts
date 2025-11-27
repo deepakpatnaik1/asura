@@ -4,6 +4,7 @@ import { validateHtmlSize, extractTitleFromHtml } from '$lib/capabilities';
 import { requireAuth } from '$lib/api/require-auth';
 import { parseRequestJson } from '$lib/api/parse-json';
 import { readerUploadSchema, validateSchema } from '$lib/schemas';
+import { errorResponse, databaseError } from '$lib/api/errors';
 
 export const POST: RequestHandler = async ({ request, locals: { safeGetSession, supabase } }) => {
 	// 1. AUTHENTICATION CHECK
@@ -23,15 +24,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 	// 3. VALIDATE HTML SIZE (using file-reader capability)
 	const sizeValidation = validateHtmlSize(html);
 	if (!sizeValidation.valid) {
-		return json(
-			{
-				error: {
-					message: sizeValidation.error,
-					code: 'INPUT_TOO_LARGE'
-				}
-			},
-			{ status: 413 }
-		);
+		return errorResponse('PAYLOAD_TOO_LARGE', { message: sizeValidation.error });
 	}
 
 	// 4. EXTRACT ARTICLE TITLE (using file-reader capability)
@@ -50,16 +43,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		.single();
 
 	if (insertError || !article) {
-		return json(
-			{
-				error: {
-					message: 'Failed to create article record',
-					code: 'DATABASE_ERROR',
-					details: insertError?.message
-				}
-			},
-			{ status: 500 }
-		);
+		return databaseError('Failed to create article record');
 	}
 
 	// 6. RETURN ARTICLE ID AND TITLE

@@ -103,7 +103,7 @@ export const deleteArticleSchema = z.object({
 // Validation Helper
 // ============================================================================
 
-import { json } from '@sveltejs/kit';
+import { validationError } from '$lib/api/errors';
 
 export interface ValidationResult<T> {
 	success: true;
@@ -134,16 +134,10 @@ export function validateSchema<T>(
 		const firstError = result.error.issues[0];
 		return {
 			success: false,
-			error: json(
-				{
-					error: {
-						message: firstError.message,
-						code: 'VALIDATION_ERROR',
-						field: firstError.path.join('.') || undefined,
-						details: result.error.issues
-					}
-				},
-				{ status: 400 }
+			error: validationError(
+				firstError.message,
+				firstError.path.join('.') || undefined,
+				result.error.issues
 			)
 		};
 	}

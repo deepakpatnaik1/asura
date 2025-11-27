@@ -5,7 +5,7 @@
  * Returns a tuple of [data, error] for clean error handling.
  */
 
-import { json } from '@sveltejs/kit';
+import { errorResponse } from './errors';
 
 export type ParseResult<T> =
 	| { success: true; data: T }
@@ -29,15 +29,7 @@ export async function parseRequestJson<T>(request: Request): Promise<ParseResult
 	} catch {
 		return {
 			success: false,
-			error: json(
-				{
-					error: {
-						message: 'Invalid JSON in request body',
-						code: 'INVALID_JSON'
-					}
-				},
-				{ status: 400 }
-			)
+			error: errorResponse('INVALID_JSON')
 		};
 	}
 }

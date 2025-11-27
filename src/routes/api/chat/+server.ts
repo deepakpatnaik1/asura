@@ -19,6 +19,7 @@ import { requireAuth } from '$lib/api/require-auth';
 import { waitForRateLimit, RATE_LIMITS } from '$lib/api/rate-limit';
 import { createLogger, createSimpleLogger } from '$lib/api/logger';
 import { chatMessageSchema, validateSchema } from '$lib/schemas';
+import { internalError } from '$lib/api/errors';
 
 const voyage = new VoyageAIClient({ apiKey: VOYAGE_API_KEY });
 
@@ -350,6 +351,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		});
 	} catch (error) {
 		bgLog.error('Chat API error', { error: error instanceof Error ? error.message : 'Unknown' });
-		return json({ error: 'Failed to generate response' }, { status: 500 });
+		return internalError('Failed to generate response');
 	}
 };

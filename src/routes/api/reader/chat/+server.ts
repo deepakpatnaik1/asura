@@ -8,6 +8,7 @@ import { requireAuth } from '$lib/api/require-auth';
 import { waitForRateLimit, RATE_LIMITS } from '$lib/api/rate-limit';
 import { createLogger } from '$lib/api/logger';
 import { readerChatSchema, validateSchema } from '$lib/schemas';
+import { notFoundError, errorResponse, databaseError } from '$lib/api/errors';
 
 /**
  * Reader Chat Endpoint (Phase 5 - Q&A System)
@@ -53,30 +54,13 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 
 	if (fetchError || !article) {
 		log.error('Failed to fetch article', { error: fetchError?.message });
-		return json(
-			{
-				error: {
-					message: 'Article not found or access denied',
-					code: 'NOT_FOUND',
-					details: fetchError?.message
-				}
-			},
-			{ status: 404 }
-		);
+		return notFoundError('Article');
 	}
 
 	// 4. VALIDATE ARTICLE HAS RAW HTML
 	if (!article.raw_html) {
 		log.error('Article missing raw_html', { articleId: article_id });
-		return json(
-			{
-				error: {
-					message: 'Article has no content',
-					code: 'INVALID_STATE'
-				}
-			},
-			{ status: 400 }
-		);
+		return errorResponse('BAD_REQUEST', { message: 'Article has no content' });
 	}
 
 	// 5. FETCH CHART IF REFERENCED
@@ -159,16 +143,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 
 	if (saveUserError) {
 		log.error('Failed to save user message', { error: saveUserError.message });
-		return json(
-			{
-				error: {
-					message: 'Failed to save message',
-					code: 'DATABASE_ERROR',
-					details: saveUserError.message
-				}
-			},
-			{ status: 500 }
-		);
+		return databaseError('Failed to save message');
 	}
 
 	// 10. CREATE STREAMING RESPONSE

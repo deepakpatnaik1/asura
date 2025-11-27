@@ -2,6 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { requireAuth } from '$lib/api/require-auth';
+import { notFoundError, databaseError, internalError } from '$lib/api/errors';
 
 // Helper to wait for journal entry to exist (Call 2 compression creates it)
 async function waitForJournalEntry(
@@ -40,7 +41,7 @@ export const PATCH: RequestHandler = async ({ params, locals: { supabase, safeGe
 		let journalEntry = await waitForJournalEntry(supabase, id, userId);
 
 		if (!journalEntry) {
-			return json({ error: 'Journal entry not found' }, { status: 404 });
+			return notFoundError('Journal entry');
 		}
 
 		// Toggle the is_starred field
@@ -52,12 +53,12 @@ export const PATCH: RequestHandler = async ({ params, locals: { supabase, safeGe
 			.eq('user_id', userId);
 
 		if (updateError) {
-			return json({ error: updateError.message }, { status: 500 });
+			return databaseError('Failed to update starred status');
 		}
 
 		return json({ success: true, id, is_starred: newStarredStatus });
 	} catch (error) {
-		return json({ error: 'Unexpected error' }, { status: 500 });
+		return internalError();
 	}
 };
 
@@ -78,11 +79,11 @@ export const DELETE: RequestHandler = async ({ params, locals: { supabase, safeG
 			.eq('user_id', userId);
 
 		if (error) {
-			return json({ error: error.message }, { status: 500 });
+			return databaseError('Failed to delete message');
 		}
 
 		return json({ success: true, id });
 	} catch (error) {
-		return json({ error: 'Unexpected error' }, { status: 500 });
+		return internalError();
 	}
 };

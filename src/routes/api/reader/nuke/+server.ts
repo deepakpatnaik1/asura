@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { requireAuth } from '$lib/api/require-auth';
+import { databaseError } from '$lib/api/errors';
 
 /**
  * E-Reader Nuke Endpoint
@@ -84,16 +85,7 @@ export const POST: RequestHandler = async ({ locals: { safeGetSession, supabase 
 		.eq('user_id', userId);
 
 	if (deleteError) {
-		return json(
-			{
-				error: {
-					message: 'Failed to delete articles',
-					code: 'DATABASE_ERROR',
-					details: deleteError.message
-				}
-			},
-			{ status: 500 }
-		);
+		return databaseError('Failed to delete articles');
 	}
 
 	const articleCount = articles?.length || 0;

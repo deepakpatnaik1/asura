@@ -1,4 +1,3 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { DEFAULT_READER_MODEL } from '$lib/config/models';
 import { getModelParams } from '$lib/config/model-params';
@@ -6,6 +5,7 @@ import { describeStream } from '$lib/calls';
 import { requireAuth } from '$lib/api/require-auth';
 import { parseRequestJson } from '$lib/api/parse-json';
 import { processArticleSchema, validateSchema } from '$lib/schemas';
+import { notFoundError, errorResponse } from '$lib/api/errors';
 
 /**
  * Process Article Endpoint (Phase 2, Group D - Chunks 6-8)
@@ -41,29 +41,12 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		.single();
 
 	if (fetchError || !article) {
-		return json(
-			{
-				error: {
-					message: 'Article not found or access denied',
-					code: 'NOT_FOUND',
-					details: fetchError?.message
-				}
-			},
-			{ status: 404 }
-		);
+		return notFoundError('Article');
 	}
 
 	// 4. VALIDATE ARTICLE HAS RAW HTML
 	if (!article.raw_html) {
-		return json(
-			{
-				error: {
-					message: 'Article has no HTML content',
-					code: 'INVALID_STATE'
-				}
-			},
-			{ status: 400 }
-		);
+		return errorResponse('BAD_REQUEST', { message: 'Article has no HTML content' });
 	}
 
 	// 5. GET USER'S SELECTED E-READER MODEL (OR DEFAULT)

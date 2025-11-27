@@ -5,8 +5,8 @@
  * Returns either the authenticated user or an error response.
  */
 
-import { json } from '@sveltejs/kit';
 import type { Session, User } from '@supabase/supabase-js';
+import { unauthorizedError } from './errors';
 
 type SafeGetSession = () => Promise<{ session: Session | null; user: User | null }>;
 
@@ -31,15 +31,7 @@ export async function requireAuth(safeGetSession: SafeGetSession): Promise<AuthR
 	if (!user) {
 		return {
 			success: false,
-			error: json(
-				{
-					error: {
-						message: 'Unauthorized - must be logged in',
-						code: 'UNAUTHORIZED'
-					}
-				},
-				{ status: 401 }
-			)
+			error: unauthorizedError('Unauthorized - must be logged in')
 		};
 	}
 

@@ -9,6 +9,7 @@ import { uploadFileWithRetry } from '$lib/api/anthropic-client';
 import { requireAuth } from '$lib/api/require-auth';
 import { parseRequestJson } from '$lib/api/parse-json';
 import { extractImagesSchema, validateSchema } from '$lib/schemas';
+import { notFoundError, internalError } from '$lib/api/errors';
 
 // SERVICE_ROLE_KEY for storage operations (storage policies require it)
 const supabaseStorage = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -187,15 +188,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			.single();
 
 		if (fetchError || !article) {
-			return json(
-				{
-					error: {
-						message: 'Article not found or access denied',
-						code: 'NOT_FOUND'
-					}
-				},
-				{ status: 404 }
-			);
+			return notFoundError('Article');
 		}
 
 		// 4. EXTRACT ALL <img> TAGS
@@ -305,15 +298,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			total_charts: chartResults.length
 		});
 	} catch (error) {
-		return json(
-			{
-				error: {
-					message: 'Image extraction failed',
-					code: 'EXTRACTION_ERROR',
-					details: error instanceof Error ? error.message : 'Unknown error'
-				}
-			},
-			{ status: 500 }
-		);
+		return internalError('Image extraction failed');
 	}
 };

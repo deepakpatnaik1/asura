@@ -9,6 +9,7 @@ import {
 import { requireAuth } from '$lib/api/require-auth';
 import { parseRequestJson } from '$lib/api/parse-json';
 import { settingsUpdateSchema, validateSchema } from '$lib/schemas';
+import { databaseError } from '$lib/api/errors';
 
 export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase } }) => {
 	// 1. AUTHENTICATION CHECK
@@ -73,14 +74,14 @@ export const PUT: RequestHandler = async ({ request, locals: { safeGetSession, s
 	if (selected_embedding_model !== undefined) updateData.selected_embedding_model = selected_embedding_model;
 	if (active_reader_article_id !== undefined) updateData.active_reader_article_id = active_reader_article_id;
 
-	const { data, error } = await supabase
+	const { error } = await supabase
 		.from('user_settings')
 		.update(updateData)
 		.eq('user_id', userId)
 		.select();
 
 	if (error) {
-		return json({ error: error.message }, { status: 500 });
+		return databaseError('Failed to update settings');
 	}
 
 	return json({ success: true });

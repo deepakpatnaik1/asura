@@ -3,6 +3,7 @@ import type { RequestHandler } from './$types';
 import { requireAuth } from '$lib/api/require-auth';
 import { parseRequestJson } from '$lib/api/parse-json';
 import { deleteArticleSchema, validateSchema } from '$lib/schemas';
+import { databaseError } from '$lib/api/errors';
 
 /**
  * Articles Management Endpoint
@@ -39,16 +40,7 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 		.order('created_at', { ascending: false }); // Most recent first
 
 	if (fetchError) {
-		return json(
-			{
-				error: {
-					message: 'Failed to fetch articles',
-					code: 'DATABASE_ERROR',
-					details: fetchError.message
-				}
-			},
-			{ status: 500 }
-		);
+		return databaseError('Failed to fetch articles');
 	}
 
 	return json({
@@ -141,16 +133,7 @@ export const DELETE: RequestHandler = async ({ request, locals: { safeGetSession
 		.eq('user_id', userId);
 
 	if (deleteError) {
-		return json(
-			{
-				error: {
-					message: 'Failed to delete article',
-					code: 'DATABASE_ERROR',
-					details: deleteError.message
-				}
-			},
-			{ status: 500 }
-		);
+		return databaseError('Failed to delete article');
 	}
 
 	return json({

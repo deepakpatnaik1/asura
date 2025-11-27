@@ -1,0 +1,824 @@
+openapi: 3.0.3
+info:
+  title: Asura API
+  version: 1.0.0
+  description: |
+    Asura is an AI-powered journaling and article reading application.
+    This API provides endpoints for chat conversations, article processing,
+    and user settings management.
+
+servers:
+  - url: /api
+    description: Local API
+
+tags:
+  - name: Chat
+    description: AI chat conversation endpoints
+  - name: Reader
+    description: Article reading and processing endpoints
+  - name: Settings
+    description: User settings management
+  - name: System
+    description: System and utility endpoints
+
+paths:
+  /health:
+    get:
+      tags: [System]
+      summary: Health check
+      description: Returns the health status of the API
+      responses:
+        '200':
+          description: API is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /chat:
+    post:
+      tags: [Chat]
+      summary: Send chat message
+      description: |
+        Send a message to the AI assistant and receive a streaming response.
+        Uses Server-Sent Events (SSE) for real-time response streaming.
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatMessageRequest'
+      responses:
+        '200':
+          description: SSE stream of response chunks
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: |
+                  Stream of SSE events:
+                  - `{ type: 'chunk', content: string }` - Response text chunk
+                  - `{ type: 'done', timestamp: string, model_identifier: string }` - Stream complete
+                  - `{ type: 'error', message: string }` - Error occurred
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /chat/compress:
+    post:
+      tags: [Chat]
+      summary: Compress orphan message
+      description: Manually trigger compression for an orphan superjournal entry
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompressRequest'
+      responses:
+        '200':
+          description: Compression triggered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /settings:
+    get:
+      tags: [Settings]
+      summary: Get user settings
+      description: Retrieve the current user's settings
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: User settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSettings'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    put:
+      tags: [Settings]
+      summary: Update user settings
+      description: Update one or more user settings
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SettingsUpdateRequest'
+      responses:
+        '200':
+          description: Settings updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/DatabaseError'
+
+  /models:
+    get:
+      tags: [Settings]
+      summary: Get available AI models
+      description: Returns list of available AI models for different use cases
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Available models
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  conversation:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ModelInfo'
+                  compression:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ModelInfo'
+                  reader:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ModelInfo'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /nuke:
+    post:
+      tags: [System]
+      summary: Delete all user data
+      description: |
+        Permanently deletes all data for the authenticated user including:
+        - Superjournal entries
+        - Journal entries
+        - User settings
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: All data deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/DatabaseError'
+
+  /superjournal/{id}:
+    patch:
+      tags: [Chat]
+      summary: Toggle starred status
+      description: Toggle the is_starred field on a journal entry linked to a superjournal
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Starred status toggled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  id:
+                    type: string
+                  is_starred:
+                    type: boolean
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/DatabaseError'
+    delete:
+      tags: [Chat]
+      summary: Delete message
+      description: Delete a superjournal entry (cascade deletes linked journal entry)
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Message deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  id:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/DatabaseError'
+
+  /reader/upload:
+    post:
+      tags: [Reader]
+      summary: Upload article HTML
+      description: Upload HTML content to create a new article for processing
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UploadArticleRequest'
+      responses:
+        '200':
+          description: Article created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  article_id:
+                    type: string
+                    format: uuid
+                  title:
+                    type: string
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '500':
+          $ref: '#/components/responses/DatabaseError'
+
+  /reader/articles:
+    get:
+      tags: [Reader]
+      summary: List user articles
+      description: Get all articles for the authenticated user
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: List of articles
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: Cache control header
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  articles:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ArticleSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/DatabaseError'
+    delete:
+      tags: [Reader]
+      summary: Delete article
+      description: |
+        Delete an article and all related data including:
+        - Chart images from storage
+        - PDF files from storage
+        - Database records (cascades to article_charts, article_chat)
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [article_id]
+              properties:
+                article_id:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: Article deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/DatabaseError'
+
+  /reader/process-article:
+    post:
+      tags: [Reader]
+      summary: Process article with AI
+      description: |
+        Trigger AI processing to generate article summary.
+        Returns Server-Sent Events stream with progress updates.
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [article_id]
+              properties:
+                article_id:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: SSE stream of processing progress
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /reader/chat:
+    post:
+      tags: [Reader]
+      summary: Ask follow-up question
+      description: |
+        Ask a follow-up question about an article.
+        Supports optional chart reference for chart-specific questions.
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReaderChatRequest'
+      responses:
+        '200':
+          description: SSE stream of AI response
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/DatabaseError'
+
+  /reader/extract-images:
+    post:
+      tags: [Reader]
+      summary: Extract images from article
+      description: |
+        Extract all images from article HTML, generate thumbnails,
+        and upload to storage and Anthropic Files API
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExtractImagesRequest'
+      responses:
+        '200':
+          description: Images extracted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  article_id:
+                    type: string
+                  charts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ChartInfo'
+                  total_charts:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /reader/filter-charts:
+    post:
+      tags: [Reader]
+      summary: Filter charts with AI
+      description: |
+        Use programmatic and AI filtering to identify relevant charts
+        vs ads/decorative images
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [article_id]
+              properties:
+                article_id:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: Charts filtered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  article_id:
+                    type: string
+                  total_charts:
+                    type: integer
+                  programmatic_filtered:
+                    type: integer
+                  ai_filtered:
+                    type: integer
+                  relevant_charts:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        chart_index:
+                          type: integer
+                        filter_reason:
+                          type: string
+                  irrelevant_charts:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        chart_index:
+                          type: integer
+                        filter_reason:
+                          type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /reader/nuke:
+    post:
+      tags: [Reader]
+      summary: Delete all reader data
+      description: Delete all articles and related data for the authenticated user
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: All reader data deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  deleted:
+                    type: integer
+                    description: Number of articles deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/DatabaseError'
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: sb-access-token
+      description: Supabase authentication cookie
+
+  schemas:
+    ChatMessageRequest:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+          minLength: 1
+          maxLength: 50000
+          description: The message to send to the AI
+        persona:
+          type: string
+          enum: [gunnar, kirby]
+          description: AI persona to use (defaults to user setting)
+
+    CompressRequest:
+      type: object
+      required: [superjournal_id, user_message, ai_response, persona_name]
+      properties:
+        superjournal_id:
+          type: string
+          format: uuid
+        user_message:
+          type: string
+          minLength: 1
+        ai_response:
+          type: string
+          minLength: 1
+        persona_name:
+          type: string
+          minLength: 1
+
+    UserSettings:
+      type: object
+      properties:
+        selected_conversation_model:
+          type: string
+        selected_compression_model:
+          type: string
+        selected_reader_model:
+          type: string
+        selected_embedding_model:
+          type: string
+        active_reader_article_id:
+          type: string
+          format: uuid
+          nullable: true
+
+    SettingsUpdateRequest:
+      type: object
+      properties:
+        selected_conversation_model:
+          type: string
+        selected_compression_model:
+          type: string
+        selected_reader_model:
+          type: string
+        selected_embedding_model:
+          type: string
+        active_reader_article_id:
+          type: string
+          format: uuid
+          nullable: true
+
+    ModelInfo:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        provider:
+          type: string
+
+    UploadArticleRequest:
+      type: object
+      required: [html]
+      properties:
+        html:
+          type: string
+          minLength: 1
+          maxLength: 5000000
+          description: HTML content of the article
+
+    ArticleSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        preview_snippet:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    ReaderChatRequest:
+      type: object
+      required: [article_id, message]
+      properties:
+        article_id:
+          type: string
+          format: uuid
+        message:
+          type: string
+          minLength: 1
+          maxLength: 10000
+        chart_index:
+          type: integer
+          minimum: 0
+          nullable: true
+          description: 0-based index of chart to reference
+
+    ExtractImagesRequest:
+      type: object
+      required: [article_id, html]
+      properties:
+        article_id:
+          type: string
+          format: uuid
+        html:
+          type: string
+          minLength: 1
+          maxLength: 5000000
+
+    ChartInfo:
+      type: object
+      properties:
+        index:
+          type: integer
+        storage_path:
+          type: string
+        thumbnail_path:
+          type: string
+        image_size:
+          type: integer
+        alt:
+          type: string
+        anthropic_file_id:
+          type: string
+          nullable: true
+
+    ApiError:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [message, code]
+          properties:
+            message:
+              type: string
+            code:
+              type: string
+            details:
+              type: object
+            field:
+              type: string
+            retryAfter:
+              type: integer
+              description: Milliseconds until retry is allowed
+
+  responses:
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          example:
+            error:
+              message: Must be logged in
+              code: UNAUTHORIZED
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          example:
+            error:
+              message: Resource not found
+              code: NOT_FOUND
+
+    ValidationError:
+      description: Invalid input
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          example:
+            error:
+              message: Message is required
+              code: VALIDATION_ERROR
+              field: message
+
+    RateLimited:
+      description: Too many requests
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          description: Seconds until retry is allowed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          example:
+            error:
+              message: Rate limit exceeded. Try again in 60 seconds.
+              code: RATE_LIMITED
+              retryAfter: 60000
+
+    PayloadTooLarge:
+      description: Request payload too large
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          example:
+            error:
+              message: HTML too large (max 5MB)
+              code: PAYLOAD_TOO_LARGE
+
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          example:
+            error:
+              message: Internal server error
+              code: INTERNAL_ERROR
+
+    DatabaseError:
+      description: Database operation failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          example:
+            error:
+              message: Database operation failed
+              code: DATABASE_ERROR

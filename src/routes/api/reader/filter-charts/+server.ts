@@ -5,6 +5,7 @@ import { DEFAULT_READER_MODEL } from '$lib/config/models';
 import { requireAuth } from '$lib/api/require-auth';
 import { parseRequestJson } from '$lib/api/parse-json';
 import { filterChartsSchema, validateSchema } from '$lib/schemas';
+import { notFoundError, internalError } from '$lib/api/errors';
 
 /**
  * Programmatic filter - identifies obvious ads/irrelevant images using alt text patterns
@@ -208,15 +209,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			.single();
 
 		if (fetchError || !article) {
-			return json(
-				{
-					error: {
-						message: 'Article not found or access denied',
-						code: 'NOT_FOUND'
-					}
-				},
-				{ status: 404 }
-			);
+			return notFoundError('Article');
 		}
 
 		// 4. FETCH ALL CHARTS FOR THIS ARTICLE (with user_id filter for defense-in-depth)
@@ -380,15 +373,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			}))
 		});
 	} catch (error) {
-		return json(
-			{
-				error: {
-					message: 'Chart filtering failed',
-					code: 'FILTER_ERROR',
-					details: error instanceof Error ? error.message : 'Unknown error'
-				}
-			},
-			{ status: 500 }
-		);
+		return internalError('Chart filtering failed');
 	}
 };

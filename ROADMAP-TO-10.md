@@ -4,14 +4,14 @@
 
 | Category | Initial | Current | Target | Gap |
 |----------|---------|---------|--------|-----|
-| Test Coverage | 0/10 | 8/10 | 10/10 | Low (237 tests, need E2E) |
+| Test Coverage | 0/10 | 8/10 | 10/10 | Low (268 tests, need E2E) |
 | Maintainability | 3/10 | 6/10 | 10/10 | Medium (37% size reduction) |
 | Consistency | 5/10 | 8/10 | 10/10 | Low (standardized auth, JSON parsing, removed debug logs) |
 | Reliability | 6/10 | 8/10 | 10/10 | Low (error boundary, retry, offline detection, timeouts) |
 | Security | 7.5/10 | 9/10 | 10/10 | Low (Zod validation, CSRF, security headers, Redis rate limiting) |
-| API Quality | 7/10 | 7/10 | 10/10 | Low |
+| API Quality | 7/10 | 9/10 | 10/10 | Low (standardized errors, OpenAPI docs, versioning) |
 
-**Overall Score: 4.6/10 → 8.3/10** (after Phase 1, 2, 3, 4 & 5)
+**Overall Score: 4.6/10 → 8.7/10** (after Phase 1, 2, 3, 4, 5 & 6)
 
 ---
 
@@ -480,99 +480,62 @@ export async function checkRateLimitRedis(
 
 ---
 
-## Phase 6: API Quality Improvements
+## Phase 6: API Quality Improvements ✅ COMPLETE
 
 **Goal:** Improve API consistency and documentation
 
-### 6.1 Standardized Error Responses
+**Results:**
+- Created `src/lib/api/errors.ts` with standardized error codes and helpers
+- Updated all API endpoints to use consistent error responses
+- Created comprehensive OpenAPI specification (`openapi.yaml`)
+- Added API versioning utilities in `src/lib/api/versioning.ts`
+- Added 31 new tests for errors and versioning modules (268 total)
+
+### 6.1 Standardized Error Responses ✅
+
+Created `src/lib/api/errors.ts`:
 
 ```typescript
-// src/lib/api/errors.ts
-export interface ApiError {
-  error: {
-    message: string;
-    code: string;
-    details?: unknown;
-    retryAfter?: number;
-  }
-}
-
-export function errorResponse(
-  code: string,
-  message: string,
-  status: number,
-  details?: unknown
-): Response {
-  return json({ error: { message, code, details } }, { status });
-}
-
 // Standard error codes
 export const ERROR_CODES = {
-  UNAUTHORIZED: { status: 401, message: 'Must be logged in' },
-  FORBIDDEN: { status: 403, message: 'Access denied' },
-  NOT_FOUND: { status: 404, message: 'Resource not found' },
-  VALIDATION_ERROR: { status: 400, message: 'Invalid input' },
-  RATE_LIMITED: { status: 429, message: 'Too many requests' },
-  INTERNAL_ERROR: { status: 500, message: 'Internal server error' }
+  UNAUTHORIZED: { code: 'UNAUTHORIZED', status: 401, message: 'Must be logged in' },
+  FORBIDDEN: { code: 'FORBIDDEN', status: 403, message: 'Access denied' },
+  NOT_FOUND: { code: 'NOT_FOUND', status: 404, message: 'Resource not found' },
+  VALIDATION_ERROR: { code: 'VALIDATION_ERROR', status: 400, message: 'Validation failed' },
+  RATE_LIMITED: { code: 'RATE_LIMITED', status: 429, message: 'Too many requests' },
+  INTERNAL_ERROR: { code: 'INTERNAL_ERROR', status: 500, message: 'Internal server error' },
+  DATABASE_ERROR: { code: 'DATABASE_ERROR', status: 500, message: 'Database operation failed' },
+  // ... more codes
 } as const;
+
+// Helper functions
+export function errorResponse(code: ErrorCode, options?: {...}): Response
+export function unauthorizedError(message?: string): Response
+export function notFoundError(resource?: string): Response
+export function validationError(message: string, field?: string): Response
+export function rateLimitedError(retryAfterMs: number): Response
+export function databaseError(message?: string): Response
+// ... more helpers
 ```
 
-### 6.2 OpenAPI Specification
+### 6.2 OpenAPI Specification ✅
 
-Generate OpenAPI spec for API documentation:
+Created `openapi.yaml` documenting all 19 API endpoints:
+- Chat endpoints: `/chat`, `/chat/compress`, `/superjournal/{id}`
+- Reader endpoints: `/reader/upload`, `/reader/articles`, `/reader/process-article`, etc.
+- Settings endpoints: `/settings`, `/models`
+- System endpoints: `/health`, `/nuke`
 
-```yaml
-# openapi.yaml
-openapi: 3.0.3
-info:
-  title: Asura API
-  version: 1.0.0
-paths:
-  /api/chat:
-    post:
-      summary: Send chat message
-      security:
-        - cookieAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [message]
-              properties:
-                message:
-                  type: string
-                  minLength: 1
-                  maxLength: 10000
-                persona:
-                  type: string
-                  enum: [gunnar, kirby]
-      responses:
-        '200':
-          description: SSE stream of response chunks
-        '400':
-          $ref: '#/components/responses/ValidationError'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '429':
-          $ref: '#/components/responses/RateLimited'
-```
+### 6.3 API Versioning Strategy ✅
 
-### 6.3 API Versioning Strategy
-
-Prepare for future breaking changes:
+Created `src/lib/api/versioning.ts`:
 
 ```typescript
-// Version in URL: /api/v1/chat
-// Or version in header: Accept: application/vnd.asura.v1+json
-
-// src/lib/api/versioning.ts
-export function getApiVersion(request: Request): number {
-  const accept = request.headers.get('accept') || '';
-  const match = accept.match(/vnd\.asura\.v(\d+)/);
-  return match ? parseInt(match[1]) : 1;
-}
+// Header-based versioning: Accept: application/vnd.asura.v1+json
+export function getApiVersion(request: Request): number
+export function isVersionSupported(version: number): boolean
+export function createVersionedHeaders(version: number): Record<string, string>
+export function getDeprecationHeader(message: string, sunsetDate?: Date): string
 ```
 
 ---
@@ -667,16 +630,17 @@ Document migration guidelines:
 
 | Metric | Initial | Current | Target |
 |--------|---------|---------|--------|
-| Test coverage | 0% | 237 tests passing | >80% |
+| Test coverage | 0% | 268 tests passing | >80% |
 | Largest component | 1921 lines | 1162 lines | <300 lines |
-| API consistency | 5/10 | 8/10 | 10/10 |
+| API consistency | 5/10 | 9/10 | 10/10 |
 | Security headers | 0 | 6 | 5+ ✅ |
 | E2E test count | 0 | 0 | 10+ |
-| Documented endpoints | 0 | 0 | 100% |
-| Error handling | None | ErrorBoundary + retry | Full |
-| Offline support | None | Detection + banner | Full |
+| Documented endpoints | 0 | 19 | 100% ✅ |
+| Error handling | None | ErrorBoundary + retry | Full ✅ |
+| Offline support | None | Detection + banner | Full ✅ |
 | Input validation | Manual | Zod schemas | Full ✅ |
 | CSRF protection | None | Origin validation | Full ✅ |
+| API versioning | None | Header-based | Prepared ✅ |
 
 ---
 
@@ -689,10 +653,10 @@ Document migration guidelines:
 | Phase 3: Consistency | 8 hours | None | ✅ Complete |
 | Phase 4: Reliability | 12 hours | Phase 2 | ✅ Complete |
 | Phase 5: Security | 16 hours | Phase 3 | ✅ Complete |
-| Phase 6: API Quality | 12 hours | Phase 5 | Pending |
+| Phase 6: API Quality | 12 hours | Phase 5 | ✅ Complete |
 | Phase 7: Schema | 8 hours | None | Pending |
 
-**Total: ~126 hours** (~106 hours completed, ~20 hours remaining)
+**Total: ~126 hours** (~118 hours completed, ~8 hours remaining)
 
 ---
 
