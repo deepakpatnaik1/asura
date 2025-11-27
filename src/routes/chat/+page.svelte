@@ -1,13 +1,13 @@
 <script lang="ts">
 	import { Icon } from 'svelte-icons-pack';
-	import { LuStar, LuCopy, LuTrash2, LuPaperclip, LuFolder, LuChevronDown, LuCloudDownload, LuEllipsisVertical, LuFlame } from 'svelte-icons-pack/lu';
+	import { LuPaperclip, LuFolder, LuChevronDown, LuCloudDownload, LuFlame } from 'svelte-icons-pack/lu';
 	import { currentMessage, isLoading, sendMessage, abortCurrentMessage } from '$lib/stores/chat';
 	import { tick, onMount } from 'svelte';
 	import { TIMING } from '$lib/config/timing';
 	import { DEFAULT_PERSONA } from '$lib/config/personas';
-	import { renderMarkdown } from '$lib/markdown-renderer';
 	import { CHAT_CONFIG, scrollToTurn, scrollToBottom, getTurns } from '$lib/ui/scroll';
 	import ScrollControls from '$lib/components/ScrollControls.svelte';
+	import MessageGroup from '$lib/components/MessageGroup.svelte';
 
 	// Receive loaded messages from server
 	let { data } = $props();
@@ -341,73 +341,35 @@
 	<div class="messages-area">
 		<div class="messages-content">
 			{#each allMessages as msg, index}
-				<!-- Boss Message -->
-				<div class="message-group">
-					<div class="boss-message">
-						<!-- Turn Indicator -->
-						<div class="turn-indicator">turn {index + 1}</div>
-
-						<div class="message-header">
-							<span class="message-label boss-label">Boss</span>
-							<div class="message-actions">
-								<div class="action-icons">
-									<button class="action-btn" class:starred={starredIds.has(msg.id)} title={starredIds.has(msg.id) ? 'Unstar' : 'Star'} onclick={() => handleStarToggle(msg.id)}><Icon src={LuStar} size="11" /></button>
-									<button class="action-btn" class:copied={copiedMessageId === msg.id} title="Copy" onclick={() => handleCopyTurn(msg.id, msg.user_message, msg.ai_response, msg.persona_name)}><Icon src={LuCopy} size="11" /></button>
-									<button class="action-btn" title="Delete" onclick={() => handleMessageDeleteClick(msg.id)}><Icon src={LuTrash2} size="11" /></button>
-								</div>
-								<span class="timestamp">{msg.formatted_timestamp}</span>
-							</div>
-						</div>
-						<div class="message-text">{msg.user_message}</div>
-					</div>
-				</div>
-
-				<!-- AI Response -->
-				<div class="message-group">
-					<div class="ai-message">
-						<div class="message-header">
-							<span class="message-label ai-label">{msg.persona_name.charAt(0).toUpperCase() + msg.persona_name.slice(1)}</span>
-						</div>
-						<div class="message-text">
-							{@html renderMarkdown(msg.ai_response)}
-						</div>
-					</div>
-				</div>
+				<MessageGroup
+					userMessage={msg.user_message}
+					aiResponse={msg.ai_response}
+					personaName={msg.persona_name}
+					mode="chat"
+					turnNumber={index + 1}
+					timestamp={msg.formatted_timestamp}
+					isStarred={starredIds.has(msg.id)}
+					isCopied={copiedMessageId === msg.id}
+					showActions={true}
+					onStar={() => handleStarToggle(msg.id)}
+					onCopy={() => handleCopyTurn(msg.id, msg.user_message, msg.ai_response, msg.persona_name)}
+					onDelete={() => handleMessageDeleteClick(msg.id)}
+				/>
 			{/each}
 
 			<!-- Show loading state for new message being sent -->
 			{#if $isLoading && $currentMessage}
-				<!-- Boss Message -->
-				<div class="message-group">
-					<div class="boss-message">
-						<div class="turn-indicator">turn {allMessages.length + 1}</div>
-
-						<div class="message-header">
-							<span class="message-label boss-label">Boss</span>
-							<div class="message-actions">
-								<div class="action-icons">
-									<button class="action-btn" title="Star"><Icon src={LuStar} size="11" /></button>
-									<button class="action-btn" title="Copy"><Icon src={LuCopy} size="11" /></button>
-									<button class="action-btn" title="Abort" onclick={handleAbortCurrentMessage}><Icon src={LuTrash2} size="11" /></button>
-								</div>
-								<span class="timestamp">{$currentMessage.timestamp}</span>
-							</div>
-						</div>
-						<div class="message-text">{$currentMessage.boss}</div>
-					</div>
-				</div>
-
-				<!-- AI Response Loading -->
-				<div class="message-group">
-					<div class="ai-message">
-						<div class="message-header">
-							<span class="message-label ai-label">{selectedPersona.charAt(0).toUpperCase() + selectedPersona.slice(1)}</span>
-						</div>
-						<div class="message-text loading-text">
-							Thinking<span class="dots"><span>.</span><span>.</span><span>.</span></span>
-						</div>
-					</div>
-				</div>
+				<MessageGroup
+					userMessage={$currentMessage.boss}
+					aiResponse={$currentMessage.ai}
+					personaName={selectedPersona}
+					mode="chat"
+					turnNumber={allMessages.length + 1}
+					timestamp={$currentMessage.timestamp}
+					isLoading={true}
+					showActions={true}
+					onDelete={handleAbortCurrentMessage}
+				/>
 			{/if}
 
 			<!-- Scroll anchor -->

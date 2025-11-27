@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
-	import { renderMarkdown } from '$lib/markdown-renderer';
 	import { Icon } from 'svelte-icons-pack';
 	import { LuPaperclip, LuFolder, LuCloudDownload, LuChevronDown, LuFlame, LuTrash2 } from 'svelte-icons-pack/lu';
 	import { READER_CONFIG, scrollToTurn, scrollToBottom, getTurns, updateSpacer } from '$lib/ui/scroll';
 	import ScrollControls from '$lib/components/ScrollControls.svelte';
+	import MessageGroup from '$lib/components/MessageGroup.svelte';
 
 
 	// Article state
@@ -918,82 +918,36 @@
 
 			<!-- Article Display -->
 			{#if currentArticle || streamingContent}
-				<div class="message-group">
-					<div class="boss-message">
-						<div class="message-header">
-							<span class="message-label boss-label">Boss</span>
-						</div>
-						<div class="message-text">
-							Let's explore: {currentArticle?.title || 'Article'}
-						</div>
-					</div>
-				</div>
-
-				<div class="message-group">
-					<div class="ai-message">
-						<div class="message-header">
-							<span class="message-label ai-label">Samara</span>
-						</div>
-						<div class="message-text">
-							{@html renderMarkdown(currentArticle?.content || streamingContent, 'reader')}
-						</div>
-					</div>
-				</div>
+				<MessageGroup
+					userMessage={`Let's explore: ${currentArticle?.title || 'Article'}`}
+					aiResponse={currentArticle?.content || streamingContent}
+					personaName="samara"
+					mode="reader"
+				/>
 
 				<!-- Q&A History -->
-				{#each chatHistory as turn}
-					{#if turn.role === 'user'}
-						<div class="message-group">
-							<div class="boss-message">
-								<div class="message-header">
-									<span class="message-label boss-label">Boss</span>
-								</div>
-								<div class="message-text">
-									{turn.content}
-								</div>
-							</div>
-						</div>
-					{:else}
-						<div class="message-group">
-							<div class="ai-message">
-								<div class="message-header">
-									<span class="message-label ai-label">Samara</span>
-								</div>
-								<div class="message-text">
-									{@html renderMarkdown(turn.content, 'reader')}
-								</div>
-							</div>
-						</div>
+				{#each Array.from({ length: Math.floor(chatHistory.length / 2) }, (_, i) => i) as turnIndex}
+					{@const userTurn = chatHistory[turnIndex * 2]}
+					{@const assistantTurn = chatHistory[turnIndex * 2 + 1]}
+					{#if userTurn && assistantTurn}
+						<MessageGroup
+							userMessage={userTurn.content}
+							aiResponse={assistantTurn.content}
+							personaName="samara"
+							mode="reader"
+						/>
 					{/if}
 				{/each}
 
 				<!-- Current Q&A Turn (streaming) -->
 				{#if currentUserMessage}
-					<div class="message-group">
-						<div class="boss-message">
-							<div class="message-header">
-								<span class="message-label boss-label">Boss</span>
-							</div>
-							<div class="message-text">
-								{currentUserMessage}
-							</div>
-						</div>
-					</div>
-
-					<div class="message-group">
-						<div class="ai-message">
-							<div class="message-header">
-								<span class="message-label ai-label">Samara</span>
-							</div>
-							<div class="message-text">
-								{#if isLoadingChat && !streamingChatResponse}
-									Thinking<span class="dots"><span>.</span><span>.</span><span>.</span></span>
-								{:else}
-									{@html renderMarkdown(streamingChatResponse, 'reader')}
-								{/if}
-							</div>
-						</div>
-					</div>
+					<MessageGroup
+						userMessage={currentUserMessage}
+						aiResponse={streamingChatResponse}
+						personaName="samara"
+						mode="reader"
+						isLoading={isLoadingChat && !streamingChatResponse}
+					/>
 				{/if}
 			{/if}
 		</div>
