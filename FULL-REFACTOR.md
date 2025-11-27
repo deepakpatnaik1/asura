@@ -404,3 +404,15 @@ Implementation details:
 - Maintains prompt caching via `anthropic-beta` header
 - AI decides when to search (no user toggle)
 - Both personas (Gunnar and Kirby) have search capability
+
+**Post-refactor cleanup:**
+
+**Commit:** `9383570` - fix: Resolve all TypeScript errors
+
+Fixed 7 pre-existing TypeScript errors:
+- `context-builder.ts:180` - Voyage SDK `data` possibly undefined
+- `api/chat/+server.ts:206` - Voyage SDK `data` possibly undefined
+- `api/demo/convert-pdf/+server.ts:21` - Puppeteer `headless: 'new'` → `true`
+- `api/demo/convert-pdf/+server.ts:65` - Uint8Array → Buffer for Response body
+- `api/reader/filter-charts/+server.ts:151` - Files API beta types not in SDK
+- `chat/+page.server.ts:42` - `user` possibly null after session check
