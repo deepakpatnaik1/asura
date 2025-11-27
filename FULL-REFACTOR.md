@@ -310,7 +310,31 @@ Integration:
 - Changed from index-based pairing to role-based iteration
 - Fixes display bug where boss/Samara messages were swapped
 
-### Phase 3: Reorganize Backend - PENDING
+### Phase 3: Reorganize Backend - COMPLETE ✓
+
+**Prompts restructure:**
+- Merged `base-instructions.ts` content into Gunnar and Kirby personas (deleted base file)
+- Created `/lib/prompts/personas/` directory
+- Moved `persona-gunnar.ts` → `personas/gunnar.ts`
+- Moved `persona-kirby.ts` → `personas/kirby.ts`
+- Moved `reader-samara.ts` → `personas/samara.ts` (renamed export to `PERSONA_SAMARA`)
+- Updated all imports in API routes
+
+**Calls restructure:**
+- Created `/lib/calls/` directory structure
+- `chat/converse.ts` - Async generator for persona conversation streaming
+- `chat/compress.ts` - Artisan cut compression call
+- `reader/describe.ts` - Article summary with Brave Search tool use
+- `reader/followup.ts` - Q&A follow-up with history + chart support
+- Updated `api/chat/+server.ts` to use `converseStream` and `compress`
+- Updated `api/reader/process-article/+server.ts` to use `describeStream`
+- Updated `api/reader/chat/+server.ts` to use `followupStream`
+
+**Note - Pre-existing type errors (not from refactor):**
+- `context-builder.ts`, `chat/+server.ts` - Voyage SDK `data` possibly undefined
+- `demo/convert-pdf/+server.ts` - Node spawn options + Uint8Array body type
+- `filter-charts/+server.ts` - Anthropic SDK `file_id` source type mismatch
+- `chat/+page.server.ts` - `user` possibly null check
 
 ### Phase 4: Wire Up Capabilities & Modes - PENDING
 

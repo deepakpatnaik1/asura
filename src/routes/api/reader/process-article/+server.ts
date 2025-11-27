@@ -1,13 +1,8 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import Anthropic from '@anthropic-ai/sdk';
-import { ANTHROPIC_API_KEY } from '$env/static/private';
-import { READER_SAMARA_PROMPT } from '$lib/prompts';
 import { DEFAULT_READER_MODEL } from '$lib/config/models';
 import { getModelParams } from '$lib/config/model-params';
-import { BRAVE_SEARCH_TOOL, executeBraveSearch } from '$lib/api/brave-search';
-
-const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
+import { describeStream } from '$lib/calls';
 
 /**
  * Process Article Endpoint (Phase 2, Group D - Chunks 6-8)
@@ -109,108 +104,27 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			const encoder = new TextEncoder();
 
 			try {
-				// Build messages array with raw HTML content (no PDF needed!)
-				const messages: Anthropic.MessageParam[] = [
-					{
-						role: 'user',
-						content: `Here is an article titled "${article.title}". Please provide an educational summary. Use the web search tool as needed to understand recent context.
+				console.log('[Process Article] Starting AI call...');
 
-<article>
-${article.raw_html}
-</article>`
-					}
-				];
+				// Use describeStream call
+				const generator = describeStream({
+					articleTitle: article.title,
+					articleHtml: article.raw_html,
+					model: selectedModel,
+					maxTokens: modelParams.max_tokens,
+					temperature: modelParams.temperature
+				});
 
 				let fullResponse = '';
-
-				// Recursive function to handle tool use (supports multiple search iterations)
-				async function processWithTools(
-					conversationMessages: Anthropic.MessageParam[]
-				): Promise<void> {
-					console.log('[Process Article] Starting AI call...');
-
-					const stream = await anthropic.messages.stream({
-						model: selectedModel,
-						max_tokens: modelParams.max_tokens,
-						temperature: modelParams.temperature,
-						system: READER_SAMARA_PROMPT,
-						messages: conversationMessages,
-						tools: [BRAVE_SEARCH_TOOL]
-					});
-
-					// Stream text deltas to client while accumulating
-					for await (const event of stream) {
-						if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
-							const text = event.delta.text;
-							fullResponse += text;
-							controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`));
-						}
+				// Stream chunks to client
+				while (true) {
+					const { value, done } = await generator.next();
+					if (done) {
+						fullResponse = value;
+						break;
 					}
-
-					// Get finalized message to extract tool use
-					const finalMessage = await stream.finalMessage();
-
-					// Check if any tool was used
-					const toolUseBlocks = finalMessage.content.filter(
-						(block): block is Anthropic.ToolUseBlock => block.type === 'tool_use'
-					);
-
-					if (toolUseBlocks.length > 0) {
-						console.log(`[Process Article] ${toolUseBlocks.length} tool use(s) detected`);
-
-						// Process all tool uses
-						const toolResults: Anthropic.MessageParam[] = [];
-
-						for (const toolBlock of toolUseBlocks) {
-							if (toolBlock.name === 'brave_search') {
-								const searchQuery = (toolBlock.input as { query: string }).query;
-								console.log('[Process Article] Executing Brave Search:', searchQuery);
-
-								const searchResults = await executeBraveSearch(searchQuery);
-
-								if (searchResults) {
-									toolResults.push({
-										role: 'user',
-										content: [
-											{
-												type: 'tool_result',
-												tool_use_id: toolBlock.id,
-												content: searchResults
-											}
-										]
-									});
-								} else {
-									// Graceful degradation: tell model search failed
-									toolResults.push({
-										role: 'user',
-										content: [
-											{
-												type: 'tool_result',
-												tool_use_id: toolBlock.id,
-												content: 'Search failed. Please continue without search results.'
-											}
-										]
-									});
-								}
-							}
-						}
-
-						// Add assistant's tool use to conversation
-						conversationMessages.push({
-							role: 'assistant',
-							content: finalMessage.content
-						});
-
-						// Add all tool results
-						conversationMessages.push(...toolResults);
-
-						// Recurse to continue conversation with tool results
-						await processWithTools(conversationMessages);
-					}
+					controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: value })}\n\n`));
 				}
-
-				// Start processing
-				await processWithTools(messages);
 
 				// 8. EXTRACT PREVIEW SNIPPET (first 100-150 chars)
 				const previewLength = 150;

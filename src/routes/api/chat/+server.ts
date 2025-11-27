@@ -12,40 +12,12 @@ import {
 } from '$lib/config/models';
 import { getModelParams } from '$lib/config/model-params';
 import { DEFAULT_PERSONA } from '$lib/config/personas';
-import {
-	BASE_INSTRUCTIONS,
-	PERSONA_GUNNAR,
-	PERSONA_KIRBY,
-	CALL1_PROMPT,
-	CALL2_PROMPT
-} from '$lib/prompts';
-import { createMessage, createMessageStream } from '$lib/api/anthropic-client';
+import { PERSONA_GUNNAR, PERSONA_KIRBY } from '$lib/prompts';
+import { converseStream, compress } from '$lib/calls';
 
 const voyage = new VoyageAIClient({ apiKey: VOYAGE_API_KEY });
 
 const supabase = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-
-// Helper function to extract JSON from LLM output (handles <think> tags)
-function extractJSON(text: string): string {
-	// Remove <think> tags and content between them
-	const withoutThink = text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
-
-	// Find the first { and last } to extract JSON object
-	const firstBrace = withoutThink.indexOf('{');
-	const lastBrace = withoutThink.lastIndexOf('}');
-
-	if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-		return withoutThink.substring(firstBrace, lastBrace + 1);
-	}
-
-	return withoutThink;
-}
-
-// Helper function to extract thinking content from <think> tags
-function extractThinking(text: string): string {
-	const thinkMatch = text.match(/<think>([\s\S]*?)<\/think>/);
-	return thinkMatch ? thinkMatch[1].trim() : '';
-}
 
 // Helper function to extract message content (everything outside <think> tags)
 function extractMessage(text: string): string {
@@ -172,41 +144,24 @@ async function compressToJournal(
 
 		const compressionProvider = getProviderType(compressionModel);
 
-		// Call 2: Artisan Cut compression
-		let compressionOutput: string;
-
-		if (compressionProvider === 'anthropic') {
-			const response = await createMessage({
-				model: compressionModel,
-				max_tokens: compressionParams.max_tokens,
-				temperature: compressionParams.temperature,
-				system: [
-					{
-						type: 'text' as const,
-						text: CALL2_PROMPT,
-						cache_control: { type: 'ephemeral' as const }
-					}
-				],
-				messages: [
-					{
-						role: 'user',
-						content: `User message: ${userMessage}\n\nPersona (${personaName}) response: ${aiResponse}`
-					}
-				]
-			});
-			compressionOutput = response.content[0]?.type === 'text' ? response.content[0].text : '{}';
-		} else {
+		if (compressionProvider !== 'anthropic') {
 			throw new Error(`Provider '${compressionProvider}' not implemented. Only 'anthropic' is currently supported.`);
 		}
-		console.log('[Compression] Call 2 output:', compressionOutput);
 
+		// Call 2: Artisan Cut compression
 		let compressionJson;
 		try {
-			const cleanedOutput = extractJSON(compressionOutput);
-			compressionJson = JSON.parse(cleanedOutput);
+			compressionJson = await compress({
+				userMessage,
+				aiResponse,
+				personaName,
+				model: compressionModel,
+				maxTokens: compressionParams.max_tokens,
+				temperature: compressionParams.temperature
+			});
+			console.log('[Compression] Call 2 output:', compressionJson);
 		} catch (parseError) {
-			console.error('[Compression] JSON parse error:', parseError);
-			console.error('[Compression] Raw output:', compressionOutput);
+			console.error('[Compression] Compression error:', parseError);
 			return;
 		}
 
@@ -318,116 +273,82 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 		// Select persona prompt based on selected persona
 		const personaPrompt = persona === 'kirby' ? PERSONA_KIRBY : PERSONA_GUNNAR;
 
-		// Construct system prompt with cache breakpoints
-		// Cache only stable behavioral instructions (BASE_INSTRUCTIONS + PERSONA + CALL1_PROMPT)
-		// Context stays in user message to preserve proven prompt architecture
-		const systemPromptWithCache = [
-			{
-				type: 'text' as const,
-				text: `${BASE_INSTRUCTIONS}\n\n---\n\n${personaPrompt}`,
-				cache_control: { type: 'ephemeral' as const }
-			},
-			{
-				type: 'text' as const,
-				text: CALL1_PROMPT,
-				cache_control: { type: 'ephemeral' as const }
-			}
-		];
-
-		// Construct full user prompt with context (proven architecture)
-		const fullUserPrompt = context.length > 0
-			? `${context}--- CURRENT QUERY ---\n${message}`
-			: message;
-
-		// Stream response with BASE_INSTRUCTIONS + PERSONA + memory context
+		// Stream response with PERSONA + memory context
 		const conversationProvider = getProviderType(conversationModel);
 
-		if (conversationProvider === 'anthropic') {
-			// Set up SSE headers for streaming
-			const stream = new ReadableStream({
-				async start(controller) {
-					const encoder = new TextEncoder();
-
-					try {
-						// Start streaming from Anthropic API
-						const streamResponse = await createMessageStream({
-							model: conversationModel,
-							max_tokens: conversationParams.max_tokens,
-							temperature: conversationParams.temperature,
-							system: systemPromptWithCache,
-							messages: [
-								{
-									role: 'user',
-									content: fullUserPrompt
-								}
-							]
-						});
-
-						let fullResponse = '';
-
-						// Stream chunks to client
-						for await (const event of streamResponse) {
-							// Handle content delta events (actual text chunks)
-							if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
-								const chunk = event.delta.text;
-								fullResponse += chunk;
-
-								// Send chunk to client via SSE
-								const data = JSON.stringify({ type: 'chunk', content: chunk });
-								controller.enqueue(encoder.encode(`data: ${data}\n\n`));
-							}
-						}
-
-						// Capture token counts AFTER loop completes
-						const finalMessage = await streamResponse.finalMessage();
-						const tokens = {
-							input: finalMessage.usage.input_tokens,
-							output: finalMessage.usage.output_tokens
-						};
-
-						const aiResponse = extractMessage(fullResponse);
-
-						// Send completion event IMMEDIATELY (don't wait for database)
-						const doneData = JSON.stringify({
-							type: 'done',
-							timestamp: new Date().toISOString(),
-							model_identifier: conversationModel
-						});
-						controller.enqueue(encoder.encode(`data: ${doneData}\n\n`));
-						controller.close();
-
-						// Trigger background save AFTER stream closes
-						saveConversationToDatabase(
-							userId,
-							message,
-							aiResponse,
-							tokens,
-							conversationModel,
-							persona
-						).catch((error) => {
-							console.error('[Background] Failed to save conversation:', error);
-						});
-
-					} catch (error) {
-						console.error('Streaming error:', error);
-						const errorData = JSON.stringify({ type: 'error', message: 'Failed to generate response' });
-						controller.enqueue(encoder.encode(`data: ${errorData}\n\n`));
-						controller.close();
-					}
-				}
-			});
-
-			// Return response immediately
-			return new Response(stream, {
-				headers: {
-					'Content-Type': 'text/event-stream',
-					'Cache-Control': 'no-cache',
-					'Connection': 'keep-alive'
-				}
-			});
-		} else {
+		if (conversationProvider !== 'anthropic') {
 			throw new Error(`Provider '${conversationProvider}' not implemented. Only 'anthropic' is currently supported.`);
 		}
+
+		// Set up SSE headers for streaming
+		const stream = new ReadableStream({
+			async start(controller) {
+				const encoder = new TextEncoder();
+
+				try {
+					// Start streaming using converseStream call
+					const generator = converseStream({
+						personaPrompt,
+						context,
+						message,
+						model: conversationModel,
+						maxTokens: conversationParams.max_tokens,
+						temperature: conversationParams.temperature
+					});
+
+					let result;
+					// Stream chunks to client
+					while (true) {
+						const { value, done } = await generator.next();
+						if (done) {
+							result = value;
+							break;
+						}
+						// Send chunk to client via SSE
+						const data = JSON.stringify({ type: 'chunk', content: value });
+						controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+					}
+
+					const aiResponse = extractMessage(result.fullResponse);
+
+					// Send completion event IMMEDIATELY (don't wait for database)
+					const doneData = JSON.stringify({
+						type: 'done',
+						timestamp: new Date().toISOString(),
+						model_identifier: conversationModel
+					});
+					controller.enqueue(encoder.encode(`data: ${doneData}\n\n`));
+					controller.close();
+
+					// Trigger background save AFTER stream closes
+					saveConversationToDatabase(
+						userId,
+						message,
+						aiResponse,
+						result.tokens,
+						conversationModel,
+						persona
+					).catch((error) => {
+						console.error('[Background] Failed to save conversation:', error);
+					});
+
+				} catch (error) {
+					console.error('Streaming error:', error);
+					const errorData = JSON.stringify({ type: 'error', message: 'Failed to generate response' });
+					controller.enqueue(encoder.encode(`data: ${errorData}\n\n`));
+					controller.close();
+				}
+			}
+		});
+
+		// Return response immediately
+		return new Response(stream, {
+			headers: {
+				'Content-Type': 'text/event-stream',
+				'Cache-Control': 'no-cache',
+				'Connection': 'keep-alive'
+			}
+		});
 	} catch (error) {
 		console.error('Chat API error:', error);
 		return json({ error: 'Failed to generate response' }, { status: 500 });

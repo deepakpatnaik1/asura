@@ -2,7 +2,7 @@
  * CALL 1 PROMPT (Chat Response Generation)
  *
  * Purpose: Generate persona response to user query
- * Input: BASE_INSTRUCTIONS + persona profile + memory context + user query
+ * Input: Persona profile + memory context + user query
  * Output: Streaming response to user
  */
 

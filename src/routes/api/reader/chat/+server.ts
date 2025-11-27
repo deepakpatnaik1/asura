@@ -1,13 +1,8 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import Anthropic from '@anthropic-ai/sdk';
-import { ANTHROPIC_API_KEY } from '$env/static/private';
-import { READER_SAMARA_PROMPT } from '$lib/prompts';
 import { DEFAULT_READER_MODEL } from '$lib/config/models';
 import { getModelParams } from '$lib/config/model-params';
-import { BRAVE_SEARCH_TOOL, executeBraveSearch } from '$lib/api/brave-search';
-
-const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
+import { followupStream } from '$lib/calls';
 
 /**
  * Reader Chat Endpoint (Phase 5 - Q&A System)
@@ -205,147 +200,43 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			const encoder = new TextEncoder();
 
 			try {
-				// Build conversation messages
-				const messages: Anthropic.MessageParam[] = [];
+				console.log('[Reader Chat] Starting AI call...');
 
-				// First message: Article HTML + original summary (if exists)
-				let articleContext = `Here is an article titled "${article.title}":\n\n<article>\n${article.raw_html}\n</article>`;
-
-				// Add original summary as context if it exists
-				if (article.transformed_content) {
-					articleContext += `\n\nHere is my previous summary of this article:\n\n${article.transformed_content}`;
-				}
-
-				messages.push({
-					role: 'user',
-					content: articleContext
-				});
-
-				// Add conversation history (all previous Q&A turns)
+				// Build chat history for the call
+				const history: Array<{ role: 'user' | 'assistant'; content: string }> = [];
 				if (chatHistory && chatHistory.length > 0) {
 					for (const turn of chatHistory) {
-						messages.push({
+						history.push({
 							role: turn.role as 'user' | 'assistant',
 							content: turn.content
 						});
 					}
 				}
 
-				// Add current user question
-				const currentQuestionContent: Anthropic.ContentBlockParam[] = [];
-
-				// Include chart image if referenced
-				if (chartImageData) {
-					currentQuestionContent.push({
-						type: 'image',
-						source: {
-							type: 'base64',
-							media_type: chartImageData.mediaType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
-							data: chartImageData.base64
-						}
-					});
-					currentQuestionContent.push({
-						type: 'text',
-						text: `[Referring to chart ${(chart_index ?? 0) + 1}] ${message}`
-					});
-				} else {
-					currentQuestionContent.push({
-						type: 'text',
-						text: message
-					});
-				}
-
-				messages.push({
-					role: 'user',
-					content: currentQuestionContent
+				// Use followupStream call
+				const generator = followupStream({
+					articleTitle: article.title,
+					articleHtml: article.raw_html,
+					previousSummary: article.transformed_content || null,
+					chatHistory: history,
+					message,
+					chartImage: chartImageData,
+					chartIndex: chart_index ?? null,
+					model: selectedModel,
+					maxTokens: modelParams.max_tokens,
+					temperature: modelParams.temperature
 				});
 
 				let fullResponse = '';
-
-				// Recursive function to handle tool use
-				async function processWithTools(
-					conversationMessages: Anthropic.MessageParam[]
-				): Promise<void> {
-					console.log('[Reader Chat] Starting AI call...');
-
-					const stream = await anthropic.messages.stream({
-						model: selectedModel,
-						max_tokens: modelParams.max_tokens,
-						temperature: modelParams.temperature,
-						system: READER_SAMARA_PROMPT,
-						messages: conversationMessages,
-						tools: [BRAVE_SEARCH_TOOL]
-					});
-
-					// Stream text deltas to client
-					for await (const event of stream) {
-						if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
-							const text = event.delta.text;
-							fullResponse += text;
-							controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`));
-						}
+				// Stream chunks to client
+				while (true) {
+					const { value, done } = await generator.next();
+					if (done) {
+						fullResponse = value;
+						break;
 					}
-
-					// Get finalized message
-					const finalMessage = await stream.finalMessage();
-
-					// Check for tool use
-					const toolUseBlocks = finalMessage.content.filter(
-						(block): block is Anthropic.ToolUseBlock => block.type === 'tool_use'
-					);
-
-					if (toolUseBlocks.length > 0) {
-						console.log(`[Reader Chat] ${toolUseBlocks.length} tool use(s) detected`);
-
-						const toolResults: Anthropic.MessageParam[] = [];
-
-						for (const toolBlock of toolUseBlocks) {
-							if (toolBlock.name === 'brave_search') {
-								const searchQuery = (toolBlock.input as { query: string }).query;
-								console.log('[Reader Chat] Executing Brave Search:', searchQuery);
-
-								const searchResults = await executeBraveSearch(searchQuery);
-
-								if (searchResults) {
-									toolResults.push({
-										role: 'user',
-										content: [
-											{
-												type: 'tool_result',
-												tool_use_id: toolBlock.id,
-												content: searchResults
-											}
-										]
-									});
-								} else {
-									toolResults.push({
-										role: 'user',
-										content: [
-											{
-												type: 'tool_result',
-												tool_use_id: toolBlock.id,
-												content: 'Search failed. Please continue without search results.'
-											}
-										]
-									});
-								}
-							}
-						}
-
-						// Add tool use + results to conversation
-						conversationMessages.push({
-							role: 'assistant',
-							content: finalMessage.content
-						});
-						conversationMessages.push(...toolResults);
-
-						// Recurse
-						await processWithTools(conversationMessages);
-					}
+					controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: value })}\n\n`));
 				}
-
-				// Start processing
-				await processWithTools(messages);
 
 				// 11. SAVE AI RESPONSE TO DATABASE
 				const { error: saveAssistantError } = await supabase.from('article_chat').insert({
