@@ -3,6 +3,7 @@
 	import { Icon } from 'svelte-icons-pack';
 	import { LuPaperclip, LuFolder, LuCloudDownload, LuFlame, LuTrash2 } from 'svelte-icons-pack/lu';
 	import { READER_CONFIG, scrollToTurn, scrollToBottom, getTurns, updateSpacer } from '$lib/ui/scroll';
+	import { createConfirmation } from '$lib/composables';
 	import ScrollControls from '$lib/components/ScrollControls.svelte';
 	import MessageGroup from '$lib/components/MessageGroup.svelte';
 	import ConfirmationModal from '$lib/components/ConfirmationModal.svelte';
@@ -52,16 +53,10 @@
 	let libraryDropdownRef: HTMLDivElement | null = null;
 	let libraryButtonRef: HTMLButtonElement | null = null;
 
-	// Article delete confirmation state
-	let deleteArticleId = $state<string | null>(null);
-	let deleteArticleProgress = $state(0);
-	let deleteArticleTimer: number | null = null;
+	// Confirmation composables (replaces manual timer state)
+	const deleteConfirm = createConfirmation();
+	const nukeConfirm = createConfirmation();
 	let isDeleting = $state(false);
-
-	// Nuke confirmation state
-	let showNukeModal = $state(false);
-	let nukeProgress = $state(0);
-	let nukeTimer: number | null = null;
 
 	// Mock data for testing (TODO: fetch from database)
 	const MOCK_CHARTS = [
@@ -709,144 +704,80 @@
 	function handleArticleDeleteClick(articleId: string, event: MouseEvent) {
 		event.stopPropagation(); // Prevent switching to article
 		// Keep dropdown open during delete so user can see articles disappear
-		deleteArticleId = articleId;
-		deleteArticleProgress = 0;
+		deleteConfirm.start(articleId, async () => {
+			if (isDeleting) return;
 
-		// Auto-confirm after 3 seconds
-		const duration = 3000;
-		const interval = 50;
-		const increment = (interval / duration) * 100;
+			isDeleting = true;
+			const maxRetries = 3;
+			let lastError: Error | null = null;
 
-		deleteArticleTimer = window.setInterval(() => {
-			deleteArticleProgress += increment;
-			if (deleteArticleProgress >= 100) {
-				if (deleteArticleTimer) clearInterval(deleteArticleTimer);
-				handleArticleDeleteConfirm();
-			}
-		}, interval);
-	}
+			for (let attempt = 1; attempt <= maxRetries; attempt++) {
+				try {
+					const response = await fetch('/api/reader/articles', {
+						method: 'DELETE',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({ article_id: articleId })
+					});
 
-	function handleArticleDeleteCancel() {
-		if (deleteArticleTimer) {
-			clearInterval(deleteArticleTimer);
-			deleteArticleTimer = null;
-		}
-		deleteArticleId = null;
-		deleteArticleProgress = 0;
-	}
+					if (response.ok) {
+						console.log('[Articles] Successfully deleted article:', articleId);
 
-	async function handleArticleDeleteConfirm() {
-		if (deleteArticleTimer) {
-			clearInterval(deleteArticleTimer);
-			deleteArticleTimer = null;
-		}
-		const articleId = deleteArticleId;
-		deleteArticleId = null;
-		deleteArticleProgress = 0;
+						// If we deleted the current article, clear it
+						if (currentArticle?.id === articleId) {
+							currentArticle = null;
+							chatHistory = [];
+							charts = [];
+						}
 
-		if (!articleId || isDeleting) return;
-
-		isDeleting = true;
-		const maxRetries = 3;
-		let lastError: Error | null = null;
-
-		for (let attempt = 1; attempt <= maxRetries; attempt++) {
-			try {
-				const response = await fetch('/api/reader/articles', {
-					method: 'DELETE',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ article_id: articleId })
-				});
-
-				if (response.ok) {
-					console.log('[Articles] Successfully deleted article:', articleId);
-
-					// If we deleted the current article, clear it
-					if (currentArticle?.id === articleId) {
-						currentArticle = null;
-						chatHistory = [];
-						charts = [];
+						// Reload articles list
+						await loadArticles();
+						isDeleting = false;
+						return;
 					}
 
-					// Reload articles list
-					await loadArticles();
-					isDeleting = false;
-					return;
+					lastError = new Error(response.statusText);
+					console.warn(`[Articles] Delete attempt ${attempt}/${maxRetries} failed:`, response.statusText);
+				} catch (error) {
+					lastError = error as Error;
+					console.warn(`[Articles] Delete attempt ${attempt}/${maxRetries} error:`, error);
 				}
 
-				lastError = new Error(response.statusText);
-				console.warn(`[Articles] Delete attempt ${attempt}/${maxRetries} failed:`, response.statusText);
-			} catch (error) {
-				lastError = error as Error;
-				console.warn(`[Articles] Delete attempt ${attempt}/${maxRetries} error:`, error);
+				// Wait before retry (exponential backoff: 500ms, 1000ms, 2000ms)
+				if (attempt < maxRetries) {
+					await new Promise((resolve) => setTimeout(resolve, 500 * Math.pow(2, attempt - 1)));
+				}
 			}
 
-			// Wait before retry (exponential backoff: 500ms, 1000ms, 2000ms)
-			if (attempt < maxRetries) {
-				await new Promise((resolve) => setTimeout(resolve, 500 * Math.pow(2, attempt - 1)));
-			}
-		}
-
-		console.error('[Articles] Failed to delete after', maxRetries, 'attempts:', lastError);
-		isDeleting = false;
+			console.error('[Articles] Failed to delete after', maxRetries, 'attempts:', lastError);
+			isDeleting = false;
+		});
 	}
 
 	// Nuke all e-reader data - show confirmation modal with 3s countdown
 	function handleNukeClick() {
-		showNukeModal = true;
-		nukeProgress = 0;
+		nukeConfirm.start('nuke', async () => {
+			try {
+				const response = await fetch('/api/reader/nuke', {
+					method: 'POST'
+				});
 
-		const duration = 3000;
-		const interval = 50;
-		const increment = (interval / duration) * 100;
+				if (!response.ok) {
+					console.error('[Nuke] Failed:', response.statusText);
+					return;
+				}
 
-		nukeTimer = window.setInterval(() => {
-			nukeProgress += increment;
-			if (nukeProgress >= 100) {
-				if (nukeTimer) clearInterval(nukeTimer);
-				handleNukeConfirm();
+				const result = await response.json();
+				console.log('[Nuke] Successfully deleted', result.deleted, 'articles');
+
+				// Clear all local state
+				articles = [];
+				currentArticle = null;
+				chatHistory = [];
+				charts = [];
+			} catch (error) {
+				console.error('[Nuke] Error:', error);
 			}
-		}, interval);
-	}
-
-	function handleNukeCancel() {
-		if (nukeTimer) {
-			clearInterval(nukeTimer);
-			nukeTimer = null;
-		}
-		showNukeModal = false;
-		nukeProgress = 0;
-	}
-
-	async function handleNukeConfirm() {
-		if (nukeTimer) {
-			clearInterval(nukeTimer);
-			nukeTimer = null;
-		}
-		showNukeModal = false;
-		nukeProgress = 0;
-
-		try {
-			const response = await fetch('/api/reader/nuke', {
-				method: 'POST'
-			});
-
-			if (!response.ok) {
-				console.error('[Nuke] Failed:', response.statusText);
-				return;
-			}
-
-			const result = await response.json();
-			console.log('[Nuke] Successfully deleted', result.deleted, 'articles');
-
-			// Clear all local state
-			articles = [];
-			currentArticle = null;
-			chatHistory = [];
-			charts = [];
-		} catch (error) {
-			console.error('[Nuke] Error:', error);
-		}
+		});
 	}
 
 	// Handle clicks outside dropdown
@@ -1104,17 +1035,17 @@
 
 <!-- Article Delete Confirmation Modal -->
 <ConfirmationModal
-	isOpen={!!deleteArticleId}
-	progress={deleteArticleProgress}
-	onCancel={handleArticleDeleteCancel}
+	isOpen={deleteConfirm.isActive}
+	progress={deleteConfirm.progress}
+	onCancel={() => deleteConfirm.cancel()}
 	mode="reader"
 />
 
 <!-- Nuke Confirmation Modal -->
 <ConfirmationModal
-	isOpen={showNukeModal}
-	progress={nukeProgress}
-	onCancel={handleNukeCancel}
+	isOpen={nukeConfirm.isActive}
+	progress={nukeConfirm.progress}
+	onCancel={() => nukeConfirm.cancel()}
 	mode="reader"
 />
 

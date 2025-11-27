@@ -3,9 +3,9 @@
 	import { LuPaperclip, LuFolder, LuCloudDownload, LuFlame } from 'svelte-icons-pack/lu';
 	import { currentMessage, isLoading, sendMessage, abortCurrentMessage } from '$lib/stores/chat';
 	import { tick, onMount } from 'svelte';
-	import { TIMING } from '$lib/config/timing';
 	import { DEFAULT_PERSONA } from '$lib/config/personas';
 	import { CHAT_CONFIG, scrollToTurn, scrollToBottom, getTurns } from '$lib/ui/scroll';
+	import { createConfirmation } from '$lib/composables';
 	import ScrollControls from '$lib/components/ScrollControls.svelte';
 	import MessageGroup from '$lib/components/MessageGroup.svelte';
 	import ConfirmationModal from '$lib/components/ConfirmationModal.svelte';
@@ -22,17 +22,13 @@
 	let inputMessage = $state('');
 	let messagesEndRef: HTMLDivElement;
 	let textareaRef: HTMLTextAreaElement;
-	let showNukeConfirm = $state(false);
-	let nukeProgress = $state(0);
-	let nukeTimer: number | null = null;
 
 	// User settings state
 	let selectedPersona = $state<'gunnar' | 'kirby'>(DEFAULT_PERSONA);
 
-	// Message deletion state
-	let deleteMessageId = $state<string | null>(null);
-	let deleteMessageProgress = $state(0);
-	let deleteMessageTimer: number | null = null;
+	// Confirmation composables (replaces manual timer state)
+	const nukeConfirm = createConfirmation();
+	const deleteConfirm = createConfirmation();
 
 	// Load user settings on mount
 	onMount(async () => {
@@ -179,42 +175,7 @@
 	}
 
 	function handleMessageDeleteClick(messageId: string) {
-		deleteMessageId = messageId;
-		deleteMessageProgress = 0;
-
-		// Auto-confirm after 3 seconds
-		const duration = TIMING.countdownDuration;
-		const interval = 50;
-		const increment = (interval / duration) * 100;
-
-		deleteMessageTimer = window.setInterval(() => {
-			deleteMessageProgress += increment;
-			if (deleteMessageProgress >= 100) {
-				if (deleteMessageTimer) clearInterval(deleteMessageTimer);
-				handleMessageDeleteConfirm();
-			}
-		}, interval);
-	}
-
-	function handleMessageDeleteCancel() {
-		if (deleteMessageTimer) {
-			clearInterval(deleteMessageTimer);
-			deleteMessageTimer = null;
-		}
-		deleteMessageId = null;
-		deleteMessageProgress = 0;
-	}
-
-	async function handleMessageDeleteConfirm() {
-		if (deleteMessageTimer) {
-			clearInterval(deleteMessageTimer);
-			deleteMessageTimer = null;
-		}
-		const messageId = deleteMessageId;
-		deleteMessageId = null;
-		deleteMessageProgress = 0;
-
-		if (messageId) {
+		deleteConfirm.start(messageId, async () => {
 			try {
 				const response = await fetch(`/api/superjournal/${messageId}`, {
 					method: 'DELETE'
@@ -226,7 +187,7 @@
 			} catch (err) {
 				console.error('[Message] Delete failed:', err);
 			}
-		}
+		});
 	}
 
 	function handleAbortCurrentMessage() {
@@ -285,55 +246,23 @@
 	}
 
 	function handleNukeClick() {
-		showNukeConfirm = true;
-		nukeProgress = 0;
+		nukeConfirm.start('nuke', async () => {
+			try {
+				const response = await fetch('/api/nuke', {
+					method: 'POST'
+				});
 
-		// Auto-confirm after 3 seconds
-		const duration = TIMING.countdownDuration;
-		const interval = 50;
-		const increment = (interval / duration) * 100;
+				if (!response.ok) {
+					throw new Error('Failed to nuke database');
+				}
 
-		nukeTimer = window.setInterval(() => {
-			nukeProgress += increment;
-			if (nukeProgress >= 100) {
-				if (nukeTimer) clearInterval(nukeTimer);
-				handleNukeConfirm();
+				// Clear local messages
+				allMessages = [];
+				currentMessage.set(null);
+			} catch (error) {
+				console.error('Nuke error:', error);
 			}
-		}, interval);
-	}
-
-	function handleNukeCancel() {
-		if (nukeTimer) {
-			clearInterval(nukeTimer);
-			nukeTimer = null;
-		}
-		showNukeConfirm = false;
-		nukeProgress = 0;
-	}
-
-	async function handleNukeConfirm() {
-		if (nukeTimer) {
-			clearInterval(nukeTimer);
-			nukeTimer = null;
-		}
-		showNukeConfirm = false;
-		nukeProgress = 0;
-
-		try {
-			const response = await fetch('/api/nuke', {
-				method: 'POST'
-			});
-
-			if (!response.ok) {
-				throw new Error('Failed to nuke database');
-			}
-
-			// Clear local messages
-			allMessages = [];
-			currentMessage.set(null);
-		} catch (error) {
-			console.error('Nuke error:', error);
-		}
+		});
 	}
 
 
@@ -428,17 +357,17 @@
 
 	<!-- Message Delete Confirmation Modal -->
 	<ConfirmationModal
-		isOpen={!!deleteMessageId}
-		progress={deleteMessageProgress}
-		onCancel={handleMessageDeleteCancel}
+		isOpen={deleteConfirm.isActive}
+		progress={deleteConfirm.progress}
+		onCancel={() => deleteConfirm.cancel()}
 		mode="chat"
 	/>
 
 	<!-- Nuke Confirmation Modal -->
 	<ConfirmationModal
-		isOpen={showNukeConfirm}
-		progress={nukeProgress}
-		onCancel={handleNukeCancel}
+		isOpen={nukeConfirm.isActive}
+		progress={nukeConfirm.progress}
+		onCancel={() => nukeConfirm.cancel()}
 		mode="chat"
 	/>
 

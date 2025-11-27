@@ -1,6 +1,6 @@
 import { marked } from 'marked';
-import DOMPurify from 'isomorphic-dompurify';
 import { CHAT_ACCENT, READER_ACCENT, DIVIDER_COLOR } from '$lib/config/colors';
+import { sanitizeHtml } from '$lib/security';
 
 export type RenderMode = 'chat' | 'reader';
 
@@ -121,24 +121,8 @@ export function renderMarkdown(markdown: string, mode: RenderMode = 'chat'): str
 	// Parse markdown to HTML
 	const rawHtml = marked.parse(normalizedMarkdown) as string;
 
-	// Sanitize HTML to prevent XSS
-	const cleanHtml = DOMPurify.sanitize(rawHtml, {
-		ALLOWED_TAGS: [
-			'p',
-			'br',
-			'span',
-			'div',
-			'ul',
-			'ol',
-			'li',
-			'hr',
-			'strong',
-			'em',
-			'code',
-			'pre',
-		],
-		ALLOWED_ATTR: ['style'],
-	});
+	// Sanitize HTML to prevent XSS (uses centralized security config)
+	const cleanHtml = sanitizeHtml(rawHtml);
 
 	// Strip any remaining asterisks from the final HTML
 	const finalHtml = cleanHtml.replace(/\*/g, '');
