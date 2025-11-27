@@ -340,6 +340,8 @@ Integration:
 
 ### Phase 4: Wire Up Capabilities & Modes - COMPLETE ✓
 
+**Commit:** `7cb4222` - refactor: Phase 4 - Create capabilities and modes abstractions
+
 **Capabilities created (`/lib/capabilities/`):**
 - `web-search.ts` - Re-exports Brave Search tool and execution function with config types
 - `context-injection.ts` - Re-exports context builder with config types for injection levels
