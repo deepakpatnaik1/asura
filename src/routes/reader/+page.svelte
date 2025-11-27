@@ -58,16 +58,6 @@
 	const nukeConfirm = createConfirmation();
 	let isDeleting = $state(false);
 
-	// Mock data for testing (TODO: fetch from database)
-	const MOCK_CHARTS = [
-		{ id: '1', thumbnail_url: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=150&h=150&fit=crop', full_url: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=1200&h=800&fit=crop', alt: 'Revenue growth analytics dashboard' },
-		{ id: '2', thumbnail_url: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=150&h=150&fit=crop', full_url: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=1200&h=800&fit=crop', alt: 'Market trends and projections' },
-		{ id: '3', thumbnail_url: 'https://images.unsplash.com/photo-1543286386-713bdd548da4?w=150&h=150&fit=crop', full_url: 'https://images.unsplash.com/photo-1543286386-713bdd548da4?w=1200&h=800&fit=crop', alt: 'Data visualization pie chart' },
-		{ id: '4', thumbnail_url: 'https://images.unsplash.com/photo-1579621970563-ebec7560ff3e?w=150&h=150&fit=crop', full_url: 'https://images.unsplash.com/photo-1579621970563-ebec7560ff3e?w=1200&h=800&fit=crop', alt: 'Statistical analysis graphs' },
-		{ id: '5', thumbnail_url: 'https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?w=150&h=150&fit=crop', full_url: 'https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?w=1200&h=800&fit=crop', alt: 'Performance metrics dashboard' },
-		{ id: '6', thumbnail_url: 'https://images.unsplash.com/photo-1504868584819-f8e8b4b6d7e3?w=150&h=150&fit=crop', full_url: 'https://images.unsplash.com/photo-1504868584819-f8e8b4b6d7e3?w=1200&h=800&fit=crop', alt: 'Business intelligence charts' }
-	];
-
 	// Save active article to user settings
 	async function saveActiveArticle(articleId: string | null) {
 		try {
