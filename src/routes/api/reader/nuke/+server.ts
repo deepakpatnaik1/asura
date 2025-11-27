@@ -29,8 +29,6 @@ export const POST: RequestHandler = async ({ locals: { safeGetSession, supabase 
 	}
 	const userId = user.id;
 
-	console.log('[Reader Nuke] Starting for user:', userId);
-
 	// 2. FETCH ALL ARTICLES TO GET FILE PATHS
 	const { data: articles, error: articlesFetchError } = await supabase
 		.from('articles')
@@ -38,7 +36,6 @@ export const POST: RequestHandler = async ({ locals: { safeGetSession, supabase 
 		.eq('user_id', userId);
 
 	if (articlesFetchError) {
-		console.error('[Reader Nuke] Failed to fetch articles:', articlesFetchError);
 		// Continue anyway - we still want to try deletion
 	}
 
@@ -49,7 +46,6 @@ export const POST: RequestHandler = async ({ locals: { safeGetSession, supabase 
 		.eq('user_id', userId);
 
 	if (chartsFetchError) {
-		console.error('[Reader Nuke] Failed to fetch charts:', chartsFetchError);
 		// Continue anyway
 	}
 
@@ -77,29 +73,17 @@ export const POST: RequestHandler = async ({ locals: { safeGetSession, supabase 
 		}
 	}
 
-	console.log('[Reader Nuke] Files to delete:', {
-		pdfs: pdfPaths.length,
-		images: imagePaths.length,
-		thumbnails: thumbnailPaths.length
-	});
-
 	// 5. DELETE FROM SUPABASE STORAGE
 	if (pdfPaths.length > 0) {
-		const { error } = await supabase.storage.from('article-pdfs').remove(pdfPaths);
-		if (error) console.error('[Reader Nuke] Failed to delete PDFs:', error);
-		else console.log('[Reader Nuke] Deleted', pdfPaths.length, 'PDFs');
+		await supabase.storage.from('article-pdfs').remove(pdfPaths);
 	}
 
 	if (imagePaths.length > 0) {
-		const { error } = await supabase.storage.from('article-images').remove(imagePaths);
-		if (error) console.error('[Reader Nuke] Failed to delete images:', error);
-		else console.log('[Reader Nuke] Deleted', imagePaths.length, 'images');
+		await supabase.storage.from('article-images').remove(imagePaths);
 	}
 
 	if (thumbnailPaths.length > 0) {
-		const { error } = await supabase.storage.from('article-thumbnails').remove(thumbnailPaths);
-		if (error) console.error('[Reader Nuke] Failed to delete thumbnails:', error);
-		else console.log('[Reader Nuke] Deleted', thumbnailPaths.length, 'thumbnails');
+		await supabase.storage.from('article-thumbnails').remove(thumbnailPaths);
 	}
 
 	// 6. DELETE ALL ARTICLES FROM DATABASE (CASCADE handles article_charts and article_chat)
@@ -109,7 +93,6 @@ export const POST: RequestHandler = async ({ locals: { safeGetSession, supabase 
 		.eq('user_id', userId);
 
 	if (deleteError) {
-		console.error('[Reader Nuke] Failed to delete from database:', deleteError);
 		return json(
 			{
 				error: {
@@ -123,7 +106,6 @@ export const POST: RequestHandler = async ({ locals: { safeGetSession, supabase 
 	}
 
 	const articleCount = articles?.length || 0;
-	console.log('[Reader Nuke] Successfully deleted', articleCount, 'articles and all related data');
 
 	return json({
 		success: true,

@@ -205,10 +205,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		);
 	}
 
-	console.log('[Extract Images] User ID:', userId);
-	console.log('[Extract Images] Article ID:', article_id);
-	console.log('[Extract Images] HTML length:', html.length);
-
 	try {
 		// 3. VERIFY ARTICLE OWNERSHIP (explicit user_id filter for defense-in-depth)
 		const { data: article, error: fetchError } = await supabase
@@ -231,9 +227,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		}
 
 		// 4. EXTRACT ALL <img> TAGS
-		console.log('[Extract Images] Extracting images from HTML...');
 		const images = extractImages(html);
-		console.log(`[Extract Images] Found ${images.length} images`);
 
 		// 5. PROCESS EACH IMAGE: DOWNLOAD, GENERATE THUMBNAIL, UPLOAD
 		const chartResults: Array<{
@@ -247,25 +241,13 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		}> = [];
 
 		for (const image of images) {
-			console.log(`[Image Process] Processing image ${image.index}...`);
 			try {
 				// Download image from URL or data URL
 				const imageBuffer = await downloadImage(image.src);
 				const imageExt = getImageExtension(imageBuffer);
-				console.log(
-					`[Image Process] Image ${image.index} downloaded:`,
-					(imageBuffer.length / 1024).toFixed(2),
-					'KB',
-					`(${imageExt})`
-				);
 
 				// Generate thumbnail
 				const thumbnailBuffer = await generateThumbnail(imageBuffer);
-				console.log(
-					`[Image Process] Thumbnail ${image.index} generated:`,
-					(thumbnailBuffer.length / 1024).toFixed(2),
-					'KB'
-				);
 
 				// Upload original image to storage
 				const imagePath = await uploadImageToStorage(
@@ -274,7 +256,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 					article_id,
 					`chart-${image.index}.${imageExt}`
 				);
-				console.log(`[Image Process] Image ${image.index} uploaded to storage:`, imagePath);
 
 				// Upload thumbnail to storage
 				const thumbnailPath = await uploadThumbnailToStorage(
@@ -283,13 +264,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 					article_id,
 					image.index
 				);
-				console.log(
-					`[Image Process] Thumbnail ${image.index} uploaded to storage:`,
-					thumbnailPath
-				);
 
 				// Upload image to Anthropic Files API (for potential chart-specific Q&A)
-				console.log(`[Image Process] Uploading image ${image.index} to Anthropic Files API...`);
 				const chartAnthropicResult = await uploadFileWithRetry(
 					imageBuffer,
 					`chart-${image.index}.${imageExt}`
@@ -301,14 +277,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				if (chartAnthropicResult) {
 					chartAnthropicFileId = chartAnthropicResult.file_id;
 					chartAnthropicFileCreatedAt = chartAnthropicResult.created_at;
-					console.log(
-						`[Image Process] Image ${image.index} uploaded to Anthropic:`,
-						chartAnthropicFileId
-					);
 				} else {
-					console.warn(
-						`[Image Process] Failed to upload image ${image.index} to Anthropic after retries`
-					);
 					// Continue anyway - graceful degradation
 				}
 
@@ -322,7 +291,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 					anthropic_file_created_at: chartAnthropicFileCreatedAt
 				});
 			} catch (error) {
-				console.error(`[Image Process] Failed to process image ${image.index}:`, error);
 				// Continue with other images even if one fails
 			}
 		}
@@ -346,7 +314,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				.insert(chartRecords);
 
 			if (insertError) {
-				console.error('[Extract Images] Failed to insert chart records:', insertError);
 				// Continue anyway - files are uploaded, just not tracked in DB yet
 			}
 		}
@@ -366,7 +333,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			total_charts: chartResults.length
 		});
 	} catch (error) {
-		console.error('[Extract Images] Error:', error);
 		return json(
 			{
 				error: {

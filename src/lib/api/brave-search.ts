@@ -67,8 +67,6 @@ interface BraveSearchResponse {
  */
 export async function executeBraveSearch(query: string): Promise<string | null> {
 	try {
-		console.log(`[Brave Search] Executing search: "${query}"`);
-
 		// Call Brave Search API
 		const response = await fetch(
 			`https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=10`,
@@ -81,7 +79,6 @@ export async function executeBraveSearch(query: string): Promise<string | null> 
 		);
 
 		if (!response.ok) {
-			console.error(`[Brave Search] API error: ${response.status} ${response.statusText}`);
 			return null;
 		}
 
@@ -130,13 +127,8 @@ export async function executeBraveSearch(query: string): Promise<string | null> 
 			formattedResults += 'No results found for this query.\n';
 		}
 
-		console.log(
-			`[Brave Search] Found ${data.web?.results?.length || 0} web results, ${data.news?.results?.length || 0} news results`
-		);
-
 		return formattedResults;
 	} catch (error) {
-		console.error('[Brave Search] Error:', error);
 		return null; // Graceful degradation - return null instead of throwing
 	}
 }

@@ -5,7 +5,6 @@ export const POST: RequestHandler = async ({ locals: { supabase } }) => {
 	const { error } = await supabase.auth.signOut();
 
 	if (error) {
-		console.error('[Logout] Error:', error.message);
 		return json({ error: error.message }, { status: 400 });
 	}
 

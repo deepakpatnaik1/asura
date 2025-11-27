@@ -19,7 +19,6 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 		.order('model_name', { ascending: true });
 
 	if (error) {
-		console.error('[Models GET] Database error:', error);
 		return json({ error: error.message }, { status: 500 });
 	}
 

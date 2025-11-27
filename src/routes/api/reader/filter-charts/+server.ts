@@ -218,9 +218,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		);
 	}
 
-	console.log('[Chart Filter] User ID:', userId);
-	console.log('[Chart Filter] Article ID:', article_id);
-
 	try {
 		// 3. READ SELECTED READER MODEL FROM USER_SETTINGS
 		const { data: settings } = await supabase
@@ -230,7 +227,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			.single();
 
 		const readerModel = settings?.selected_reader_model || DEFAULT_READER_MODEL;
-		console.log('[Chart Filter] Using reader model:', readerModel);
 
 		// 4. VERIFY ARTICLE OWNERSHIP
 		const { data: article, error: fetchError } = await supabase
@@ -264,7 +260,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		}
 
 		if (!charts || charts.length === 0) {
-			console.log('[Chart Filter] No charts found for article');
 			return json({
 				success: true,
 				article_id: article_id,
@@ -275,8 +270,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				irrelevant_charts: []
 			});
 		}
-
-		console.log(`[Chart Filter] Found ${charts.length} charts`);
 
 		// 5. PROGRAMMATIC FILTER (FIRST PASS)
 		const programmaticResults: Array<{
@@ -317,9 +310,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 					const isExpired = isAnthropicFileExpired(chart.anthropic_file_created_at);
 
 					if (isExpired) {
-						console.warn(
-							`[Chart Filter] Chart ${chart.chart_index} file ID expired, marking as irrelevant`
-						);
 						programmaticResults.push({
 							chart_index: chart.chart_index,
 							id: chart.id,
@@ -346,9 +336,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			}
 		}
 
-		console.log(`[Chart Filter] Programmatic pass: ${programmaticResults.length} classified`);
-		console.log(`[Chart Filter] Ambiguous charts requiring AI: ${ambiguousCharts.length}`);
-
 		// 6. AI FILTER (SECOND PASS) - only on ambiguous charts with valid file IDs
 		let aiResults: Array<{
 			chart_index: number;
@@ -358,8 +345,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		}> = [];
 
 		if (ambiguousCharts.length > 0) {
-			console.log('[Chart Filter] Running AI filter on ambiguous charts...');
-
 			try {
 				const aiClassification = await filterChartsWithAI(ambiguousCharts, readerModel);
 
@@ -373,10 +358,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 						filter_reason: isRelevant ? 'ai_relevant' : 'ai_irrelevant'
 					});
 				}
-
-				console.log(`[Chart Filter] AI classified ${aiResults.length} charts`);
 			} catch (error) {
-				console.error('[Chart Filter] AI filter failed:', error);
 				// Graceful degradation - mark ambiguous charts as relevant (show them to user)
 				for (const chart of ambiguousCharts) {
 					aiResults.push({
@@ -402,7 +384,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				.eq('user_id', userId); // Defense-in-depth: ensure user owns this chart
 
 			if (updateError) {
-				console.error(`[Chart Filter] Failed to update chart ${result.chart_index}:`, updateError);
 				// Continue with other charts
 			}
 		}
@@ -427,7 +408,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			}))
 		});
 	} catch (error) {
-		console.error('[Chart Filter] Error:', error);
 		return json(
 			{
 				error: {

@@ -27,7 +27,6 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession, supabase 
 		.order('created_at', { ascending: false });
 
 	if (error) {
-		console.error('Error loading superjournal:', error);
 		return { messages: [], starredIds: [], orphans: [], user };
 	}
 
@@ -67,9 +66,6 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession, supabase 
 			persona_name: msg.persona_name
 		}));
 
-	if (orphans.length > 0) {
-		console.log(`[Orphan Recovery] Found ${orphans.length} orphan entries to recover`);
-	}
 
 	// Format timestamps on the server to prevent hydration mismatch
 	const messagesWithFormattedTimestamps = (messages || []).map((msg) => ({

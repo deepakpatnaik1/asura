@@ -21,7 +21,6 @@ async function getModelContextWindow(supabase: SupabaseClient, modelIdentifier: 
 		.single();
 
 	if (error || !data) {
-		console.warn('Failed to fetch model context window, using default 131072');
 		return 131072; // Default fallback (128K tokens)
 	}
 
@@ -185,7 +184,6 @@ export async function buildContextForCalls1A1B(
 		if (journalCount && journalCount > MEMORY.vectorSearchThreshold) {
 			try {
 				// Generate embedding for user query
-				console.log('[Context Builder] Generating query embedding for vector search');
 				const queryEmbedding = await voyage.embed({
 					input: userQuery,
 					model: EMBEDDING_MODEL // 1024 dimensions
@@ -261,14 +259,10 @@ export async function buildContextForCalls1A1B(
 						components.highSalienceArcs = vectorText; // Reuse highSalienceArcs component
 						totalTokens += vectorTokens;
 					}
-
-					console.log('[Context Builder] Vector search loaded', reranked.length, 'results');
 				}
 			} catch (vectorError) {
-				console.error('[Context Builder] Vector search error:', vectorError);
+				// Vector search failed, continue without it
 			}
-		} else {
-			console.log(`[Context Builder] Skipping vector search (journal count <= ${MEMORY.vectorSearchThreshold})`);
 		}
 	}
 
@@ -288,13 +282,6 @@ export async function buildContextForCalls1A1B(
 			otherArcs: estimateTokens(components.otherArcs)
 		}
 	};
-
-	console.log('[Context Builder] Stats:', {
-		totalTokens,
-		budget: contextBudget,
-		utilization: `${((totalTokens / contextBudget) * 100).toFixed(1)}%`,
-		components: stats.components
-	});
 
 	return { context: finalContext, components, stats };
 }

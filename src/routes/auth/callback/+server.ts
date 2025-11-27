@@ -9,7 +9,6 @@ export const GET: RequestHandler = async ({ url, locals: { supabase } }) => {
 		const { error } = await supabase.auth.exchangeCodeForSession(code);
 
 		if (error) {
-			console.error('[OAuth Callback] Error exchanging code:', error.message);
 			throw redirect(303, '/login?error=auth_failed');
 		}
 

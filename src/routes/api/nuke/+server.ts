@@ -18,8 +18,6 @@ export const POST: RequestHandler = async ({ locals: { safeGetSession, supabase 
 		}
 		const userId = user.id;
 
-		console.log(`[Nuke] Starting user data cleanup for user: ${userId}`);
-
 		// 2. Delete user data
 		const { error: superjournalError } = await supabase
 			.from('superjournal')
@@ -27,7 +25,6 @@ export const POST: RequestHandler = async ({ locals: { safeGetSession, supabase 
 			.eq('user_id', userId);
 
 		if (superjournalError) {
-			console.error('[Nuke] Superjournal delete error:', superjournalError);
 			return json({ error: 'Failed to delete superjournal data' }, { status: 500 });
 		}
 
@@ -37,7 +34,6 @@ export const POST: RequestHandler = async ({ locals: { safeGetSession, supabase 
 			.eq('user_id', userId);
 
 		if (journalError) {
-			console.error('[Nuke] Journal delete error:', journalError);
 			return json({ error: 'Failed to delete journal data' }, { status: 500 });
 		}
 
@@ -48,18 +44,14 @@ export const POST: RequestHandler = async ({ locals: { safeGetSession, supabase 
 			.eq('user_id', userId);
 
 		if (settingsError) {
-			console.error('[Nuke] Settings delete error:', settingsError);
 			return json({ error: 'Failed to delete settings' }, { status: 500 });
 		}
-
-		console.log(`[Nuke] Successfully deleted all data for user: ${userId}`);
 
 		return json({
 			success: true,
 			message: 'All your data has been deleted'
 		});
 	} catch (error) {
-		console.error('[Nuke] Unexpected error:', error);
 		return json({ error: 'Unexpected error during nuke operation' }, { status: 500 });
 	}
 };

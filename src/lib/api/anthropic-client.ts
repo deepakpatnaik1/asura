@@ -179,15 +179,11 @@ export async function uploadFileWithRetry(
 			const result = await uploadFileToAnthropic(fileBuffer, filename);
 			return result;
 		} catch (error) {
-			console.error(`[Anthropic Upload] Attempt ${attempt}/${maxRetries} failed:`, error);
-
 			if (attempt < maxRetries) {
 				// Exponential backoff: 1s, 2s, 4s
 				const delayMs = Math.pow(2, attempt - 1) * 1000;
-				console.log(`[Anthropic Upload] Retrying in ${delayMs}ms...`);
 				await new Promise((resolve) => setTimeout(resolve, delayMs));
 			} else {
-				console.error(`[Anthropic Upload] All ${maxRetries} attempts failed for ${filename}`);
 				return null; // Graceful degradation
 			}
 		}

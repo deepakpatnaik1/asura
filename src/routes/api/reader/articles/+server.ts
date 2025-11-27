@@ -38,8 +38,6 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 	}
 	const userId = user.id;
 
-	console.log('[Articles] Fetching for user:', userId);
-
 	// 2. FETCH ARTICLES FROM DATABASE
 	const { data: articles, error: fetchError } = await supabase
 		.from('articles')
@@ -48,7 +46,6 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 		.order('created_at', { ascending: false }); // Most recent first
 
 	if (fetchError) {
-		console.error('[Articles] Failed to fetch:', fetchError);
 		return json(
 			{
 				error: {
@@ -60,8 +57,6 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 			{ status: 500 }
 		);
 	}
-
-	console.log('[Articles] Found', articles?.length || 0, 'articles');
 
 	return json({
 		articles: articles || []
@@ -103,8 +98,6 @@ export const DELETE: RequestHandler = async ({ request, locals: { safeGetSession
 		);
 	}
 
-	console.log('[Articles] Deleting article:', article_id);
-
 	// 3. FETCH ARTICLE AND CHARTS TO GET FILE PATHS (before deletion)
 	const { data: article, error: articleFetchError } = await supabase
 		.from('articles')
@@ -114,7 +107,6 @@ export const DELETE: RequestHandler = async ({ request, locals: { safeGetSession
 		.single();
 
 	if (articleFetchError) {
-		console.error('[Articles] Failed to fetch article for cleanup:', articleFetchError);
 		// Continue anyway - we still want to delete the database record
 	}
 
@@ -125,7 +117,6 @@ export const DELETE: RequestHandler = async ({ request, locals: { safeGetSession
 		.eq('user_id', userId);
 
 	if (chartsFetchError) {
-		console.error('[Articles] Failed to fetch charts for cleanup:', chartsFetchError);
 		// Continue anyway
 	}
 
@@ -146,8 +137,6 @@ export const DELETE: RequestHandler = async ({ request, locals: { safeGetSession
 	}
 
 	if (storagePaths.length > 0) {
-		console.log('[Articles] Deleting', storagePaths.length, 'files from storage');
-
 		// Group by bucket (extract bucket name from path)
 		const pdfPaths = storagePaths.filter((p) => p.startsWith('article-pdfs/'));
 		const imagePaths = storagePaths.filter((p) => p.startsWith('article-images/'));
@@ -155,21 +144,15 @@ export const DELETE: RequestHandler = async ({ request, locals: { safeGetSession
 
 		// Delete from each bucket
 		if (pdfPaths.length > 0) {
-			const { error } = await supabase.storage.from('article-pdfs').remove(pdfPaths.map((p) => p.replace('article-pdfs/', '')));
-			if (error) console.error('[Articles] Failed to delete PDFs from storage:', error);
-			else console.log('[Articles] Deleted', pdfPaths.length, 'PDFs from storage');
+			await supabase.storage.from('article-pdfs').remove(pdfPaths.map((p) => p.replace('article-pdfs/', '')));
 		}
 
 		if (imagePaths.length > 0) {
-			const { error } = await supabase.storage.from('article-images').remove(imagePaths.map((p) => p.replace('article-images/', '')));
-			if (error) console.error('[Articles] Failed to delete images from storage:', error);
-			else console.log('[Articles] Deleted', imagePaths.length, 'images from storage');
+			await supabase.storage.from('article-images').remove(imagePaths.map((p) => p.replace('article-images/', '')));
 		}
 
 		if (thumbnailPaths.length > 0) {
-			const { error } = await supabase.storage.from('article-thumbnails').remove(thumbnailPaths.map((p) => p.replace('article-thumbnails/', '')));
-			if (error) console.error('[Articles] Failed to delete thumbnails from storage:', error);
-			else console.log('[Articles] Deleted', thumbnailPaths.length, 'thumbnails from storage');
+			await supabase.storage.from('article-thumbnails').remove(thumbnailPaths.map((p) => p.replace('article-thumbnails/', '')));
 		}
 	}
 
@@ -181,7 +164,6 @@ export const DELETE: RequestHandler = async ({ request, locals: { safeGetSession
 		.eq('user_id', userId);
 
 	if (deleteError) {
-		console.error('[Articles] Failed to delete from database:', deleteError);
 		return json(
 			{
 				error: {
@@ -193,8 +175,6 @@ export const DELETE: RequestHandler = async ({ request, locals: { safeGetSession
 			{ status: 500 }
 		);
 	}
-
-	console.log('[Articles] Successfully deleted article and all related data:', article_id);
 
 	return json({
 		success: true

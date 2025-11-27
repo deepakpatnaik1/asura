@@ -47,12 +47,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		);
 	}
 
-	console.log('[Reader Upload] User ID:', userId);
-	console.log('[Reader Upload] HTML length:', html.length);
-
 	// 4. EXTRACT ARTICLE TITLE (using file-reader capability)
 	const title = extractTitleFromHtml(html);
-	console.log('[Reader Upload] Extracted title:', title);
 
 	// 5. CREATE ARTICLE RECORD WITH STATUS = 'processing' AND RAW HTML
 	const { data: article, error: insertError } = await supabase
@@ -67,7 +63,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		.single();
 
 	if (insertError || !article) {
-		console.error('[Reader Upload] Failed to create article:', insertError);
 		return json(
 			{
 				error: {
@@ -79,8 +74,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			{ status: 500 }
 		);
 	}
-
-	console.log('[Reader Upload] Created article:', article.id);
 
 	// 6. RETURN ARTICLE ID AND TITLE
 	// Note: Client will send HTML + article_id to next endpoint for PDF conversion

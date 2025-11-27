@@ -40,8 +40,6 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supab
 		);
 	}
 
-	console.log('[Article] Fetching:', articleId);
-
 	// 3. FETCH ARTICLE FROM DATABASE
 	const { data: article, error: fetchError } = await supabase
 		.from('articles')
@@ -51,7 +49,6 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supab
 		.single();
 
 	if (fetchError || !article) {
-		console.error('[Article] Failed to fetch:', fetchError);
 		return json(
 			{
 				error: {
@@ -63,8 +60,6 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supab
 			{ status: 404 }
 		);
 	}
-
-	console.log('[Article] Successfully fetched:', article.title);
 
 	return json({
 		article

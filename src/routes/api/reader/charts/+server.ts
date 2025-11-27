@@ -41,8 +41,6 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supab
 		);
 	}
 
-	console.log('[Charts] Fetching for article:', articleId);
-
 	// 3. FETCH CHARTS FROM DATABASE (only relevant ones)
 	const { data: charts, error: fetchError } = await supabase
 		.from('article_charts')
@@ -53,7 +51,6 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supab
 		.order('chart_index', { ascending: true });
 
 	if (fetchError) {
-		console.error('[Charts] Failed to fetch:', fetchError);
 		return json(
 			{
 				error: {
@@ -65,8 +62,6 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supab
 			{ status: 500 }
 		);
 	}
-
-	console.log('[Charts] Found', charts?.length || 0, 'charts');
 
 	// Transform storage paths to public URLs (bucket name: articles)
 	const transformedCharts = (charts || []).map((chart) => ({

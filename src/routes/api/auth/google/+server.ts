@@ -10,7 +10,6 @@ export const POST: RequestHandler = async ({ locals: { supabase }, url }) => {
 	});
 
 	if (error) {
-		console.error('[Google OAuth] Error initiating OAuth:', error.message);
 		return json({ error: error.message }, { status: 400 });
 	}
 

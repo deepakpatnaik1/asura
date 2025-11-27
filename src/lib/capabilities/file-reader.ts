@@ -74,7 +74,6 @@ export function extractTitleFromHtml(
 			title = title.substring(0, config.maxTitleLength) + '...';
 		}
 	} catch (error) {
-		console.error('[File Reader] Failed to parse HTML for title:', error);
 		title = `Article ${new Date().toISOString().split('T')[0]}`;
 	}
 

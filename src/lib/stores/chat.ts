@@ -105,7 +105,6 @@ export async function sendMessage(userMessage: string, persona?: string): Promis
 									throw new Error(data.message);
 								}
 							} catch (parseError) {
-								console.error('[SSE] Failed to parse event data:', line, parseError);
 								// Continue processing other lines
 							}
 						}
@@ -136,13 +135,10 @@ export async function sendMessage(userMessage: string, persona?: string): Promis
 	} catch (error) {
 		// Check if error is from abort
 		if (error instanceof Error && error.name === 'AbortError') {
-			console.log('[Chat] Request aborted by user');
 			// Don't show error message for user-initiated abort
 			// (isLoading already set to false in abortCurrentMessage())
 			return;
 		}
-
-		console.error('Error sending message:', error);
 
 		// Don't clear the message - preserve UI state and show error
 		currentMessage.update(msg => {
@@ -168,7 +164,6 @@ export async function sendMessage(userMessage: string, persona?: string): Promis
  */
 export function abortCurrentMessage() {
 	if (currentAbortController) {
-		console.log('[Chat] Aborting current message request');
 		currentAbortController.abort();
 		currentAbortController = null;
 		// Only clear message if we actually aborted an active request

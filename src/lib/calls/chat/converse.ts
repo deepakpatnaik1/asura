@@ -82,7 +82,6 @@ export async function* converseStream(
 	): AsyncGenerator<string, void, unknown> {
 		// Prevent unbounded recursion
 		if (depth >= MEMORY.maxToolUseDepth) {
-			console.warn(`[Converse] Tool use depth limit (${MEMORY.maxToolUseDepth}) reached, stopping recursion`);
 			return;
 		}
 		const stream = await anthropic.messages.stream(

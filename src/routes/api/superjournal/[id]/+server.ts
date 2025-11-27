@@ -45,13 +45,10 @@ export const PATCH: RequestHandler = async ({ params, locals: { supabase, safeGe
 	const { id } = params;
 
 	try {
-		console.log(`[PATCH Superjournal] User ${userId} toggling star for entry: ${id}`);
-
 		// Find the journal entry linked to this superjournal (wait if not yet created)
 		let journalEntry = await waitForJournalEntry(supabase, id, userId);
 
 		if (!journalEntry) {
-			console.error('[PATCH Superjournal] Journal entry not found after polling');
 			return json({ error: 'Journal entry not found' }, { status: 404 });
 		}
 
@@ -64,14 +61,11 @@ export const PATCH: RequestHandler = async ({ params, locals: { supabase, safeGe
 			.eq('user_id', userId);
 
 		if (updateError) {
-			console.error('[PATCH Superjournal] Error updating star:', updateError);
 			return json({ error: updateError.message }, { status: 500 });
 		}
 
-		console.log(`[PATCH Superjournal] Successfully toggled star to ${newStarredStatus} for: ${id}`);
 		return json({ success: true, id, is_starred: newStarredStatus });
 	} catch (error) {
-		console.error('[PATCH Superjournal] Unexpected error:', error);
 		return json({ error: 'Unexpected error' }, { status: 500 });
 	}
 };
@@ -95,8 +89,6 @@ export const DELETE: RequestHandler = async ({ params, locals: { supabase, safeG
 	const { id } = params;
 
 	try {
-		console.log(`[DELETE Superjournal] User ${userId} deleting entry: ${id}`);
-
 		// Delete from superjournal (cascade will handle journal)
 		// CRITICAL: Include user_id check to prevent cross-user deletions
 		const { error } = await supabase
@@ -106,14 +98,11 @@ export const DELETE: RequestHandler = async ({ params, locals: { supabase, safeG
 			.eq('user_id', userId);
 
 		if (error) {
-			console.error('[DELETE Superjournal] Error:', error);
 			return json({ error: error.message }, { status: 500 });
 		}
 
-		console.log(`[DELETE Superjournal] Successfully deleted: ${id}`);
 		return json({ success: true, id });
 	} catch (error) {
-		console.error('[DELETE Superjournal] Unexpected error:', error);
 		return json({ error: 'Unexpected error' }, { status: 500 });
 	}
 };

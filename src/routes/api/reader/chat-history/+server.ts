@@ -40,8 +40,6 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supab
 		);
 	}
 
-	console.log('[Chat History] Fetching for article:', articleId);
-
 	// 3. FETCH CHAT HISTORY FROM DATABASE
 	const { data: chatHistory, error: fetchError } = await supabase
 		.from('article_chat')
@@ -51,7 +49,6 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supab
 		.order('created_at', { ascending: true });
 
 	if (fetchError) {
-		console.error('[Chat History] Failed to fetch:', fetchError);
 		return json(
 			{
 				error: {
@@ -63,8 +60,6 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supab
 			{ status: 500 }
 		);
 	}
-
-	console.log('[Chat History] Found', chatHistory?.length || 0, 'turns');
 
 	return json({
 		history: chatHistory || []

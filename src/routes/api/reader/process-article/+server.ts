@@ -45,9 +45,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		);
 	}
 
-	console.log('[Process Article] User ID:', userId);
-	console.log('[Process Article] Article ID:', article_id);
-
 	// 3. FETCH ARTICLE FROM DATABASE (including raw_html)
 	const { data: article, error: fetchError } = await supabase
 		.from('articles')
@@ -57,7 +54,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		.single();
 
 	if (fetchError || !article) {
-		console.error('[Process Article] Failed to fetch article:', fetchError);
 		return json(
 			{
 				error: {
@@ -72,7 +68,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 
 	// 4. VALIDATE ARTICLE HAS RAW HTML
 	if (!article.raw_html) {
-		console.error('[Process Article] Article missing raw_html');
 		return json(
 			{
 				error: {
@@ -92,11 +87,9 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		.single();
 
 	const selectedModel = settings?.selected_reader_model || DEFAULT_READER_MODEL;
-	console.log('[Process Article] Using model:', selectedModel);
 
 	// 6. GET MODEL PARAMETERS
 	const modelParams = await getModelParams(selectedModel, 'reader');
-	console.log('[Process Article] Model params:', modelParams);
 
 	// 7. CREATE STREAMING RESPONSE
 	const stream = new ReadableStream({
@@ -104,8 +97,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			const encoder = new TextEncoder();
 
 			try {
-				console.log('[Process Article] Starting AI call...');
-
 				// Use describeStream call
 				const generator = describeStream({
 					articleTitle: article.title,
@@ -130,10 +121,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				const previewLength = 150;
 				const previewSnippet = fullResponse.substring(0, previewLength).trim();
 
-				console.log('[Process Article] Full response length:', fullResponse.length);
-				console.log('[Process Article] Preview snippet:', previewSnippet);
-			console.log('[Process Article] Raw content (first 2000 chars):', JSON.stringify(fullResponse.slice(0, 2000)));
-
 				// 9. SAVE TO DATABASE
 				const { error: updateError } = await supabase
 					.from('articles')
@@ -146,21 +133,17 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 					.eq('user_id', userId);
 
 				if (updateError) {
-					console.error('[Process Article] Failed to save results:', updateError);
 					controller.enqueue(
 						encoder.encode(
 							`data: ${JSON.stringify({ error: 'Failed to save results to database' })}\n\n`
 						)
 					);
 				} else {
-					console.log('[Process Article] Successfully saved results to database');
 					controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true })}\n\n`));
 				}
 
 				controller.close();
 			} catch (error) {
-				console.error('[Process Article] Error during processing:', error);
-
 				// Article remains in 'processing' status on error
 				controller.enqueue(
 					encoder.encode(

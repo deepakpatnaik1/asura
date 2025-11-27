@@ -30,9 +30,6 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 		.eq('user_id', userId)
 		.single();
 
-	console.log('[Settings GET] User ID:', userId);
-	console.log('[Settings GET] Query result:', { data, error });
-
 	// 3. HANDLE MISSING SETTINGS (create defaults for new user)
 	if (error) {
 		const defaults = {
@@ -49,10 +46,6 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 				user_id: userId,
 				...defaults
 			});
-
-		if (insertError) {
-			console.error('[Settings GET] Failed to create defaults:', insertError);
-		}
 
 		return json(defaults);
 	}
@@ -79,15 +72,6 @@ export const PUT: RequestHandler = async ({ request, locals: { safeGetSession, s
 	// 2. PARSE REQUEST BODY
 	const { selected_conversation_model, selected_compression_model, selected_reader_model, selected_embedding_model, active_reader_article_id } = await request.json();
 
-	console.log('[Settings PUT] User ID:', userId);
-	console.log('[Settings PUT] Body received:', {
-		selected_conversation_model,
-		selected_compression_model,
-		selected_reader_model,
-		selected_embedding_model,
-		active_reader_article_id
-	});
-
 	// 3. UPDATE USER SETTINGS
 	const updateData: Record<string, any> = {
 		updated_at: new Date().toISOString()
@@ -106,10 +90,7 @@ export const PUT: RequestHandler = async ({ request, locals: { safeGetSession, s
 		.eq('user_id', userId)
 		.select();
 
-	console.log('[Settings PUT] Update result:', { data, error });
-
 	if (error) {
-		console.error('[Settings PUT] Update error:', error);
 		return json({ error: error.message }, { status: 500 });
 	}
 

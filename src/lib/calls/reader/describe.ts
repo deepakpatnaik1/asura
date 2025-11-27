@@ -52,7 +52,6 @@ export async function* describeStream(
 	): AsyncGenerator<string, void, unknown> {
 		// Prevent unbounded recursion
 		if (depth >= MEMORY.maxToolUseDepth) {
-			console.warn(`[Describe] Tool use depth limit (${MEMORY.maxToolUseDepth}) reached, stopping recursion`);
 			return;
 		}
 		const stream = await anthropic.messages.stream({

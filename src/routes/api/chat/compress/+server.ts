@@ -61,8 +61,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		const compressionModel = settings?.selected_compression_model || DEFAULT_COMPRESSION_MODEL;
 		const compressionParams = await getModelParams(compressionModel, 'compression');
 
-		console.log(`[Orphan Recovery] Compressing superjournal_id: ${superjournal_id}`);
-
 		const compressionJson = await compress({
 			userMessage: user_message,
 			aiResponse: ai_response,
@@ -112,11 +110,9 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				.eq('id', journalData.id);
 		}
 
-		console.log(`[Orphan Recovery] Successfully compressed superjournal_id: ${superjournal_id}`);
 		return json({ success: true, journal_id: journalData.id });
 
 	} catch (error) {
-		console.error('[Orphan Recovery] Failed:', error);
 		return json({ error: { message: 'Compression failed', code: 'COMPRESSION_ERROR' } }, { status: 500 });
 	}
 };
