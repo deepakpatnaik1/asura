@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Icon } from 'svelte-icons-pack';
-	import { LuStar, LuCopy, LuTrash2, LuPaperclip, LuFolder, LuChevronDown, LuCloudDownload, LuEllipsisVertical, LuMessageSquare, LuFlame } from 'svelte-icons-pack/lu';
+	import { LuStar, LuCopy, LuTrash2, LuPaperclip, LuFolder, LuChevronDown, LuCloudDownload, LuEllipsisVertical, LuFlame } from 'svelte-icons-pack/lu';
 	import { currentMessage, isLoading, sendMessage, abortCurrentMessage } from '$lib/stores/chat';
 	import { tick, onMount } from 'svelte';
 	import { TIMING } from '$lib/config/timing';
@@ -425,7 +425,6 @@
 
 					<div class="icon-group">
 						<ScrollControls config={CHAT_CONFIG} />
-						<button class="control-btn" title="Messages"><Icon src={LuMessageSquare} size="11" /></button>
 					</div>
 
 					<button class="control-btn settings-btn" title="Nuke all history" onclick={handleNukeClick}><Icon src={LuFlame} size="11" /></button>

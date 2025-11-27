@@ -2,7 +2,7 @@
 	import { onMount, tick } from 'svelte';
 	import { renderMarkdown } from '$lib/markdown-renderer';
 	import { Icon } from 'svelte-icons-pack';
-	import { LuPaperclip, LuFolder, LuCloudDownload, LuChevronDown, LuMessageSquare, LuFlame, LuTrash2 } from 'svelte-icons-pack/lu';
+	import { LuPaperclip, LuFolder, LuCloudDownload, LuChevronDown, LuFlame, LuTrash2 } from 'svelte-icons-pack/lu';
 	import { READER_CONFIG, scrollToTurn, scrollToBottom, getTurns, updateSpacer } from '$lib/ui/scroll';
 	import ScrollControls from '$lib/components/ScrollControls.svelte';
 
@@ -1103,7 +1103,6 @@
 
 					<div class="icon-group">
 						<ScrollControls config={READER_CONFIG} />
-						<button class="control-btn" title="Messages"><Icon src={LuMessageSquare} size="11" /></button>
 					</div>
 
 					<button class="control-btn settings-btn" title="Nuke all history" onclick={handleNukeClick}><Icon src={LuFlame} size="11" /></button>
