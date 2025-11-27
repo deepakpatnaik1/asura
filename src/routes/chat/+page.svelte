@@ -18,6 +18,7 @@
 
 	let inputMessage = $state('');
 	let messagesEndRef: HTMLDivElement;
+	let textareaRef: HTMLTextAreaElement;
 	let showNukeConfirm = $state(false);
 	let nukeProgress = $state(0);
 	let nukeTimer: number | null = null;
@@ -129,6 +130,7 @@
 
 		const message = inputMessage.trim();
 		inputMessage = '';
+		resetTextareaHeight();
 
 		// Send message and wait for response
 		await sendMessage(message, selectedPersona);
@@ -160,6 +162,18 @@
 		}
 	}
 
+	// Auto-resize textarea to fit content
+	function autoResize() {
+		if (!textareaRef) return;
+		textareaRef.style.height = 'auto';
+		textareaRef.style.height = Math.min(textareaRef.scrollHeight, 200) + 'px';
+	}
+
+	// Reset textarea height after sending
+	function resetTextareaHeight() {
+		if (!textareaRef) return;
+		textareaRef.style.height = 'auto';
+	}
 
 	function handleMessageDeleteClick(messageId: string) {
 		deleteMessageId = messageId;
@@ -429,14 +443,16 @@
 
 					<button class="control-btn settings-btn" title="Nuke all history" onclick={handleNukeClick}><Icon src={LuFlame} size="11" /></button>
 				</div>
-				<input
-					type="text"
+				<textarea
 					placeholder="Type your message..."
 					class="message-input"
+					rows="1"
+					bind:this={textareaRef}
 					bind:value={inputMessage}
 					onkeydown={handleKeyDown}
+					oninput={autoResize}
 					disabled={$isLoading}
-				/>
+				></textarea>
 			</div>
 			<button class="send-button" onclick={handleSend} disabled={$isLoading}>
 				{$isLoading ? 'Sending...' : 'Send'}
@@ -764,7 +780,7 @@
 	}
 
 	.message-input {
-		flex: 1;
+		width: 100%;
 		background: hsl(var(--input));
 		color: hsl(var(--foreground));
 		border: 1px solid hsl(var(--border));
@@ -772,6 +788,14 @@
 		padding: 12px 16px;
 		outline: none;
 		transition: border-color 0.2s;
+		resize: none;
+		min-height: 44px;
+		max-height: 200px;
+		overflow-y: auto;
+		font-family: inherit;
+		font-size: inherit;
+		line-height: 1.5;
+		box-sizing: border-box;
 	}
 
 	.message-input:focus {

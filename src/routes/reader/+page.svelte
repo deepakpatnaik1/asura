@@ -27,6 +27,7 @@
 	// UI state
 	let selectedPersona = $state<'samara'>('samara');
 	let inputMessage = $state('');
+	let textareaRef: HTMLTextAreaElement;
 	let showPasteArea = $state(false);
 	let isProcessing = $state(false);
 	let processingStatus = $state('');
@@ -439,6 +440,7 @@
 
 		// Clear input immediately
 		inputMessage = '';
+		resetTextareaHeight();
 
 		// Set current user message for display
 		currentUserMessage = userMessage;
@@ -538,6 +540,19 @@
 			event.preventDefault();
 			handleSubmitQuestion();
 		}
+	}
+
+	// Auto-resize textarea to fit content
+	function autoResize() {
+		if (!textareaRef) return;
+		textareaRef.style.height = 'auto';
+		textareaRef.style.height = Math.min(textareaRef.scrollHeight, 200) + 'px';
+	}
+
+	// Reset textarea height after sending
+	function resetTextareaHeight() {
+		if (!textareaRef) return;
+		textareaRef.style.height = 'auto';
 	}
 
 	// Canvas carousel functions
@@ -1112,14 +1127,16 @@
 
 					<button class="control-btn settings-btn" title="Nuke all history" onclick={handleNukeClick}><Icon src={LuFlame} size="11" /></button>
 				</div>
-				<input
-					type="text"
+				<textarea
 					placeholder="Type your message..."
 					class="message-input"
+					rows="1"
+					bind:this={textareaRef}
 					bind:value={inputMessage}
 					onkeypress={handleKeyPress}
+					oninput={autoResize}
 					disabled={isLoadingChat}
-				/>
+				></textarea>
 			</div>
 			<button class="send-button" onclick={handleSubmitQuestion} disabled={isLoadingChat || !inputMessage.trim()}>
 				Send
@@ -1494,7 +1511,7 @@
 	}
 
 	.message-input {
-		flex: 1;
+		width: 100%;
 		background: hsl(var(--input));
 		color: hsl(var(--foreground));
 		border: 1px solid hsl(var(--border));
@@ -1502,6 +1519,14 @@
 		padding: 12px 16px;
 		outline: none;
 		transition: border-color 0.2s;
+		resize: none;
+		min-height: 44px;
+		max-height: 200px;
+		overflow-y: auto;
+		font-family: inherit;
+		font-size: inherit;
+		line-height: 1.5;
+		box-sizing: border-box;
 	}
 
 	.message-input:focus {
