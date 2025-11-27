@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import * as cheerio from 'cheerio';
+import { validateHtmlSize, extractTitleFromHtml } from '$lib/capabilities';
 
 export const POST: RequestHandler = async ({ request, locals: { safeGetSession, supabase } }) => {
 	// 1. AUTHENTICATION CHECK
@@ -33,13 +33,13 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		);
 	}
 
-	// 3. VALIDATE HTML SIZE (max 5MB)
-	const MAX_HTML_SIZE = 5 * 1024 * 1024; // 5MB
-	if (html.length > MAX_HTML_SIZE) {
+	// 3. VALIDATE HTML SIZE (using file-reader capability)
+	const validation = validateHtmlSize(html);
+	if (!validation.valid) {
 		return json(
 			{
 				error: {
-					message: `HTML content too large (max ${MAX_HTML_SIZE / 1024 / 1024}MB)`,
+					message: validation.error,
 					code: 'INPUT_TOO_LARGE'
 				}
 			},
@@ -50,37 +50,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 	console.log('[Reader Upload] User ID:', userId);
 	console.log('[Reader Upload] HTML length:', html.length);
 
-	// 4. EXTRACT ARTICLE TITLE USING CHEERIO
-	let title = 'Untitled Article';
-	const MAX_TITLE_LENGTH = 200;
-
-	try {
-		const $ = cheerio.load(html);
-
-		// Try <h1> first
-		const h1Text = $('h1').first().text().trim();
-		if (h1Text) {
-			title = h1Text;
-		} else {
-			// Try <title> tag
-			const titleText = $('title').first().text().trim();
-			if (titleText) {
-				title = titleText;
-			} else {
-				// Fallback to timestamp-based title
-				title = `Article ${new Date().toISOString().split('T')[0]}`;
-			}
-		}
-
-		// Truncate title if too long
-		if (title.length > MAX_TITLE_LENGTH) {
-			title = title.substring(0, MAX_TITLE_LENGTH) + '...';
-		}
-	} catch (error) {
-		console.error('[Reader Upload] Failed to parse HTML for title:', error);
-		title = `Article ${new Date().toISOString().split('T')[0]}`;
-	}
-
+	// 4. EXTRACT ARTICLE TITLE (using file-reader capability)
+	const title = extractTitleFromHtml(html);
 	console.log('[Reader Upload] Extracted title:', title);
 
 	// 5. CREATE ARTICLE RECORD WITH STATUS = 'processing' AND RAW HTML

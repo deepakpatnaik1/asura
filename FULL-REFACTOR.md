@@ -338,7 +338,29 @@ Integration:
 - `filter-charts/+server.ts` - Anthropic SDK `file_id` source type mismatch
 - `chat/+page.server.ts` - `user` possibly null check
 
-### Phase 4: Wire Up Capabilities & Modes - PENDING
+### Phase 4: Wire Up Capabilities & Modes - COMPLETE ✓
+
+**Capabilities created (`/lib/capabilities/`):**
+- `web-search.ts` - Re-exports Brave Search tool and execution function with config types
+- `context-injection.ts` - Re-exports context builder with config types for injection levels
+- `file-reader.ts` - HTML parsing utilities: `extractTitleFromHtml()`, `validateHtmlSize()`, `parseHtml()`
+- `index.ts` - Central export for all capabilities
+
+**Modes created (`/lib/modes/`):**
+- `chat.ts` - Chat mode config (personas: gunnar/kirby, context: rich, compression: on)
+- `reader.ts` - Reader mode config (persona: samara, webSearch: on, fileReading: on)
+- `registry.ts` - Mode lookup by ID/route, capability checks, persona validation
+- `index.ts` - Central export for mode system
+
+**Integration:**
+- Updated `api/reader/upload/+server.ts` to use `validateHtmlSize()` and `extractTitleFromHtml()` from capabilities
+- Removed direct Cheerio import (now encapsulated in file-reader capability)
+
+**Architecture achieved:**
+- Adding a new mode: create config in `/lib/modes/`, add to registry
+- Adding a new capability: create in `/lib/capabilities/`, export from index
+- Modes declare which capabilities they support via `ModeCapabilities` interface
+- Pages/API routes can query capabilities via `modeHasCapability()`
 
 ### Phase 5: Security & Cleanup - PENDING
 
