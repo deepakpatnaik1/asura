@@ -312,6 +312,8 @@ Integration:
 
 ### Phase 3: Reorganize Backend - COMPLETE ✓
 
+**Commit:** `ffcab05` - refactor: Phase 3 - Reorganize prompts and extract AI calls
+
 **Prompts restructure:**
 - Merged `base-instructions.ts` content into Gunnar and Kirby personas (deleted base file)
 - Created `/lib/prompts/personas/` directory
