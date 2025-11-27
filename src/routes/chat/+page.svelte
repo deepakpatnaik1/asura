@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Icon } from 'svelte-icons-pack';
-	import { LuPaperclip, LuFolder, LuChevronDown, LuCloudDownload, LuFlame } from 'svelte-icons-pack/lu';
+	import { LuPaperclip, LuFolder, LuCloudDownload, LuFlame } from 'svelte-icons-pack/lu';
 	import { currentMessage, isLoading, sendMessage, abortCurrentMessage } from '$lib/stores/chat';
 	import { tick, onMount } from 'svelte';
 	import { TIMING } from '$lib/config/timing';
@@ -8,6 +8,9 @@
 	import { CHAT_CONFIG, scrollToTurn, scrollToBottom, getTurns } from '$lib/ui/scroll';
 	import ScrollControls from '$lib/components/ScrollControls.svelte';
 	import MessageGroup from '$lib/components/MessageGroup.svelte';
+	import ConfirmationModal from '$lib/components/ConfirmationModal.svelte';
+	import PersonaDropdown from '$lib/components/PersonaDropdown.svelte';
+	import InputBar from '$lib/components/InputBar.svelte';
 
 	// Receive loaded messages from server
 	let { data } = $props();
@@ -394,10 +397,10 @@
 
 					<button class="control-btn" title="Download from cloud"><Icon src={LuCloudDownload} size="11" /></button>
 
-					<div class="persona-dropdown" onclick={() => togglePersona()}>
-						<span class="persona-name">{selectedPersona.charAt(0).toUpperCase() + selectedPersona.slice(1)}</span>
-						<Icon src={LuChevronDown} size="11" />
-					</div>
+					<PersonaDropdown
+						selectedPersona={selectedPersona}
+						onClick={() => togglePersona()}
+					/>
 
 					<div class="icon-group">
 						<ScrollControls config={CHAT_CONFIG} />
@@ -424,34 +427,20 @@
 
 
 	<!-- Message Delete Confirmation Modal -->
-	{#if deleteMessageId}
-		<div class="modal-overlay" onclick={handleMessageDeleteCancel}>
-			<div class="modal-content" onclick={(e) => e.stopPropagation()}>
-				<p class="modal-text">Hush... it'll all be over soon.</p>
-				<div class="nuke-progress-container">
-					<div class="nuke-progress-bar" style="width: {deleteMessageProgress}%"></div>
-				</div>
-				<div class="nuke-actions">
-					<button class="nuke-cancel-btn" onclick={handleMessageDeleteCancel}>Cancel</button>
-				</div>
-			</div>
-		</div>
-	{/if}
+	<ConfirmationModal
+		isOpen={!!deleteMessageId}
+		progress={deleteMessageProgress}
+		onCancel={handleMessageDeleteCancel}
+		mode="chat"
+	/>
 
 	<!-- Nuke Confirmation Modal -->
-	{#if showNukeConfirm}
-		<div class="modal-overlay" onclick={handleNukeCancel}>
-			<div class="modal-content" onclick={(e) => e.stopPropagation()}>
-				<p class="modal-text">Hush... it'll all be over soon.</p>
-				<div class="nuke-progress-container">
-					<div class="nuke-progress-bar" style="width: {nukeProgress}%"></div>
-				</div>
-				<div class="nuke-actions">
-					<button class="nuke-cancel-btn" onclick={handleNukeCancel}>Cancel</button>
-				</div>
-			</div>
-		</div>
-	{/if}
+	<ConfirmationModal
+		isOpen={showNukeConfirm}
+		progress={nukeProgress}
+		onCancel={handleNukeCancel}
+		mode="chat"
+	/>
 
 	<!-- Canvas Area - blank for now -->
 	<div class="canvas-area"></div>

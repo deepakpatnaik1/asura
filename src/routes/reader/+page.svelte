@@ -1,10 +1,12 @@
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
 	import { Icon } from 'svelte-icons-pack';
-	import { LuPaperclip, LuFolder, LuCloudDownload, LuChevronDown, LuFlame, LuTrash2 } from 'svelte-icons-pack/lu';
+	import { LuPaperclip, LuFolder, LuCloudDownload, LuFlame, LuTrash2 } from 'svelte-icons-pack/lu';
 	import { READER_CONFIG, scrollToTurn, scrollToBottom, getTurns, updateSpacer } from '$lib/ui/scroll';
 	import ScrollControls from '$lib/components/ScrollControls.svelte';
 	import MessageGroup from '$lib/components/MessageGroup.svelte';
+	import ConfirmationModal from '$lib/components/ConfirmationModal.svelte';
+	import PersonaDropdown from '$lib/components/PersonaDropdown.svelte';
 
 
 	// Article state
@@ -1070,10 +1072,10 @@
 
 					<button class="control-btn" title="Download from cloud"><Icon src={LuCloudDownload} size="11" /></button>
 
-					<div class="persona-dropdown">
-						<span class="persona-name">{selectedPersona.charAt(0).toUpperCase() + selectedPersona.slice(1)}</span>
-						<Icon src={LuChevronDown} size="11" />
-					</div>
+					<PersonaDropdown
+						selectedPersona={selectedPersona}
+						interactive={false}
+					/>
 
 					<div class="icon-group">
 						<ScrollControls config={READER_CONFIG} />
@@ -1100,34 +1102,20 @@
 </div>
 
 <!-- Article Delete Confirmation Modal -->
-{#if deleteArticleId}
-	<div class="modal-overlay" onclick={handleArticleDeleteCancel}>
-		<div class="modal-content" onclick={(e) => e.stopPropagation()}>
-			<p class="modal-text">Hush... it'll all be over soon.</p>
-			<div class="delete-progress-container">
-				<div class="delete-progress-bar" style="width: {deleteArticleProgress}%"></div>
-			</div>
-			<div class="delete-actions">
-				<button class="delete-cancel-btn" onclick={handleArticleDeleteCancel}>Cancel</button>
-			</div>
-		</div>
-	</div>
-{/if}
+<ConfirmationModal
+	isOpen={!!deleteArticleId}
+	progress={deleteArticleProgress}
+	onCancel={handleArticleDeleteCancel}
+	mode="reader"
+/>
 
 <!-- Nuke Confirmation Modal -->
-{#if showNukeModal}
-	<div class="modal-overlay" onclick={handleNukeCancel}>
-		<div class="modal-content" onclick={(e) => e.stopPropagation()}>
-			<p class="modal-text">Hush... it'll all be over soon.</p>
-			<div class="delete-progress-container">
-				<div class="delete-progress-bar" style="width: {nukeProgress}%"></div>
-			</div>
-			<div class="delete-actions">
-				<button class="delete-cancel-btn" onclick={handleNukeCancel}>Cancel</button>
-			</div>
-		</div>
-	</div>
-{/if}
+<ConfirmationModal
+	isOpen={showNukeModal}
+	progress={nukeProgress}
+	onCancel={handleNukeCancel}
+	mode="reader"
+/>
 
 <style>
 	/* Main Layout - Two-column grid (reader left, canvas right) */
