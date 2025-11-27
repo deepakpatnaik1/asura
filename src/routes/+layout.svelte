@@ -15,10 +15,8 @@
 	// FOUC prevention
 	let mounted = $state(false);
 
-	// Check if current route is reader mode
-	$effect(() => {
-		const isReader = $page.url.pathname === '/reader';
-	});
+	// Check if current route is login page (hide chrome)
+	let isLoginPage = $derived($page.url.pathname === '/login');
 
 	// Logout handler (moved from +page.svelte)
 	async function handleLogout() {
@@ -51,7 +49,8 @@
 </script>
 
 <div class="app-layout" class:mounted={mounted}>
-	<!-- Sidebar -->
+	<!-- Sidebar (hidden on login) -->
+	{#if !isLoginPage}
 	<aside class="sidebar">
 		<div class="sidebar-icons">
 			<a href="/chat" class="sidebar-icon" class:active={$page.url.pathname === '/chat'} title="Chat">
@@ -62,6 +61,7 @@
 			</a>
 		</div>
 	</aside>
+	{/if}
 
 	<!-- Article Pane (Library) - Temporarily removed, will reposition later -->
 	<!-- {#if $page.url.pathname === '/reader'}
@@ -93,7 +93,8 @@
 		</aside>
 	{/if} -->
 
-	<!-- User controls (top-right) -->
+	<!-- User controls (top-right, hidden on login) -->
+	{#if !isLoginPage}
 	<div class="user-controls">
 		<button class="logout-btn" onclick={handleLogout} title="Sign out">
 			<Icon src={LuLogOut} size="18" />
@@ -104,6 +105,7 @@
 	<button class="settings-btn-fixed" onclick={() => showSettings = true} title="Settings">
 		<Icon src={LuSettings} size="18" />
 	</button>
+	{/if}
 
 	<!-- Main content -->
 	<div class="main-content">

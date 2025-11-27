@@ -28,14 +28,14 @@
 </script>
 
 <svelte:head>
-	<title>Sign in to Asura</title>
+	<title>Sign in to Aether</title>
 </svelte:head>
 
 <div class="login-container">
 	<div class="login-card">
 		<div class="brand-header">
-			<h1>Asura</h1>
-			<p class="subtitle">AI Memory System</p>
+			<h1>Aether</h1>
+			<p class="subtitle">Founder Psychology. Business Strategy. Next Steps.</p>
 		</div>
 
 		{#if error}
@@ -86,8 +86,7 @@
 		</div>
 
 		<div class="info-text">
-			<p>Multi-call AI architecture with compressed memory</p>
-			<p class="tech-stack">Powered by Supabase + Anthropic Claude + Voyage AI</p>
+			<p class="tech-stack">Powered by Supabase, Anthropic Claude, and Voyage AI</p>
 		</div>
 	</div>
 </div>
@@ -108,7 +107,7 @@
 		border-radius: 12px;
 		border: 1px solid hsl(var(--border));
 		box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-		max-width: 420px;
+		max-width: 540px;
 		width: 90%;
 	}
 
@@ -147,22 +146,23 @@
 	/* Google's official "Sign in with Google" button styles */
 	/* Based on: https://developers.google.com/identity/gsi/web/guides/offerings */
 	.gsi-material-button {
+		display: block;
 		-moz-user-select: none;
 		-webkit-user-select: none;
 		-ms-user-select: none;
 		-webkit-appearance: none;
-		background-color: #ffffff;
+		background-color: #131314;
 		background-image: none;
-		border: 1px solid #dadce0;
+		border: 1px solid #8E918F;
 		-webkit-border-radius: 4px;
 		border-radius: 4px;
 		-webkit-box-sizing: border-box;
 		box-sizing: border-box;
-		color: #1f1f1f;
+		color: #E3E3E3;
 		cursor: pointer;
 		font-family: 'Roboto', arial, sans-serif;
 		font-size: 14px;
-		height: 48px;
+		height: 40px;
 		letter-spacing: 0.25px;
 		outline: none;
 		overflow: hidden;
@@ -179,9 +179,8 @@
 			box-shadow 0.218s;
 		vertical-align: middle;
 		white-space: nowrap;
-		width: 100%;
-		max-width: 400px;
-		min-width: min-content;
+		width: auto;
+		min-width: 240px;
 		margin: 0 auto;
 	}
 
@@ -229,9 +228,9 @@
 
 	.gsi-material-button:disabled {
 		cursor: default;
-		background-color: #ffffff61;
-		border-color: #1f1f1f1f;
-		opacity: 0.6;
+		background-color: #131314;
+		border-color: #8E918F;
+		opacity: 0.5;
 	}
 
 	.gsi-material-button:disabled .gsi-material-button-contents {
@@ -244,21 +243,22 @@
 
 	.gsi-material-button:not(:disabled):active .gsi-material-button-state,
 	.gsi-material-button:not(:disabled):focus .gsi-material-button-state {
-		background-color: #303030;
+		background-color: #E3E3E3;
 		opacity: 12%;
 	}
 
 	.gsi-material-button:not(:disabled):hover {
 		-webkit-box-shadow:
-			0 1px 2px 0 rgba(60, 64, 67, 0.3),
-			0 1px 3px 1px rgba(60, 64, 67, 0.15);
+			0 1px 2px 0 rgba(0, 0, 0, 0.3),
+			0 1px 3px 1px rgba(0, 0, 0, 0.15);
 		box-shadow:
-			0 1px 2px 0 rgba(60, 64, 67, 0.3),
-			0 1px 3px 1px rgba(60, 64, 67, 0.15);
+			0 1px 2px 0 rgba(0, 0, 0, 0.3),
+			0 1px 3px 1px rgba(0, 0, 0, 0.15);
+		border-color: #E3E3E3;
 	}
 
 	.gsi-material-button:not(:disabled):hover .gsi-material-button-state {
-		background-color: #303030;
+		background-color: #E3E3E3;
 		opacity: 8%;
 	}
 
