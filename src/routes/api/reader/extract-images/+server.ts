@@ -317,12 +317,12 @@ function calculateColumnWidths(headers: string[], rows: string[][]): number[] {
 }
 
 /**
- * Renders a table to a PNG image buffer
+ * Renders a table to SVG string (vector format for sharp display)
  */
-async function renderTableToImage(
+async function renderTableToSvg(
 	headers: string[],
 	rows: string[][]
-): Promise<Buffer> {
+): Promise<{ svg: string; width: number; height: number }> {
 	const tableJsx = buildTableJsx(headers, rows);
 
 	// Calculate dimensions
@@ -345,6 +345,13 @@ async function renderTableToImage(
 		],
 	});
 
+	return { svg, width, height };
+}
+
+/**
+ * Converts SVG string to PNG buffer (for thumbnails)
+ */
+function svgToPng(svg: string, width: number): Buffer {
 	const resvg = new Resvg(svg, {
 		background: TABLE_COLORS.background,
 		fitTo: { mode: 'width', value: width },
@@ -598,19 +605,26 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		for (const table of tables) {
 			console.log('[ExtractImages] Processing table', table.index, 'with', table.headers.length, 'cols,', table.rows.length, 'rows');
 			try {
-				// Render table to PNG image
-				const tableImageBuffer = await renderTableToImage(table.headers, table.rows);
+				// Render table to SVG (vector format for sharp display)
+				const { svg, width } = await renderTableToSvg(table.headers, table.rows);
+				const svgBuffer = Buffer.from(svg, 'utf-8');
 
-				// Generate thumbnail
-				const thumbnailBuffer = await generateThumbnail(tableImageBuffer);
+				// Convert SVG to PNG for thumbnail
+				const pngBuffer = svgToPng(svg, width);
+				const thumbnailBuffer = await generateThumbnail(pngBuffer);
 
-				// Upload table image to storage
-				const imagePath = await uploadImageToStorage(
-					tableImageBuffer,
-					userId,
-					article_id,
-					`table-${table.index}.png`
-				);
+				// Upload SVG to storage
+				const storagePath = `article-images/${userId}/${article_id}/table-${table.index}.svg`;
+				const { error: uploadError } = await supabaseStorage.storage
+					.from('articles')
+					.upload(storagePath, svgBuffer, {
+						contentType: 'image/svg+xml',
+						upsert: true
+					});
+
+				if (uploadError) {
+					throw new Error(`SVG upload failed: ${uploadError.message}`);
+				}
 
 				// Upload thumbnail to storage
 				const thumbnailPath = await uploadThumbnailToStorage(
@@ -620,28 +634,15 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 					table.index
 				);
 
-				// Upload to Anthropic Files API
-				const tableAnthropicResult = await uploadFileWithRetry(
-					tableImageBuffer,
-					`table-${table.index}.png`
-				);
-
-				let tableAnthropicFileId: string | null = null;
-				let tableAnthropicFileCreatedAt: Date | null = null;
-
-				if (tableAnthropicResult) {
-					tableAnthropicFileId = tableAnthropicResult.file_id;
-					tableAnthropicFileCreatedAt = tableAnthropicResult.created_at;
-				}
-
+				// Skip Anthropic upload for SVG tables - Claude can read original markdown
 				chartResults.push({
 					index: table.index,
-					storage_path: imagePath,
+					storage_path: storagePath,
 					thumbnail_path: thumbnailPath,
-					image_size: tableImageBuffer.length,
+					image_size: svgBuffer.length,
 					alt: `Table with ${table.headers.length} columns and ${table.rows.length} rows`,
-					anthropic_file_id: tableAnthropicFileId,
-					anthropic_file_created_at: tableAnthropicFileCreatedAt
+					anthropic_file_id: null,
+					anthropic_file_created_at: null
 				});
 			} catch (error) {
 				console.error('[ExtractImages] Failed to render table', table.index, ':', error);
