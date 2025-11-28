@@ -64,6 +64,24 @@ const TABLE_COLORS = {
 };
 
 /**
+ * Strips markdown formatting asterisks from text while preserving multiplication asterisks.
+ * - Removes: **bold**, *italic*, ***bold italic***
+ * - Preserves: 2 * 3, 5*10 (asterisks between numbers/words without wrapping)
+ */
+function stripFormattingAsterisks(text: string): string {
+	// Remove bold italic (***text***)
+	let result = text.replace(/\*\*\*([^*]+)\*\*\*/g, '$1');
+	// Remove bold (**text**)
+	result = result.replace(/\*\*([^*]+)\*\*/g, '$1');
+	// Remove italic (*text*) - but not multiplication like "2 * 3" or "5*10"
+	// Italic asterisks wrap text: *word* or *multiple words*
+	// Multiplication has spaces or digits adjacent: 2 * 3, 5*10
+	result = result.replace(/\*([^*\s][^*]*[^*\s])\*/g, '$1');
+	result = result.replace(/\*([^*\s])\*/g, '$1'); // Single char italic like *x*
+	return result;
+}
+
+/**
  * Extracts markdown pipe tables from text content
  * Matches: | Header | Header |
  *          |--------|--------|
@@ -209,16 +227,11 @@ function buildTableJsx(
 	headers: string[],
 	rows: string[][]
 ): Record<string, unknown> {
-	// Calculate column widths based on content
-	const allRows = [headers, ...rows];
-	const colWidths = headers.map((_, colIdx) => {
-		const maxLen = Math.max(...allRows.map((row) => (row[colIdx] || '').length));
-		return Math.max(60, Math.min(200, maxLen * 9 + 24));
-	});
+	const colWidths = calculateColumnWidths(headers, rows);
 
 	const totalWidth = colWidths.reduce((sum, w) => sum + w, 0) + 2;
 
-	// Build header cells
+	// Build header cells (strip markdown formatting asterisks)
 	const headerCells = headers.map((header, idx) => ({
 		type: 'div',
 		props: {
@@ -233,11 +246,11 @@ function buildTableJsx(
 				display: 'flex',
 				alignItems: 'center',
 			},
-			children: header,
+			children: stripFormattingAsterisks(header),
 		},
 	}));
 
-	// Build data rows
+	// Build data rows (strip markdown formatting asterisks)
 	const dataRows = rows.map((row, rowIdx) => ({
 		type: 'div',
 		props: {
@@ -257,7 +270,7 @@ function buildTableJsx(
 						display: 'flex',
 						alignItems: 'center',
 					},
-					children: cell,
+					children: stripFormattingAsterisks(cell),
 				},
 			})),
 		},
@@ -290,6 +303,20 @@ function buildTableJsx(
 }
 
 /**
+ * Calculate column widths for a table (shared logic)
+ */
+function calculateColumnWidths(headers: string[], rows: string[][]): number[] {
+	const allRows = [headers, ...rows];
+	return headers.map((_, colIdx) => {
+		const maxLen = Math.max(...allRows.map((row) => (row[colIdx] || '').length));
+		// ~8px per character + 24px padding
+		// Only cap at 400px for very long content (>50 chars)
+		const naturalWidth = maxLen * 8 + 24;
+		return Math.max(60, maxLen > 50 ? Math.min(400, naturalWidth) : naturalWidth);
+	});
+}
+
+/**
  * Renders a table to a PNG image buffer
  */
 async function renderTableToImage(
@@ -299,11 +326,7 @@ async function renderTableToImage(
 	const tableJsx = buildTableJsx(headers, rows);
 
 	// Calculate dimensions
-	const allRows = [headers, ...rows];
-	const colWidths = headers.map((_, colIdx) => {
-		const maxLen = Math.max(...allRows.map((row) => (row[colIdx] || '').length));
-		return Math.max(60, Math.min(200, maxLen * 9 + 24));
-	});
+	const colWidths = calculateColumnWidths(headers, rows);
 	const width = colWidths.reduce((sum, w) => sum + w, 0) + 4;
 	const height = (rows.length + 1) * 36 + 4;
 

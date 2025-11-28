@@ -245,16 +245,14 @@
 		flex: 1;
 		position: relative;
 		display: flex;
-		align-items: center;
-		justify-content: center;
+		align-items: flex-start;
+		justify-content: flex-start;
 		padding: 24px;
-		overflow: hidden;
+		overflow: auto;
 	}
 
 	.chart-view-image img {
-		max-width: 100%;
-		max-height: 100%;
-		object-fit: contain;
+		/* Display at natural size, scroll if larger than container */
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 	}
 
