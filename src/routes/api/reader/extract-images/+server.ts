@@ -64,6 +64,14 @@ const TABLE_COLORS = {
 };
 
 /**
+ * Strip all emoji characters from text.
+ * Uses Unicode Extended_Pictographic property to match emoji.
+ */
+function stripEmoji(text: string): string {
+	return text.replace(/\p{Extended_Pictographic}/gu, '');
+}
+
+/**
  * Strips markdown formatting asterisks from text while preserving multiplication asterisks.
  * - Removes: **bold**, *italic*, ***bold italic***
  * - Preserves: 2 * 3, 5*10 (asterisks between numbers/words without wrapping)
@@ -79,6 +87,13 @@ function stripFormattingAsterisks(text: string): string {
 	result = result.replace(/\*([^*\s][^*]*[^*\s])\*/g, '$1');
 	result = result.replace(/\*([^*\s])\*/g, '$1'); // Single char italic like *x*
 	return result;
+}
+
+/**
+ * Clean cell text for table rendering: strip emoji and formatting asterisks.
+ */
+function cleanCellText(text: string): string {
+	return stripEmoji(stripFormattingAsterisks(text));
 }
 
 /**
@@ -231,7 +246,7 @@ function buildTableJsx(
 
 	const totalWidth = colWidths.reduce((sum, w) => sum + w, 0) + 2;
 
-	// Build header cells (strip markdown formatting asterisks)
+	// Build header cells (strip emoji and markdown formatting)
 	const headerCells = headers.map((header, idx) => ({
 		type: 'div',
 		props: {
@@ -246,11 +261,11 @@ function buildTableJsx(
 				display: 'flex',
 				alignItems: 'center',
 			},
-			children: stripFormattingAsterisks(header),
+			children: cleanCellText(header),
 		},
 	}));
 
-	// Build data rows (strip markdown formatting asterisks)
+	// Build data rows (strip emoji and markdown formatting)
 	const dataRows = rows.map((row, rowIdx) => ({
 		type: 'div',
 		props: {
@@ -270,7 +285,7 @@ function buildTableJsx(
 						display: 'flex',
 						alignItems: 'center',
 					},
-					children: stripFormattingAsterisks(cell),
+					children: cleanCellText(cell),
 				},
 			})),
 		},

@@ -4,6 +4,14 @@ import { CHAT_ACCENT, READER_ACCENT } from '$lib/config/colors';
 export type RenderMode = 'chat' | 'reader';
 
 /**
+ * Strip all emoji characters from text.
+ * Uses Unicode Extended_Pictographic property to match emoji.
+ */
+function stripEmoji(text: string): string {
+	return text.replace(/\p{Extended_Pictographic}/gu, '');
+}
+
+/**
  * Replace em dashes with en dashes, ensuring single space on each side.
  * Em dash: — (U+2014)
  * En dash: – (U+2013)
@@ -27,6 +35,7 @@ function removeHorizontalRules(text: string): string {
  * Custom markdown renderer with accent color styling.
  *
  * Pre-processing:
+ * - Emoji stripped (all Extended_Pictographic characters removed)
  * - Horizontal rules (---) removed (cause flickering during auto-scroll)
  * - Em dashes (—) normalized to en dashes (–) with spaces
  *
@@ -45,8 +54,9 @@ function removeHorizontalRules(text: string): string {
 export function renderMarkdown(markdown: string, mode: RenderMode = 'chat'): string {
 	const ACCENT_COLOR = mode === 'chat' ? CHAT_ACCENT : READER_ACCENT;
 
-	// Pre-process: remove horizontal rules (cause flickering), normalize em dashes
-	const withoutHr = removeHorizontalRules(markdown);
+	// Pre-process: strip emoji, remove horizontal rules (cause flickering), normalize em dashes
+	const withoutEmoji = stripEmoji(markdown);
+	const withoutHr = removeHorizontalRules(withoutEmoji);
 	const normalizedMarkdown = normalizeEmDashes(withoutHr);
 	// Configure marked with custom renderer
 	const renderer = new marked.Renderer();
