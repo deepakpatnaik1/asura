@@ -157,10 +157,10 @@
 		aspect-ratio: 1;
 		background: hsl(var(--background));
 		border: none;
-		border-radius: 8px;
 		overflow: hidden;
 		cursor: pointer;
 		transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+		padding: 4px;
 	}
 
 	.chart-thumbnail:hover {
@@ -255,7 +255,6 @@
 		max-width: 100%;
 		max-height: 100%;
 		object-fit: contain;
-		border-radius: 8px;
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 	}
 

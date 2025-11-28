@@ -5,6 +5,10 @@ import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
 import * as cheerio from 'cheerio';
 import sharp from 'sharp';
+import satori from 'satori';
+import { Resvg } from '@resvg/resvg-js';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { uploadFileWithRetry } from '$lib/api/anthropic-client';
 import { requireAuth } from '$lib/api/require-auth';
 import { parseRequestJson } from '$lib/api/parse-json';
@@ -35,6 +39,295 @@ function extractImages(html: string): Array<{ index: number; src: string; alt: s
 	});
 
 	return images;
+}
+
+// Load font once at module level for table rendering
+let fontData: ArrayBuffer | null = null;
+
+function loadFont(): ArrayBuffer {
+	if (fontData) return fontData;
+	const fontPath = join(
+		process.cwd(),
+		'node_modules/pdfjs-dist/standard_fonts/LiberationSans-Regular.ttf'
+	);
+	fontData = readFileSync(fontPath).buffer;
+	return fontData;
+}
+
+// Table styling colors (reader accent - green)
+const TABLE_COLORS = {
+	accent: 'rgb(16, 185, 129)',
+	accentBg: 'rgba(16, 185, 129, 0.08)',
+	background: '#141414',
+	foreground: '#e5e5e5',
+	border: 'rgba(255, 255, 255, 0.1)',
+};
+
+/**
+ * Extracts markdown pipe tables from text content
+ * Matches: | Header | Header |
+ *          |--------|--------|
+ *          | Cell   | Cell   |
+ */
+function extractMarkdownTables(
+	text: string,
+	startIndex: number
+): Array<{ index: number; headers: string[]; rows: string[][] }> {
+	const tables: Array<{ index: number; headers: string[]; rows: string[][] }> = [];
+
+	// Regex to match markdown tables (header row, separator row, data rows)
+	const tableRegex = /^(\|[^\n]+\|)\s*\n(\|[-:\s|]+\|)\s*\n((?:\|[^\n]+\|\s*\n?)+)/gm;
+
+	let match;
+	let tableIndex = 0;
+
+	while ((match = tableRegex.exec(text)) !== null) {
+		const headerLine = match[1];
+		const dataLines = match[3].trim().split('\n');
+
+		// Parse header row
+		const headers = headerLine
+			.split('|')
+			.slice(1, -1) // Remove empty first/last from split
+			.map((cell) => cell.trim());
+
+		if (headers.length === 0) continue;
+
+		// Parse data rows
+		const rows: string[][] = [];
+		for (const line of dataLines) {
+			const cells = line
+				.split('|')
+				.slice(1, -1)
+				.map((cell) => cell.trim());
+			if (cells.length > 0) {
+				rows.push(cells);
+			}
+		}
+
+		if (rows.length === 0) continue;
+
+		tables.push({
+			index: startIndex + tableIndex + 1,
+			headers,
+			rows,
+		});
+		tableIndex++;
+	}
+
+	return tables;
+}
+
+/**
+ * Extracts all <table> tags from HTML and parses them into structured data
+ */
+function extractHtmlTables(
+	html: string,
+	startIndex: number
+): Array<{ index: number; headers: string[]; rows: string[][] }> {
+	const $ = cheerio.load(html);
+	const tables: Array<{ index: number; headers: string[]; rows: string[][] }> = [];
+
+	$('table').each((i, tableEl) => {
+		const headers: string[] = [];
+		const rows: string[][] = [];
+
+		// Extract headers from thead > tr > th, or first row with th
+		const headerRow = $(tableEl).find('thead tr').first();
+		if (headerRow.length) {
+			headerRow.find('th, td').each((_, el) => {
+				headers.push($(el).text().trim());
+			});
+		} else {
+			// Try first row if it has th elements
+			const firstRow = $(tableEl).find('tr').first();
+			if (firstRow.find('th').length > 0) {
+				firstRow.find('th, td').each((_, el) => {
+					headers.push($(el).text().trim());
+				});
+			}
+		}
+
+		// If no headers found, use first row as headers
+		if (headers.length === 0) {
+			const firstRow = $(tableEl).find('tr').first();
+			firstRow.find('th, td').each((_, el) => {
+				headers.push($(el).text().trim());
+			});
+		}
+
+		if (headers.length === 0) return; // Skip tables with no content
+
+		// Extract body rows
+		const bodyRows = $(tableEl).find('tbody tr');
+		if (bodyRows.length) {
+			bodyRows.each((_, row) => {
+				const cells: string[] = [];
+				$(row)
+					.find('td, th')
+					.each((_, cell) => {
+						cells.push($(cell).text().trim());
+					});
+				if (cells.length > 0) {
+					rows.push(cells);
+				}
+			});
+		} else {
+			// No tbody, skip header row and get remaining rows
+			$(tableEl)
+				.find('tr')
+				.slice(1)
+				.each((_, row) => {
+					const cells: string[] = [];
+					$(row)
+						.find('td, th')
+						.each((_, cell) => {
+							cells.push($(cell).text().trim());
+						});
+					if (cells.length > 0) {
+						rows.push(cells);
+					}
+				});
+		}
+
+		if (rows.length === 0) return; // Skip tables with no data rows
+
+		tables.push({
+			index: startIndex + i + 1,
+			headers,
+			rows,
+		});
+	});
+
+	return tables;
+}
+
+/**
+ * Builds JSX-like structure for satori to render a table
+ */
+function buildTableJsx(
+	headers: string[],
+	rows: string[][]
+): Record<string, unknown> {
+	// Calculate column widths based on content
+	const allRows = [headers, ...rows];
+	const colWidths = headers.map((_, colIdx) => {
+		const maxLen = Math.max(...allRows.map((row) => (row[colIdx] || '').length));
+		return Math.max(60, Math.min(200, maxLen * 9 + 24));
+	});
+
+	const totalWidth = colWidths.reduce((sum, w) => sum + w, 0) + 2;
+
+	// Build header cells
+	const headerCells = headers.map((header, idx) => ({
+		type: 'div',
+		props: {
+			style: {
+				width: colWidths[idx],
+				padding: '8px 12px',
+				fontWeight: 600,
+				color: TABLE_COLORS.accent,
+				backgroundColor: TABLE_COLORS.accentBg,
+				borderRight: idx < headers.length - 1 ? `1px solid ${TABLE_COLORS.accent}` : 'none',
+				borderBottom: `1px solid ${TABLE_COLORS.accent}`,
+				display: 'flex',
+				alignItems: 'center',
+			},
+			children: header,
+		},
+	}));
+
+	// Build data rows
+	const dataRows = rows.map((row, rowIdx) => ({
+		type: 'div',
+		props: {
+			style: {
+				display: 'flex',
+				backgroundColor: rowIdx % 2 === 1 ? 'rgba(255, 255, 255, 0.02)' : 'transparent',
+			},
+			children: row.map((cell, cellIdx) => ({
+				type: 'div',
+				props: {
+					style: {
+						width: colWidths[cellIdx] || 100,
+						padding: '8px 12px',
+						color: TABLE_COLORS.foreground,
+						borderRight: cellIdx < headers.length - 1 ? `1px solid ${TABLE_COLORS.border}` : 'none',
+						borderBottom: rowIdx < rows.length - 1 ? `1px solid ${TABLE_COLORS.border}` : 'none',
+						display: 'flex',
+						alignItems: 'center',
+					},
+					children: cell,
+				},
+			})),
+		},
+	}));
+
+	return {
+		type: 'div',
+		props: {
+			style: {
+				display: 'flex',
+				flexDirection: 'column',
+				backgroundColor: TABLE_COLORS.background,
+				border: `1px solid ${TABLE_COLORS.accent}`,
+				fontFamily: 'Liberation Sans',
+				fontSize: 14,
+				width: totalWidth,
+			},
+			children: [
+				{
+					type: 'div',
+					props: {
+						style: { display: 'flex' },
+						children: headerCells,
+					},
+				},
+				...dataRows,
+			],
+		},
+	};
+}
+
+/**
+ * Renders a table to a PNG image buffer
+ */
+async function renderTableToImage(
+	headers: string[],
+	rows: string[][]
+): Promise<Buffer> {
+	const tableJsx = buildTableJsx(headers, rows);
+
+	// Calculate dimensions
+	const allRows = [headers, ...rows];
+	const colWidths = headers.map((_, colIdx) => {
+		const maxLen = Math.max(...allRows.map((row) => (row[colIdx] || '').length));
+		return Math.max(60, Math.min(200, maxLen * 9 + 24));
+	});
+	const width = colWidths.reduce((sum, w) => sum + w, 0) + 4;
+	const height = (rows.length + 1) * 36 + 4;
+
+	const font = loadFont();
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	const svg = await satori(tableJsx as any, {
+		width,
+		height,
+		fonts: [
+			{
+				name: 'Liberation Sans',
+				data: font,
+				weight: 400,
+				style: 'normal',
+			},
+		],
+	});
+
+	const resvg = new Resvg(svg, {
+		background: TABLE_COLORS.background,
+		fitTo: { mode: 'width', value: width },
+	});
+	const pngData = resvg.render();
+	return Buffer.from(pngData.asPng());
 }
 
 /**
@@ -257,6 +550,79 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				});
 			} catch (error) {
 				// Continue with other images even if one fails
+			}
+		}
+
+		// 5b. EXTRACT AND RENDER TABLES AS IMAGES (HTML + Markdown)
+		console.log('[ExtractImages] Starting table extraction, HTML length:', html.length);
+
+		// Extract plain text from HTML for markdown table detection
+		// Note: $.text() strips whitespace. For content with white-space:pre,
+		// we need to convert block elements to newlines first
+		const $2 = cheerio.load(html);
+		// Replace closing block tags with newlines to preserve structure
+		$2('div, p, br, tr, li').each((_, el) => {
+			$2(el).after('\n');
+		});
+		const plainText = $2.text();
+		console.log('[ExtractImages] Plain text length:', plainText.length);
+		console.log('[ExtractImages] Plain text preview:', plainText.substring(0, 500));
+
+		const htmlTables = extractHtmlTables(html, images.length);
+		const mdTables = extractMarkdownTables(plainText, images.length + htmlTables.length);
+		const tables = [...htmlTables, ...mdTables];
+		console.log('[ExtractImages] Found tables:', { htmlTables: htmlTables.length, mdTables: mdTables.length, total: tables.length });
+		for (const table of tables) {
+			console.log('[ExtractImages] Processing table', table.index, 'with', table.headers.length, 'cols,', table.rows.length, 'rows');
+			try {
+				// Render table to PNG image
+				const tableImageBuffer = await renderTableToImage(table.headers, table.rows);
+
+				// Generate thumbnail
+				const thumbnailBuffer = await generateThumbnail(tableImageBuffer);
+
+				// Upload table image to storage
+				const imagePath = await uploadImageToStorage(
+					tableImageBuffer,
+					userId,
+					article_id,
+					`table-${table.index}.png`
+				);
+
+				// Upload thumbnail to storage
+				const thumbnailPath = await uploadThumbnailToStorage(
+					thumbnailBuffer,
+					userId,
+					article_id,
+					table.index
+				);
+
+				// Upload to Anthropic Files API
+				const tableAnthropicResult = await uploadFileWithRetry(
+					tableImageBuffer,
+					`table-${table.index}.png`
+				);
+
+				let tableAnthropicFileId: string | null = null;
+				let tableAnthropicFileCreatedAt: Date | null = null;
+
+				if (tableAnthropicResult) {
+					tableAnthropicFileId = tableAnthropicResult.file_id;
+					tableAnthropicFileCreatedAt = tableAnthropicResult.created_at;
+				}
+
+				chartResults.push({
+					index: table.index,
+					storage_path: imagePath,
+					thumbnail_path: thumbnailPath,
+					image_size: tableImageBuffer.length,
+					alt: `Table with ${table.headers.length} columns and ${table.rows.length} rows`,
+					anthropic_file_id: tableAnthropicFileId,
+					anthropic_file_created_at: tableAnthropicFileCreatedAt
+				});
+			} catch (error) {
+				console.error('[ExtractImages] Failed to render table', table.index, ':', error);
+				// Continue with other tables even if one fails
 			}
 		}
 
