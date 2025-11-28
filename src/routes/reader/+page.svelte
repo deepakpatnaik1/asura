@@ -521,7 +521,8 @@
 	// Load articles from database
 	async function loadArticles() {
 		try {
-			const response = await fetch('/api/reader/articles');
+			// Cache-bust to ensure fresh data
+			const response = await fetch(`/api/reader/articles?_t=${Date.now()}`);
 			if (!response.ok) {
 				console.error('[Articles] Failed to load:', response.statusText);
 				return;
@@ -541,6 +542,9 @@
 		showArticleLibrary = false;
 
 		try {
+			// Refresh article list to ensure dropdown is current
+			await loadArticles();
+
 			// Fetch article details
 			const response = await fetch(`/api/reader/article?article_id=${articleId}`);
 			if (!response.ok) {

@@ -47,7 +47,7 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 		articles: articles || []
 	}, {
 		headers: {
-			'Cache-Control': 'private, max-age=60, stale-while-revalidate=30' // 1 min cache
+			'Cache-Control': 'no-cache, no-store, must-revalidate' // Always fetch fresh list
 		}
 	});
 };

@@ -1,6 +1,5 @@
 import { marked } from 'marked';
-import { CHAT_ACCENT, READER_ACCENT, DIVIDER_COLOR } from '$lib/config/colors';
-import { sanitizeHtml } from '$lib/security';
+import { CHAT_ACCENT, READER_ACCENT } from '$lib/config/colors';
 
 export type RenderMode = 'chat' | 'reader';
 
@@ -16,39 +15,39 @@ function normalizeEmDashes(text: string): string {
 }
 
 /**
- * Fix missing spaces after tool calls.
- * When AI uses tools mid-response, text chunks may be concatenated without spacing.
- * Pattern: sentence-ending punctuation followed immediately by a capital letter.
- * Example: "...summary.Perfect! Now..." → "...summary.\n\nPerfect! Now..."
+ * Remove horizontal rules (---) and collapse the extra blank line.
+ * Horizontal rules cause flickering during auto-scroll due to sub-pixel rendering.
+ * Pattern: blank line + --- + newline → single newline
  */
-function fixToolCallSpacing(text: string): string {
-	// Match: sentence-ending punctuation, optional closing quotes/parens, then capital letter with no space
-	// Insert paragraph break (\n\n) to create visual separation
-	return text.replace(/([.!?]["')\]]?)([A-Z])/g, '$1\n\n$2');
+function removeHorizontalRules(text: string): string {
+	return text.replace(/\n\n---\n/g, '\n');
 }
 
 /**
  * Custom markdown renderer with accent color styling.
  *
+ * Pre-processing:
+ * - Horizontal rules (---) removed (cause flickering during auto-scroll)
+ * - Em dashes (—) normalized to en dashes (–) with spaces
+ *
  * Transformations:
- * 1. Headings (# ## ###) → Accent bold (hashes stripped)
- * 2. Horizontal rules (---) → Thin grey divider
- * 3. Bold (**text**) → Accent color (bold stripped, NOT bold)
- * 4. Italic (*text*) → Accent italic
- * 5. Bullet lists → Indented accent bullets
- * 6. Numbered lists → Indented accent numbers
+ * 1. Headings (# ## ###) → Accent bold (all levels identical)
+ * 2. Bold (**text**) → Plain text (styling stripped)
+ * 3. Italic (*text*) → Plain text (styling stripped)
+ * 4. Bullet lists → Solid circle (●) in accent color
+ * 5. Numbered lists → Numbers in accent color
  *
  * Spacing Rules:
- * - One line space after paragraphs
+ * - One line space after paragraphs (1.6em)
  * - One line space before section headers
- * - Maximum one line space between any two elements
+ * - breaks: true preserves single newlines as <br>
  */
 export function renderMarkdown(markdown: string, mode: RenderMode = 'chat'): string {
 	const ACCENT_COLOR = mode === 'chat' ? CHAT_ACCENT : READER_ACCENT;
 
-	// Fix missing spaces from tool call boundaries, then normalize em dashes
-	const spacedMarkdown = fixToolCallSpacing(markdown);
-	const normalizedMarkdown = normalizeEmDashes(spacedMarkdown);
+	// Pre-process: remove horizontal rules (cause flickering), normalize em dashes
+	const withoutHr = removeHorizontalRules(markdown);
+	const normalizedMarkdown = normalizeEmDashes(withoutHr);
 	// Configure marked with custom renderer
 	const renderer = new marked.Renderer();
 
@@ -62,13 +61,9 @@ export function renderMarkdown(markdown: string, mode: RenderMode = 'chat'): str
 		return `<div style="font-weight: bold; color: ${ACCENT_COLOR}; margin: 1.6em 0 0 0;">${text}</div>`;
 	};
 
-	// 2. Horizontal Rules → Thin grey divider (matches Gunnar border)
-	// Rule 3: One line space before and after horizontal rule
-	renderer.hr = () => {
-		return `<hr style="border: none; border-top: 0.5px solid ${DIVIDER_COLOR}; margin: 1.6em 0;" />`;
-	};
+	// 2. Horizontal Rules → Removed in pre-processing (cause flickering during auto-scroll)
 
-	// 3. Bold → Strip asterisks, render as plain text
+	// 3. Bold → Strip to plain text
 	renderer.strong = ({ text }) => {
 		return text;
 	};
@@ -99,33 +94,31 @@ export function renderMarkdown(markdown: string, mode: RenderMode = 'chat'): str
 	};
 
 	// List items with accent color markers (bullet or number)
+	// Use parseInline to render bold/italic within list items
 	renderer.listitem = (token) => {
-		const text = token.text;
+		const content = marked.parseInline(token.text);
 		if (isOrderedList) {
 			// Numbered list: number in accent color
 			listItemIndex++;
-			return `<li style="margin: 0; display: flex;"><span style="color: ${ACCENT_COLOR}; margin-right: 8px; flex-shrink: 0;">${listItemIndex}.</span><span>${text}</span></li>`;
+			return `<li style="margin: 0; display: flex;"><span style="color: ${ACCENT_COLOR}; margin-right: 8px; flex-shrink: 0;">${listItemIndex}.</span><span>${content}</span></li>`;
 		} else {
-			// Bullet list: bullet in accent color
-			return `<li style="margin: 0; display: flex;"><span style="color: ${ACCENT_COLOR}; margin-right: 8px; flex-shrink: 0;">\u2022</span><span>${text}</span></li>`;
+			// Bullet list: bullet in accent color (scaled up, vertically centered)
+			return `<li style="margin: 0; display: flex; align-items: baseline;"><span style="color: ${ACCENT_COLOR}; margin-right: 8px; flex-shrink: 0; font-size: 1.2em;">\u2022</span><span>${content}</span></li>`;
 		}
 	};
 
 	// Configure marked options
 	marked.setOptions({
 		renderer,
-		breaks: false, // Don't convert line breaks to <br>
+		breaks: true, // Convert single line breaks to <br> (preserves Claude's formatting)
 		gfm: true, // GitHub Flavored Markdown
 	});
 
 	// Parse markdown to HTML
 	const rawHtml = marked.parse(normalizedMarkdown) as string;
 
-	// Sanitize HTML to prevent XSS (uses centralized security config)
-	const cleanHtml = sanitizeHtml(rawHtml);
+	// Strip any remaining asterisks that weren't parsed as bold/italic
+	const html = rawHtml.replace(/\*/g, '');
 
-	// Strip any remaining asterisks from the final HTML
-	const finalHtml = cleanHtml.replace(/\*/g, '');
-
-	return finalHtml;
+	return html;
 }
