@@ -21,6 +21,10 @@
 	let allMessages = $state([...(data.messages || [])].reverse());
 	// Track starred message IDs
 	let starredIds = $state(new Set<string>(data.starredIds || []));
+	// Pagination state
+	let hasMore = $state(data.hasMore || false);
+	let isLoadingMore = $state(false);
+	let currentOffset = $state(data.messages?.length || 0);
 
 	// Charts state for canvas
 	interface Chart {
@@ -157,6 +161,28 @@
 			minute: '2-digit',
 			hour12: true
 		});
+	}
+
+	// Load more messages (older history)
+	async function loadMoreMessages() {
+		if (isLoadingMore || !hasMore) return;
+
+		isLoadingMore = true;
+		try {
+			const response = await fetch(`/api/superjournal?offset=${currentOffset}&limit=50`);
+			if (response.ok) {
+				const result = await response.json();
+				// Prepend older messages (they come newest first, so reverse and prepend)
+				const olderMessages = [...result.messages].reverse();
+				allMessages = [...olderMessages, ...allMessages];
+				currentOffset += result.messages.length;
+				hasMore = result.hasMore;
+			}
+		} catch (error) {
+			console.error('Failed to load more messages:', error);
+		} finally {
+			isLoadingMore = false;
+		}
 	}
 
 	// Behavior 1: Auto-switch dropdown when typing persona name at start
@@ -555,6 +581,17 @@
 	<!-- Messages Area -->
 	<div class="messages-area">
 		<div class="messages-content">
+			<!-- Load More Button -->
+			{#if hasMore}
+				<button
+					class="load-more-btn"
+					onclick={loadMoreMessages}
+					disabled={isLoadingMore}
+				>
+					{isLoadingMore ? 'Loading...' : 'Load older messages'}
+				</button>
+			{/if}
+
 			{#each allMessages as msg, index}
 				<MessageGroup
 					userMessage={msg.user_message}
@@ -903,5 +940,29 @@
 	.send-button:hover:not(:disabled) {
 		background: var(--boss-accent);
 		color: hsl(var(--background));
+	}
+
+	/* Load More Button */
+	.load-more-btn {
+		background: transparent;
+		border: 1px solid hsl(var(--border));
+		border-radius: 6px;
+		padding: 8px 16px;
+		color: hsl(var(--muted-foreground));
+		cursor: pointer;
+		transition: all 0.2s;
+		margin: 0 auto 16px;
+		display: block;
+		font-size: 0.875rem;
+	}
+
+	.load-more-btn:hover:not(:disabled) {
+		border-color: hsl(var(--foreground));
+		color: hsl(var(--foreground));
+	}
+
+	.load-more-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
 	}
 </style>

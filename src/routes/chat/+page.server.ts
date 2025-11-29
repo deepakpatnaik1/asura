@@ -1,5 +1,9 @@
 import type { PageServerLoad } from './$types';
 import { redirect } from '@sveltejs/kit';
+import { createLogger } from '$lib/api/logger';
+import { createQueryMonitor } from '$lib/api/query-monitor';
+
+const PAGE_SIZE = 50;
 
 function formatTimestamp(dateString: string): string {
 	const date = new Date(dateString);
@@ -20,32 +24,45 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession, supabase 
 		throw redirect(303, '/login');
 	}
 
-	// Fetch all Superjournal entries, newest first
-	const { data: messages, error } = await supabase
-		.from('superjournal')
-		.select('*')
-		.order('created_at', { ascending: false });
+	const log = createLogger('ChatPageLoad', user?.id);
+	const monitor = createQueryMonitor(log, 100); // 100ms threshold
+
+	// Fetch last N Superjournal entries, newest first (paginated)
+	const { data: messages, error, count } = await monitor.track('fetchSuperjournal', () =>
+		supabase
+			.from('superjournal')
+			.select('*', { count: 'exact' })
+			.order('created_at', { ascending: false })
+			.limit(PAGE_SIZE)
+	);
 
 	if (error) {
-		return { messages: [], starredIds: [], orphans: [], user };
+		return { messages: [], starredIds: [], orphans: [], user, hasMore: false, totalCount: 0 };
 	}
 
+	const totalCount = count ?? 0;
+	const hasMore = totalCount > PAGE_SIZE;
+
 	// Fetch starred journal entries to get their superjournal_ids
-	const { data: starredJournals } = await supabase
-		.from('journal')
-		.select('superjournal_id')
-		.eq('is_starred', true)
-		.eq('user_id', user!.id);
+	const { data: starredJournals } = await monitor.track('fetchStarredJournals', () =>
+		supabase
+			.from('journal')
+			.select('superjournal_id')
+			.eq('is_starred', true)
+			.eq('user_id', user!.id)
+	);
 
 	const starredIds = (starredJournals || [])
 		.map((j) => j.superjournal_id)
 		.filter((id): id is string => id !== null);
 
 	// Fetch all journal superjournal_ids to find orphans
-	const { data: allJournals } = await supabase
-		.from('journal')
-		.select('superjournal_id')
-		.eq('user_id', user!.id);
+	const { data: allJournals } = await monitor.track('fetchJournalIds', () =>
+		supabase
+			.from('journal')
+			.select('superjournal_id')
+			.eq('user_id', user!.id)
+	);
 
 	const journalSuperjournalIds = new Set(
 		(allJournals || []).map((j) => j.superjournal_id).filter(Boolean)
@@ -73,10 +90,29 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession, supabase 
 		formatted_timestamp: formatTimestamp(msg.created_at)
 	}));
 
+	// Log query performance summary
+	const stats = monitor.getStats();
+	if (stats.slowQueries > 0) {
+		log.warn('Page load had slow queries', {
+			totalQueries: stats.totalQueries,
+			slowQueries: stats.slowQueries,
+			averageMs: stats.averageMs,
+			maxMs: stats.maxMs
+		});
+	} else {
+		log.debug('Page load complete', {
+			totalQueries: stats.totalQueries,
+			averageMs: stats.averageMs,
+			maxMs: stats.maxMs
+		});
+	}
+
 	return {
 		messages: messagesWithFormattedTimestamps,
 		starredIds,
 		orphans,
-		user
+		user,
+		hasMore,
+		totalCount
 	};
 };
