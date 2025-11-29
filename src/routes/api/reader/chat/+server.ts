@@ -154,13 +154,14 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			try {
 				log.debug('Starting stream');
 
-				// Build chat history for the call
+				// Build chat history for the call (with timestamps for temporal reasoning)
 				const history: Array<{ role: 'user' | 'assistant'; content: string }> = [];
 				if (chatHistory && chatHistory.length > 0) {
 					for (const turn of chatHistory) {
+						const timestamp = new Date(turn.created_at).toISOString();
 						history.push({
 							role: turn.role as 'user' | 'assistant',
-							content: turn.content
+							content: `[${timestamp}]\n${turn.content}`
 						});
 					}
 				}

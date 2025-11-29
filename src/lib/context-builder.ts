@@ -316,6 +316,11 @@ export async function buildContextForCalls1A1B(
 	return { context: finalContext, components, stats };
 }
 
+// Format timestamp for context (ISO 8601 format for precise temporal reasoning)
+function formatTimestamp(dateString: string): string {
+	return new Date(dateString).toISOString();
+}
+
 // Format Superjournal history (recent full turns)
 function formatSuperjournalHistory(
 	entries: Array<{
@@ -330,7 +335,7 @@ function formatSuperjournalHistory(
 	const formatted = entries
 		.map(
 			(entry) =>
-				`[Working Memory - ${new Date(entry.created_at).toLocaleDateString()}]
+				`[${formatTimestamp(entry.created_at)}]
 User: ${entry.user_message}
 ${entry.persona_name}: ${entry.ai_response}`
 		)
@@ -354,7 +359,7 @@ function formatJournalHistory(
 	const formatted = entries
 		.map(
 			(entry) =>
-				`[Recent Memory - ${new Date(entry.created_at).toLocaleDateString()}]
+				`[${formatTimestamp(entry.created_at)}]
 User: ${entry.boss_essence}
 ${entry.persona_name}: ${entry.persona_essence}`
 		)
@@ -398,7 +403,7 @@ function formatStarredMessages(
 	const formatted = entries
 		.map(
 			(entry) =>
-				`[Starred - ${new Date(entry.created_at).toLocaleDateString()}]
+				`[Starred - ${formatTimestamp(entry.created_at)}]
 User: ${entry.boss_essence}
 ${entry.persona_name}: ${entry.persona_essence}`
 		)
@@ -422,7 +427,7 @@ function formatInstructions(
 	const formatted = entries
 		.map(
 			(entry) =>
-				`[Instruction - ${new Date(entry.created_at).toLocaleDateString()}]
+				`[Instruction - ${formatTimestamp(entry.created_at)}]
 User: ${entry.boss_essence}
 ${entry.persona_name}: ${entry.persona_essence}`
 		)
@@ -447,7 +452,7 @@ function formatVectorSearchResults(
 	const formatted = entries
 		.map(
 			(entry) =>
-				`[Relevant Memory - ${new Date(entry.created_at).toLocaleDateString()}]
+				`[${formatTimestamp(entry.created_at)}]
 User: ${entry.boss_essence}
 AI: ${entry.persona_essence}`
 		)
