@@ -118,7 +118,7 @@
 			{:else}
 				<!-- Model Selection -->
 				<div class="settings-section">
-					<label for="conversation-model">Conversation Model (Call 1A, 1B)</label>
+					<label for="conversation-model">Conversation Model</label>
 					<select id="conversation-model" bind:value={selectedConversationModel}>
 						{#each models.filter(m => m.model_type === 'text_generation') as model}
 							<option value={model.model_identifier}>
@@ -130,7 +130,7 @@
 				</div>
 
 				<div class="settings-section">
-					<label for="compression-model">Artisan Cut Model (Compression & Files)</label>
+					<label for="compression-model">Artisan Cut Model</label>
 					<select id="compression-model" bind:value={selectedCompressionModel}>
 						{#each models.filter(m => m.model_type === 'text_generation') as model}
 							<option value={model.model_identifier}>

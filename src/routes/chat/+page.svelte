@@ -28,8 +28,13 @@
 		thumbnail_url: string;
 		full_url: string;
 		alt: string;
+		is_pinned?: boolean;
+		source: 'file' | 'superjournal';
+		file_id?: string;
 	}
-	let allCharts = $state<Chart[]>([]);
+	let superjournalCharts = $state<Chart[]>([]);
+	let fileCharts = $state<Chart[]>([]);
+	let allCharts = $derived([...fileCharts, ...superjournalCharts]);
 	let selectedChartIndex = $state<number | null>(null);
 	let showLightbox = $state(false);
 
@@ -55,12 +60,14 @@
 	// Confirmation composables (replaces manual timer state)
 	const nukeConfirm = createConfirmation();
 	const deleteConfirm = createConfirmation();
+	const fileDeleteConfirm = createConfirmation();
+	const chartDeleteConfirm = createConfirmation();
 
-	// Fetch charts for all messages
-	async function loadCharts() {
+	// Fetch superjournal charts (tables from AI responses)
+	async function loadSuperjournalCharts() {
 		const messageIds = allMessages.map((m) => m.id).filter(Boolean);
 		if (messageIds.length === 0) {
-			allCharts = [];
+			superjournalCharts = [];
 			return;
 		}
 
@@ -71,13 +78,36 @@
 				// Flatten all charts from all messages into single array
 				const charts: Chart[] = [];
 				for (const sjId of Object.keys(data.charts || {})) {
-					charts.push(...data.charts[sjId]);
+					for (const chart of data.charts[sjId]) {
+						charts.push({ ...chart, source: 'superjournal' as const });
+					}
 				}
-				allCharts = charts;
+				superjournalCharts = charts;
 			}
 		} catch (error) {
-			console.error('Failed to load charts:', error);
+			console.error('Failed to load superjournal charts:', error);
 		}
+	}
+
+	// Fetch file charts (images/tables from pasted files)
+	async function loadFileCharts() {
+		try {
+			const response = await fetch('/api/chat/files/charts?enabled_only=true');
+			if (response.ok) {
+				const data = await response.json();
+				fileCharts = (data.charts || []).map((chart: Chart & { file_id: string }) => ({
+					...chart,
+					source: 'file' as const
+				}));
+			}
+		} catch (error) {
+			console.error('Failed to load file charts:', error);
+		}
+	}
+
+	// Load all charts
+	async function loadCharts() {
+		await Promise.all([loadSuperjournalCharts(), loadFileCharts()]);
 	}
 
 	// Load user settings on mount and trigger orphan recovery
@@ -199,8 +229,17 @@
 		inputMessage = '';
 		resetTextareaHeight();
 
+		// Get selected chart info if lightbox is open
+		let chartId: string | undefined;
+		let chartSource: 'file' | 'superjournal' | undefined;
+		if (showLightbox && selectedChartIndex !== null && allCharts[selectedChartIndex]) {
+			const selectedChart = allCharts[selectedChartIndex];
+			chartId = selectedChart.id;
+			chartSource = selectedChart.source;
+		}
+
 		// Send message and wait for response
-		await sendMessage(message, selectedPersona);
+		await sendMessage(message, selectedPersona, chartId, chartSource);
 
 		// Add the completed message to allMessages
 		if ($currentMessage) {
@@ -387,6 +426,9 @@
 				files = files.map((f) =>
 					f.id === fileId ? { ...f, is_enabled: currentState } : f
 				);
+			} else {
+				// Reload file charts to reflect enabled/disabled state
+				await loadFileCharts();
 			}
 		} catch (error) {
 			// Revert on failure
@@ -396,28 +438,30 @@
 		}
 	}
 
-	async function deleteFile(fileId: string, event: MouseEvent) {
+	function handleFileDeleteClick(fileId: string, event: MouseEvent) {
 		event.stopPropagation();
-		isDeletingFile = true;
+		fileDeleteConfirm.start(fileId, async () => {
+			isDeletingFile = true;
 
-		// Optimistic update
-		const originalFiles = files;
-		files = files.filter((f) => f.id !== fileId);
+			// Optimistic update
+			const originalFiles = files;
+			files = files.filter((f) => f.id !== fileId);
 
-		try {
-			const response = await fetch(`/api/chat/files/${fileId}`, {
-				method: 'DELETE'
-			});
+			try {
+				const response = await fetch(`/api/chat/files/${fileId}`, {
+					method: 'DELETE'
+				});
 
-			if (!response.ok) {
-				// Revert on failure
+				if (!response.ok) {
+					// Revert on failure
+					files = originalFiles;
+				}
+			} catch (error) {
 				files = originalFiles;
+			} finally {
+				isDeletingFile = false;
 			}
-		} catch (error) {
-			files = originalFiles;
-		} finally {
-			isDeletingFile = false;
-		}
+		});
 	}
 
 	function handleFilePasteSuccess(fileId: string, title: string) {
@@ -426,6 +470,62 @@
 		if (showFileLibrary) {
 			loadFiles();
 		}
+	}
+
+	// Chart pin/dismiss handlers
+	async function handleChartPinToggle(chartId: string, isPinned: boolean) {
+		// Optimistic update
+		allCharts = allCharts.map((c) =>
+			c.id === chartId ? { ...c, is_pinned: isPinned } : c
+		);
+
+		try {
+			const response = await fetch(`/api/superjournal/charts/${chartId}`, {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ is_pinned: isPinned })
+			});
+
+			if (!response.ok) {
+				// Revert on failure
+				allCharts = allCharts.map((c) =>
+					c.id === chartId ? { ...c, is_pinned: !isPinned } : c
+				);
+			}
+		} catch (error) {
+			// Revert on failure
+			allCharts = allCharts.map((c) =>
+				c.id === chartId ? { ...c, is_pinned: !isPinned } : c
+			);
+		}
+	}
+
+	function handleChartDeleteClick(chartId: string) {
+		chartDeleteConfirm.start(chartId, async () => {
+			// Close lightbox if deleted chart was selected
+			const deletedIndex = allCharts.findIndex((c) => c.id === chartId);
+			if (showLightbox && selectedChartIndex === deletedIndex) {
+				showLightbox = false;
+				selectedChartIndex = null;
+			}
+
+			// Optimistic update - remove from display
+			const originalCharts = allCharts;
+			allCharts = allCharts.filter((c) => c.id !== chartId);
+
+			try {
+				const response = await fetch(`/api/superjournal/charts/${chartId}`, {
+					method: 'DELETE'
+				});
+
+				if (!response.ok) {
+					// Revert on failure
+					allCharts = originalCharts;
+				}
+			} catch (error) {
+				allCharts = originalCharts;
+			}
+		});
 	}
 
 	// Keyboard shortcuts
@@ -523,7 +623,7 @@
 							currentFileId={null}
 							isDeleting={isDeletingFile}
 							onToggle={toggleFile}
-							onDelete={deleteFile}
+							onDelete={handleFileDeleteClick}
 						/>
 					{/if}
 					</div>
@@ -584,11 +684,30 @@
 		mode="chat"
 	/>
 
+	<!-- File Delete Confirmation Modal -->
+	<ConfirmationModal
+		isOpen={fileDeleteConfirm.isActive}
+		progress={fileDeleteConfirm.progress}
+		onCancel={() => fileDeleteConfirm.cancel()}
+		mode="chat"
+	/>
+
+	<!-- Chart Delete Confirmation Modal -->
+	<ConfirmationModal
+		isOpen={chartDeleteConfirm.isActive}
+		progress={chartDeleteConfirm.progress}
+		onCancel={() => chartDeleteConfirm.cancel()}
+		mode="chat"
+	/>
+
 	<!-- Canvas Area with Charts -->
 	<ChartCarousel
 		charts={allCharts}
 		bind:selectedChartIndex
 		bind:showLightbox
+		enablePinDelete={true}
+		onPinToggle={handleChartPinToggle}
+		onDelete={handleChartDeleteClick}
 	/>
 
 </div>

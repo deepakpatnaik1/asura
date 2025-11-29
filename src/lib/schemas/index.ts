@@ -24,12 +24,17 @@ export const personaSchema = z.enum(['gunnar', 'kirby']);
 // Chat Schemas
 // ============================================================================
 
+/** Chart source type for chat mode */
+export const chartSourceSchema = z.enum(['file', 'superjournal']);
+
 /** POST /api/chat - Send chat message */
 export const chatMessageSchema = z.object({
 	message: z.string()
 		.min(1, 'Message is required')
 		.max(50000, 'Message too long (max 50000 characters)'),
-	persona: personaSchema.optional()
+	persona: personaSchema.optional(),
+	chart_id: z.string().uuid().optional(),
+	chart_source: chartSourceSchema.optional()
 });
 
 /** POST /api/chat/compress - Orphan recovery compression */
@@ -87,11 +92,6 @@ export const extractImagesSchema = z.object({
 	html: z.string()
 		.min(1, 'HTML content is required')
 		.max(5_000_000, 'HTML too large (max 5MB)')
-});
-
-/** POST /api/reader/filter-charts - Filter charts with AI */
-export const filterChartsSchema = z.object({
-	article_id: uuidSchema
 });
 
 /** DELETE /api/reader/articles - Delete an article */

@@ -233,25 +233,7 @@
 				return await response.json();
 			}, 2, 1000, 'Extracting images...');
 
-			// Step 3: Filter charts
-			processingStatus = 'Filtering charts...';
-			await retryWithBackoff(async () => {
-				const response = await fetch('/api/reader/filter-charts', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ article_id: articleId }),
-					signal: abortController?.signal
-				});
-
-				if (!response.ok) {
-					const error = await response.json();
-					throw new Error(error.error?.message || 'Chart filtering failed');
-				}
-
-				return await response.json();
-			}, 2, 1000, 'Filtering charts...');
-
-			// Step 4: Process article with AI (streaming)
+			// Step 3: Process article with AI (streaming)
 			processingStatus = 'Processing with AI...';
 
 			const response = await fetch('/api/reader/process-article', {

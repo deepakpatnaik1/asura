@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { DEFAULT_READER_MODEL } from '$lib/config/models';
 import { getModelParams } from '$lib/config/model-params';
-import { followupStream } from '$lib/calls';
+import { followupStream, runExtractReaderTablesJob } from '$lib/calls';
 import { parseRequestJson } from '$lib/api/parse-json';
 import { requireAuth } from '$lib/api/require-auth';
 import { waitForRateLimit, RATE_LIMITS } from '$lib/api/rate-limit';
@@ -191,12 +191,16 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				}
 
 				// 11. SAVE AI RESPONSE TO DATABASE
-				const { error: saveAssistantError } = await supabase.from('article_chat').insert({
-					article_id,
-					user_id: userId,
-					role: 'assistant',
-					content: fullResponse
-				});
+				const { data: assistantMessage, error: saveAssistantError } = await supabase
+					.from('article_chat')
+					.insert({
+						article_id,
+						user_id: userId,
+						role: 'assistant',
+						content: fullResponse
+					})
+					.select('id')
+					.single();
 
 				if (saveAssistantError) {
 					log.error('Failed to save assistant response', { error: saveAssistantError.message });
@@ -206,8 +210,26 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 						)
 					);
 				} else {
-					log.info('Response saved');
-					controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true })}\n\n`));
+					const articleChatId = assistantMessage?.id;
+					log.info('Response saved', { articleChatId });
+
+					// Send done event with message ID for chart fetching
+					controller.enqueue(
+						encoder.encode(
+							`data: ${JSON.stringify({ done: true, article_chat_id: articleChatId })}\n\n`
+						)
+					);
+
+					// Trigger background table extraction
+					if (articleChatId) {
+						setTimeout(() => {
+							runExtractReaderTablesJob({
+								articleChatId,
+								userId,
+								aiResponse: fullResponse
+							});
+						}, 0);
+					}
 				}
 
 				controller.close();

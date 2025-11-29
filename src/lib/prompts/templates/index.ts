@@ -9,12 +9,33 @@
 // DESCRIBE (Reader: Article Summary)
 // ============================================================================
 
-export function describeUserPrompt(articleTitle: string, articleHtml: string): string {
-	return `Here is an article titled "${articleTitle}". Please provide an educational summary. Use the web search tool as needed to understand recent context.
+export function describeUserPrompt(
+	articleTitle: string,
+	articleHtml: string,
+	chartCount: number = 0
+): string {
+	let prompt = `Here is an article titled "${articleTitle}". Please provide an educational summary. Use the web search tool as needed to understand recent context.
 
 <article>
 ${articleHtml}
 </article>`;
+
+	// If there are charts/tables, ask for captions
+	if (chartCount > 0) {
+		prompt += `
+
+IMPORTANT: This article contains ${chartCount} figure(s) and/or table(s). After your summary, provide a brief actionable caption for each one that explains what insight it provides in context of the article's argument. Use this exact format:
+
+<figure_captions>
+1: [Your caption for figure/table 1]
+2: [Your caption for figure/table 2]
+...
+</figure_captions>
+
+Each caption should be a single sentence (under 100 characters) that helps the reader understand why this figure matters.`;
+	}
+
+	return prompt;
 }
 
 // ============================================================================

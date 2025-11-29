@@ -3,11 +3,11 @@
  */
 
 // Core AI calls
-export { converseStream, type ConverseParams, type ConverseResult } from './converse';
+export { converseStream, type ConverseParams, type ConverseResult, type ChartImageData } from './converse';
 export { compress, type CompressParams, type CompressResult } from './compress';
 
 // Background jobs
-export { saveConversation, type SaveConversationParams } from './save';
+export { saveConversation, saveToSuperjournal, triggerBackgroundJobs, type SaveConversationParams } from './save';
 export { runCompressJob, type CompressJobParams } from './compress-job';
 
 // Utilities

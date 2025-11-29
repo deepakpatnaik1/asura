@@ -32,10 +32,23 @@ function removeHorizontalRules(text: string): string {
 }
 
 /**
+ * Strip markdown pipe tables from text.
+ * Tables are extracted and rendered to canvas separately.
+ * Matches: | Header | Header |
+ *          |--------|--------|
+ *          | Cell   | Cell   |
+ */
+function stripMarkdownTables(text: string): string {
+	const tableRegex = /^(\|[^\n]+\|)\s*\n(\|[-:\s|]+\|)\s*\n((?:\|[^\n]+\|\s*\n?)+)/gm;
+	return text.replace(tableRegex, '').trim();
+}
+
+/**
  * Custom markdown renderer with accent color styling.
  *
  * Pre-processing:
  * - Emoji stripped (all Extended_Pictographic characters removed)
+ * - Markdown tables stripped (rendered to canvas separately)
  * - Horizontal rules (---) removed (cause flickering during auto-scroll)
  * - Em dashes (—) normalized to en dashes (–) with spaces
  *
@@ -43,8 +56,7 @@ function removeHorizontalRules(text: string): string {
  * 1. Headings (# ## ###) → Accent bold (all levels identical)
  * 2. Bold (**text**) → Plain text (styling stripped)
  * 3. Italic (*text*) → Plain text (styling stripped)
- * 4. Bullet lists → Solid circle (●) in accent color
- * 5. Numbered lists → Numbers in accent color
+ * 4. All lists → Solid circle (●) in accent color (numbered lists become bullets)
  *
  * Spacing Rules:
  * - One line space after paragraphs (1.6em)
@@ -54,16 +66,13 @@ function removeHorizontalRules(text: string): string {
 export function renderMarkdown(markdown: string, mode: RenderMode = 'chat'): string {
 	const ACCENT_COLOR = mode === 'chat' ? CHAT_ACCENT : READER_ACCENT;
 
-	// Pre-process: strip emoji, remove horizontal rules (cause flickering), normalize em dashes
+	// Pre-process: strip emoji, tables, horizontal rules, normalize em dashes
 	const withoutEmoji = stripEmoji(markdown);
-	const withoutHr = removeHorizontalRules(withoutEmoji);
+	const withoutTables = stripMarkdownTables(withoutEmoji);
+	const withoutHr = removeHorizontalRules(withoutTables);
 	const normalizedMarkdown = normalizeEmDashes(withoutHr);
 	// Configure marked with custom renderer
 	const renderer = new marked.Renderer();
-
-	// Track list context for proper numbering
-	let isOrderedList = false;
-	let listItemIndex = 0;
 
 	// 1. Headings → Accent Bold (all levels identical)
 	// One line space before section header (margin-top), no bottom margin
@@ -88,13 +97,10 @@ export function renderMarkdown(markdown: string, mode: RenderMode = 'chat'): str
 		return `<p style="margin: 0 0 1.6em 0; display: block;">${text}</p>`;
 	};
 
-	// 5. Bullet lists → Indented accent bullets
-	// 6. Numbered lists → Indented accent numbers
+	// 5. All lists → Indented accent bullets
 	// One line space after lists (margin-bottom only)
 	const originalList = renderer.list.bind(renderer);
 	renderer.list = (token) => {
-		isOrderedList = token.ordered;
-		listItemIndex = 0;
 		const listHtml = originalList(token);
 		// Add custom styling to the list - one line space after
 		return listHtml.replace(
@@ -103,18 +109,12 @@ export function renderMarkdown(markdown: string, mode: RenderMode = 'chat'): str
 		);
 	};
 
-	// List items with accent color markers (bullet or number)
+	// List items with accent color bullets (all lists become bullet lists)
 	// Use parseInline to render bold/italic within list items
 	renderer.listitem = (token) => {
 		const content = marked.parseInline(token.text);
-		if (isOrderedList) {
-			// Numbered list: number in accent color
-			listItemIndex++;
-			return `<li style="margin: 0; display: flex;"><span style="color: ${ACCENT_COLOR}; margin-right: 8px; flex-shrink: 0;">${listItemIndex}.</span><span>${content}</span></li>`;
-		} else {
-			// Bullet list: bullet in accent color (scaled up, vertically centered)
-			return `<li style="margin: 0; display: flex; align-items: baseline;"><span style="color: ${ACCENT_COLOR}; margin-right: 8px; flex-shrink: 0; font-size: 1.2em;">\u2022</span><span>${content}</span></li>`;
-		}
+		// All lists use bullets in accent color (scaled up, vertically centered)
+		return `<li style="margin: 0; display: flex; align-items: baseline;"><span style="color: ${ACCENT_COLOR}; margin-right: 8px; flex-shrink: 0; font-size: 1.2em;">\u2022</span><span>${content}</span></li>`;
 	};
 
 	// Configure marked options

@@ -4,25 +4,39 @@
 	 *
 	 * Displays extracted chart images from articles with expand/collapse functionality.
 	 * Uses bindable props so parent can read lightbox state for Q&A context.
+	 * Supports optional pin/delete controls for chat mode.
 	 */
+
+	import { Icon } from 'svelte-icons-pack';
+	import { LuPin, LuTrash2 } from 'svelte-icons-pack/lu';
 
 	interface Chart {
 		id: string;
 		thumbnail_url: string;
 		full_url: string;
 		alt: string;
+		is_pinned?: boolean;
 	}
 
 	interface Props {
 		charts: Chart[];
 		selectedChartIndex?: number | null;
 		showLightbox?: boolean;
+		/** Enable pin/delete controls (for chat mode) */
+		enablePinDelete?: boolean;
+		/** Callback when chart is pinned/unpinned */
+		onPinToggle?: (chartId: string, isPinned: boolean) => void;
+		/** Callback when chart is deleted */
+		onDelete?: (chartId: string) => void;
 	}
 
 	let {
 		charts,
 		selectedChartIndex = $bindable(null),
-		showLightbox = $bindable(false)
+		showLightbox = $bindable(false),
+		enablePinDelete = false,
+		onPinToggle,
+		onDelete
 	}: Props = $props();
 
 	function openLightbox(index: number) {
@@ -42,6 +56,20 @@
 			selectedChartIndex = selectedChartIndex > 0 ? selectedChartIndex - 1 : charts.length - 1;
 		} else {
 			selectedChartIndex = selectedChartIndex < charts.length - 1 ? selectedChartIndex + 1 : 0;
+		}
+	}
+
+	function handlePinClick(event: MouseEvent, chart: Chart) {
+		event.stopPropagation();
+		if (onPinToggle) {
+			onPinToggle(chart.id, !chart.is_pinned);
+		}
+	}
+
+	function handleDeleteClick(event: MouseEvent, chart: Chart) {
+		event.stopPropagation();
+		if (onDelete) {
+			onDelete(chart.id);
 		}
 	}
 
@@ -71,6 +99,25 @@
 						<span class="chart-counter">{selectedChartIndex + 1} / {charts.length}</span>
 						<span class="chart-title">{charts[selectedChartIndex].alt}</span>
 					</div>
+					{#if enablePinDelete}
+						<div class="chart-view-actions">
+							<button
+								class="chart-action-btn"
+								class:active={charts[selectedChartIndex].is_pinned}
+								onclick={(e) => handlePinClick(e, charts[selectedChartIndex])}
+								title={charts[selectedChartIndex].is_pinned ? 'Unpin' : 'Pin'}
+							>
+								<Icon src={LuPin} size="14" />
+							</button>
+							<button
+								class="chart-action-btn delete"
+								onclick={(e) => handleDeleteClick(e, charts[selectedChartIndex])}
+								title="Delete"
+							>
+								<Icon src={LuTrash2} size="14" />
+							</button>
+						</div>
+					{/if}
 				</div>
 
 				<div class="chart-view-image">
@@ -95,25 +142,47 @@
 		<div class="chart-grid">
 			{#each charts as chart, index}
 				{@const isActive = showLightbox && selectedChartIndex === index}
-				<button
-					class="chart-thumbnail"
-					class:active={isActive}
-					onclick={() => isActive ? closeLightbox() : openLightbox(index)}
-					title={isActive ? "Collapse (Esc)" : chart.alt}
-				>
-					<img src={chart.thumbnail_url} alt={chart.alt} />
-					<div class="chart-overlay">
-						{#if isActive}
-							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-								<path d="M4 14h6v6M20 10h-6V4M10 14l-7 7M14 10l7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-							</svg>
-						{:else}
-							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-								<path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-							</svg>
-						{/if}
-					</div>
-				</button>
+				<div class="chart-thumbnail-wrapper">
+					<button
+						class="chart-thumbnail"
+						class:active={isActive}
+						class:pinned={chart.is_pinned}
+						onclick={() => isActive ? closeLightbox() : openLightbox(index)}
+						title={isActive ? "Collapse (Esc)" : chart.alt}
+					>
+						<img src={chart.thumbnail_url} alt={chart.alt} />
+						<div class="chart-overlay">
+							{#if isActive}
+								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+									<path d="M4 14h6v6M20 10h-6V4M10 14l-7 7M14 10l7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+								</svg>
+							{:else}
+								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+									<path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+								</svg>
+							{/if}
+						</div>
+					</button>
+					{#if enablePinDelete}
+						<div class="thumbnail-actions">
+							<button
+								class="thumbnail-action-btn"
+								class:active={chart.is_pinned}
+								onclick={(e) => handlePinClick(e, chart)}
+								title={chart.is_pinned ? 'Unpin' : 'Pin'}
+							>
+								<Icon src={LuPin} size="11" />
+							</button>
+							<button
+								class="thumbnail-action-btn delete"
+								onclick={(e) => handleDeleteClick(e, chart)}
+								title="Delete"
+							>
+								<Icon src={LuTrash2} size="11" />
+							</button>
+						</div>
+					{/if}
+				</div>
 			{/each}
 		</div>
 	{/if}
@@ -149,6 +218,11 @@
 		background: hsl(var(--background));
 	}
 
+	.chart-thumbnail-wrapper {
+		position: relative;
+		flex-shrink: 0;
+	}
+
 	.chart-thumbnail {
 		position: relative;
 		flex-shrink: 0;
@@ -176,6 +250,11 @@
 		outline-offset: 2px;
 	}
 
+	.chart-thumbnail.pinned {
+		outline: 1px solid var(--boss-accent);
+		outline-offset: 1px;
+	}
+
 	.chart-thumbnail img {
 		width: 100%;
 		height: 100%;
@@ -199,6 +278,53 @@
 	.chart-thumbnail:hover .chart-overlay,
 	.chart-thumbnail.active .chart-overlay {
 		opacity: 1;
+	}
+
+	.thumbnail-actions {
+		position: absolute;
+		bottom: -4px;
+		left: 50%;
+		transform: translateX(-50%);
+		display: flex;
+		gap: 2px;
+		opacity: 0;
+		transition: opacity 0.2s ease;
+		background: hsl(var(--card));
+		border-radius: 4px;
+		padding: 2px;
+		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+	}
+
+	.chart-thumbnail-wrapper:hover .thumbnail-actions {
+		opacity: 1;
+	}
+
+	.thumbnail-action-btn {
+		width: 20px;
+		height: 20px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: transparent;
+		border: none;
+		border-radius: 3px;
+		color: hsl(var(--muted-foreground));
+		cursor: pointer;
+		transition: all 0.15s;
+	}
+
+	.thumbnail-action-btn:hover {
+		background: hsl(var(--accent));
+		color: hsl(var(--foreground));
+	}
+
+	.thumbnail-action-btn.active {
+		color: var(--boss-accent);
+	}
+
+	.thumbnail-action-btn.delete:hover {
+		background: rgba(239, 68, 68, 0.1);
+		color: rgb(239, 68, 68);
 	}
 
 	.canvas-chart-view {
@@ -239,6 +365,42 @@
 		font-size: 10pt;
 		color: hsl(var(--foreground));
 		font-weight: 500;
+	}
+
+	.chart-view-actions {
+		display: flex;
+		gap: 8px;
+	}
+
+	.chart-action-btn {
+		width: 32px;
+		height: 32px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: hsl(var(--card));
+		border: 1px solid hsl(var(--border));
+		border-radius: 6px;
+		color: hsl(var(--muted-foreground));
+		cursor: pointer;
+		transition: all 0.15s;
+	}
+
+	.chart-action-btn:hover {
+		background: hsl(var(--accent));
+		color: hsl(var(--foreground));
+	}
+
+	.chart-action-btn.active {
+		background: var(--boss-accent);
+		border-color: var(--boss-accent);
+		color: black;
+	}
+
+	.chart-action-btn.delete:hover {
+		background: rgba(239, 68, 68, 0.1);
+		border-color: rgb(239, 68, 68);
+		color: rgb(239, 68, 68);
 	}
 
 	.chart-view-image {

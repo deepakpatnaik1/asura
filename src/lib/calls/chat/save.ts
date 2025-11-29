@@ -10,6 +10,7 @@ import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { createLogger } from '$lib/api/logger';
 import { runCompressJob } from './compress-job';
+import { runExtractTablesJob } from './extract-tables';
 import { scheduleRetries } from './retry';
 
 // Lazy-initialized client
@@ -31,52 +32,88 @@ export interface SaveConversationParams {
 }
 
 /**
- * Save a conversation turn to the database.
- * This saves to superjournal first, then triggers background compression.
- *
- * @param params - The conversation parameters to save
+ * Save to superjournal and return the ID.
+ * Does NOT trigger background jobs - caller must do that separately.
  */
-export async function saveConversation(params: SaveConversationParams): Promise<void> {
+export async function saveToSuperjournal(params: SaveConversationParams): Promise<string | null> {
 	const { userId, message, aiResponse, conversationModel, persona } = params;
 	const log = createLogger('ChatSave', userId);
 	const supabase = getSupabaseServiceRole();
 
-	const saveToSuperjournal = async (): Promise<string | null> => {
-		const { data: superjournalData, error: dbError } = await supabase
-			.from('superjournal')
-			.insert({
-				user_id: userId,
-				persona_name: persona,
-				user_message: message,
-				ai_response: aiResponse,
-				model_identifier: conversationModel
-			})
-			.select('id')
-			.single();
+	const { data: superjournalData, error: dbError } = await supabase
+		.from('superjournal')
+		.insert({
+			user_id: userId,
+			persona_name: persona,
+			user_message: message,
+			ai_response: aiResponse,
+			model_identifier: conversationModel
+		})
+		.select('id')
+		.single();
 
-		if (dbError) {
-			throw new Error(`Superjournal insert failed: ${dbError.message}`);
-		}
+	if (dbError) {
+		log.error('Superjournal insert failed', { error: dbError.message });
+		return null;
+	}
 
-		return superjournalData?.id || null;
-	};
+	const superjournalId = superjournalData?.id || null;
+	if (superjournalId) {
+		log.info('Saved to superjournal', { superjournalId });
+	}
+	return superjournalId;
+}
+
+/**
+ * Trigger background jobs (compression, table extraction) for a saved conversation.
+ */
+export function triggerBackgroundJobs(params: {
+	superjournalId: string;
+	userId: string;
+	message: string;
+	aiResponse: string;
+	persona: string;
+}): void {
+	const { superjournalId, userId, message, aiResponse, persona } = params;
+
+	setTimeout(() => {
+		runCompressJob({
+			superjournalId,
+			userId,
+			userMessage: message,
+			aiResponse,
+			personaName: persona
+		});
+		runExtractTablesJob({
+			superjournalId,
+			userId,
+			aiResponse
+		});
+	}, 0);
+}
+
+/**
+ * Save a conversation turn to the database.
+ * This saves to superjournal first, then triggers background compression.
+ * Legacy function - prefer saveToSuperjournal + triggerBackgroundJobs for more control.
+ *
+ * @param params - The conversation parameters to save
+ */
+export async function saveConversation(params: SaveConversationParams): Promise<void> {
+	const { userId, message, aiResponse, persona } = params;
+	const log = createLogger('ChatSave', userId);
 
 	try {
-		const superjournalId = await saveToSuperjournal();
+		const superjournalId = await saveToSuperjournal(params);
 
 		if (superjournalId) {
-			log.info('Saved to superjournal', { superjournalId });
-
-			// Trigger background compression
-			setTimeout(() => {
-				runCompressJob({
-					superjournalId,
-					userId,
-					userMessage: message,
-					aiResponse,
-					personaName: persona
-				});
-			}, 0);
+			triggerBackgroundJobs({
+				superjournalId,
+				userId,
+				message,
+				aiResponse,
+				persona
+			});
 		}
 	} catch (error) {
 		log.error('Initial save failed, scheduling retries', {
@@ -85,15 +122,14 @@ export async function saveConversation(params: SaveConversationParams): Promise<
 
 		// Schedule retries at 1min, 5min, 10min
 		scheduleRetries(async () => {
-			const superjournalId = await saveToSuperjournal();
+			const superjournalId = await saveToSuperjournal(params);
 			if (superjournalId) {
-				// Trigger compression after successful retry
-				runCompressJob({
+				triggerBackgroundJobs({
 					superjournalId,
 					userId,
-					userMessage: message,
+					message,
 					aiResponse,
-					personaName: persona
+					persona
 				});
 			}
 		}, 'SuperjournalSave', userId);

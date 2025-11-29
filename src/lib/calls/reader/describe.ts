@@ -21,6 +21,7 @@ export interface DescribeParams {
 	model: string;
 	maxTokens: number;
 	temperature: number;
+	chartCount?: number;
 }
 
 /**
@@ -34,12 +35,12 @@ export interface DescribeParams {
 export async function* describeStream(
 	params: DescribeParams
 ): AsyncGenerator<string, string, unknown> {
-	const { articleTitle, articleHtml, model, maxTokens, temperature } = params;
+	const { articleTitle, articleHtml, model, maxTokens, temperature, chartCount } = params;
 
 	const messages: Anthropic.MessageParam[] = [
 		{
 			role: 'user',
-			content: describeUserPrompt(articleTitle, articleHtml)
+			content: describeUserPrompt(articleTitle, articleHtml, chartCount)
 		}
 	];
 

@@ -29,6 +29,7 @@ async function getModelContextWindow(supabase: SupabaseClient, modelIdentifier: 
 
 interface ContextComponents {
 	superjournal: string;
+	files: string; // Enabled user files (artisan cuts)
 	starred: string;
 	instructions: string;
 	journal: string;
@@ -40,6 +41,7 @@ interface ContextStats {
 	totalTokens: number;
 	components: {
 		superjournal: number;
+		files: number;
 		starred: number;
 		instructions: number;
 		journal: number;
@@ -87,6 +89,7 @@ export async function buildContextForCalls1A1B(
 	// Initialize context components
 	const components: ContextComponents = {
 		superjournal: '',
+		files: '',
 		starred: '',
 		instructions: '',
 		journal: '',
@@ -109,6 +112,23 @@ export async function buildContextForCalls1A1B(
 		const superjournalText = formatSuperjournalHistory(superjournalData.reverse()); // Oldest first
 		components.superjournal = superjournalText;
 		totalTokens += estimateTokens(superjournalText);
+	}
+
+	// Priority 1.5: Enabled files (user-uploaded content)
+	const { data: filesData } = await supabase
+		.from('files')
+		.select('title, artisan_cut, created_at')
+		.eq('user_id', userId)
+		.eq('is_enabled', true)
+		.order('created_at', { ascending: false });
+
+	if (filesData && filesData.length > 0) {
+		const filesText = formatEnabledFiles(filesData);
+		const filesTokens = estimateTokens(filesText);
+		if (totalTokens + filesTokens <= contextBudget) {
+			components.files = filesText;
+			totalTokens += filesTokens;
+		}
 	}
 
 	// Priority 2: Starred messages (user-curated memory)
@@ -275,6 +295,7 @@ export async function buildContextForCalls1A1B(
 		totalTokens,
 		components: {
 			superjournal: estimateTokens(components.superjournal),
+			files: estimateTokens(components.files),
 			starred: estimateTokens(components.starred),
 			instructions: estimateTokens(components.instructions),
 			journal: estimateTokens(components.journal),
@@ -331,6 +352,27 @@ ${entry.persona_name}: ${entry.persona_essence}`
 		.join('\n\n');
 
 	return `--- RECENT MEMORY (Last ${MEMORY.lastNJournalEntries} Compressed Turns) ---\n${formatted}\n\n`;
+}
+
+// Format enabled files (artisan cuts)
+function formatEnabledFiles(
+	entries: Array<{
+		title: string;
+		artisan_cut: string;
+		created_at: string;
+	}>
+): string {
+	if (entries.length === 0) return '';
+
+	const formatted = entries
+		.map(
+			(entry) =>
+				`[File: ${entry.title}]
+${entry.artisan_cut}`
+		)
+		.join('\n\n');
+
+	return `--- ENABLED FILES (User-Uploaded Content) ---\n${formatted}\n\n`;
 }
 
 // Format starred messages
@@ -465,6 +507,7 @@ function truncateArcsToFit(
 function assembleContext(components: ContextComponents): string {
 	const parts = [
 		components.superjournal,
+		components.files, // After superjournal, before starred
 		components.starred,
 		components.instructions,
 		components.journal,

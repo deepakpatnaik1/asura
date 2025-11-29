@@ -164,13 +164,15 @@ function extractHtmlTables(
 	$('table').each((i, tableEl) => {
 		const headers: string[] = [];
 		const rows: string[][] = [];
+		let headerRowIndex = -1; // Track which row we used for headers
 
 		// Extract headers from thead > tr > th, or first row with th
-		const headerRow = $(tableEl).find('thead tr').first();
-		if (headerRow.length) {
-			headerRow.find('th, td').each((_, el) => {
+		const theadRow = $(tableEl).find('thead tr').first();
+		if (theadRow.length) {
+			theadRow.find('th, td').each((_, el) => {
 				headers.push($(el).text().trim());
 			});
+			// Headers from thead - no row to skip in tbody
 		} else {
 			// Try first row if it has th elements
 			const firstRow = $(tableEl).find('tr').first();
@@ -178,6 +180,7 @@ function extractHtmlTables(
 				firstRow.find('th, td').each((_, el) => {
 					headers.push($(el).text().trim());
 				});
+				headerRowIndex = 0; // First row used for headers
 			}
 		}
 
@@ -187,14 +190,17 @@ function extractHtmlTables(
 			firstRow.find('th, td').each((_, el) => {
 				headers.push($(el).text().trim());
 			});
+			headerRowIndex = 0; // First row used for headers
 		}
 
 		if (headers.length === 0) return; // Skip tables with no content
 
-		// Extract body rows
-		const bodyRows = $(tableEl).find('tbody tr');
-		if (bodyRows.length) {
-			bodyRows.each((_, row) => {
+		// Extract body rows, skipping the header row if it came from tbody
+		const allRows = $(tableEl).find('tbody tr');
+		if (allRows.length) {
+			allRows.each((rowIdx, row) => {
+				// Skip if this row was used for headers
+				if (headerRowIndex === rowIdx) return;
 				const cells: string[] = [];
 				$(row)
 					.find('td, th')

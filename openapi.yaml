@@ -478,69 +478,6 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
 
-  /reader/filter-charts:
-    post:
-      tags: [Reader]
-      summary: Filter charts with AI
-      description: |
-        Use programmatic and AI filtering to identify relevant charts
-        vs ads/decorative images
-      security:
-        - cookieAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [article_id]
-              properties:
-                article_id:
-                  type: string
-                  format: uuid
-      responses:
-        '200':
-          description: Charts filtered
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                  article_id:
-                    type: string
-                  total_charts:
-                    type: integer
-                  programmatic_filtered:
-                    type: integer
-                  ai_filtered:
-                    type: integer
-                  relevant_charts:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        chart_index:
-                          type: integer
-                        filter_reason:
-                          type: string
-                  irrelevant_charts:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        chart_index:
-                          type: integer
-                        filter_reason:
-                          type: string
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '500':
-          $ref: '#/components/responses/InternalError'
-
   /reader/nuke:
     post:
       tags: [Reader]

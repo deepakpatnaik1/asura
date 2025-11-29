@@ -7,6 +7,7 @@ interface Message {
 	ai: string;
 	timestamp: string;
 	model_identifier?: string;
+	superjournal_id?: string;
 }
 
 export const currentMessage = writable<Message | null>(null);
@@ -18,7 +19,12 @@ let currentAbortController: AbortController | null = null;
 // Streaming timeout: 2 minutes (streaming can be slow)
 const STREAMING_TIMEOUT_MS = 120000;
 
-export async function sendMessage(userMessage: string, persona?: string): Promise<void> {
+export async function sendMessage(
+	userMessage: string,
+	persona?: string,
+	chartId?: string,
+	chartSource?: 'file' | 'superjournal'
+): Promise<void> {
 	// Create new abort controller for this request
 	currentAbortController = new AbortController();
 	const now = new Date();
@@ -41,10 +47,17 @@ export async function sendMessage(userMessage: string, persona?: string): Promis
 	isLoading.set(true);
 
 	try {
+		// Build request body with optional chart reference
+		const body: Record<string, unknown> = { message: userMessage, persona };
+		if (chartId && chartSource) {
+			body.chart_id = chartId;
+			body.chart_source = chartSource;
+		}
+
 		const response = await fetchWithTimeout('/api/chat', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ message: userMessage, persona }),
+			body: JSON.stringify(body),
 			signal: currentAbortController.signal
 		}, STREAMING_TIMEOUT_MS);
 
@@ -60,7 +73,6 @@ export async function sendMessage(userMessage: string, persona?: string): Promis
 			const reader = response.body?.getReader();
 			const decoder = new TextDecoder();
 			let streamedText = '';
-			let modelIdentifier = '';
 			let buffer = ''; // Buffer for incomplete lines
 
 			if (!reader) {
@@ -97,11 +109,14 @@ export async function sendMessage(userMessage: string, persona?: string): Promis
 										return msg;
 									});
 								} else if (data.type === 'done') {
-									// Stream complete
-									modelIdentifier = data.model_identifier;
+									// Stream complete - capture model and superjournal ID
 									currentMessage.update(msg => {
 										if (msg) {
-											return { ...msg, model_identifier: modelIdentifier };
+											return {
+												...msg,
+												model_identifier: data.model_identifier,
+												superjournal_id: data.superjournal_id
+											};
 										}
 										return msg;
 									});

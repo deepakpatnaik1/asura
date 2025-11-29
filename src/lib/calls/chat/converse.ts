@@ -16,6 +16,11 @@ import { TIMING } from '$lib/config/timing';
 
 const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 
+export interface ChartImageData {
+	base64: string;
+	mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+}
+
 export interface ConverseParams {
 	personaPrompt: string;
 	context: string;
@@ -23,6 +28,7 @@ export interface ConverseParams {
 	model: string;
 	maxTokens: number;
 	temperature: number;
+	chartImage?: ChartImageData | null;
 }
 
 export interface ConverseResult {
@@ -44,7 +50,7 @@ export interface ConverseResult {
 export async function* converseStream(
 	params: ConverseParams
 ): AsyncGenerator<string, ConverseResult, unknown> {
-	const { personaPrompt, context, message, model, maxTokens, temperature } = params;
+	const { personaPrompt, context, message, model, maxTokens, temperature, chartImage } = params;
 
 	// Build system prompt with cache breakpoints
 	const systemPromptWithCache: Anthropic.Messages.TextBlockParam[] = [
@@ -63,11 +69,32 @@ export async function* converseStream(
 	// Build user prompt with context
 	const fullUserPrompt = converseUserPrompt(context, message);
 
+	// Build user message content - include chart image if provided
+	let userContent: Anthropic.MessageParam['content'];
+	if (chartImage) {
+		userContent = [
+			{
+				type: 'image',
+				source: {
+					type: 'base64',
+					media_type: chartImage.mediaType,
+					data: chartImage.base64
+				}
+			},
+			{
+				type: 'text',
+				text: `[Referring to the image above]\n\n${fullUserPrompt}`
+			}
+		];
+	} else {
+		userContent = fullUserPrompt;
+	}
+
 	// Initial messages
 	const messages: Anthropic.MessageParam[] = [
 		{
 			role: 'user',
-			content: fullUserPrompt
+			content: userContent
 		}
 	];
 

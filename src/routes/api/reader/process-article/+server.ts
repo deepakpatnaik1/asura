@@ -6,6 +6,8 @@ import { requireAuth } from '$lib/api/require-auth';
 import { parseRequestJson } from '$lib/api/parse-json';
 import { processArticleSchema, validateSchema } from '$lib/schemas';
 import { notFoundError, errorResponse } from '$lib/api/errors';
+import { extractTablesFromSummary } from './extract-summary-tables';
+import { updateChartCaptions } from './update-chart-captions';
 
 /**
  * Process Article Endpoint (Phase 2, Group D - Chunks 6-8)
@@ -61,6 +63,13 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 	// 6. GET MODEL PARAMETERS
 	const modelParams = await getModelParams(selectedModel, 'reader');
 
+	// 6b. GET CHART COUNT FOR CAPTION GENERATION
+	const { count: chartCount } = await supabase
+		.from('article_charts')
+		.select('*', { count: 'exact', head: true })
+		.eq('article_id', article_id)
+		.eq('user_id', userId);
+
 	// 7. CREATE STREAMING RESPONSE
 	const stream = new ReadableStream({
 		async start(controller) {
@@ -73,7 +82,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 					articleHtml: article.raw_html,
 					model: selectedModel,
 					maxTokens: modelParams.max_tokens,
-					temperature: modelParams.temperature
+					temperature: modelParams.temperature,
+					chartCount: chartCount || 0
 				});
 
 				let fullResponse = '';
@@ -110,6 +120,26 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 					);
 				} else {
 					controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true })}\n\n`));
+
+					// Background jobs (don't block response)
+					setTimeout(() => {
+						// Extract tables from AI summary
+						extractTablesFromSummary({
+							articleId: article_id,
+							userId,
+							aiResponse: fullResponse
+						});
+
+						// Update source chart captions from AI response
+						if (chartCount && chartCount > 0) {
+							updateChartCaptions({
+								articleId: article_id,
+								userId,
+								aiResponse: fullResponse,
+								chartCount
+							});
+						}
+					}, 0);
 				}
 
 				controller.close();

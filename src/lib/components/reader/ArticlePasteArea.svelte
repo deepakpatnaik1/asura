@@ -80,14 +80,13 @@
 		background: rgb(0, 0, 0);
 		border: 1px solid var(--reader-accent);
 		padding: var(--boss-card-padding-y) var(--boss-card-padding-x);
-		margin-left: var(--boss-card-margin-x);
-		margin-right: var(--boss-card-margin-x);
 		border-radius: var(--boss-card-border-radius);
-		min-height: 300px;
-		position: absolute;
+		min-height: 250px;
+		position: fixed;
 		bottom: 80px;
 		left: 24px;
-		right: 24px;
+		width: calc(var(--middle-section-width) - 48px);
+		z-index: 50;
 	}
 
 	.paste-area {

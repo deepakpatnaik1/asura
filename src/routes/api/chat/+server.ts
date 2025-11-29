@@ -13,10 +13,18 @@ import { DEFAULT_PERSONA } from '$lib/config/personas';
 import { PERSONA_GUNNAR, PERSONA_KIRBY } from '$lib/prompts';
 import {
 	converseStream,
-	saveConversation,
+	saveToSuperjournal,
+	triggerBackgroundJobs,
 	getProviderType,
-	assertProviderSupported
+	assertProviderSupported,
+	type ChartImageData
 } from '$lib/calls';
+import { createClient } from '@supabase/supabase-js';
+import { PUBLIC_SUPABASE_URL } from '$env/static/public';
+import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
+
+// Service role client for storage operations
+const supabaseStorage = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 import { parseRequestJson } from '$lib/api/parse-json';
 import { requireAuth } from '$lib/api/require-auth';
 import { waitForRateLimit, RATE_LIMITS } from '$lib/api/rate-limit';
@@ -63,9 +71,57 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		const validation = validateSchema(chatMessageSchema, parseResult.data);
 		if (!validation.success) return validation.error;
 
-		const { message, persona = selectedPersona } = validation.data;
+		const { message, persona = selectedPersona, chart_id, chart_source } = validation.data;
 
-		// 5. Validate provider support
+		// 5. Fetch chart image if referenced
+		let chartImage: ChartImageData | null = null;
+		if (chart_id && chart_source) {
+			try {
+				// Determine which table and bucket to query
+				const table = chart_source === 'file' ? 'file_charts' : 'superjournal_charts';
+				const bucket = chart_source === 'file' ? 'files' : 'articles';
+
+				const { data: chartData, error: chartError } = await supabase
+					.from(table)
+					.select('storage_path')
+					.eq('id', chart_id)
+					.eq('user_id', userId)
+					.single();
+
+				if (!chartError && chartData?.storage_path) {
+					log.debug('Fetching chart image', { storagePath: chartData.storage_path, source: chart_source });
+
+					// Download image from Supabase storage
+					const { data: imageBlob, error: downloadError } = await supabaseStorage.storage
+						.from(bucket)
+						.download(chartData.storage_path);
+
+					if (!downloadError && imageBlob) {
+						const arrayBuffer = await imageBlob.arrayBuffer();
+						const base64 = Buffer.from(arrayBuffer).toString('base64');
+
+						// Detect media type from storage path
+						const ext = chartData.storage_path.split('.').pop()?.toLowerCase();
+						let mediaType: ChartImageData['mediaType'] = 'image/jpeg';
+						if (ext === 'png') mediaType = 'image/png';
+						else if (ext === 'gif') mediaType = 'image/gif';
+						else if (ext === 'webp') mediaType = 'image/webp';
+						else if (ext === 'svg') mediaType = 'image/png'; // SVG will be handled specially
+
+						chartImage = { base64, mediaType };
+						log.debug('Chart image loaded', { sizeBytes: base64.length });
+					} else {
+						log.warn('Failed to download chart image', { error: downloadError?.message });
+					}
+				} else {
+					log.debug('Chart not found', { chartId: chart_id, source: chart_source });
+				}
+			} catch (err) {
+				log.warn('Error fetching chart', { error: err instanceof Error ? err.message : 'Unknown' });
+			}
+		}
+
+		// 6. Validate provider support
 		const conversationProvider = getProviderType(conversationModel);
 		assertProviderSupported(conversationProvider);
 
@@ -97,7 +153,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 						message,
 						model: conversationModel,
 						maxTokens: conversationParams.max_tokens,
-						temperature: conversationParams.temperature
+						temperature: conversationParams.temperature,
+						chartImage
 					});
 
 					let result;
@@ -113,23 +170,35 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 
 					const aiResponse = extractMessage(result.fullResponse);
 
-					// Send completion event immediately
-					const doneData = JSON.stringify({
-						type: 'done',
-						timestamp: new Date().toISOString(),
-						model_identifier: conversationModel
-					});
-					controller.enqueue(encoder.encode(`data: ${doneData}\n\n`));
-					controller.close();
-
-					// Trigger background save after stream closes
-					saveConversation({
+					// Save to superjournal first to get the real ID
+					const superjournalId = await saveToSuperjournal({
 						userId,
 						message,
 						aiResponse,
 						conversationModel,
 						persona
 					});
+
+					// Send completion event with real superjournal ID
+					const doneData = JSON.stringify({
+						type: 'done',
+						timestamp: new Date().toISOString(),
+						model_identifier: conversationModel,
+						superjournal_id: superjournalId
+					});
+					controller.enqueue(encoder.encode(`data: ${doneData}\n\n`));
+					controller.close();
+
+					// Trigger background jobs after stream closes
+					if (superjournalId) {
+						triggerBackgroundJobs({
+							superjournalId,
+							userId,
+							message,
+							aiResponse,
+							persona
+						});
+					}
 				} catch (error) {
 					log.error('Streaming error', {
 						error: error instanceof Error ? error.message : 'Unknown'
