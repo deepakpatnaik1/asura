@@ -1,14 +1,17 @@
 # CLAUDE.md
 
-## Documentation
+## Working Docs
 
-All documentation lives in `../docs/asura/` (sibling directory to this project).
+Go to /Users/d.patnaik/code/vault/Welcome.md.
+Read the file.
+Then find the open docs in /Users/d.patnaik/code/vault/docs/asura.
+We will work on the open docs.
 
 ## Tech Stack
 
-- **Frontend**: SvelteKit 2.x, Svelte 5, Tailwind CSS 4.1
-- **Backend**: SvelteKit API routes, Supabase PostgreSQL
-- **AI**: Anthropic Claude (Haiku 4.5 default), Voyage AI embeddings
+- **Frontend**: SvelteKit 2.x, Svelte 5 (runes: `$state`, `$effect`, `$props`, `$derived`), Tailwind CSS 4.1
+- **Backend**: SvelteKit API routes, Supabase PostgreSQL with RLS
+- **AI**: Anthropic Claude (Haiku 4.5 default), Voyage AI embeddings (pgvector)
 - **APIs**: Brave Search, Cheerio, pdf-parse
 
 ## Project Structure
@@ -16,29 +19,49 @@ All documentation lives in `../docs/asura/` (sibling directory to this project).
 ```
 src/
 ├── lib/
-│   ├── calls/chat|reader/   # AI call logic
-│   ├── capabilities/        # Feature implementations
-│   ├── config/              # Constants (models, personas, timing)
-│   ├── prompts/             # System prompts & personas
-│   └── stores/              # Svelte state management
+│   ├── api/              # Logger, query monitor, rate limiter
+│   ├── calls/            # AI call logic (chat/, reader/)
+│   ├── capabilities/     # Feature implementations (webSearch, compression)
+│   ├── components/       # Svelte components
+│   ├── composables/      # Reusable reactive state (confirmation timers)
+│   ├── config/           # Constants (models, personas, timing, memory)
+│   ├── context-builder.ts # AI context with priority-based token budget
+│   ├── prompts/          # System prompts & personas
+│   ├── security/         # Sanitization utilities
+│   ├── stores/           # Svelte stores (chat, connectivity)
+│   ├── ui/               # Scroll utilities
+│   └── utils/            # Helpers (fetch-with-retry, strip-metadata)
 ├── routes/
-│   ├── chat/                # Chat mode
-│   ├── reader/              # Reader mode
-│   └── api/                 # REST endpoints
-└── supabase/migrations/     # DB schema
+│   ├── chat/             # Chat mode (Gunnar & Kirby personas)
+│   ├── reader/           # Reader mode (Samara persona)
+│   └── api/              # REST endpoints
+│       ├── chat/         # Chat messaging, files, compression
+│       ├── reader/       # Articles, processing, Q&A
+│       ├── superjournal/ # Message history, charts
+│       ├── export/       # Data export
+│       └── nuke/         # Data deletion
+└── supabase/migrations/  # DB schema
 ```
 
 ## Key Patterns
 
-- **Mode Registry**: Pluggable modes (chat, reader) with their own personas and capabilities
-- **Capability System**: Features (webSearch, compression, contextInjection) decoupled per mode
-- **Context Pyramid**: Superjournal (last 5 turns) + Journal (compressed) + vector search
-- **Three Personas**: Gunnar & Kirby (chat), Samara (reader)
+- **Context Pyramid**: Superjournal (last 5 full turns) → Journal (compressed) → vector search
+- **Token Budget**: 40% context window cap with priority-based truncation
+- **Optimistic UI**: Toggle actions update immediately, revert on API failure
+- **Parallel Queries**: Context builder runs independent queries concurrently
 
 ## Commands
 
 ```bash
 npm run dev      # Start dev server
 npm run build    # Production build
-npm run test     # Run tests
+npm run check    # TypeScript check
 ```
+
+## Database Tables
+
+- `superjournal` - Full conversation turns (working memory)
+- `journal` - Compressed turns with embeddings (long-term memory)
+- `articles` - Reader mode articles
+- `files` - Chat mode uploaded files
+- `user_settings` - Per-user preferences
