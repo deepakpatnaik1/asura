@@ -30,6 +30,7 @@
 	let selectedEmbeddingModel = $state<string>('');
 	let isLoading = $state(true);
 	let isSaving = $state(false);
+	let isExporting = $state(false);
 	let errorMessage = $state<string | null>(null);
 
 	// Fetch data on mount
@@ -100,6 +101,48 @@
 			onClose();
 		}
 	}
+
+	// Handle data export
+	async function handleExport() {
+		isExporting = true;
+		errorMessage = null;
+
+		try {
+			const response = await fetch('/api/export');
+
+			if (response.status === 429) {
+				const retryAfter = response.headers.get('Retry-After');
+				const minutes = retryAfter ? Math.ceil(parseInt(retryAfter) / 60) : 60;
+				errorMessage = `Export limit reached. Try again in ${minutes} minute${minutes > 1 ? 's' : ''}.`;
+				return;
+			}
+
+			if (!response.ok) {
+				throw new Error('Failed to export data');
+			}
+
+			// Get filename from Content-Disposition header or use default
+			const contentDisposition = response.headers.get('Content-Disposition');
+			const filenameMatch = contentDisposition?.match(/filename="(.+)"/);
+			const filename = filenameMatch ? filenameMatch[1] : `asura-export-${new Date().toISOString().split('T')[0]}.json`;
+
+			// Download the file
+			const blob = await response.blob();
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = filename;
+			document.body.appendChild(a);
+			a.click();
+			document.body.removeChild(a);
+			URL.revokeObjectURL(url);
+		} catch (error) {
+			console.error('[SettingsModal] Export failed:', error);
+			errorMessage = 'Failed to export data. Please try again.';
+		} finally {
+			isExporting = false;
+		}
+	}
 </script>
 
 {#if open}
@@ -165,10 +208,25 @@
 					<p class="help-text">Used for vector embeddings (memory search & file chunks)</p>
 				</div>
 
+				<!-- Error Message -->
+				{#if errorMessage}
+					<div class="error-message">{errorMessage}</div>
+				{/if}
+
 				<!-- Save Button -->
 				<button class="save-btn" onclick={handleSave} disabled={isSaving}>
 					{isSaving ? 'Saving...' : 'Save Changes'}
 				</button>
+
+				<!-- Data Export Section -->
+				<div class="export-section">
+					<div class="section-divider"></div>
+					<p class="export-label">Data Export</p>
+					<button class="export-btn" onclick={handleExport} disabled={isExporting}>
+						{isExporting ? 'Exporting...' : 'Export All Data'}
+					</button>
+					<p class="help-text">Download all your data as JSON (1 export per hour)</p>
+				</div>
 			{/if}
 		</div>
 	</div>
@@ -297,5 +355,50 @@
 		padding: 40px;
 		color: hsl(var(--muted-foreground));
 		font-size: 11px;
+	}
+
+	.error-message {
+		background: hsla(0, 70%, 50%, 0.1);
+		border: 1px solid hsla(0, 70%, 50%, 0.3);
+		color: hsl(0, 70%, 60%);
+		padding: 8px 12px;
+		font-size: 11px;
+		margin-bottom: 12px;
+	}
+
+	.export-section {
+		margin-top: 8px;
+	}
+
+	.section-divider {
+		border-top: 1px solid hsl(var(--border));
+		margin: 16px 0;
+	}
+
+	.export-label {
+		font-size: 11px;
+		color: hsl(var(--muted-foreground));
+		margin-bottom: 8px;
+	}
+
+	.export-btn {
+		width: 100%;
+		padding: 6px;
+		background: transparent;
+		color: hsl(var(--foreground));
+		border: 1px solid hsl(var(--border));
+		border-radius: 0;
+		font-weight: 400;
+		font-size: 11px;
+		cursor: pointer;
+	}
+
+	.export-btn:hover:not(:disabled) {
+		border-color: hsl(var(--foreground));
+	}
+
+	.export-btn:disabled {
+		opacity: 0.3;
+		cursor: not-allowed;
 	}
 </style>
