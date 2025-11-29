@@ -98,32 +98,69 @@ export async function buildContextForCalls1A1B(
 	};
 
 	let totalTokens = 0;
-	let queryVector: number[] | null = null;
 
-	// Priority 1: Last N Superjournal turns (working memory - highest priority)
-	const { data: superjournalData } = await supabase
-		.from('superjournal')
-		.select('user_message, ai_response, persona_name, created_at')
-		.eq('user_id', userId)
-		.order('created_at', { ascending: false })
-		.limit(MEMORY.superjournalLimit);
+	// Run all queries in parallel - budget checks happen during assembly
+	const [
+		superjournalResult,
+		filesResult,
+		starredResult,
+		instructionsResult,
+		journalResult
+	] = await Promise.all([
+		// Priority 1: Last N Superjournal turns (working memory)
+		supabase
+			.from('superjournal')
+			.select('user_message, ai_response, persona_name, created_at')
+			.eq('user_id', userId)
+			.order('created_at', { ascending: false })
+			.limit(MEMORY.superjournalLimit),
 
-	if (superjournalData && superjournalData.length > 0) {
-		const superjournalText = formatSuperjournalHistory(superjournalData.reverse()); // Oldest first
+		// Priority 1.5: Enabled files (user-uploaded content)
+		supabase
+			.from('files')
+			.select('title, artisan_cut, created_at')
+			.eq('user_id', userId)
+			.eq('is_enabled', true)
+			.order('created_at', { ascending: false }),
+
+		// Priority 2: Starred messages (user-curated memory)
+		supabase
+			.from('journal')
+			.select('boss_essence, persona_essence, persona_name, created_at')
+			.eq('is_starred', true)
+			.eq('user_id', userId)
+			.order('created_at', { ascending: false }),
+
+		// Priority 3: Instructions (global + current persona)
+		supabase
+			.from('journal')
+			.select('boss_essence, persona_essence, decision_arc_summary, persona_name, created_at')
+			.eq('is_instruction', true)
+			.eq('user_id', userId)
+			.or(`instruction_scope.eq.global,instruction_scope.eq.${personaName}`)
+			.order('created_at', { ascending: false }),
+
+		// Priority 4: Last N Journal turns (recent memory)
+		supabase
+			.from('journal')
+			.select('boss_essence, persona_essence, decision_arc_summary, persona_name, created_at')
+			.eq('user_id', userId)
+			.order('created_at', { ascending: false })
+			.limit(MEMORY.lastNJournalEntries)
+	]);
+
+	// Assemble context with budget checks (in priority order)
+
+	// Priority 1: Superjournal (always included - highest priority)
+	if (superjournalResult.data && superjournalResult.data.length > 0) {
+		const superjournalText = formatSuperjournalHistory(superjournalResult.data.reverse());
 		components.superjournal = superjournalText;
 		totalTokens += estimateTokens(superjournalText);
 	}
 
-	// Priority 1.5: Enabled files (user-uploaded content)
-	const { data: filesData } = await supabase
-		.from('files')
-		.select('title, artisan_cut, created_at')
-		.eq('user_id', userId)
-		.eq('is_enabled', true)
-		.order('created_at', { ascending: false });
-
-	if (filesData && filesData.length > 0) {
-		const filesText = formatEnabledFiles(filesData);
+	// Priority 1.5: Files
+	if (filesResult.data && filesResult.data.length > 0) {
+		const filesText = formatEnabledFiles(filesResult.data);
 		const filesTokens = estimateTokens(filesText);
 		if (totalTokens + filesTokens <= contextBudget) {
 			components.files = filesText;
@@ -131,16 +168,9 @@ export async function buildContextForCalls1A1B(
 		}
 	}
 
-	// Priority 2: Starred messages (user-curated memory)
-	const { data: starredData } = await supabase
-		.from('journal')
-		.select('boss_essence, persona_essence, persona_name, created_at')
-		.eq('is_starred', true)
-		.eq('user_id', userId)
-		.order('created_at', { ascending: false });
-
-	if (starredData && starredData.length > 0) {
-		const starredText = formatStarredMessages(starredData.reverse()); // Oldest first
+	// Priority 2: Starred
+	if (starredResult.data && starredResult.data.length > 0) {
+		const starredText = formatStarredMessages(starredResult.data.reverse());
 		const starredTokens = estimateTokens(starredText);
 		if (totalTokens + starredTokens <= contextBudget) {
 			components.starred = starredText;
@@ -148,17 +178,9 @@ export async function buildContextForCalls1A1B(
 		}
 	}
 
-	// Priority 3: Instructions (global + current persona behavioral directives)
-	const { data: instructionsData } = await supabase
-		.from('journal')
-		.select('boss_essence, persona_essence, decision_arc_summary, persona_name, created_at')
-		.eq('is_instruction', true)
-		.eq('user_id', userId)
-		.or(`instruction_scope.eq.global,instruction_scope.eq.${personaName}`)
-		.order('created_at', { ascending: false });
-
-	if (instructionsData && instructionsData.length > 0) {
-		const instructionsText = formatInstructions(instructionsData.reverse()); // Oldest first
+	// Priority 3: Instructions
+	if (instructionsResult.data && instructionsResult.data.length > 0) {
+		const instructionsText = formatInstructions(instructionsResult.data.reverse());
 		const instructionsTokens = estimateTokens(instructionsText);
 		if (totalTokens + instructionsTokens <= contextBudget) {
 			components.instructions = instructionsText;
@@ -166,16 +188,10 @@ export async function buildContextForCalls1A1B(
 		}
 	}
 
-	// Priority 4: Last N Journal turns (recent memory)
-	const { data: journalData } = await supabase
-		.from('journal')
-		.select('boss_essence, persona_essence, decision_arc_summary, persona_name, created_at')
-		.eq('user_id', userId)
-		.order('created_at', { ascending: false })
-		.limit(MEMORY.lastNJournalEntries);
-
-	if (journalData && journalData.length > 0) {
-		const journalText = formatJournalHistory(journalData.reverse()); // Oldest first
+	// Priority 4: Journal (with truncation if needed)
+	if (journalResult.data && journalResult.data.length > 0) {
+		const journalData = journalResult.data.reverse();
+		const journalText = formatJournalHistory(journalData);
 		const journalTokens = estimateTokens(journalText);
 		if (totalTokens + journalTokens <= contextBudget) {
 			components.journal = journalText;
@@ -183,7 +199,7 @@ export async function buildContextForCalls1A1B(
 		} else {
 			// Truncate journal entries to fit budget
 			const truncatedJournal = truncateToFit(
-				journalData.reverse(),
+				journalData,
 				contextBudget - totalTokens,
 				formatJournalHistory
 			);
@@ -192,9 +208,8 @@ export async function buildContextForCalls1A1B(
 		}
 	}
 
-	// Priority 5: Vector search results (only if userQuery provided and journal count > 100)
+	// Priority 5: Vector search (only if userQuery provided and journal count > threshold)
 	if (userQuery) {
-		// Check journal count first
 		const { count: journalCount } = await supabase
 			.from('journal')
 			.select('id', { count: 'exact', head: true })
@@ -206,81 +221,75 @@ export async function buildContextForCalls1A1B(
 				// Generate embedding for user query
 				const queryEmbedding = await voyage.embed({
 					input: userQuery,
-					model: EMBEDDING_MODEL // 1024 dimensions
+					model: EMBEDDING_MODEL
 				});
 
-				queryVector = queryEmbedding.data?.[0]?.embedding ?? null;
+				const queryVector = queryEmbedding.data?.[0]?.embedding ?? null;
 
-				// Collect IDs to exclude (already loaded in Priorities 1-4)
-				// Run queries in parallel for better performance
-				const [superjournalIdsResult, last100IdsResult] = await Promise.all([
-					// Get last N Superjournal IDs
-					supabase
-						.from('superjournal')
-						.select('id')
-						.eq('user_id', userId)
-						.order('created_at', { ascending: false })
-						.limit(MEMORY.superjournalLimit),
-					// Get last N Journal IDs
-					supabase
-						.from('journal')
-						.select('id')
-						.eq('is_instruction', false)
-						.eq('user_id', userId)
-						.order('created_at', { ascending: false })
-						.limit(MEMORY.lastNJournalEntries)
-				]);
+				if (queryVector) {
+					// Get IDs to exclude (already in context) - run in parallel
+					const [superjournalIdsResult, journalIdsResult] = await Promise.all([
+						supabase
+							.from('superjournal')
+							.select('id')
+							.eq('user_id', userId)
+							.order('created_at', { ascending: false })
+							.limit(MEMORY.superjournalLimit),
+						supabase
+							.from('journal')
+							.select('id')
+							.eq('is_instruction', false)
+							.eq('user_id', userId)
+							.order('created_at', { ascending: false })
+							.limit(MEMORY.lastNJournalEntries)
+					]);
 
-				const excludeIds: string[] = [];
+					const excludeIds: string[] = [];
 
-				// Add last N journal IDs
-				if (last100IdsResult.data) {
-					excludeIds.push(...last100IdsResult.data.map(j => j.id));
-				}
+					if (journalIdsResult.data) {
+						excludeIds.push(...journalIdsResult.data.map(j => j.id));
+					}
 
-				// Get corresponding Journal IDs via Superjournal IDs (depends on first query)
-				if (superjournalIdsResult.data && superjournalIdsResult.data.length > 0) {
-					const sjIds = superjournalIdsResult.data.map(s => s.id);
-					const { data: journalFromSj } = await supabase
-						.from('journal')
-						.select('id')
-						.in('superjournal_id', sjIds);
+					if (superjournalIdsResult.data && superjournalIdsResult.data.length > 0) {
+						const sjIds = superjournalIdsResult.data.map(s => s.id);
+						const { data: journalFromSj } = await supabase
+							.from('journal')
+							.select('id')
+							.in('superjournal_id', sjIds);
 
-					if (journalFromSj) {
-						excludeIds.push(...journalFromSj.map(j => j.id));
+						if (journalFromSj) {
+							excludeIds.push(...journalFromSj.map(j => j.id));
+						}
+					}
+
+					// Perform vector search
+					const { data: vectorResults } = await supabase.rpc('search_journal_by_embedding', {
+						query_embedding: JSON.stringify(queryVector),
+						match_count: 50,
+						exclude_ids: excludeIds,
+						user_id_filter: userId
+					});
+
+					if (vectorResults && vectorResults.length > 0) {
+						// Re-rank by weighted score: similarity × (salience/10)
+						const reranked: RankedVectorResult[] = (vectorResults as VectorSearchResult[])
+							.map((entry) => ({
+								...entry,
+								weighted_score: entry.similarity * (entry.salience_score / 10.0)
+							}))
+							.sort((a, b) => b.weighted_score - a.weighted_score)
+							.slice(0, 10);
+
+						const vectorText = formatVectorSearchResults(reranked);
+						const vectorTokens = estimateTokens(vectorText);
+
+						if (totalTokens + vectorTokens <= contextBudget) {
+							components.highSalienceArcs = vectorText;
+							totalTokens += vectorTokens;
+						}
 					}
 				}
-
-				// Perform vector search with salience weighting
-				// Note: pgvector doesn't support complex expressions in ORDER BY
-				// So we'll fetch top 50 by similarity and re-rank in app code
-				const { data: vectorResults } = await supabase.rpc('search_journal_by_embedding', {
-					query_embedding: JSON.stringify(queryVector),
-					match_count: 50,
-					exclude_ids: excludeIds,
-					user_id_filter: userId
-				});
-
-				if (vectorResults && vectorResults.length > 0) {
-					// Re-rank by weighted score: similarity × (salience/10)
-					const reranked: RankedVectorResult[] = (vectorResults as VectorSearchResult[])
-						.map((entry) => ({
-							...entry,
-							weighted_score: entry.similarity * (entry.salience_score / 10.0)
-						}))
-						.sort((a, b) => b.weighted_score - a.weighted_score)
-						.slice(0, 10); // Top 10
-
-					// Format vector search results
-					const vectorText = formatVectorSearchResults(reranked);
-					const vectorTokens = estimateTokens(vectorText);
-
-					if (totalTokens + vectorTokens <= contextBudget) {
-						components.highSalienceArcs = vectorText; // Reuse highSalienceArcs component
-						totalTokens += vectorTokens;
-					}
-				}
-			} catch (vectorError) {
+			} catch {
 				// Vector search failed, continue without it
 			}
 		}
