@@ -23,7 +23,7 @@
 		"test:all": "npm run test && npm run test:e2e"
 	},
 	"devDependencies": {
-		"@playwright/mcp": "^0.0.45",
+		"@playwright/mcp": "^0.0.48",
 		"@supabase/mcp-server-supabase": "^0.5.9",
 		"@sveltejs/adapter-auto": "^7.0.0",
 		"@sveltejs/kit": "^2.47.1",
@@ -33,7 +33,7 @@
 		"@testing-library/jest-dom": "^6.9.1",
 		"@testing-library/svelte": "^5.2.8",
 		"@types/marked": "^5.0.2",
-		"@vitest/ui": "^4.0.8",
+		"@vitest/ui": "^4.0.14",
 		"autoprefixer": "^10.4.21",
 		"happy-dom": "^20.0.10",
 		"jsdom": "^27.1.0",
@@ -45,12 +45,12 @@
 		"tsx": "^4.20.6",
 		"typescript": "^5.9.3",
 		"vite": "^7.1.10",
-		"vitest": "^4.0.8"
+		"vitest": "^4.0.14"
 	},
 	"dependencies": {
-		"@anthropic-ai/sdk": "^0.69.0",
+		"@anthropic-ai/sdk": "^0.71.0",
 		"@resvg/resvg-js": "^2.6.2",
-		"@supabase/ssr": "^0.7.0",
+		"@supabase/ssr": "^0.8.0",
 		"@supabase/supabase-js": "^2.80.0",
 		"@tailwindcss/postcss": "^4.1.17",
 		"@types/node": "^24.10.0",

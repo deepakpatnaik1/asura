@@ -1,5 +1,6 @@
 import { marked } from 'marked';
 import { CHAT_ACCENT, READER_ACCENT } from '$lib/config/colors';
+import { sanitizeHtml } from '$lib/security/sanitize';
 
 export type RenderMode = 'chat' | 'reader';
 
@@ -130,5 +131,6 @@ export function renderMarkdown(markdown: string, mode: RenderMode = 'chat'): str
 	// Strip any remaining asterisks that weren't parsed as bold/italic
 	const html = rawHtml.replace(/\*/g, '');
 
-	return html;
+	// Sanitize to prevent XSS attacks
+	return sanitizeHtml(html);
 }
