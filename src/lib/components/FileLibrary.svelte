@@ -49,7 +49,7 @@
 					title={file.is_enabled ? 'Disable context injection' : 'Enable context injection'}
 				>
 					{#if file.is_enabled}
-						<Icon src={LuCheck} size="11" />
+						<Icon src={LuCheck} size="9" />
 					{/if}
 				</button>
 				<div class="file-content">
@@ -116,10 +116,10 @@
 	}
 
 	.toggle-btn {
-		width: 20px;
-		height: 20px;
+		width: 13px;
+		height: 13px;
 		margin-left: 12px;
-		border-radius: 4px;
+		border-radius: 2px;
 		border: 1px solid hsl(var(--border));
 		background: transparent;
 		cursor: pointer;
