@@ -12,21 +12,36 @@ export const isConnected = derived(
 	([$isOnline, $isApiReachable]) => $isOnline && $isApiReachable
 );
 
-// Initialize browser event listeners (only runs in browser)
-if (typeof window !== 'undefined') {
-	// Set initial value from browser
+// Event handlers (stored for cleanup)
+function handleOnline() {
+	isOnline.set(true);
+	checkApiConnectivity();
+}
+
+function handleOffline() {
+	isOnline.set(false);
+	isApiReachable.set(false);
+}
+
+let listenersInitialized = false;
+
+/** Initialize connectivity listeners (call from root layout) */
+export function initConnectivityListeners(): void {
+	if (typeof window === 'undefined' || listenersInitialized) return;
+
 	isOnline.set(navigator.onLine);
+	window.addEventListener('online', handleOnline);
+	window.addEventListener('offline', handleOffline);
+	listenersInitialized = true;
+}
 
-	window.addEventListener('online', () => {
-		isOnline.set(true);
-		// When coming back online, check API connectivity
-		checkApiConnectivity();
-	});
+/** Cleanup connectivity listeners (call on unmount) */
+export function cleanupConnectivityListeners(): void {
+	if (typeof window === 'undefined' || !listenersInitialized) return;
 
-	window.addEventListener('offline', () => {
-		isOnline.set(false);
-		isApiReachable.set(false);
-	});
+	window.removeEventListener('online', handleOnline);
+	window.removeEventListener('offline', handleOffline);
+	listenersInitialized = false;
 }
 
 /**

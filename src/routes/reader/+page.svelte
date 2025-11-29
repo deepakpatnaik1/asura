@@ -63,6 +63,9 @@
 	const nukeConfirm = createConfirmation();
 	let isDeleting = $state(false);
 
+	// Track timeout IDs for cleanup on unmount
+	let pendingTimeouts: number[] = [];
+
 	// Save active article to user settings
 	async function saveActiveArticle(articleId: string | null) {
 		try {
@@ -108,6 +111,18 @@
 			// Load active article from settings
 			loadActiveArticle();
 		}
+
+		// Cleanup on unmount
+		return () => {
+			pendingTimeouts.forEach(clearTimeout);
+			pendingTimeouts = [];
+			deleteConfirm.cleanup();
+			nukeConfirm.cleanup();
+			if (abortController) {
+				abortController.abort();
+				abortController = null;
+			}
+		};
 	});
 
 	// Toggle paste area
@@ -439,9 +454,10 @@
 								if (data.article_chat_id) {
 									chatChartsIds = [...chatChartsIds, data.article_chat_id];
 									// Fetch charts after delay (give background job time to run)
-									setTimeout(() => {
+									const timeoutId = window.setTimeout(() => {
 										loadChatCharts(chatChartsIds);
 									}, 2000);
+									pendingTimeouts.push(timeoutId);
 								}
 
 								// Reset streaming state
@@ -582,12 +598,13 @@
 
 				// Scroll to top (only when manually switching articles, not on initial load)
 				if (scrollToTop) {
-					setTimeout(() => {
+					const timeoutId = window.setTimeout(() => {
 						const container = document.querySelector('.reader-container') as HTMLElement | null;
 						if (container) {
 							container.scrollTo({ top: 0, behavior: 'smooth' });
 						}
 					}, 100);
+					pendingTimeouts.push(timeoutId);
 				}
 			}
 		} catch (error) {

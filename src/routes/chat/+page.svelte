@@ -67,6 +67,9 @@
 	const fileDeleteConfirm = createConfirmation();
 	const chartDeleteConfirm = createConfirmation();
 
+	// Track timeout IDs for cleanup on unmount
+	let pendingTimeouts: number[] = [];
+
 	// Fetch superjournal charts (tables from AI responses)
 	async function loadSuperjournalCharts() {
 		const messageIds = allMessages.map((m) => m.id).filter(Boolean);
@@ -115,40 +118,52 @@
 	}
 
 	// Load user settings on mount and trigger orphan recovery
-	onMount(async () => {
+	onMount(() => {
 		// Persist mode to localStorage
 		if (typeof window !== 'undefined') {
 			localStorage.setItem('asura_app_mode', 'chat');
 		}
 
-		try {
-			const response = await fetch('/api/settings');
-			if (response.ok) {
-				const settingsData = await response.json();
-				selectedPersona = settingsData.selected_persona || DEFAULT_PERSONA;
+		(async () => {
+			try {
+				const response = await fetch('/api/settings');
+				if (response.ok) {
+					const settingsData = await response.json();
+					selectedPersona = settingsData.selected_persona || DEFAULT_PERSONA;
+				}
+			} catch (error) {
+				console.error('Failed to load settings:', error);
+				// Fallback to defaults if database read fails
 			}
-		} catch (error) {
-			console.error('Failed to load settings:', error);
-			// Fallback to defaults if database read fails
-		}
 
-		// Load charts for existing messages
-		await loadCharts();
+			// Load charts for existing messages
+			await loadCharts();
 
-		// Trigger orphan recovery for any failed compressions
-		if (data.orphans && data.orphans.length > 0) {
-			for (const orphan of data.orphans) {
-				try {
-					await fetch('/api/chat/compress', {
-						method: 'POST',
-						headers: { 'Content-Type': 'application/json' },
-						body: JSON.stringify(orphan)
-					});
-				} catch (error) {
-					console.error('[Orphan Recovery] Failed to recover:', orphan.superjournal_id, error);
+			// Trigger orphan recovery for any failed compressions
+			if (data.orphans && data.orphans.length > 0) {
+				for (const orphan of data.orphans) {
+					try {
+						await fetch('/api/chat/compress', {
+							method: 'POST',
+							headers: { 'Content-Type': 'application/json' },
+							body: JSON.stringify(orphan)
+						});
+					} catch (error) {
+						console.error('[Orphan Recovery] Failed to recover:', orphan.superjournal_id, error);
+					}
 				}
 			}
-		}
+		})();
+
+		// Cleanup on unmount
+		return () => {
+			pendingTimeouts.forEach(clearTimeout);
+			pendingTimeouts = [];
+			nukeConfirm.cleanup();
+			deleteConfirm.cleanup();
+			fileDeleteConfirm.cleanup();
+			chartDeleteConfirm.cleanup();
+		};
 	});
 
 	// Helper function to format timestamps
@@ -289,7 +304,8 @@
 			currentMessage.set(null);
 
 			// Reload charts after delay (allow backend to process tables)
-			setTimeout(() => loadCharts(), 2000);
+			const timeoutId = window.setTimeout(() => loadCharts(), 2000);
+			pendingTimeouts.push(timeoutId);
 		}
 	}
 
@@ -345,9 +361,10 @@
 
 		// Show visual feedback briefly
 		copiedMessageId = messageId;
-		setTimeout(() => {
+		const timeoutId = window.setTimeout(() => {
 			if (copiedMessageId === messageId) copiedMessageId = null;
 		}, 1500);
+		pendingTimeouts.push(timeoutId);
 	}
 
 	async function handleStarToggle(messageId: string) {

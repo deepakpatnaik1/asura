@@ -16,6 +16,7 @@ export interface ConfirmationState {
 	readonly progress: number;
 	start: (targetId: string, onConfirm: () => Promise<void> | void) => void;
 	cancel: () => void;
+	cleanup: () => void;
 }
 
 /**
@@ -89,6 +90,11 @@ export function createConfirmation(duration: number = TIMING.countdownDuration):
 		}
 	}
 
+	/** Cleanup on component unmount - same as cancel but explicit for lifecycle */
+	function cleanup(): void {
+		cancel();
+	}
+
 	return {
 		get isActive() {
 			return isActive;
@@ -100,6 +106,7 @@ export function createConfirmation(duration: number = TIMING.countdownDuration):
 			return progress;
 		},
 		start,
-		cancel
+		cancel,
+		cleanup
 	};
 }

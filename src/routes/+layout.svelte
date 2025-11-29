@@ -6,7 +6,7 @@
 	import { LuMessageSquare, LuBook, LuLogOut, LuSettings, LuChevronDown, LuPlus, LuWifiOff } from 'svelte-icons-pack/lu';
 	import SettingsModal from '$lib/components/SettingsModal.svelte';
 	import ErrorBoundary from '$lib/components/ErrorBoundary.svelte';
-	import { isConnected, checkApiConnectivity } from '$lib/stores/connectivity';
+	import { isConnected, initConnectivityListeners, cleanupConnectivityListeners } from '$lib/stores/connectivity';
 	import { fetchWithRetry } from '$lib/utils/fetch-with-retry';
 
 	let { children } = $props();
@@ -40,13 +40,17 @@
 		}
 	}
 
-	onMount(async () => {
-		// Check API connectivity on mount
-		checkApiConnectivity();
+	onMount(() => {
+		// Initialize connectivity listeners
+		initConnectivityListeners();
 
 		// Trigger mounted state for CSS transition (prevents FOUC)
-		await tick();
-		mounted = true;
+		tick().then(() => { mounted = true; });
+
+		// Cleanup on unmount
+		return () => {
+			cleanupConnectivityListeners();
+		};
 	});
 </script>
 
