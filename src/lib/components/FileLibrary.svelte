@@ -1,28 +1,28 @@
 <script lang="ts">
 	/**
-	 * ArticleLibrary - Dropdown list of saved articles
+	 * FileLibrary - Dropdown showing user's saved files
 	 *
-	 * Shows all user's articles with ability to switch or delete.
+	 * Allows toggling files for context injection and deleting files.
 	 */
-
 	import { Icon } from 'svelte-icons-pack';
-	import { LuTrash2 } from 'svelte-icons-pack/lu';
+	import { LuTrash2, LuCheck } from 'svelte-icons-pack/lu';
 
-	interface Article {
+	interface FileItem {
 		id: string;
 		title: string;
+		is_enabled: boolean;
 		created_at: string;
 	}
 
 	interface Props {
-		articles: Article[];
-		currentArticleId: string | null;
+		files: FileItem[];
+		currentFileId: string | null;
 		isDeleting: boolean;
-		onSelect: (articleId: string) => void;
-		onDelete: (articleId: string, event: MouseEvent) => void;
+		onToggle: (fileId: string, currentState: boolean) => void;
+		onDelete: (fileId: string, event: MouseEvent) => void;
 	}
 
-	let { articles, currentArticleId, isDeleting, onSelect, onDelete }: Props = $props();
+	let { files, currentFileId, isDeleting, onToggle, onDelete }: Props = $props();
 
 	function formatDate(dateString: string) {
 		const date = new Date(dateString);
@@ -33,26 +33,33 @@
 	}
 </script>
 
-<div class="article-library-dropdown">
-	{#if articles.length === 0}
-		<div class="dropdown-empty">No articles yet</div>
+<div class="file-library-dropdown">
+	{#if files.length === 0}
+		<div class="dropdown-empty">No files yet</div>
 	{:else}
-		{#each articles as article}
+		{#each files as file}
 			<div
-				class="article-item"
-				class:active={currentArticleId === article.id}
+				class="file-item"
+				class:active={file.is_enabled}
 			>
 				<button
-					class="article-button"
-					onclick={() => onSelect(article.id)}
+					class="toggle-btn"
+					class:active={file.is_enabled}
+					onclick={() => onToggle(file.id, file.is_enabled)}
+					title={file.is_enabled ? 'Disable context injection' : 'Enable context injection'}
 				>
-					<span class="article-title">{article.title}</span>
-					<span class="article-date">{formatDate(article.created_at)}</span>
+					{#if file.is_enabled}
+						<Icon src={LuCheck} size="11" />
+					{/if}
 				</button>
+				<div class="file-content">
+					<span class="file-title">{file.title}</span>
+					<span class="file-date">{formatDate(file.created_at)}</span>
+				</div>
 				<button
 					class="delete-btn"
-					onclick={(e) => onDelete(article.id, e)}
-					title="Delete article"
+					onclick={(e) => onDelete(file.id, e)}
+					title="Delete file"
 					disabled={isDeleting}
 				>
 					<Icon src={LuTrash2} size="11" />
@@ -63,7 +70,7 @@
 </div>
 
 <style>
-	.article-library-dropdown {
+	.file-library-dropdown {
 		position: fixed;
 		bottom: 80px;
 		left: 100px;
@@ -84,45 +91,68 @@
 		font-size: 1em;
 	}
 
-	.article-item {
+	.file-item {
 		width: 100%;
 		display: flex;
 		align-items: center;
+		gap: 10px;
 		border-left: 3px solid transparent;
 		transition: all 0.2s ease;
 		border-bottom: 1px solid hsl(var(--border) / 0.3);
 	}
 
-	.article-item:last-child {
+	.file-item:last-child {
 		border-bottom: none;
 	}
 
-	.article-item:hover {
+	.file-item:hover {
 		background: hsl(var(--accent) / 0.5);
-		border-left-color: var(--reader-accent);
+		border-left-color: var(--boss-accent);
 	}
 
-	.article-item.active {
+	.file-item.active {
 		background: hsl(var(--accent) / 0.7);
-		border-left-color: var(--reader-accent);
+		border-left-color: var(--boss-accent);
 	}
 
-	.article-button {
+	.toggle-btn {
+		width: 20px;
+		height: 20px;
+		margin-left: 12px;
+		border-radius: 4px;
+		border: 1px solid hsl(var(--border));
+		background: transparent;
+		cursor: pointer;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: hsl(var(--foreground));
+		opacity: 0.4;
+		transition: all 0.15s;
+		flex-shrink: 0;
+	}
+
+	.toggle-btn:hover {
+		opacity: 0.8;
+	}
+
+	.toggle-btn.active {
+		background: var(--boss-accent);
+		border-color: var(--boss-accent);
+		color: black;
+		opacity: 1;
+	}
+
+	.file-content {
 		flex: 1;
+		min-width: 0;
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		padding: 12px 16px;
-		background: transparent;
-		border: none;
-		color: hsl(var(--foreground));
-		text-align: left;
-		cursor: pointer;
-		min-width: 0;
-		transition: none;
+		padding: 12px 0;
 	}
 
-	.article-title {
+	.file-title {
 		flex: 1;
 		font-size: 1em;
 		color: hsl(var(--foreground));
@@ -131,7 +161,7 @@
 		text-overflow: ellipsis;
 	}
 
-	.article-date {
+	.file-date {
 		font-size: 1em;
 		color: hsl(var(--muted-foreground));
 		flex-shrink: 0;
@@ -151,7 +181,7 @@
 		opacity: 0;
 	}
 
-	.article-item:hover .delete-btn {
+	.file-item:hover .delete-btn {
 		opacity: 1;
 	}
 

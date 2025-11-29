@@ -9,6 +9,7 @@
 	import ConfirmationModal from '$lib/components/ConfirmationModal.svelte';
 	import PersonaDropdown from '$lib/components/PersonaDropdown.svelte';
 	import { ArticlePasteArea, ArticleLibrary, ChartCarousel } from '$lib/components/reader';
+	import { stripFigureCaptions } from '$lib/utils/strip-metadata';
 
 
 	// Article state
@@ -42,15 +43,20 @@
 
 	// Canvas carousel state
 	let charts = $state<Array<{ id: string; thumbnail_url: string; full_url: string; alt: string }>>([]);
+	let chatCharts = $state<Array<{ id: string; thumbnail_url: string; full_url: string; alt: string }>>([]);
+	let chatChartsIds = $state<string[]>([]); // Track assistant message IDs
 	let selectedChartIndex = $state<number | null>(null);
 	let showLightbox = $state(false);
+
+	// Combined charts for carousel (article charts + Q&A response charts)
+	const allCharts = $derived([...charts, ...chatCharts]);
 
 	// Messages container ref for auto-scroll
 	let messagesContainer: HTMLDivElement | null = null;
 
 	// Article library state
 	let showArticleLibrary = $state(false);
-	let articles = $state<Array<{ id: string; title: string; preview_snippet: string }>>([]);
+	let articles = $state<Array<{ id: string; title: string; created_at: string }>>([]);
 
 	// Confirmation composables (replaces manual timer state)
 	const deleteConfirm = createConfirmation();
@@ -113,6 +119,8 @@
 			streamingContent = '';
 			processingError = null;
 			charts = [];
+			chatCharts = [];
+			chatChartsIds = [];
 			chatHistory = [];
 			// Focus the paste area after DOM updates
 			await tick();
@@ -299,7 +307,7 @@
 								currentArticle = {
 									id: articleId,
 									title: articleTitle,
-									content: streamingContent
+									content: stripFigureCaptions(streamingContent)
 								};
 								abortController = null;
 
@@ -445,6 +453,15 @@
 									{ role: 'assistant', content: streamingChatResponse }
 								];
 
+								// Track article_chat_id for chart fetching
+								if (data.article_chat_id) {
+									chatChartsIds = [...chatChartsIds, data.article_chat_id];
+									// Fetch charts after delay (give background job time to run)
+									setTimeout(() => {
+										loadChatCharts(chatChartsIds);
+									}, 2000);
+								}
+
 								// Reset streaming state
 								currentUserMessage = null;
 								streamingChatResponse = '';
@@ -509,6 +526,14 @@
 		}
 	}
 
+	// Auto-focus paste area when window regains focus
+	function handleWindowFocus() {
+		if (showPasteArea && !isProcessing) {
+			const pasteArea = document.querySelector('.paste-area') as HTMLElement;
+			pasteArea?.focus();
+		}
+	}
+
 	// Toggle article library dropdown
 	function toggleArticleLibrary(event: MouseEvent) {
 		event.stopPropagation();
@@ -541,6 +566,10 @@
 	async function switchToArticle(articleId: string, scrollToTop: boolean = true) {
 		showArticleLibrary = false;
 
+		// Clear chat charts from previous article
+		chatCharts = [];
+		chatChartsIds = [];
+
 		try {
 			// Refresh article list to ensure dropdown is current
 			await loadArticles();
@@ -557,7 +586,7 @@
 				currentArticle = {
 					id: data.article.id,
 					title: data.article.title,
-					content: data.article.transformed_content
+					content: stripFigureCaptions(data.article.transformed_content || '')
 				};
 
 				// Load chat history for this article
@@ -604,6 +633,34 @@
 		}
 	}
 
+	// Load charts from Q&A responses
+	async function loadChatCharts(articleChatIds: string[]) {
+		if (articleChatIds.length === 0) {
+			chatCharts = [];
+			return;
+		}
+
+		try {
+			const response = await fetch(`/api/reader/chat-charts?ids=${articleChatIds.join(',')}`);
+			if (!response.ok) {
+				console.error('[ChatCharts] Failed to load:', response.statusText);
+				return;
+			}
+
+			const data = await response.json();
+			if (data.charts) {
+				// Flatten charts from all message IDs into single array
+				const allChatCharts: typeof chatCharts = [];
+				for (const charts of Object.values(data.charts)) {
+					allChatCharts.push(...(charts as typeof chatCharts));
+				}
+				chatCharts = allChatCharts;
+			}
+		} catch (error) {
+			console.error('[ChatCharts] Error loading:', error);
+		}
+	}
+
 	// Delete article - show confirmation modal with 3s countdown
 	function handleArticleDeleteClick(articleId: string, event: MouseEvent) {
 		event.stopPropagation(); // Prevent switching to article
@@ -629,6 +686,8 @@
 							currentArticle = null;
 							chatHistory = [];
 							charts = [];
+							chatCharts = [];
+							chatChartsIds = [];
 						}
 
 						// Reload articles list
@@ -675,6 +734,8 @@
 				currentArticle = null;
 				chatHistory = [];
 				charts = [];
+				chatCharts = [];
+				chatChartsIds = [];
 			} catch (error) {
 				console.error('[Nuke] Error:', error);
 			}
@@ -692,7 +753,7 @@
 
 	</script>
 
-<svelte:window onkeydown={handleKeydown} onclick={handleClickOutside} />
+<svelte:window onkeydown={handleKeydown} onclick={handleClickOutside} onfocus={handleWindowFocus} />
 
 <div class="reader-container">
 	<!-- Messages Area -->
@@ -748,8 +809,8 @@
 		</div>
 	</div>
 
-	<!-- Canvas Area - Chart Carousel -->
-	<ChartCarousel {charts} bind:selectedChartIndex bind:showLightbox />
+	<!-- Canvas Area - Chart Carousel (article charts + Q&A response charts) -->
+	<ChartCarousel charts={allCharts} bind:selectedChartIndex bind:showLightbox />
 
 	<!-- Input Area -->
 	<div class="input-area" data-mode="reader">

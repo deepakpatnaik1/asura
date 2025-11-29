@@ -11,6 +11,9 @@
 	import ConfirmationModal from '$lib/components/ConfirmationModal.svelte';
 	import PersonaDropdown from '$lib/components/PersonaDropdown.svelte';
 	import InputBar from '$lib/components/InputBar.svelte';
+	import ChartCarousel from '$lib/components/reader/ChartCarousel.svelte';
+	import FilePasteArea from '$lib/components/FilePasteArea.svelte';
+	import FileLibrary from '$lib/components/FileLibrary.svelte';
 
 	// Receive loaded messages from server
 	let { data } = $props();
@@ -19,6 +22,17 @@
 	// Track starred message IDs
 	let starredIds = $state(new Set<string>(data.starredIds || []));
 
+	// Charts state for canvas
+	interface Chart {
+		id: string;
+		thumbnail_url: string;
+		full_url: string;
+		alt: string;
+	}
+	let allCharts = $state<Chart[]>([]);
+	let selectedChartIndex = $state<number | null>(null);
+	let showLightbox = $state(false);
+
 	let inputMessage = $state('');
 	let messagesEndRef: HTMLDivElement;
 	let textareaRef: HTMLTextAreaElement;
@@ -26,9 +40,45 @@
 	// User settings state
 	let selectedPersona = $state<'gunnar' | 'kirby'>(DEFAULT_PERSONA);
 
+	// File paste and library state
+	let showFilePaste = $state(false);
+	let showFileLibrary = $state(false);
+	interface FileItem {
+		id: string;
+		title: string;
+		is_enabled: boolean;
+		created_at: string;
+	}
+	let files = $state<FileItem[]>([]);
+	let isDeletingFile = $state(false);
+
 	// Confirmation composables (replaces manual timer state)
 	const nukeConfirm = createConfirmation();
 	const deleteConfirm = createConfirmation();
+
+	// Fetch charts for all messages
+	async function loadCharts() {
+		const messageIds = allMessages.map((m) => m.id).filter(Boolean);
+		if (messageIds.length === 0) {
+			allCharts = [];
+			return;
+		}
+
+		try {
+			const response = await fetch(`/api/superjournal/charts?ids=${messageIds.join(',')}`);
+			if (response.ok) {
+				const data = await response.json();
+				// Flatten all charts from all messages into single array
+				const charts: Chart[] = [];
+				for (const sjId of Object.keys(data.charts || {})) {
+					charts.push(...data.charts[sjId]);
+				}
+				allCharts = charts;
+			}
+		} catch (error) {
+			console.error('Failed to load charts:', error);
+		}
+	}
 
 	// Load user settings on mount and trigger orphan recovery
 	onMount(async () => {
@@ -47,6 +97,9 @@
 			console.error('Failed to load settings:', error);
 			// Fallback to defaults if database read fails
 		}
+
+		// Load charts for existing messages
+		await loadCharts();
 
 		// Trigger orphan recovery for any failed compressions
 		if (data.orphans && data.orphans.length > 0) {
@@ -154,8 +207,11 @@
 			const now = new Date().toISOString();
 			const formattedTimestamp = formatTimestamp(now);
 
+			// Use real superjournal ID from server if available, fallback to random
+			const messageId = $currentMessage.superjournal_id || crypto.randomUUID();
+
 			allMessages = [...allMessages, {
-				id: crypto.randomUUID(),
+				id: messageId,
 				user_message: $currentMessage.boss,
 				ai_response: $currentMessage.ai,
 				persona_name: selectedPersona,
@@ -166,6 +222,9 @@
 
 			// Clear current message after adding to history
 			currentMessage.set(null);
+
+			// Reload charts after delay (allow backend to process tables)
+			setTimeout(() => loadCharts(), 2000);
 		}
 	}
 
@@ -269,8 +328,9 @@
 					throw new Error('Failed to nuke database');
 				}
 
-				// Clear local messages
+				// Clear local state
 				allMessages = [];
+				allCharts = [];
 				currentMessage.set(null);
 			} catch (error) {
 				console.error('Nuke error:', error);
@@ -278,6 +338,116 @@
 		});
 	}
 
+	// File paste handlers
+	async function handlePaperclipClick() {
+		showFileLibrary = false;
+		showFilePaste = !showFilePaste;
+		if (showFilePaste) {
+			await tick();
+			const pasteArea = document.querySelector('.paste-area') as HTMLElement;
+			pasteArea?.focus();
+		}
+	}
+
+	async function handleFolderClick() {
+		showFilePaste = false;
+		showFileLibrary = !showFileLibrary;
+		if (showFileLibrary) {
+			await loadFiles();
+		}
+	}
+
+	async function loadFiles() {
+		try {
+			const response = await fetch('/api/chat/files');
+			if (response.ok) {
+				const data = await response.json();
+				files = data.files || [];
+			}
+		} catch (error) {
+			console.error('Failed to load files:', error);
+		}
+	}
+
+	async function toggleFile(fileId: string, currentState: boolean) {
+		// Optimistic update
+		files = files.map((f) =>
+			f.id === fileId ? { ...f, is_enabled: !currentState } : f
+		);
+
+		try {
+			const response = await fetch(`/api/chat/files/${fileId}`, {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ is_enabled: !currentState })
+			});
+
+			if (!response.ok) {
+				// Revert on failure
+				files = files.map((f) =>
+					f.id === fileId ? { ...f, is_enabled: currentState } : f
+				);
+			}
+		} catch (error) {
+			// Revert on failure
+			files = files.map((f) =>
+				f.id === fileId ? { ...f, is_enabled: currentState } : f
+			);
+		}
+	}
+
+	async function deleteFile(fileId: string, event: MouseEvent) {
+		event.stopPropagation();
+		isDeletingFile = true;
+
+		// Optimistic update
+		const originalFiles = files;
+		files = files.filter((f) => f.id !== fileId);
+
+		try {
+			const response = await fetch(`/api/chat/files/${fileId}`, {
+				method: 'DELETE'
+			});
+
+			if (!response.ok) {
+				// Revert on failure
+				files = originalFiles;
+			}
+		} catch (error) {
+			files = originalFiles;
+		} finally {
+			isDeletingFile = false;
+		}
+	}
+
+	function handleFilePasteSuccess(fileId: string, title: string) {
+		console.log('[Files] Saved:', title, fileId);
+		// Refresh file library if it's open
+		if (showFileLibrary) {
+			loadFiles();
+		}
+	}
+
+	// Keyboard shortcuts
+	function handleKeydown(event: KeyboardEvent) {
+		// Close file library on Escape
+		if (event.key === 'Escape' && showFileLibrary) {
+			showFileLibrary = false;
+		}
+
+		// Close file paste on Escape
+		if (event.key === 'Escape' && showFilePaste) {
+			showFilePaste = false;
+		}
+	}
+
+	// Auto-focus paste area when window regains focus
+	function handleWindowFocus() {
+		if (showFilePaste) {
+			const pasteArea = document.querySelector('.paste-area') as HTMLElement;
+			pasteArea?.focus();
+		}
+	}
 
 </script>
 
@@ -327,15 +497,36 @@
 		<div class="input-container">
 			<div class="input-field-wrapper">
 				<div class="input-controls">
-					<!-- Paperclip icon (decorative only) -->
-					<button class="control-btn" title="Attach file (disabled)" disabled>
+					<!-- Paperclip icon - opens paste area -->
+					<button
+						class="control-btn"
+						class:active={showFilePaste}
+						title="Paste file content"
+						onclick={handlePaperclipClick}
+					>
 						<Icon src={LuPaperclip} size="11" />
 					</button>
 
-					<!-- Folder icon (decorative only) -->
-					<button class="control-btn" title="Files (disabled)" disabled>
-						<Icon src={LuFolder} size="11" />
-					</button>
+					<!-- Folder icon - opens file library -->
+					<div class="folder-wrapper">
+						<button
+							class="control-btn"
+							class:active={showFileLibrary}
+							title="File library"
+							onclick={handleFolderClick}
+						>
+							<Icon src={LuFolder} size="11" />
+						</button>
+						{#if showFileLibrary}
+						<FileLibrary
+							{files}
+							currentFileId={null}
+							isDeleting={isDeletingFile}
+							onToggle={toggleFile}
+							onDelete={deleteFile}
+						/>
+					{/if}
+					</div>
 
 					<button class="control-btn" title="Download from cloud"><Icon src={LuCloudDownload} size="11" /></button>
 
@@ -368,6 +559,15 @@
 	</div>
 
 
+	<!-- File Paste Area -->
+	{#if showFilePaste}
+		<FilePasteArea
+			onClose={() => showFilePaste = false}
+			onSuccess={handleFilePasteSuccess}
+		/>
+	{/if}
+
+
 	<!-- Message Delete Confirmation Modal -->
 	<ConfirmationModal
 		isOpen={deleteConfirm.isActive}
@@ -384,10 +584,16 @@
 		mode="chat"
 	/>
 
-	<!-- Canvas Area - blank for now -->
-	<div class="canvas-area"></div>
+	<!-- Canvas Area with Charts -->
+	<ChartCarousel
+		charts={allCharts}
+		bind:selectedChartIndex
+		bind:showLightbox
+	/>
 
 </div>
+
+<svelte:window onkeydown={handleKeydown} onfocus={handleWindowFocus} />
 
 <style>
 	/* Main Layout - Two-column grid (chat left, canvas right) */
@@ -404,13 +610,6 @@
 		background: hsl(var(--background));
 		color: hsl(var(--foreground));
 		position: relative;
-	}
-
-	/* Canvas area - blank for now */
-	.canvas-area {
-		grid-area: canvas;
-		background: hsl(var(--background));
-		border-left: 1px solid hsl(var(--border) / 0.3);
 	}
 
 	/* Responsive adjustments for narrow screens */
@@ -460,6 +659,10 @@
 		margin-bottom: 0px;
 		flex-wrap: nowrap;
 		overflow-x: auto;
+	}
+
+	.folder-wrapper {
+		position: relative;
 	}
 
 	.control-btn {
