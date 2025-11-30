@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+> **LIVE ON VERCEL** - Production deployment active. All changes require careful, systematic implementation. Test thoroughly before committing.
+
 ## Working Docs
 
 Go to /Users/d.patnaik/code/vault/Welcome.md.

@@ -53,6 +53,20 @@
 
 	// Capitalize persona name
 	const displayName = $derived(personaName.charAt(0).toUpperCase() + personaName.slice(1));
+
+	// Render markdown asynchronously, updating state when ready
+	// This avoids flashing "Rendering" text during streaming
+	let renderedHtml = $state('');
+
+	$effect(() => {
+		if (aiResponse) {
+			renderMarkdown(aiResponse, mode).then((html) => {
+				renderedHtml = html;
+			});
+		} else {
+			renderedHtml = '';
+		}
+	});
 </script>
 
 <!-- Boss Message -->
@@ -113,7 +127,7 @@
 			{#if isLoading && !aiResponse}
 				<span class="loading-text">{loadingText}<span class="dots"><span>.</span><span>.</span><span>.</span></span></span>
 			{:else}
-				{@html renderMarkdown(aiResponse, mode)}
+				{@html renderedHtml}
 			{/if}
 		</div>
 	</div>

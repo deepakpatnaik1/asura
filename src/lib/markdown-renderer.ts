@@ -64,7 +64,7 @@ function stripMarkdownTables(text: string): string {
  * - One line space before section headers
  * - breaks: true preserves single newlines as <br>
  */
-export function renderMarkdown(markdown: string, mode: RenderMode = 'chat'): string {
+export async function renderMarkdown(markdown: string, mode: RenderMode = 'chat'): Promise<string> {
 	const ACCENT_COLOR = mode === 'chat' ? CHAT_ACCENT : READER_ACCENT;
 
 	// Pre-process: strip emoji, tables, horizontal rules, normalize em dashes
@@ -132,5 +132,5 @@ export function renderMarkdown(markdown: string, mode: RenderMode = 'chat'): str
 	const html = rawHtml.replace(/\*/g, '');
 
 	// Sanitize to prevent XSS attacks
-	return sanitizeHtml(html);
+	return await sanitizeHtml(html);
 }
