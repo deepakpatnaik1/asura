@@ -63,7 +63,7 @@
 			const response = await fetch('/api/settings', {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ active_reader_article_id: articleId })
+				body: JSON.stringify({ active_content_id: articleId })
 			});
 
 			if (!response.ok) {
@@ -85,8 +85,8 @@
 
 			const data = await response.json();
 
-			if (data.active_reader_article_id) {
-				await switchToArticle(data.active_reader_article_id, false);
+			if (data.active_content_id) {
+				await switchToArticle(data.active_content_id, false);
 			}
 		} catch (error) {
 			console.error('[Settings] Error loading active article:', error);
@@ -124,7 +124,7 @@
 	}
 
 	// Handle successful paste - display article content
-	async function handlePasteSuccess(articleId: string, title: string, content: string) {
+	async function handlePasteSuccess(articleId: string, title: string, content: string, superjournalId?: string) {
 		// Set as current article
 		currentArticle = {
 			id: articleId,
@@ -132,8 +132,8 @@
 			content: stripFigureCaptions(content)
 		};
 
-		// Reset Q&A state for new article
-		chatHistory = [];
+		// Load chat history for new article (includes the upload message)
+		await loadChatHistory(articleId);
 
 		// Close paste area
 		showPasteArea = false;

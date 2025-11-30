@@ -532,10 +532,11 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 	try {
 		// 3. VERIFY ARTICLE OWNERSHIP (explicit user_id filter for defense-in-depth)
 		const { data: article, error: fetchError } = await supabase
-			.from('articles')
+			.from('content')
 			.select('id, user_id, title')
 			.eq('id', article_id)
 			.eq('user_id', userId)
+			.eq('mode', 'reader')
 			.single();
 
 		if (fetchError || !article) {
@@ -682,7 +683,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		// 6. INSERT CHART RECORDS INTO DATABASE
 		if (chartResults.length > 0) {
 			const chartRecords = chartResults.map((chart) => ({
-				article_id: article_id,
+				content_id: article_id,
 				user_id: userId,
 				chart_index: chart.index,
 				storage_path: chart.storage_path,
@@ -694,7 +695,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			}));
 
 			const { error: insertError } = await supabase
-				.from('article_charts')
+				.from('charts')
 				.insert(chartRecords);
 
 			if (insertError) {

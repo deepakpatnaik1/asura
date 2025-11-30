@@ -34,9 +34,9 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supab
 
 	// 3. FETCH CHARTS FROM DATABASE (only relevant ones)
 	const { data: charts, error: fetchError } = await supabase
-		.from('article_charts')
+		.from('charts')
 		.select('chart_index, storage_path, thumbnail_path, alt_text')
-		.eq('article_id', articleId)
+		.eq('content_id', articleId)
 		.eq('user_id', userId) // RLS check
 		.eq('is_relevant', true) // Only show AI-filtered relevant charts
 		.order('chart_index', { ascending: true });

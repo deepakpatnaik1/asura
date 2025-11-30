@@ -2,7 +2,7 @@
  * Extract Tables from AI Response
  *
  * Background job that extracts markdown tables from AI responses,
- * renders them to SVG, uploads to storage, and saves to superjournal_charts.
+ * renders them to SVG, uploads to storage, and saves to charts table.
  */
 
 import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
@@ -130,7 +130,7 @@ export async function runExtractTablesJob(params: ExtractTablesParams): Promise<
 		// 3. Insert records into database
 		if (chartRecords.length > 0) {
 			const { error: insertError } = await supabase
-				.from('superjournal_charts')
+				.from('charts')
 				.insert(chartRecords);
 
 			if (insertError) {

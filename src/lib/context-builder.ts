@@ -117,9 +117,10 @@ export async function buildContextForCalls1A1B(
 
 		// Priority 1.5: Enabled files (user-uploaded content)
 		supabase
-			.from('files')
+			.from('content')
 			.select('title, artisan_cut, created_at')
 			.eq('user_id', userId)
+			.eq('mode', 'chat')
 			.eq('is_enabled', true)
 			.order('created_at', { ascending: false }),
 

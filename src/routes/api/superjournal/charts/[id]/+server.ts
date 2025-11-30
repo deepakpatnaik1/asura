@@ -39,7 +39,7 @@ export const PUT: RequestHandler = async ({ params, request, locals: { safeGetSe
 
 	// 3. UPDATE CHART
 	const { error: updateError } = await supabase
-		.from('superjournal_charts')
+		.from('charts')
 		.update({ is_pinned })
 		.eq('id', chartId)
 		.eq('user_id', userId);
@@ -69,7 +69,7 @@ export const DELETE: RequestHandler = async ({ params, locals: { safeGetSession,
 
 	// 2. FETCH CHART TO GET STORAGE PATHS
 	const { data: chart, error: fetchError } = await supabase
-		.from('superjournal_charts')
+		.from('charts')
 		.select('storage_path, thumbnail_path')
 		.eq('id', chartId)
 		.eq('user_id', userId)
@@ -104,7 +104,7 @@ export const DELETE: RequestHandler = async ({ params, locals: { safeGetSession,
 
 	// 4. DELETE DATABASE RECORD
 	const { error: deleteError } = await supabase
-		.from('superjournal_charts')
+		.from('charts')
 		.delete()
 		.eq('id', chartId)
 		.eq('user_id', userId);

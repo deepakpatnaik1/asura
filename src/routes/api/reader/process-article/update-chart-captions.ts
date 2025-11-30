@@ -2,7 +2,7 @@
  * Update Chart Captions from AI Response
  *
  * Parses figure_captions from Samara's response and updates
- * article_charts records with meaningful captions.
+ * charts records with meaningful captions.
  */
 
 import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
@@ -63,7 +63,7 @@ function parseFigureCaptions(text: string): Map<number, string> {
 }
 
 /**
- * Update article_charts with captions from AI response
+ * Update charts with captions from AI response
  */
 export async function updateChartCaptions(params: UpdateChartCaptionsParams): Promise<void> {
 	const { articleId, userId, aiResponse, chartCount } = params;
@@ -85,9 +85,9 @@ export async function updateChartCaptions(params: UpdateChartCaptionsParams): Pr
 
 		// 2. Fetch existing charts (only source charts, not summary-table-*)
 		const { data: charts, error: fetchError } = await supabase
-			.from('article_charts')
+			.from('charts')
 			.select('id, chart_index, storage_path')
-			.eq('article_id', articleId)
+			.eq('content_id', articleId)
 			.eq('user_id', userId)
 			.not('storage_path', 'like', '%summary-table%')
 			.order('chart_index', { ascending: true });
@@ -106,7 +106,7 @@ export async function updateChartCaptions(params: UpdateChartCaptionsParams): Pr
 			console.log(`[UpdateChartCaptions] Chart ${chart.chart_index}: caption = ${caption ? 'found' : 'NOT FOUND'}`);
 			if (caption) {
 				const { error: updateError, data: updateResult } = await supabase
-					.from('article_charts')
+					.from('charts')
 					.update({ alt_text: caption })
 					.eq('id', chart.id)
 					.select('id, chart_index, alt_text');

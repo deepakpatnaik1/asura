@@ -9,7 +9,7 @@ import { createLogger } from '$lib/api/logger';
  *
  * POST /api/reader/nuke
  * Deletes all reader mode data for the current user:
- * 1. article_charts (+ storage files)
+ * 1. charts (article charts, with storage cleanup)
  * 2. articles
  *
  * Response: { success: true, deleted: number } or { error: { message, code } }
@@ -25,38 +25,32 @@ export const POST: RequestHandler = async ({ locals: { safeGetSession, supabase 
 
 	log.info('Starting reader mode nuke', { userId });
 
-	// 2. FETCH ALL ARTICLES TO GET FILE PATHS
+	// 2. FETCH ALL ARTICLES TO GET IDs
 	const { data: articles, error: articlesFetchError } = await supabase
-		.from('articles')
-		.select('id, pdf_storage_path')
-		.eq('user_id', userId);
+		.from('content')
+		.select('id')
+		.eq('user_id', userId)
+		.eq('mode', 'reader');
 
 	if (articlesFetchError) {
 		log.warn('Failed to fetch articles for cleanup', { error: articlesFetchError });
 	}
 
-	// 3. FETCH ALL ARTICLE CHARTS TO GET FILE PATHS
+	// 3. FETCH ALL ARTICLE CHARTS TO GET FILE PATHS (reader mode content)
 	const { data: articleCharts, error: chartsFetchError } = await supabase
-		.from('article_charts')
-		.select('storage_path, thumbnail_path')
-		.eq('user_id', userId);
+		.from('charts')
+		.select('storage_path, thumbnail_path, content!inner(mode)')
+		.eq('user_id', userId)
+		.not('content_id', 'is', null)
+		.eq('content.mode', 'reader');
 
 	if (chartsFetchError) {
-		log.warn('Failed to fetch article_charts for cleanup', { error: chartsFetchError });
+		log.warn('Failed to fetch article charts for cleanup', { error: chartsFetchError });
 	}
 
 	// 4. COLLECT ALL STORAGE PATHS
-	const pdfPaths: string[] = [];
 	const imagePaths: string[] = [];
 	const thumbnailPaths: string[] = [];
-
-	if (articles && articles.length > 0) {
-		for (const article of articles) {
-			if (article.pdf_storage_path) {
-				pdfPaths.push(article.pdf_storage_path.replace('article-pdfs/', ''));
-			}
-		}
-	}
 
 	if (articleCharts && articleCharts.length > 0) {
 		for (const chart of articleCharts) {
@@ -70,10 +64,6 @@ export const POST: RequestHandler = async ({ locals: { safeGetSession, supabase 
 	}
 
 	// 5. DELETE FROM SUPABASE STORAGE
-	if (pdfPaths.length > 0) {
-		const { error } = await supabase.storage.from('article-pdfs').remove(pdfPaths);
-		if (error) log.warn('Failed to delete PDFs from storage', { error });
-	}
 
 	if (imagePaths.length > 0) {
 		const { error } = await supabase.storage.from('article-images').remove(imagePaths);
@@ -85,11 +75,12 @@ export const POST: RequestHandler = async ({ locals: { safeGetSession, supabase 
 		if (error) log.warn('Failed to delete thumbnails from storage', { error });
 	}
 
-	// 6. DELETE ALL ARTICLES FROM DATABASE (CASCADE handles article_charts)
+	// 6. DELETE ALL READER CONTENT FROM DATABASE (CASCADE handles charts via FK)
 	const { error: deleteError } = await supabase
-		.from('articles')
+		.from('content')
 		.delete()
-		.eq('user_id', userId);
+		.eq('user_id', userId)
+		.eq('mode', 'reader');
 
 	if (deleteError) {
 		log.error('Failed to delete articles', { error: deleteError });
@@ -97,7 +88,7 @@ export const POST: RequestHandler = async ({ locals: { safeGetSession, supabase 
 	}
 
 	const articleCount = articles?.length || 0;
-	const storageFilesDeleted = pdfPaths.length + imagePaths.length + thumbnailPaths.length;
+	const storageFilesDeleted = imagePaths.length + thumbnailPaths.length;
 
 	log.info('Reader mode nuke complete', {
 		articles: articleCount,

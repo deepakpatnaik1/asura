@@ -77,12 +77,11 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		let chartImage: ChartImageData | null = null;
 		if (chart_id && chart_source) {
 			try {
-				// Determine which table and bucket to query
-				const table = chart_source === 'file' ? 'file_charts' : 'superjournal_charts';
+				// All charts now in unified charts table; bucket depends on source
 				const bucket = chart_source === 'file' ? 'files' : 'articles';
 
 				const { data: chartData, error: chartError } = await supabase
-					.from(table)
+					.from('charts')
 					.select('storage_path')
 					.eq('id', chart_id)
 					.eq('user_id', userId)

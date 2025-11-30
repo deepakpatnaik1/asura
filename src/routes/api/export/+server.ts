@@ -30,12 +30,9 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 		// 3. FETCH ALL USER DATA IN PARALLEL
 		const [
 			superjournalResult,
-			superjournalChartsResult,
+			chartsResult,
 			journalResult,
-			articlesResult,
-			articleChartsResult,
-			filesResult,
-			fileChartsResult,
+			contentResult,
 			settingsResult
 		] = await Promise.all([
 			supabase
@@ -44,7 +41,7 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 				.eq('user_id', userId)
 				.order('created_at', { ascending: false }),
 			supabase
-				.from('superjournal_charts')
+				.from('charts')
 				.select('*')
 				.eq('user_id', userId)
 				.order('created_at', { ascending: false }),
@@ -54,22 +51,7 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 				.eq('user_id', userId)
 				.order('created_at', { ascending: false }),
 			supabase
-				.from('articles')
-				.select('*')
-				.eq('user_id', userId)
-				.order('created_at', { ascending: false }),
-			supabase
-				.from('article_charts')
-				.select('*')
-				.eq('user_id', userId)
-				.order('created_at', { ascending: false }),
-			supabase
-				.from('files')
-				.select('*')
-				.eq('user_id', userId)
-				.order('created_at', { ascending: false }),
-			supabase
-				.from('file_charts')
+				.from('content')
 				.select('*')
 				.eq('user_id', userId)
 				.order('created_at', { ascending: false }),
@@ -83,12 +65,9 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 		// Check for errors (settings may not exist for new users)
 		const errors = [
 			superjournalResult.error,
-			superjournalChartsResult.error,
+			chartsResult.error,
 			journalResult.error,
-			articlesResult.error,
-			articleChartsResult.error,
-			filesResult.error,
-			fileChartsResult.error
+			contentResult.error
 		].filter(Boolean);
 
 		if (errors.length > 0) {
@@ -105,22 +84,16 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 			},
 			data: {
 				superjournal: superjournalResult.data || [],
-				superjournal_charts: superjournalChartsResult.data || [],
+				charts: chartsResult.data || [],
 				journal: journalResult.data || [],
-				articles: articlesResult.data || [],
-				article_charts: articleChartsResult.data || [],
-				files: filesResult.data || [],
-				file_charts: fileChartsResult.data || [],
+				content: contentResult.data || [],
 				settings: settingsResult.data || null
 			},
 			counts: {
 				superjournal: superjournalResult.data?.length || 0,
-				superjournal_charts: superjournalChartsResult.data?.length || 0,
+				charts: chartsResult.data?.length || 0,
 				journal: journalResult.data?.length || 0,
-				articles: articlesResult.data?.length || 0,
-				article_charts: articleChartsResult.data?.length || 0,
-				files: filesResult.data?.length || 0,
-				file_charts: fileChartsResult.data?.length || 0
+				content: contentResult.data?.length || 0
 			}
 		};
 

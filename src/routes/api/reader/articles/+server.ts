@@ -21,7 +21,7 @@ import { databaseError } from '$lib/api/errors';
  * DELETE performs full cleanup:
  * 1. Fetches article and related charts to get file paths
  * 2. Deletes files from Supabase Storage
- * 3. Deletes from database (cascade handles article_charts)
+ * 3. Deletes from database (cascade handles charts via FK)
  *
  * Note: Anthropic Files API files are not deleted - they expire automatically.
  */
@@ -32,11 +32,12 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 	if (!auth.success) return auth.error;
 	const { userId } = auth;
 
-	// 2. FETCH ARTICLES FROM DATABASE
+	// 2. FETCH ARTICLES FROM DATABASE (reader mode content)
 	const { data: articles, error: fetchError } = await supabase
-		.from('articles')
+		.from('content')
 		.select('id, title, created_at')
 		.eq('user_id', userId)
+		.eq('mode', 'reader')
 		.order('created_at', { ascending: false }); // Most recent first
 
 	if (fetchError) {
@@ -67,22 +68,11 @@ export const DELETE: RequestHandler = async ({ request, locals: { safeGetSession
 
 	const { article_id } = validation.data;
 
-	// 3. FETCH ARTICLE AND CHARTS TO GET FILE PATHS (before deletion)
-	const { data: article, error: articleFetchError } = await supabase
-		.from('articles')
-		.select('pdf_storage_path, anthropic_file_id')
-		.eq('id', article_id)
-		.eq('user_id', userId)
-		.single();
-
-	if (articleFetchError) {
-		// Continue anyway - we still want to delete the database record
-	}
-
+	// 3. FETCH CHARTS TO GET FILE PATHS (before deletion)
 	const { data: charts, error: chartsFetchError } = await supabase
-		.from('article_charts')
+		.from('charts')
 		.select('storage_path, thumbnail_path, anthropic_file_id')
-		.eq('article_id', article_id)
+		.eq('content_id', article_id)
 		.eq('user_id', userId);
 
 	if (chartsFetchError) {
@@ -91,11 +81,6 @@ export const DELETE: RequestHandler = async ({ request, locals: { safeGetSession
 
 	// 4. DELETE FILES FROM SUPABASE STORAGE
 	const storagePaths: string[] = [];
-
-	// Add article PDF path
-	if (article?.pdf_storage_path) {
-		storagePaths.push(article.pdf_storage_path);
-	}
 
 	// Add chart image and thumbnail paths
 	if (charts && charts.length > 0) {
@@ -125,12 +110,13 @@ export const DELETE: RequestHandler = async ({ request, locals: { safeGetSession
 		}
 	}
 
-	// 5. DELETE ARTICLE FROM DATABASE (CASCADE handles article_charts)
+	// 5. DELETE CONTENT FROM DATABASE (CASCADE handles charts via FK)
 	const { error: deleteError } = await supabase
-		.from('articles')
+		.from('content')
 		.delete()
 		.eq('id', article_id)
-		.eq('user_id', userId);
+		.eq('user_id', userId)
+		.eq('mode', 'reader');
 
 	if (deleteError) {
 		return databaseError('Failed to delete article');

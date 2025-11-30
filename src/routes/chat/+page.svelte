@@ -498,6 +498,13 @@
 				if (!response.ok) {
 					// Revert on failure
 					files = originalFiles;
+				} else {
+					// Remove file upload message from UI
+					allMessages = allMessages.filter(m =>
+						!m.ai_response?.startsWith(`<!--file:${fileId}-->`)
+					);
+					// Reload file charts to remove deleted file's images from carousel
+					await loadFileCharts();
 				}
 			} catch (error) {
 				files = originalFiles;
@@ -507,7 +514,7 @@
 		});
 	}
 
-	function handleFilePasteSuccess(fileId: string, title: string, content: string, superjournalId?: string) {
+	async function handleFilePasteSuccess(fileId: string, title: string, content: string, superjournalId?: string) {
 		console.log('[Files] Saved:', title, fileId, superjournalId);
 
 		// Add message to display
@@ -531,6 +538,9 @@
 		if (showFileLibrary) {
 			loadFiles();
 		}
+
+		// Load charts for the newly uploaded file
+		await loadFileCharts();
 	}
 
 	// Chart pin/dismiss handlers

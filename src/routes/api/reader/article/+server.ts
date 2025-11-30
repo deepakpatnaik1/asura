@@ -33,10 +33,11 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supab
 
 	// 3. FETCH ARTICLE FROM DATABASE
 	const { data: article, error: fetchError } = await supabase
-		.from('articles')
+		.from('content')
 		.select('id, title')
 		.eq('id', articleId)
-		.eq('user_id', userId) // RLS check
+		.eq('user_id', userId)
+		.eq('mode', 'reader')
 		.single();
 
 	if (fetchError || !article) {

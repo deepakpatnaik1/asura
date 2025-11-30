@@ -55,7 +55,7 @@ export const settingsUpdateSchema = z.object({
 	selected_compression_model: z.string().optional(),
 	selected_reader_model: z.string().optional(),
 	selected_embedding_model: z.string().optional(),
-	active_reader_article_id: z.string().uuid().nullable().optional()
+	active_content_id: z.string().uuid().nullable().optional()
 }).refine(
 	(data) => Object.keys(data).length > 0,
 	{ message: 'At least one field must be provided' }
@@ -65,11 +65,12 @@ export const settingsUpdateSchema = z.object({
 // Reader Schemas
 // ============================================================================
 
-/** POST /api/reader/upload - Upload article HTML */
+/** POST /api/reader/upload - Upload article content */
 export const readerUploadSchema = z.object({
-	html: z.string()
-		.min(1, 'HTML content is required')
-		.max(5_000_000, 'HTML too large (max 5MB)')
+	content: z.string()
+		.min(1, 'Content is required')
+		.max(5_000_000, 'Content too large (max 5MB)'),
+	persistent: z.boolean().optional().default(false)
 });
 
 /** POST /api/reader/process-article - Process article with AI */

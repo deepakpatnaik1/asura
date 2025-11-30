@@ -25,35 +25,37 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supab
 	const enabledOnly = url.searchParams.get('enabled_only') === 'true';
 	const fileIdsParam = url.searchParams.get('file_ids');
 
-	// Build query
+	// Build query - join to content table for chat mode files
 	let query = supabase
-		.from('file_charts')
+		.from('charts')
 		.select(`
 			id,
-			file_id,
+			content_id,
 			chart_index,
 			storage_path,
 			thumbnail_path,
 			alt_text,
 			is_pinned,
 			created_at,
-			files!inner(id, title, is_enabled)
+			content!inner(id, title, is_enabled, mode)
 		`)
 		.eq('user_id', userId)
+		.not('content_id', 'is', null)
+		.eq('content.mode', 'chat')
 		.order('is_pinned', { ascending: false })
 		.order('created_at', { ascending: false });
 
-	// Filter by specific file IDs if provided
+	// Filter by specific content IDs if provided
 	if (fileIdsParam) {
 		const fileIds = fileIdsParam.split(',').filter(Boolean);
 		if (fileIds.length > 0) {
-			query = query.in('file_id', fileIds);
+			query = query.in('content_id', fileIds);
 		}
 	}
 
-	// Filter by enabled files only
+	// Filter by enabled content only
 	if (enabledOnly) {
-		query = query.eq('files.is_enabled', true);
+		query = query.eq('content.is_enabled', true);
 	}
 
 	const { data, error } = await query;
@@ -63,17 +65,21 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supab
 	}
 
 	// Transform to public URLs
-	const charts = (data || []).map((chart) => ({
-		id: chart.id,
-		file_id: chart.file_id,
-		chart_index: chart.chart_index,
-		thumbnail_url: `${PUBLIC_SUPABASE_URL}/storage/v1/object/public/files/${chart.thumbnail_path}`,
-		full_url: `${PUBLIC_SUPABASE_URL}/storage/v1/object/public/files/${chart.storage_path}`,
-		alt: chart.alt_text,
-		is_pinned: chart.is_pinned,
-		source: 'file' as const,
-		file_title: (chart.files as { title: string })?.title
-	}));
+	const charts = (data || []).map((chart) => {
+		// content is a single object when using !inner join
+		const content = chart.content as unknown as { title: string } | null;
+		return {
+			id: chart.id,
+			file_id: chart.content_id, // Keep API response naming for backwards compatibility
+			chart_index: chart.chart_index,
+			thumbnail_url: `${PUBLIC_SUPABASE_URL}/storage/v1/object/public/files/${chart.thumbnail_path}`,
+			full_url: `${PUBLIC_SUPABASE_URL}/storage/v1/object/public/files/${chart.storage_path}`,
+			alt: chart.alt_text,
+			is_pinned: chart.is_pinned,
+			source: 'file' as const,
+			file_title: content?.title
+		};
+	});
 
 	return json({ charts });
 };

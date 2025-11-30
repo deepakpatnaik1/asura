@@ -36,18 +36,19 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 
 	// 3. FETCH ARTICLE FROM DATABASE
 	const { data: article, error: fetchError } = await supabase
-		.from('articles')
-		.select('id, title, raw_html')
+		.from('content')
+		.select('id, title, raw_content')
 		.eq('id', article_id)
-		.eq('user_id', userId) // RLS check
+		.eq('user_id', userId)
+		.eq('mode', 'reader')
 		.single();
 
 	if (fetchError || !article) {
 		return notFoundError('Article');
 	}
 
-	// 4. VALIDATE ARTICLE HAS RAW HTML
-	if (!article.raw_html) {
+	// 4. VALIDATE ARTICLE HAS RAW CONTENT
+	if (!article.raw_content) {
 		return errorResponse('BAD_REQUEST', { message: 'Article has no HTML content' });
 	}
 
@@ -65,9 +66,9 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 
 	// 6b. GET CHART COUNT FOR CAPTION GENERATION
 	const { count: chartCount } = await supabase
-		.from('article_charts')
+		.from('charts')
 		.select('*', { count: 'exact', head: true })
-		.eq('article_id', article_id)
+		.eq('content_id', article_id)
 		.eq('user_id', userId);
 
 	// 7. CREATE STREAMING RESPONSE
@@ -79,7 +80,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				// Use describeStream call
 				const generator = describeStream({
 					articleTitle: article.title,
-					articleHtml: article.raw_html,
+					articleHtml: article.raw_content,
 					model: selectedModel,
 					maxTokens: modelParams.max_tokens,
 					temperature: modelParams.temperature,

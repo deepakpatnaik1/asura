@@ -9,11 +9,10 @@ import { createLogger } from '$lib/api/logger';
  *
  * POST /api/nuke
  * Deletes all chat mode data for the current user:
- * 1. superjournal_charts (+ storage files)
+ * 1. charts (superjournal + file charts, with storage cleanup)
  * 2. superjournal (cascades to journal)
- * 3. file_charts (+ storage files)
- * 4. files
- * 5. user_settings (reset)
+ * 3. files
+ * 4. user_settings (reset)
  *
  * Response: { success: true, deleted: { ... } } or { error: { message, code } }
  */
@@ -29,19 +28,22 @@ export const POST: RequestHandler = async ({ locals: { safeGetSession, supabase 
 
 		log.info('Starting chat mode nuke', { userId });
 
-		// 2. FETCH SUPERJOURNAL CHARTS FOR STORAGE CLEANUP
+		// 2. FETCH CHARTS FOR STORAGE CLEANUP (superjournal + file charts)
 		const { data: superjournalCharts } = await supabase
-			.from('superjournal_charts')
+			.from('charts')
 			.select('storage_path, thumbnail_path')
-			.eq('user_id', userId);
+			.eq('user_id', userId)
+			.not('superjournal_id', 'is', null);
 
-		// 3. FETCH FILE CHARTS FOR STORAGE CLEANUP
+		// Fetch content charts (chat mode content)
 		const { data: fileCharts } = await supabase
-			.from('file_charts')
-			.select('storage_path, thumbnail_path')
-			.eq('user_id', userId);
+			.from('charts')
+			.select('storage_path, thumbnail_path, content!inner(mode)')
+			.eq('user_id', userId)
+			.not('content_id', 'is', null)
+			.eq('content.mode', 'chat');
 
-		// 4. COLLECT STORAGE PATHS
+		// 3. COLLECT STORAGE PATHS
 		const articlesBucketPaths: string[] = []; // superjournal charts use 'articles' bucket
 		const filesBucketPaths: string[] = []; // file charts use 'files' bucket
 
@@ -67,7 +69,7 @@ export const POST: RequestHandler = async ({ locals: { safeGetSession, supabase 
 			}
 		}
 
-		// 5. DELETE FROM SUPABASE STORAGE
+		// 4. DELETE FROM SUPABASE STORAGE
 		if (articlesBucketPaths.length > 0) {
 			const { error: storageError } = await supabase.storage
 				.from('articles')
@@ -86,40 +88,32 @@ export const POST: RequestHandler = async ({ locals: { safeGetSession, supabase 
 			}
 		}
 
-		// 6. DELETE SUPERJOURNAL CHARTS (before superjournal due to FK)
-		const { error: superjournalChartsError } = await supabase
-			.from('superjournal_charts')
+		// 5. DELETE CHARTS (superjournal + content charts for chat mode)
+		// Note: CASCADE deletes will also handle this, but explicit delete ensures storage cleanup happened first
+		const { error: chartsError } = await supabase
+			.from('charts')
 			.delete()
-			.eq('user_id', userId);
+			.eq('user_id', userId)
+			.or('superjournal_id.not.is.null,content_id.not.is.null');
 
-		if (superjournalChartsError) {
-			log.error('Failed to delete superjournal_charts', { error: superjournalChartsError });
-			return databaseError('Failed to delete superjournal charts');
+		if (chartsError) {
+			log.error('Failed to delete charts', { error: chartsError });
+			return databaseError('Failed to delete charts');
 		}
 
-		// 7. DELETE FILE CHARTS (before files due to FK)
-		const { error: fileChartsError } = await supabase
-			.from('file_charts')
+		// 6. DELETE CHAT CONTENT (files)
+		const { error: contentError } = await supabase
+			.from('content')
 			.delete()
-			.eq('user_id', userId);
+			.eq('user_id', userId)
+			.eq('mode', 'chat');
 
-		if (fileChartsError) {
-			log.error('Failed to delete file_charts', { error: fileChartsError });
-			return databaseError('Failed to delete file charts');
+		if (contentError) {
+			log.error('Failed to delete content', { error: contentError });
+			return databaseError('Failed to delete content');
 		}
 
-		// 8. DELETE FILES
-		const { error: filesError } = await supabase
-			.from('files')
-			.delete()
-			.eq('user_id', userId);
-
-		if (filesError) {
-			log.error('Failed to delete files', { error: filesError });
-			return databaseError('Failed to delete files');
-		}
-
-		// 9. DELETE SUPERJOURNAL (cascades to journal via FK)
+		// 7. DELETE SUPERJOURNAL (cascades to journal via FK)
 		const { error: superjournalError } = await supabase
 			.from('superjournal')
 			.delete()
@@ -130,7 +124,7 @@ export const POST: RequestHandler = async ({ locals: { safeGetSession, supabase 
 			return databaseError('Failed to delete superjournal data');
 		}
 
-		// 10. DELETE USER SETTINGS (reset)
+		// 8. DELETE USER SETTINGS (reset)
 		const { error: settingsError } = await supabase
 			.from('user_settings')
 			.delete()

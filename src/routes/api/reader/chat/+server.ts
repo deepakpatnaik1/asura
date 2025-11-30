@@ -41,10 +41,11 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 
 	// 4. FETCH ARTICLE FROM DATABASE
 	const { data: article, error: fetchError } = await supabase
-		.from('articles')
-		.select('id, title, raw_html')
+		.from('content')
+		.select('id, title, raw_content')
 		.eq('id', article_id)
 		.eq('user_id', userId)
+		.eq('mode', 'reader')
 		.single();
 
 	if (fetchError || !article) {
@@ -52,8 +53,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		return notFoundError('Article');
 	}
 
-	if (!article.raw_html) {
-		log.error('Article missing raw_html', { articleId: article_id });
+	if (!article.raw_content) {
+		log.error('Article missing raw_content', { articleId: article_id });
 		return errorResponse('BAD_REQUEST', { message: 'Article has no content' });
 	}
 
@@ -61,9 +62,9 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 	let chartImageData: { base64: string; mediaType: string } | null = null;
 	if (chart_index !== null && chart_index !== undefined && typeof chart_index === 'number') {
 		const { data: chartData, error: chartError } = await supabase
-			.from('article_charts')
+			.from('charts')
 			.select('storage_path, chart_index')
-			.eq('article_id', article_id)
+			.eq('content_id', article_id)
 			.eq('user_id', userId)
 			.eq('chart_index', chart_index + 1) // 0-based in frontend, 1-based in DB
 			.single();
@@ -143,7 +144,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 
 				const generator = followupStream({
 					articleTitle: article.title,
-					articleHtml: article.raw_html,
+					articleHtml: article.raw_content,
 					previousSummary: null,
 					chatHistory,
 					message,

@@ -20,7 +20,7 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 	// 2. QUERY USER SETTINGS
 	const { data, error } = await supabase
 		.from('user_settings')
-		.select('selected_conversation_model, selected_compression_model, selected_reader_model, selected_embedding_model, active_reader_article_id')
+		.select('selected_conversation_model, selected_compression_model, selected_reader_model, selected_embedding_model, active_content_id')
 		.eq('user_id', userId)
 		.single();
 
@@ -60,7 +60,7 @@ export const PUT: RequestHandler = async ({ request, locals: { safeGetSession, s
 	const validation = validateSchema(settingsUpdateSchema, parseResult.data);
 	if (!validation.success) return validation.error;
 
-	const { selected_conversation_model, selected_compression_model, selected_reader_model, selected_embedding_model, active_reader_article_id } = validation.data;
+	const { selected_conversation_model, selected_compression_model, selected_reader_model, selected_embedding_model, active_content_id } = validation.data;
 
 	// 3. UPDATE USER SETTINGS
 	const updateData: Record<string, any> = {
@@ -72,7 +72,7 @@ export const PUT: RequestHandler = async ({ request, locals: { safeGetSession, s
 	if (selected_compression_model !== undefined) updateData.selected_compression_model = selected_compression_model;
 	if (selected_reader_model !== undefined) updateData.selected_reader_model = selected_reader_model;
 	if (selected_embedding_model !== undefined) updateData.selected_embedding_model = selected_embedding_model;
-	if (active_reader_article_id !== undefined) updateData.active_reader_article_id = active_reader_article_id;
+	if (active_content_id !== undefined) updateData.active_content_id = active_content_id;
 
 	const { error } = await supabase
 		.from('user_settings')

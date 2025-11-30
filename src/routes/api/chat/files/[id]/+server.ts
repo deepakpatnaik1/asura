@@ -35,12 +35,13 @@ export const PUT: RequestHandler = async ({ params, request, locals: { safeGetSe
 		return validationError('is_enabled must be a boolean', 'is_enabled');
 	}
 
-	// Update file (RLS ensures user can only update their own files)
+	// Update content (RLS ensures user can only update their own content)
 	const { data, error } = await supabase
-		.from('files')
+		.from('content')
 		.update({ is_enabled, updated_at: new Date().toISOString() })
 		.eq('id', id)
 		.eq('user_id', userId)
+		.eq('mode', 'chat')
 		.select('id')
 		.single();
 
@@ -65,12 +66,21 @@ export const DELETE: RequestHandler = async ({ params, locals: { safeGetSession,
 		return validationError('File ID is required', 'id');
 	}
 
-	// Delete file (RLS ensures user can only delete their own files)
+	// Delete associated superjournal entry (file marker in ai_response)
+	await supabase
+		.from('superjournal')
+		.delete()
+		.eq('user_id', userId)
+		.like('ai_response', `<!--file:${id}-->%`);
+
+	// Delete content (RLS ensures user can only delete their own content)
+	// Cascade handles charts deletion
 	const { error } = await supabase
-		.from('files')
+		.from('content')
 		.delete()
 		.eq('id', id)
-		.eq('user_id', userId);
+		.eq('user_id', userId)
+		.eq('mode', 'chat');
 
 	if (error) {
 		return databaseError('Failed to delete file');

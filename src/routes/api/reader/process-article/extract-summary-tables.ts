@@ -2,7 +2,7 @@
  * Extract Tables from AI Summary
  *
  * Extracts markdown tables from Samara's initial article summary,
- * renders to SVG, and saves to article_charts alongside source tables.
+ * renders to SVG, and saves to charts table alongside source tables.
  *
  * Reuses shared utilities from table-extraction.ts
  */
@@ -47,7 +47,7 @@ async function generateThumbnail(imageBuffer: Buffer): Promise<Buffer> {
 }
 
 /**
- * Extract tables from AI summary and save to article_charts
+ * Extract tables from AI summary and save to charts table
  */
 export async function extractTablesFromSummary(params: ExtractSummaryTablesParams): Promise<void> {
 	const { articleId, userId, aiResponse } = params;
@@ -65,11 +65,11 @@ export async function extractTablesFromSummary(params: ExtractSummaryTablesParam
 
 		log.info('Found tables in summary', { articleId, count: tables.length });
 
-		// 2. Get max chart_index for this article (to continue numbering)
+		// 2. Get max chart_index for this content (to continue numbering)
 		const { data: existingCharts } = await supabase
-			.from('article_charts')
+			.from('charts')
 			.select('chart_index')
-			.eq('article_id', articleId)
+			.eq('content_id', articleId)
 			.order('chart_index', { ascending: false })
 			.limit(1);
 
@@ -77,7 +77,7 @@ export async function extractTablesFromSummary(params: ExtractSummaryTablesParam
 
 		// 3. Process each table
 		const chartRecords: Array<{
-			article_id: string;
+			content_id: string;
 			user_id: string;
 			chart_index: number;
 			storage_path: string;
@@ -128,7 +128,7 @@ export async function extractTablesFromSummary(params: ExtractSummaryTablesParam
 				}
 
 				chartRecords.push({
-					article_id: articleId,
+					content_id: articleId,
 					user_id: userId,
 					chart_index: chartIndex,
 					storage_path: storagePath,
@@ -144,10 +144,10 @@ export async function extractTablesFromSummary(params: ExtractSummaryTablesParam
 			}
 		}
 
-		// 4. Insert records into article_charts
+		// 4. Insert records into charts
 		if (chartRecords.length > 0) {
 			const { error: insertError } = await supabase
-				.from('article_charts')
+				.from('charts')
 				.insert(chartRecords);
 
 			if (insertError) {
