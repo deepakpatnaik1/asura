@@ -29,6 +29,8 @@ export interface SaveConversationParams {
 	aiResponse: string;
 	conversationModel: string;
 	persona: string;
+	mode?: 'chat' | 'reader';
+	contentId?: string; // article ID for reader mode
 }
 
 /**
@@ -36,19 +38,27 @@ export interface SaveConversationParams {
  * Does NOT trigger background jobs - caller must do that separately.
  */
 export async function saveToSuperjournal(params: SaveConversationParams): Promise<string | null> {
-	const { userId, message, aiResponse, conversationModel, persona } = params;
+	const { userId, message, aiResponse, conversationModel, persona, mode = 'chat', contentId } = params;
 	const log = createLogger('ChatSave', userId);
 	const supabase = getSupabaseServiceRole();
 
+	const insertData: Record<string, unknown> = {
+		user_id: userId,
+		persona_name: persona,
+		user_message: message,
+		ai_response: aiResponse,
+		model_identifier: conversationModel,
+		mode
+	};
+
+	// Only include content_id for reader mode
+	if (mode === 'reader' && contentId) {
+		insertData.content_id = contentId;
+	}
+
 	const { data: superjournalData, error: dbError } = await supabase
 		.from('superjournal')
-		.insert({
-			user_id: userId,
-			persona_name: persona,
-			user_message: message,
-			ai_response: aiResponse,
-			model_identifier: conversationModel
-		})
+		.insert(insertData)
 		.select('id')
 		.single();
 
@@ -59,7 +69,7 @@ export async function saveToSuperjournal(params: SaveConversationParams): Promis
 
 	const superjournalId = superjournalData?.id || null;
 	if (superjournalId) {
-		log.info('Saved to superjournal', { superjournalId });
+		log.info('Saved to superjournal', { superjournalId, mode });
 	}
 	return superjournalId;
 }

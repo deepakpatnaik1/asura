@@ -148,10 +148,123 @@
 		await saveActiveArticle(articleId);
 	}
 
-	// Q&A Submit Handler (disabled - will be rebuilt with superjournal in Phase 4 chunk)
+	// Load chat history from superjournal
+	async function loadChatHistory(articleId: string) {
+		try {
+			const response = await fetch(`/api/superjournal?content_id=${articleId}&mode=reader`);
+			if (!response.ok) {
+				console.error('[Chat History] Failed to load:', response.statusText);
+				return;
+			}
+
+			const data = await response.json();
+			if (data.entries && Array.isArray(data.entries)) {
+				// Convert superjournal format to chat turns
+				const turns: ChatTurn[] = [];
+				for (const entry of data.entries) {
+					turns.push({ role: 'user', content: entry.user_message });
+					turns.push({ role: 'assistant', content: entry.ai_response });
+				}
+				chatHistory = turns;
+			}
+		} catch (error) {
+			console.error('[Chat History] Error loading:', error);
+		}
+	}
+
+	// Q&A Submit Handler
 	async function handleSubmitQuestion() {
-		// TODO: Phase 4 chunk will rebuild this to use superjournal
-		return;
+		if (!inputMessage.trim() || !currentArticle?.id || isLoadingChat) {
+			return;
+		}
+
+		const userMessage = inputMessage.trim();
+		const articleId = currentArticle.id;
+
+		// Capture chart index at submit time
+		const chartIndexAtSubmit = showLightbox ? selectedChartIndex : null;
+
+		// Clear input immediately
+		inputMessage = '';
+		resetTextareaHeight();
+
+		// Set current user message for display
+		currentUserMessage = userMessage;
+		streamingChatResponse = '';
+		isLoadingChat = true;
+
+		try {
+			const response = await fetch('/api/reader/chat', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					article_id: articleId,
+					message: userMessage,
+					chart_index: chartIndexAtSubmit
+				})
+			});
+
+			if (!response.ok) {
+				const error = await response.json();
+				throw new Error(error.error?.message || 'Chat request failed');
+			}
+
+			// Stream the response
+			const reader = response.body?.getReader();
+			const decoder = new TextDecoder();
+
+			if (reader) {
+				while (true) {
+					const { done, value } = await reader.read();
+					if (done) break;
+
+					const chunk = decoder.decode(value);
+					const lines = chunk.split('\n');
+
+					for (const line of lines) {
+						if (line.startsWith('data: ')) {
+							const data = JSON.parse(line.slice(6));
+
+							if (data.text) {
+								streamingChatResponse += data.text;
+							}
+
+							if (data.done) {
+								// Add completed turn to history
+								chatHistory = [
+									...chatHistory,
+									{ role: 'user', content: userMessage },
+									{ role: 'assistant', content: streamingChatResponse }
+								];
+
+								// Reset streaming state
+								currentUserMessage = null;
+								streamingChatResponse = '';
+								isLoadingChat = false;
+								return;
+							}
+
+							if (data.error) {
+								throw new Error(data.error);
+							}
+						}
+					}
+				}
+			}
+		} catch (error) {
+			console.error('[Q&A] Error:', error);
+
+			// Show error in chat
+			chatHistory = [
+				...chatHistory,
+				{ role: 'user', content: userMessage },
+				{ role: 'assistant', content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}` }
+			];
+
+			currentUserMessage = null;
+			streamingChatResponse = '';
+			isLoadingChat = false;
+		}
 	}
 
 	// Handle Enter key in input
@@ -278,7 +391,8 @@
 					content: ''
 				};
 
-				// TODO: Phase 4 chunk will load chat history from superjournal
+				// Load chat history from superjournal
+				await loadChatHistory(articleId);
 
 				// Load charts for this article
 				await loadCharts(articleId);
