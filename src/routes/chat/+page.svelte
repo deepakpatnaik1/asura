@@ -12,8 +12,8 @@
 	import PersonaDropdown from '$lib/components/PersonaDropdown.svelte';
 	import InputBar from '$lib/components/InputBar.svelte';
 	import ChartCarousel from '$lib/components/reader/ChartCarousel.svelte';
-	import FilePasteArea from '$lib/components/FilePasteArea.svelte';
-	import FileLibrary from '$lib/components/FileLibrary.svelte';
+	import PasteArea from '$lib/components/PasteArea.svelte';
+	import ContentLibrary from '$lib/components/ContentLibrary.svelte';
 
 	// Receive loaded messages from server
 	let { data } = $props();
@@ -507,8 +507,26 @@
 		});
 	}
 
-	function handleFilePasteSuccess(fileId: string, title: string) {
-		console.log('[Files] Saved:', title, fileId);
+	function handleFilePasteSuccess(fileId: string, title: string, content: string, superjournalId?: string) {
+		console.log('[Files] Saved:', title, fileId, superjournalId);
+
+		// Add message to display
+		if (superjournalId) {
+			const now = new Date().toISOString();
+			allMessages = [...allMessages, {
+				id: superjournalId,
+				user_message: `Boss uploaded ${title}`,
+				ai_response: `<!--file:${fileId}-->\n${content}`,
+				persona_name: selectedPersona,
+				created_at: now,
+				formatted_timestamp: formatTimestamp(now),
+				model_identifier: 'file-upload'
+			}];
+
+			// Scroll to bottom to show new content
+			setTimeout(() => scrollToBottom(CHAT_CONFIG), 100);
+		}
+
 		// Refresh file library if it's open
 		if (showFileLibrary) {
 			loadFiles();
@@ -672,9 +690,10 @@
 							<Icon src={LuFolder} size="11" />
 						</button>
 						{#if showFileLibrary}
-						<FileLibrary
-							{files}
-							currentFileId={null}
+						<ContentLibrary
+							mode="chat"
+							items={files}
+							currentItemId={null}
 							isDeleting={isDeletingFile}
 							onToggle={toggleFile}
 							onDelete={handleFileDeleteClick}
@@ -715,7 +734,8 @@
 
 	<!-- File Paste Area -->
 	{#if showFilePaste}
-		<FilePasteArea
+		<PasteArea
+			mode="chat"
 			onClose={() => showFilePaste = false}
 			onSuccess={handleFilePasteSuccess}
 		/>

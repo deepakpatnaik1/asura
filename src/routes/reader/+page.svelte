@@ -8,7 +8,9 @@
 	import MessageGroup from '$lib/components/MessageGroup.svelte';
 	import ConfirmationModal from '$lib/components/ConfirmationModal.svelte';
 	import PersonaDropdown from '$lib/components/PersonaDropdown.svelte';
-	import { ArticlePasteArea, ArticleLibrary, ChartCarousel } from '$lib/components/reader';
+	import { ChartCarousel } from '$lib/components/reader';
+	import ContentLibrary from '$lib/components/ContentLibrary.svelte';
+	import PasteArea from '$lib/components/PasteArea.svelte';
 	import { stripFigureCaptions } from '$lib/utils/strip-metadata';
 
 
@@ -34,12 +36,6 @@
 	let inputMessage = $state('');
 	let textareaRef: HTMLTextAreaElement;
 	let showPasteArea = $state(false);
-	let isProcessing = $state(false);
-	let processingStatus = $state('');
-	let processingError = $state<string | null>(null);
-	let streamingContent = $state('');
-	let currentRetryAttempt = $state(0);
-	let abortController: AbortController | null = null;
 
 	// Canvas carousel state
 	let charts = $state<Array<{ id: string; thumbnail_url: string; full_url: string; alt: string }>>([]);
@@ -56,7 +52,7 @@
 
 	// Article library state
 	let showArticleLibrary = $state(false);
-	let articles = $state<Array<{ id: string; title: string; created_at: string }>>([]);
+	let articles = $state<Array<{ id: string; title: string; is_enabled?: boolean; created_at: string }>>([]);
 
 	// Confirmation composables (replaces manual timer state)
 	const deleteConfirm = createConfirmation();
@@ -118,10 +114,6 @@
 			pendingTimeouts = [];
 			deleteConfirm.cleanup();
 			nukeConfirm.cleanup();
-			if (abortController) {
-				abortController.abort();
-				abortController = null;
-			}
 		};
 	});
 
@@ -129,14 +121,6 @@
 	async function handlePaperclipClick() {
 		showPasteArea = !showPasteArea;
 		if (showPasteArea) {
-			// Clear any existing article and charts
-			currentArticle = null;
-			streamingContent = '';
-			processingError = null;
-			charts = [];
-			chatCharts = [];
-			chatChartsIds = [];
-			chatHistory = [];
 			// Focus the paste area after DOM updates
 			await tick();
 			const pasteArea = document.querySelector('.paste-area') as HTMLElement;
@@ -144,216 +128,31 @@
 		}
 	}
 
-	// Retry utility with exponential backoff
-	async function retryWithBackoff<T>(
-		fn: () => Promise<T>,
-		maxRetries: number = 2,
-		baseDelay: number = 1000,
-		stepName: string = 'Operation'
-	): Promise<T> {
-		let lastError: Error | null = null;
+	// Handle successful paste - display article content
+	async function handlePasteSuccess(articleId: string, title: string, content: string) {
+		// Set as current article
+		currentArticle = {
+			id: articleId,
+			title,
+			content: stripFigureCaptions(content)
+		};
 
-		for (let attempt = 0; attempt <= maxRetries; attempt++) {
-			try {
-				currentRetryAttempt = attempt;
-				return await fn();
-			} catch (error) {
-				lastError = error instanceof Error ? error : new Error(String(error));
+		// Reset Q&A state for new article
+		chatHistory = [];
+		chatCharts = [];
+		chatChartsIds = [];
 
-				if (attempt < maxRetries) {
-					const delay = baseDelay * Math.pow(2, attempt);
-					processingStatus = `${stepName} (Retry ${attempt + 2}/${maxRetries + 1})`;
-					await new Promise(resolve => setTimeout(resolve, delay));
-				}
-			}
-		}
+		// Close paste area
+		showPasteArea = false;
 
-		throw lastError;
-	}
+		// Load charts for this article
+		await loadCharts(articleId);
 
-	// Abort processing
-	async function abortProcessing() {
-		if (abortController) {
-			abortController.abort();
-			abortController = null;
-		}
-		isProcessing = false;
-		processingStatus = '';
+		// Reload articles list to include the new article
+		await loadArticles();
 
-		// If we have a partial article, delete it from database
-		if (currentArticle?.id) {
-			try {
-				await fetch('/api/reader/articles', {
-					method: 'DELETE',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ article_id: currentArticle.id })
-				});
-			} catch (error) {
-				console.error('[Abort] Failed to delete partial article:', error);
-			}
-		}
-
-		// Clear state and return to paste area
-		currentArticle = null;
-		streamingContent = '';
-		processingError = null;
-		showPasteArea = true;
-	}
-
-	// Process article through the pipeline
-	async function processArticle(html: string) {
-		isProcessing = true;
-		processingError = null;
-		streamingContent = '';
-		abortController = new AbortController();
-		currentRetryAttempt = 0;
-
-		try {
-			// Step 1: Upload article and extract title
-			processingStatus = 'Creating article...';
-			const uploadResult = await retryWithBackoff(async () => {
-				const response = await fetch('/api/reader/upload', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ html }),
-					signal: abortController?.signal
-				});
-
-				if (!response.ok) {
-					const error = await response.json();
-					throw new Error(error.error?.message || 'Upload failed');
-				}
-
-				return await response.json();
-			}, 2, 1000, 'Creating article...');
-
-			const articleId = uploadResult.article_id;
-			const articleTitle = uploadResult.title;
-
-			// Step 2: Extract images from HTML
-			processingStatus = 'Extracting images...';
-			await retryWithBackoff(async () => {
-				const response = await fetch('/api/reader/extract-images', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ article_id: articleId, html }),
-					signal: abortController?.signal
-				});
-
-				if (!response.ok) {
-					const error = await response.json();
-					throw new Error(error.error?.message || 'Image extraction failed');
-				}
-
-				return await response.json();
-			}, 2, 1000, 'Extracting images...');
-
-			// Step 3: Process article with AI (streaming)
-			processingStatus = 'Processing with AI...';
-
-			const response = await fetch('/api/reader/process-article', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ article_id: articleId }),
-				signal: abortController?.signal
-			});
-
-			if (!response.ok) {
-				const error = await response.json();
-				throw new Error(error.error?.message || 'Article processing failed');
-			}
-
-			// Stream the response
-			const reader = response.body?.getReader();
-			const decoder = new TextDecoder();
-
-			if (reader) {
-				while (true) {
-					// Check if aborted
-					if (abortController?.signal.aborted) {
-						reader.cancel();
-						throw new Error('Processing cancelled by user');
-					}
-
-					const { done, value } = await reader.read();
-					if (done) break;
-
-					const chunk = decoder.decode(value);
-					const lines = chunk.split('\n');
-
-					for (const line of lines) {
-						if (line.startsWith('data: ')) {
-							const data = JSON.parse(line.slice(6));
-
-							if (data.text) {
-								// First text chunk arrives - Samara starts speaking
-								if (streamingContent.length === 0) {
-									showPasteArea = false; // Hide paste area now that content is streaming
-									isProcessing = false;
-									processingStatus = '';
-								}
-								streamingContent += data.text;
-							}
-
-							if (data.done) {
-								// Validate streaming content before display
-								if (streamingContent.trim().length === 0) {
-									throw new Error('AI returned empty response');
-								}
-
-								currentArticle = {
-									id: articleId,
-									title: articleTitle,
-									content: stripFigureCaptions(streamingContent)
-								};
-								abortController = null;
-
-								// Load chat history for this article
-								await loadChatHistory(articleId);
-
-								// Load charts for this article
-								await loadCharts(articleId);
-
-								// Reload articles list to include the new article
-								await loadArticles();
-
-								// Save as active article
-								await saveActiveArticle(articleId);
-
-								return;
-							}
-
-							if (data.error) {
-								throw new Error(data.error);
-							}
-						}
-					}
-				}
-			}
-
-		} catch (error) {
-			console.error('[Pipeline] Error:', error);
-
-			// Handle abort separately
-			if (error instanceof Error && error.name === 'AbortError') {
-				processingError = 'Processing cancelled by user';
-			} else {
-				processingError = error instanceof Error ? error.message : 'Unknown error';
-			}
-
-			isProcessing = false;
-			processingStatus = '';
-			showPasteArea = true; // Show paste area again on error
-			abortController = null;
-		}
-	}
-
-	// Retry manually after error
-	function retryProcessing() {
-		const pasteArea = document.querySelector('.paste-area') as HTMLElement;
-		if (pasteArea && pasteArea.innerHTML) {
-			processArticle(pasteArea.innerHTML);
-		}
+		// Save as active article
+		await saveActiveArticle(articleId);
 	}
 
 	// Load chat history from database
@@ -526,7 +325,7 @@
 
 	// Auto-focus paste area when window regains focus
 	function handleWindowFocus() {
-		if (showPasteArea && !isProcessing) {
+		if (showPasteArea) {
 			const pasteArea = document.querySelector('.paste-area') as HTMLElement;
 			pasteArea?.focus();
 		}
@@ -557,6 +356,34 @@
 			}
 		} catch (error) {
 			console.error('[Articles] Error loading:', error);
+		}
+	}
+
+	// Toggle article context inclusion
+	async function toggleArticle(articleId: string, currentState: boolean) {
+		// Optimistic update
+		articles = articles.map((a) =>
+			a.id === articleId ? { ...a, is_enabled: !currentState } : a
+		);
+
+		try {
+			const response = await fetch(`/api/reader/articles/${articleId}`, {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ is_enabled: !currentState })
+			});
+
+			if (!response.ok) {
+				// Revert on failure
+				articles = articles.map((a) =>
+					a.id === articleId ? { ...a, is_enabled: currentState } : a
+				);
+			}
+		} catch (error) {
+			// Revert on failure
+			articles = articles.map((a) =>
+				a.id === articleId ? { ...a, is_enabled: currentState } : a
+			);
 		}
 	}
 
@@ -760,21 +587,18 @@
 		<div class="messages-content">
 			<!-- Paste Area Card -->
 			{#if showPasteArea}
-				<ArticlePasteArea
-					{isProcessing}
-					{processingStatus}
-					{processingError}
-					onPaste={processArticle}
-					onAbort={abortProcessing}
-					onRetry={retryProcessing}
+				<PasteArea
+					mode="reader"
+					onClose={() => showPasteArea = false}
+					onSuccess={handlePasteSuccess}
 				/>
 			{/if}
 
 			<!-- Article Display -->
-			{#if currentArticle || streamingContent}
+			{#if currentArticle}
 				<MessageGroup
-					userMessage={`Let's explore: ${currentArticle?.title || 'Article'}`}
-					aiResponse={currentArticle?.content || streamingContent}
+					userMessage={`Let's explore: ${currentArticle.title}`}
+					aiResponse={currentArticle.content}
 					personaName="samara"
 					mode="reader"
 				/>
@@ -835,10 +659,12 @@
 
 					<!-- Article Library Dropdown -->
 					{#if showArticleLibrary}
-						<ArticleLibrary
-							{articles}
-							currentArticleId={currentArticle?.id ?? null}
+						<ContentLibrary
+							mode="reader"
+							items={articles}
+							currentItemId={currentArticle?.id ?? null}
 							{isDeleting}
+							onToggle={toggleArticle}
 							onSelect={(id) => switchToArticle(id)}
 							onDelete={handleArticleDeleteClick}
 						/>
@@ -936,112 +762,6 @@
 		gap: var(--message-gap);
 	}
 
-	/* Placeholder content */
-	.placeholder-content {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		height: 60vh;
-		text-align: center;
-	}
-
-	.placeholder-content h1 {
-		color: var(--reader-accent);
-		margin-bottom: 16px;
-	}
-
-	.placeholder-content p {
-		color: hsl(var(--muted-foreground));
-		margin: 8px 0;
-	}
-
-	/* Message Groups */
-	.message-group {
-		position: relative;
-		margin-bottom: 16px;
-	}
-
-	/* Boss Message - with background card (uses reader accent bg) */
-	.boss-message {
-		background: var(--reader-bg);
-		padding: var(--boss-card-padding-y) var(--boss-card-padding-x);
-		margin-left: var(--boss-card-margin-x);
-		margin-right: var(--boss-card-margin-x);
-		border-radius: var(--boss-card-border-radius);
-		position: relative;
-	}
-
-	/* AI Message - no background */
-	.ai-message {
-		position: relative;
-		padding: var(--message-padding-y) var(--boss-card-padding-x);
-	}
-
-	/* Message Header */
-	.message-header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		margin-bottom: 12px;
-		position: relative;
-	}
-
-	/* Message Labels */
-	.message-label {
-		font-weight: 500;
-		color: hsl(var(--chat-label));
-		display: block;
-		width: 100%;
-		padding-bottom: 2px;
-	}
-
-	.boss-label {
-		color: var(--reader-accent);
-		border-bottom: 1px solid var(--reader-accent);
-		position: relative;
-		top: -1px;
-	}
-
-	.ai-label {
-		color: hsl(var(--foreground));
-		border-bottom: 1px solid hsl(var(--border));
-	}
-
-	/* Message Text */
-	.message-text {
-		line-height: 1.6;
-		color: hsl(var(--foreground));
-		white-space: normal;
-	}
-
-	/* Loading animation for thinking dots */
-	.loading-text {
-		color: hsl(var(--muted-foreground));
-	}
-
-	.dots span {
-		animation: blink 1.4s infinite;
-		animation-fill-mode: both;
-	}
-
-	.dots span:nth-child(2) {
-		animation-delay: 0.2s;
-	}
-
-	.dots span:nth-child(3) {
-		animation-delay: 0.4s;
-	}
-
-	@keyframes blink {
-		0%, 80%, 100% {
-			opacity: 0;
-		}
-		40% {
-			opacity: 1;
-		}
-	}
-
 	/* Input Area - reader mode styling */
 	.input-area {
 		grid-area: input;
@@ -1090,31 +810,6 @@
 
 	.control-btn:hover {
 		opacity: 1;
-	}
-
-	.persona-dropdown {
-		display: flex;
-		align-items: center;
-		gap: 4px;
-		margin-left: 4px;
-		cursor: pointer;
-		opacity: 0.7;
-		transition: opacity 0.2s;
-		padding: 4px;
-		flex-shrink: 0;
-	}
-
-	.persona-dropdown:hover {
-		opacity: 1;
-	}
-
-	.persona-name {
-		font-size: 1em;
-		color: hsl(var(--foreground));
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		max-width: 80px;
 	}
 
 	.icon-group {

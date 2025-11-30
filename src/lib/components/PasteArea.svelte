@@ -1,21 +1,28 @@
 <script lang="ts">
 	/**
-	 * FilePasteArea - Content-editable paste area for chat mode files
+	 * PasteArea - Unified paste area for chat and reader modes
 	 *
-	 * Handles paste events, calls /api/chat/files, auto-closes on success.
+	 * Accepts HTML (Firefox Reader Mode) or plain text (markdown, Claude docs).
+	 * Toggle controls ephemeral vs persistent storage treatment.
 	 */
 
 	interface Props {
+		mode: 'chat' | 'reader';
 		onClose: () => void;
-		onSuccess: (fileId: string, title: string) => void;
+		onSuccess: (id: string, title: string, content: string, superjournalId?: string) => void;
 	}
 
-	let { onClose, onSuccess }: Props = $props();
+	let { mode, onClose, onSuccess }: Props = $props();
 
+	// Chat defaults to persistent, reader defaults to ephemeral
+	let isPersistent = $state(mode === 'chat');
 	let isProcessing = $state(false);
 	let processingStatus = $state('');
 	let processingError = $state<string | null>(null);
-	let pastedHtml = $state('');
+	let pastedContent = $state('');
+
+	const placeholder = mode === 'chat' ? 'Paste content here...' : 'Paste article here...';
+	const accentVar = mode === 'chat' ? 'var(--boss-accent)' : 'var(--reader-accent)';
 
 	async function handlePaste(event: ClipboardEvent) {
 		event.preventDefault();
@@ -27,10 +34,11 @@
 		if (!content) return;
 
 		// Store for retry
-		pastedHtml = content;
+		pastedContent = content;
 
 		// Display cleaned version
-		if (html) {
+		const pasteArea = event.target as HTMLElement;
+		if (html && pasteArea) {
 			const temp = document.createElement('div');
 			temp.innerHTML = html;
 			temp.querySelectorAll('*').forEach((el) => {
@@ -38,27 +46,30 @@
 				el.removeAttribute('color');
 				el.removeAttribute('bgcolor');
 			});
-			const pasteArea = event.target as HTMLElement;
-			if (pasteArea) {
-				pasteArea.innerHTML = temp.innerHTML;
-			}
+			pasteArea.innerHTML = temp.innerHTML;
+		} else if (text && pasteArea) {
+			pasteArea.textContent = text;
 		}
 
-		await processFile(content);
+		await processContent(content);
 	}
 
-	async function processFile(content: string) {
+	async function processContent(content: string) {
 		isProcessing = true;
 		processingStatus = 'Extracting title...';
 		processingError = null;
 
 		try {
-			processingStatus = 'Generating artisan cut...';
+			processingStatus = isPersistent ? 'Generating artisan cut...' : 'Processing...';
 
-			const response = await fetch('/api/chat/files', {
+			const endpoint = mode === 'chat' ? '/api/chat/files' : '/api/reader/upload';
+			const response = await fetch(endpoint, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ content })
+				body: JSON.stringify({
+					content,
+					persistent: isPersistent
+				})
 			});
 
 			if (!response.ok) {
@@ -68,11 +79,15 @@
 
 			const data = await response.json();
 
-			processingStatus = 'Saving file...';
-			await new Promise((r) => setTimeout(r, 300)); // Brief pause for UX
+			processingStatus = 'Saving...';
+			await new Promise((r) => setTimeout(r, 300));
 
 			// Success - close and notify parent
-			onSuccess(data.file_id, data.title);
+			const id = data.file_id || data.article_id || data.id;
+			const title = data.title || 'Untitled';
+			const responseContent = data.content || '';
+			const superjournalId = data.superjournal_id;
+			onSuccess(id, title, responseContent, superjournalId);
 			onClose();
 		} catch (error) {
 			processingError = error instanceof Error ? error.message : 'Upload failed';
@@ -81,8 +96,8 @@
 	}
 
 	function handleRetry() {
-		if (pastedHtml) {
-			processFile(pastedHtml);
+		if (pastedContent) {
+			processContent(pastedContent);
 		}
 	}
 
@@ -93,7 +108,7 @@
 	}
 </script>
 
-<div class="paste-box" class:has-error={processingError}>
+<div class="paste-box" class:has-error={processingError} style="--accent: {accentVar}">
 	{#if isProcessing}
 		<!-- Frosted Glass Overlay -->
 		<div class="processing-overlay"></div>
@@ -127,15 +142,29 @@
 			class="paste-area"
 			contenteditable="true"
 			onpaste={handlePaste}
-			data-placeholder="Paste content here..."
+			data-placeholder={placeholder}
 		></div>
+
+		<!-- Toggle -->
+		<div class="toggle-container">
+			<span class="toggle-label" class:active={!isPersistent}>Ephemeral</span>
+			<button
+				class="toggle-switch"
+				class:on={isPersistent}
+				onclick={() => isPersistent = !isPersistent}
+				aria-label="Toggle persistent mode"
+			>
+				<span class="toggle-knob"></span>
+			</button>
+			<span class="toggle-label" class:active={isPersistent}>Persistent</span>
+		</div>
 	{/if}
 </div>
 
 <style>
 	.paste-box {
 		background: rgb(0, 0, 0);
-		border: 1px solid var(--boss-accent);
+		border: 1px solid var(--accent);
 		padding: var(--boss-card-padding-y) var(--boss-card-padding-x);
 		border-radius: var(--boss-card-border-radius);
 		min-height: 250px;
@@ -198,7 +227,7 @@
 	}
 
 	.processing-status {
-		color: var(--boss-accent);
+		color: var(--accent);
 		font-size: 10pt;
 		font-weight: 500;
 		text-align: center;
@@ -220,7 +249,7 @@
 		position: absolute;
 		width: 2px;
 		height: 10px;
-		background: var(--boss-accent);
+		background: var(--accent);
 		border-radius: 1.5px;
 		top: 5px;
 		left: 50%;
@@ -273,8 +302,8 @@
 
 	.retry-button {
 		background: transparent;
-		color: var(--boss-accent);
-		border: 1px solid var(--boss-accent);
+		color: var(--accent);
+		border: 1px solid var(--accent);
 		border-radius: 6px;
 		padding: 10px 24px;
 		font-weight: 500;
@@ -283,7 +312,7 @@
 	}
 
 	.retry-button:hover {
-		background: var(--boss-accent);
+		background: var(--accent);
 		color: hsl(var(--background));
 	}
 
@@ -300,5 +329,57 @@
 
 	.close-button:hover {
 		opacity: 1;
+	}
+
+	/* Toggle */
+	.toggle-container {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		margin-top: 12px;
+	}
+
+	.toggle-label {
+		font-size: 1em;
+		color: hsl(var(--foreground));
+		opacity: 0.4;
+		transition: opacity 0.2s;
+	}
+
+	.toggle-label.active {
+		opacity: 1;
+	}
+
+	.toggle-switch {
+		position: relative;
+		width: 22px;
+		height: 12px;
+		background: hsl(var(--border));
+		border: 1px solid hsl(var(--foreground));
+		border-radius: 6px;
+		cursor: pointer;
+		transition: background 0.2s;
+		padding: 0;
+	}
+
+	.toggle-switch.on {
+		background: var(--accent);
+		border-color: var(--accent);
+	}
+
+	.toggle-knob {
+		position: absolute;
+		top: 1px;
+		left: 1px;
+		width: 8px;
+		height: 8px;
+		background: hsl(var(--foreground));
+		border-radius: 50%;
+		transition: transform 0.2s;
+	}
+
+	.toggle-switch.on .toggle-knob {
+		transform: translateX(10px);
+		background: hsl(var(--background));
 	}
 </style>
