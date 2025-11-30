@@ -8,7 +8,7 @@ import { requireAuth } from '$lib/api/require-auth';
  * Fetches a single article's full details for display/switching
  *
  * GET /api/reader/article?article_id={id}
- * Response: { article: { id, title, transformed_content } }
+ * Response: { article: { id, title } }
  */
 export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supabase } }) => {
 	// 1. AUTHENTICATION CHECK
@@ -34,7 +34,7 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supab
 	// 3. FETCH ARTICLE FROM DATABASE
 	const { data: article, error: fetchError } = await supabase
 		.from('articles')
-		.select('id, title, transformed_content')
+		.select('id, title')
 		.eq('id', articleId)
 		.eq('user_id', userId) // RLS check
 		.single();

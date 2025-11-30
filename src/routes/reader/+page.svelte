@@ -411,7 +411,7 @@
 				currentArticle = {
 					id: data.article.id,
 					title: data.article.title,
-					content: stripFigureCaptions(data.article.transformed_content || '')
+					content: ''
 				};
 
 				// Load chat history for this article

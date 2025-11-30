@@ -97,54 +97,31 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 					controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: value })}\n\n`));
 				}
 
-				// 8. EXTRACT PREVIEW SNIPPET (first 100-150 chars)
-				const previewLength = 150;
-				const previewSnippet = fullResponse.substring(0, previewLength).trim();
+				// 8. SIGNAL DONE
+				controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true })}\n\n`));
 
-				// 9. SAVE TO DATABASE
-				const { error: updateError } = await supabase
-					.from('articles')
-					.update({
-						transformed_content: fullResponse,
-						preview_snippet: previewSnippet,
-						status: 'ready'
-					})
-					.eq('id', article_id)
-					.eq('user_id', userId);
+				// 9. BACKGROUND JOBS (don't block response)
+				setTimeout(() => {
+					// Extract tables from AI summary
+					extractTablesFromSummary({
+						articleId: article_id,
+						userId,
+						aiResponse: fullResponse
+					});
 
-				if (updateError) {
-					controller.enqueue(
-						encoder.encode(
-							`data: ${JSON.stringify({ error: 'Failed to save results to database' })}\n\n`
-						)
-					);
-				} else {
-					controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true })}\n\n`));
-
-					// Background jobs (don't block response)
-					setTimeout(() => {
-						// Extract tables from AI summary
-						extractTablesFromSummary({
+					// Update source chart captions from AI response
+					if (chartCount && chartCount > 0) {
+						updateChartCaptions({
 							articleId: article_id,
 							userId,
-							aiResponse: fullResponse
+							aiResponse: fullResponse,
+							chartCount
 						});
-
-						// Update source chart captions from AI response
-						if (chartCount && chartCount > 0) {
-							updateChartCaptions({
-								articleId: article_id,
-								userId,
-								aiResponse: fullResponse,
-								chartCount
-							});
-						}
-					}, 0);
-				}
+					}
+				}, 0);
 
 				controller.close();
 			} catch (error) {
-				// Article remains in 'processing' status on error
 				controller.enqueue(
 					encoder.encode(
 						`data: ${JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' })}\n\n`

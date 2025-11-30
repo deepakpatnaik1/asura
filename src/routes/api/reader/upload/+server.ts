@@ -30,14 +30,13 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 	// 4. EXTRACT ARTICLE TITLE (using file-reader capability)
 	const title = await extractTitleFromHtml(html);
 
-	// 5. CREATE ARTICLE RECORD WITH STATUS = 'processing' AND RAW HTML
+	// 5. CREATE ARTICLE RECORD WITH RAW HTML
 	const { data: article, error: insertError } = await supabase
 		.from('articles')
 		.insert({
 			user_id: userId,
 			title: title,
-			status: 'processing',
-			raw_html: html // Store raw HTML for direct AI processing (no PDF needed)
+			raw_html: html
 		})
 		.select()
 		.single();

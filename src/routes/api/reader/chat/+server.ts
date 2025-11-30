@@ -44,10 +44,10 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 	const log = createLogger('ReaderChat', userId);
 	log.info('Request received', { articleId: article_id, chartIndex: chart_index, messageLength: message.length });
 
-	// 3. FETCH ARTICLE FROM DATABASE (including raw_html)
+	// 3. FETCH ARTICLE FROM DATABASE
 	const { data: article, error: fetchError } = await supabase
 		.from('articles')
-		.select('id, title, raw_html, transformed_content')
+		.select('id, title, raw_html')
 		.eq('id', article_id)
 		.eq('user_id', userId)
 		.single();
@@ -170,7 +170,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				const generator = followupStream({
 					articleTitle: article.title,
 					articleHtml: article.raw_html,
-					previousSummary: article.transformed_content || null,
+					previousSummary: null,
 					chatHistory: history,
 					message,
 					chartImage: chartImageData,

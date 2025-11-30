@@ -12,7 +12,7 @@ import { databaseError } from '$lib/api/errors';
  * DELETE: Delete an article and all related data (including storage files)
  *
  * GET /api/reader/articles
- * Response: { articles: Array<{ id, title, preview_snippet }> }
+ * Response: { articles: Array<{ id, title, created_at }> }
  *
  * DELETE /api/reader/articles
  * Body: { article_id: string }
@@ -35,7 +35,7 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 	// 2. FETCH ARTICLES FROM DATABASE
 	const { data: articles, error: fetchError } = await supabase
 		.from('articles')
-		.select('id, title, preview_snippet, created_at')
+		.select('id, title, created_at')
 		.eq('user_id', userId)
 		.order('created_at', { ascending: false }); // Most recent first
 
