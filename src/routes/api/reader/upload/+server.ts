@@ -28,7 +28,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 	}
 
 	// 4. EXTRACT ARTICLE TITLE (using file-reader capability)
-	const title = extractTitleFromHtml(html);
+	const title = await extractTitleFromHtml(html);
 
 	// 5. CREATE ARTICLE RECORD WITH STATUS = 'processing' AND RAW HTML
 	const { data: article, error: insertError } = await supabase

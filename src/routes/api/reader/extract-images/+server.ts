@@ -3,8 +3,13 @@ import type { RequestHandler } from './$types';
 import { createClient } from '@supabase/supabase-js';
 import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
-import * as cheerio from 'cheerio';
 import sharp from 'sharp';
+
+// Dynamic import to isolate ESM module from cold start bundling
+async function getCheerio() {
+	const cheerio = await import('cheerio');
+	return cheerio;
+}
 import satori from 'satori';
 import { Resvg } from '@resvg/resvg-js';
 import { readFileSync } from 'fs';
@@ -21,7 +26,8 @@ const supabaseStorage = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_
 /**
  * Extracts all <img> tags from HTML and returns their URLs/data
  */
-function extractImages(html: string): Array<{ index: number; src: string; alt: string }> {
+async function extractImages(html: string): Promise<Array<{ index: number; src: string; alt: string }>> {
+	const cheerio = await getCheerio();
 	const $ = cheerio.load(html);
 	const images: Array<{ index: number; src: string; alt: string }> = [];
 
@@ -154,10 +160,11 @@ function extractMarkdownTables(
 /**
  * Extracts all <table> tags from HTML and parses them into structured data
  */
-function extractHtmlTables(
+async function extractHtmlTables(
 	html: string,
 	startIndex: number
-): Array<{ index: number; headers: string[]; rows: string[][] }> {
+): Promise<Array<{ index: number; headers: string[]; rows: string[][] }>> {
+	const cheerio = await getCheerio();
 	const $ = cheerio.load(html);
 	const tables: Array<{ index: number; headers: string[]; rows: string[][] }> = [];
 
@@ -536,7 +543,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		}
 
 		// 4. EXTRACT ALL <img> TAGS
-		const images = extractImages(html);
+		const images = await extractImages(html);
 
 		// 5. PROCESS EACH IMAGE: DOWNLOAD, GENERATE THUMBNAIL, UPLOAD
 		const chartResults: Array<{
@@ -610,6 +617,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		// Extract plain text from HTML for markdown table detection
 		// Note: $.text() strips whitespace. For content with white-space:pre,
 		// we need to convert block elements to newlines first
+		const cheerio = await getCheerio();
 		const $2 = cheerio.load(html);
 		// Replace closing block tags with newlines to preserve structure
 		$2('div, p, br, tr, li').each((_, el) => {
@@ -619,7 +627,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		console.log('[ExtractImages] Plain text length:', plainText.length);
 		console.log('[ExtractImages] Plain text preview:', plainText.substring(0, 500));
 
-		const htmlTables = extractHtmlTables(html, images.length);
+		const htmlTables = await extractHtmlTables(html, images.length);
 		const mdTables = extractMarkdownTables(plainText, images.length + htmlTables.length);
 		const tables = [...htmlTables, ...mdTables];
 		console.log('[ExtractImages] Found tables:', { htmlTables: htmlTables.length, mdTables: mdTables.length, total: tables.length });

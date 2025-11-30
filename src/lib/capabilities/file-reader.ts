@@ -3,9 +3,16 @@
  *
  * Handles parsing and content extraction from uploaded documents.
  * Currently supports HTML content with Cheerio.
+ *
+ * Note: Cheerio is dynamically imported to avoid ESM bundling issues
+ * on Vercel serverless functions (parse5 ESM compatibility).
  */
 
-import * as cheerio from 'cheerio';
+// Dynamic import to isolate ESM module from cold start bundling
+async function getCheerio() {
+	const cheerio = await import('cheerio');
+	return cheerio;
+}
 
 /**
  * File reader configuration
@@ -45,13 +52,14 @@ export interface ParsedHtmlResult {
  * @param config - File reader configuration
  * @returns Extracted title
  */
-export function extractTitleFromHtml(
+export async function extractTitleFromHtml(
 	html: string,
 	config: FileReaderConfig = DEFAULT_FILE_READER_CONFIG
-): string {
+): Promise<string> {
 	let title = 'Untitled Article';
 
 	try {
+		const cheerio = await getCheerio();
 		const $ = cheerio.load(html);
 
 		// Try <h1> first
@@ -112,10 +120,10 @@ export function validateHtmlSize(
  * @param config - File reader configuration
  * @returns Parsed result with title and cleaned HTML
  */
-export function parseHtml(
+export async function parseHtml(
 	html: string,
 	config: FileReaderConfig = DEFAULT_FILE_READER_CONFIG
-): ParsedHtmlResult {
+): Promise<ParsedHtmlResult> {
 	const validation = validateHtmlSize(html, config);
 	if (!validation.valid) {
 		return {
@@ -126,7 +134,7 @@ export function parseHtml(
 		};
 	}
 
-	const title = extractTitleFromHtml(html, config);
+	const title = await extractTitleFromHtml(html, config);
 
 	return {
 		title,

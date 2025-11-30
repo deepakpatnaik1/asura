@@ -3,9 +3,16 @@
  *
  * Shared utilities for extracting images from HTML, downloading, and generating thumbnails.
  * Used by both reader (article images) and chat (file images) flows.
+ *
+ * Note: Cheerio is dynamically imported to avoid ESM bundling issues
+ * on Vercel serverless functions (parse5 ESM compatibility).
  */
 
-import * as cheerio from 'cheerio';
+// Dynamic import to isolate ESM module from cold start bundling
+async function getCheerio() {
+	const cheerio = await import('cheerio');
+	return cheerio;
+}
 import sharp from 'sharp';
 import { createClient } from '@supabase/supabase-js';
 import { PUBLIC_SUPABASE_URL } from '$env/static/public';
@@ -23,7 +30,8 @@ export interface ExtractedImage {
 /**
  * Extract all <img> tags from HTML
  */
-export function extractImages(html: string): ExtractedImage[] {
+export async function extractImages(html: string): Promise<ExtractedImage[]> {
+	const cheerio = await getCheerio();
 	const $ = cheerio.load(html);
 	const images: ExtractedImage[] = [];
 
@@ -52,7 +60,8 @@ export interface ExtractedHtmlTable {
 /**
  * Extract all <table> tags from HTML and parse into structured data
  */
-export function extractHtmlTables(html: string, startIndex: number): ExtractedHtmlTable[] {
+export async function extractHtmlTables(html: string, startIndex: number): Promise<ExtractedHtmlTable[]> {
+	const cheerio = await getCheerio();
 	const $ = cheerio.load(html);
 	const tables: ExtractedHtmlTable[] = [];
 
@@ -135,7 +144,8 @@ export function extractHtmlTables(html: string, startIndex: number): ExtractedHt
 /**
  * Extract plain text from HTML, preserving newlines for table detection
  */
-export function htmlToPlainText(html: string): string {
+export async function htmlToPlainText(html: string): Promise<string> {
+	const cheerio = await getCheerio();
 	const $ = cheerio.load(html);
 	$('div, p, br, tr, li').each((_, el) => {
 		$(el).after('\n');

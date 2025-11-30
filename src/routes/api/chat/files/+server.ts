@@ -167,7 +167,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		}> = [];
 
 		// 1. Extract <img> tags
-		const images = extractImages(content);
+		const images = await extractImages(content);
 		for (const image of images) {
 			try {
 				const imageBuffer = await downloadImage(image.src);
@@ -192,7 +192,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		}
 
 		// 2. Extract HTML tables
-		const htmlTables = extractHtmlTables(content, images.length);
+		const htmlTables = await extractHtmlTables(content, images.length);
 		for (const table of htmlTables) {
 			try {
 				const { svg, width } = await renderTableToSvg(table.headers, table.rows);
@@ -218,7 +218,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		}
 
 		// 3. Extract markdown tables
-		const plainText = htmlToPlainText(content);
+		const plainText = await htmlToPlainText(content);
 		const mdTables = extractMarkdownTables(plainText, images.length + htmlTables.length);
 		for (const table of mdTables) {
 			try {
