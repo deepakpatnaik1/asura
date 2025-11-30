@@ -4,4 +4,3 @@
 
 export { describeStream, type DescribeParams } from './describe';
 export { followupStream, type FollowupParams } from './followup';
-export { runExtractReaderTablesJob, type ExtractReaderTablesParams } from './extract-tables';

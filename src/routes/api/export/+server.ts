@@ -34,8 +34,6 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 			journalResult,
 			articlesResult,
 			articleChartsResult,
-			articleChatResult,
-			articleChatChartsResult,
 			filesResult,
 			fileChartsResult,
 			settingsResult
@@ -66,16 +64,6 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 				.eq('user_id', userId)
 				.order('created_at', { ascending: false }),
 			supabase
-				.from('article_chat')
-				.select('*')
-				.eq('user_id', userId)
-				.order('created_at', { ascending: false }),
-			supabase
-				.from('article_chat_charts')
-				.select('*')
-				.eq('user_id', userId)
-				.order('created_at', { ascending: false }),
-			supabase
 				.from('files')
 				.select('*')
 				.eq('user_id', userId)
@@ -99,8 +87,6 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 			journalResult.error,
 			articlesResult.error,
 			articleChartsResult.error,
-			articleChatResult.error,
-			articleChatChartsResult.error,
 			filesResult.error,
 			fileChartsResult.error
 		].filter(Boolean);
@@ -123,8 +109,6 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 				journal: journalResult.data || [],
 				articles: articlesResult.data || [],
 				article_charts: articleChartsResult.data || [],
-				article_chat: articleChatResult.data || [],
-				article_chat_charts: articleChatChartsResult.data || [],
 				files: filesResult.data || [],
 				file_charts: fileChartsResult.data || [],
 				settings: settingsResult.data || null
@@ -135,8 +119,6 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 				journal: journalResult.data?.length || 0,
 				articles: articlesResult.data?.length || 0,
 				article_charts: articleChartsResult.data?.length || 0,
-				article_chat: articleChatResult.data?.length || 0,
-				article_chat_charts: articleChatChartsResult.data?.length || 0,
 				files: filesResult.data?.length || 0,
 				file_charts: fileChartsResult.data?.length || 0
 			}

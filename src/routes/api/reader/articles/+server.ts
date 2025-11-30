@@ -21,7 +21,7 @@ import { databaseError } from '$lib/api/errors';
  * DELETE performs full cleanup:
  * 1. Fetches article and related charts to get file paths
  * 2. Deletes files from Supabase Storage
- * 3. Deletes from database (cascade handles article_charts and article_chat)
+ * 3. Deletes from database (cascade handles article_charts)
  *
  * Note: Anthropic Files API files are not deleted - they expire automatically.
  */
@@ -125,7 +125,7 @@ export const DELETE: RequestHandler = async ({ request, locals: { safeGetSession
 		}
 	}
 
-	// 5. DELETE ARTICLE FROM DATABASE (CASCADE handles article_charts and article_chat)
+	// 5. DELETE ARTICLE FROM DATABASE (CASCADE handles article_charts)
 	const { error: deleteError } = await supabase
 		.from('articles')
 		.delete()

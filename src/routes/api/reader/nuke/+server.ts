@@ -9,9 +9,8 @@ import { createLogger } from '$lib/api/logger';
  *
  * POST /api/reader/nuke
  * Deletes all reader mode data for the current user:
- * 1. article_chat_charts (+ storage files)
- * 2. article_charts (+ storage files)
- * 3. articles (cascades to article_chat via FK)
+ * 1. article_charts (+ storage files)
+ * 2. articles
  *
  * Response: { success: true, deleted: number } or { error: { message, code } }
  */
@@ -46,17 +45,7 @@ export const POST: RequestHandler = async ({ locals: { safeGetSession, supabase 
 		log.warn('Failed to fetch article_charts for cleanup', { error: chartsFetchError });
 	}
 
-	// 4. FETCH ALL ARTICLE CHAT CHARTS TO GET FILE PATHS
-	const { data: chatCharts, error: chatChartsFetchError } = await supabase
-		.from('article_chat_charts')
-		.select('storage_path, thumbnail_path')
-		.eq('user_id', userId);
-
-	if (chatChartsFetchError) {
-		log.warn('Failed to fetch article_chat_charts for cleanup', { error: chatChartsFetchError });
-	}
-
-	// 5. COLLECT ALL STORAGE PATHS
+	// 4. COLLECT ALL STORAGE PATHS
 	const pdfPaths: string[] = [];
 	const imagePaths: string[] = [];
 	const thumbnailPaths: string[] = [];
@@ -80,20 +69,7 @@ export const POST: RequestHandler = async ({ locals: { safeGetSession, supabase 
 		}
 	}
 
-	// article_chat_charts use 'articles' bucket (same as superjournal_charts)
-	const articlesBucketPaths: string[] = [];
-	if (chatCharts && chatCharts.length > 0) {
-		for (const chart of chatCharts) {
-			if (chart.storage_path) {
-				articlesBucketPaths.push(chart.storage_path);
-			}
-			if (chart.thumbnail_path) {
-				articlesBucketPaths.push(chart.thumbnail_path);
-			}
-		}
-	}
-
-	// 6. DELETE FROM SUPABASE STORAGE
+	// 5. DELETE FROM SUPABASE STORAGE
 	if (pdfPaths.length > 0) {
 		const { error } = await supabase.storage.from('article-pdfs').remove(pdfPaths);
 		if (error) log.warn('Failed to delete PDFs from storage', { error });
@@ -109,23 +85,7 @@ export const POST: RequestHandler = async ({ locals: { safeGetSession, supabase 
 		if (error) log.warn('Failed to delete thumbnails from storage', { error });
 	}
 
-	if (articlesBucketPaths.length > 0) {
-		const { error } = await supabase.storage.from('articles').remove(articlesBucketPaths);
-		if (error) log.warn('Failed to delete chat chart files from storage', { error });
-	}
-
-	// 7. DELETE ARTICLE CHAT CHARTS (before article_chat due to FK)
-	const { error: chatChartsError } = await supabase
-		.from('article_chat_charts')
-		.delete()
-		.eq('user_id', userId);
-
-	if (chatChartsError) {
-		log.error('Failed to delete article_chat_charts', { error: chatChartsError });
-		return databaseError('Failed to delete article chat charts');
-	}
-
-	// 8. DELETE ALL ARTICLES FROM DATABASE (CASCADE handles article_charts and article_chat)
+	// 6. DELETE ALL ARTICLES FROM DATABASE (CASCADE handles article_charts)
 	const { error: deleteError } = await supabase
 		.from('articles')
 		.delete()
@@ -137,12 +97,11 @@ export const POST: RequestHandler = async ({ locals: { safeGetSession, supabase 
 	}
 
 	const articleCount = articles?.length || 0;
-	const storageFilesDeleted = pdfPaths.length + imagePaths.length + thumbnailPaths.length + articlesBucketPaths.length;
+	const storageFilesDeleted = pdfPaths.length + imagePaths.length + thumbnailPaths.length;
 
 	log.info('Reader mode nuke complete', {
 		articles: articleCount,
 		articleCharts: articleCharts?.length || 0,
-		chatCharts: chatCharts?.length || 0,
 		storageFilesDeleted
 	});
 

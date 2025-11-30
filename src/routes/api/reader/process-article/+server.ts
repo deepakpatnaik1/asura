@@ -34,10 +34,10 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 
 	const { article_id } = validation.data;
 
-	// 3. FETCH ARTICLE FROM DATABASE (including raw_html)
+	// 3. FETCH ARTICLE FROM DATABASE
 	const { data: article, error: fetchError } = await supabase
 		.from('articles')
-		.select('id, title, raw_html, status')
+		.select('id, title, raw_html')
 		.eq('id', article_id)
 		.eq('user_id', userId) // RLS check
 		.single();
