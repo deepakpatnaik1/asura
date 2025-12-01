@@ -11,7 +11,7 @@
 	import ConfirmationModal from '$lib/components/ConfirmationModal.svelte';
 	import PersonaDropdown from '$lib/components/PersonaDropdown.svelte';
 	import InputBar from '$lib/components/InputBar.svelte';
-	import ChartCarousel from '$lib/components/reader/ChartCarousel.svelte';
+	import ChartCarousel from '$lib/components/ChartCarousel.svelte';
 	import PasteArea from '$lib/components/PasteArea.svelte';
 	import ContentLibrary from '$lib/components/ContentLibrary.svelte';
 

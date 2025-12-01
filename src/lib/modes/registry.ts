@@ -7,27 +7,24 @@
 
 import type { ModeConfig } from './types';
 import { CHAT_MODE } from './chat';
-import { READER_MODE } from './reader';
 
 /**
  * All registered modes
  */
-export const MODES: ModeConfig[] = [CHAT_MODE, READER_MODE];
+export const MODES: ModeConfig[] = [CHAT_MODE];
 
 /**
  * Mode lookup by ID
  */
 export const MODE_BY_ID: Record<string, ModeConfig> = {
-	chat: CHAT_MODE,
-	reader: READER_MODE
+	chat: CHAT_MODE
 };
 
 /**
  * Mode lookup by route
  */
 export const MODE_BY_ROUTE: Record<string, ModeConfig> = {
-	'/chat': CHAT_MODE,
-	'/reader': READER_MODE
+	'/chat': CHAT_MODE
 };
 
 /**

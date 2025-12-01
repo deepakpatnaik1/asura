@@ -9,7 +9,6 @@ export type { ModeConfig, ModeCapabilities } from './types';
 
 // Mode configurations
 export { CHAT_MODE } from './chat';
-export { READER_MODE } from './reader';
 
 // Registry
 export {
