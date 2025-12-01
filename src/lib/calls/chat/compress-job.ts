@@ -86,32 +86,64 @@ export async function runCompressJob(params: CompressJobParams): Promise<void> {
 			isInstruction: compressionJson.is_instruction
 		});
 
-		// Save to Journal table (without embedding initially)
-		const { data: journalData, error: journalError } = await supabase
+		// Check if placeholder journal row exists (created by star button)
+		const { data: existingJournal } = await supabase
 			.from('journal')
-			.insert({
-				superjournal_id: superjournalId,
-				user_id: userId,
-				persona_name: compressionJson.persona_name || personaName,
-				boss_essence: compressionJson.boss_essence || userMessage,
-				persona_essence: compressionJson.persona_essence || aiResponse,
-				decision_arc_summary: compressionJson.decision_arc_summary || 'No arc generated',
-				salience_score: compressionJson.salience_score || 5,
-				is_starred: false,
-				is_instruction: compressionJson.is_instruction || false,
-				instruction_scope: compressionJson.instruction_scope || null,
-				file_name: null,
-				file_type: null,
-				embedding: null
-			})
-			.select('id')
+			.select('id, is_starred')
+			.eq('superjournal_id', superjournalId)
+			.eq('user_id', userId)
 			.single();
 
-		if (journalError) {
-			throw new Error(`Journal insert failed: ${journalError.message}`);
-		}
+		let journalId: string;
 
-		log.info('Saved to journal', { journalId: journalData.id });
+		if (existingJournal) {
+			// Update existing row (preserve is_starred from placeholder)
+			const { error: updateError } = await supabase
+				.from('journal')
+				.update({
+					persona_name: compressionJson.persona_name || personaName,
+					boss_essence: compressionJson.boss_essence || userMessage,
+					persona_essence: compressionJson.persona_essence || aiResponse,
+					decision_arc_summary: compressionJson.decision_arc_summary || 'No arc generated',
+					salience_score: compressionJson.salience_score || 5,
+					is_instruction: compressionJson.is_instruction || false,
+					instruction_scope: compressionJson.instruction_scope || null
+				})
+				.eq('id', existingJournal.id);
+
+			if (updateError) {
+				throw new Error(`Journal update failed: ${updateError.message}`);
+			}
+			journalId = existingJournal.id;
+			log.info('Updated existing journal', { journalId, wasStarred: existingJournal.is_starred });
+		} else {
+			// Insert new row
+			const { data: journalData, error: journalError } = await supabase
+				.from('journal')
+				.insert({
+					superjournal_id: superjournalId,
+					user_id: userId,
+					persona_name: compressionJson.persona_name || personaName,
+					boss_essence: compressionJson.boss_essence || userMessage,
+					persona_essence: compressionJson.persona_essence || aiResponse,
+					decision_arc_summary: compressionJson.decision_arc_summary || 'No arc generated',
+					salience_score: compressionJson.salience_score || 5,
+					is_starred: false,
+					is_instruction: compressionJson.is_instruction || false,
+					instruction_scope: compressionJson.instruction_scope || null,
+					file_name: null,
+					file_type: null,
+					embedding: null
+				})
+				.select('id')
+				.single();
+
+			if (journalError) {
+				throw new Error(`Journal insert failed: ${journalError.message}`);
+			}
+			journalId = journalData.id;
+			log.info('Saved to journal', { journalId });
+		}
 
 		// Generate embedding for decision_arc_summary
 		const decisionArc = compressionJson.decision_arc_summary || 'No arc generated';
@@ -128,16 +160,16 @@ export async function runCompressJob(params: CompressJobParams): Promise<void> {
 		}
 
 		// Update Journal row with embedding
-		const { error: updateError } = await supabase
+		const { error: embeddingError } = await supabase
 			.from('journal')
 			.update({ embedding: JSON.stringify(embedding) })
-			.eq('id', journalData.id);
+			.eq('id', journalId);
 
-		if (updateError) {
-			throw new Error(`Embedding update failed: ${updateError.message}`);
+		if (embeddingError) {
+			throw new Error(`Embedding update failed: ${embeddingError.message}`);
 		}
 
-		log.info('Embedding saved', { journalId: journalData.id });
+		log.info('Embedding saved', { journalId });
 	};
 
 	try {
