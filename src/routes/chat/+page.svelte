@@ -872,7 +872,7 @@
 		gap: var(--action-icon-gap);
 		margin-bottom: 0px;
 		flex-wrap: nowrap;
-		overflow-x: auto;
+		overflow: visible;
 	}
 
 	.folder-wrapper {
