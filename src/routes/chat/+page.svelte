@@ -552,34 +552,7 @@
 		await loadFileCharts();
 	}
 
-	// Chart pin/dismiss handlers
-	async function handleChartPinToggle(chartId: string, isPinned: boolean) {
-		// Optimistic update
-		allCharts = allCharts.map((c) =>
-			c.id === chartId ? { ...c, is_pinned: isPinned } : c
-		);
-
-		try {
-			const response = await fetch(`/api/superjournal/charts/${chartId}`, {
-				method: 'PUT',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ is_pinned: isPinned })
-			});
-
-			if (!response.ok) {
-				// Revert on failure
-				allCharts = allCharts.map((c) =>
-					c.id === chartId ? { ...c, is_pinned: !isPinned } : c
-				);
-			}
-		} catch (error) {
-			// Revert on failure
-			allCharts = allCharts.map((c) =>
-				c.id === chartId ? { ...c, is_pinned: !isPinned } : c
-			);
-		}
-	}
-
+	// Chart delete handler
 	function handleChartDeleteClick(chartId: string) {
 		chartDeleteConfirm.start(chartId, async () => {
 			// Close lightbox if deleted chart was selected
@@ -825,8 +798,7 @@
 		charts={allCharts}
 		bind:selectedChartIndex
 		bind:showLightbox
-		enablePinDelete={true}
-		onPinToggle={handleChartPinToggle}
+		enableDelete={true}
 		onDelete={handleChartDeleteClick}
 	/>
 

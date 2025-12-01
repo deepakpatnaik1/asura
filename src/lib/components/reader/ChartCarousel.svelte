@@ -8,24 +8,21 @@
 	 */
 
 	import { Icon } from 'svelte-icons-pack';
-	import { LuPin, LuTrash2 } from 'svelte-icons-pack/lu';
+	import { LuTrash2 } from 'svelte-icons-pack/lu';
 
 	interface Chart {
 		id: string;
 		thumbnail_url: string;
 		full_url: string;
 		alt: string;
-		is_pinned?: boolean;
 	}
 
 	interface Props {
 		charts: Chart[];
 		selectedChartIndex?: number | null;
 		showLightbox?: boolean;
-		/** Enable pin/delete controls (for chat mode) */
-		enablePinDelete?: boolean;
-		/** Callback when chart is pinned/unpinned */
-		onPinToggle?: (chartId: string, isPinned: boolean) => void;
+		/** Enable delete controls (for chat mode) */
+		enableDelete?: boolean;
 		/** Callback when chart is deleted */
 		onDelete?: (chartId: string) => void;
 	}
@@ -34,8 +31,7 @@
 		charts,
 		selectedChartIndex = $bindable(null),
 		showLightbox = $bindable(false),
-		enablePinDelete = false,
-		onPinToggle,
+		enableDelete = false,
 		onDelete
 	}: Props = $props();
 
@@ -56,13 +52,6 @@
 			selectedChartIndex = selectedChartIndex > 0 ? selectedChartIndex - 1 : charts.length - 1;
 		} else {
 			selectedChartIndex = selectedChartIndex < charts.length - 1 ? selectedChartIndex + 1 : 0;
-		}
-	}
-
-	function handlePinClick(event: MouseEvent, chart: Chart) {
-		event.stopPropagation();
-		if (onPinToggle) {
-			onPinToggle(chart.id, !chart.is_pinned);
 		}
 	}
 
@@ -99,19 +88,11 @@
 						<span class="chart-counter">{selectedChartIndex + 1} / {charts.length}</span>
 						<span class="chart-title">{charts[selectedChartIndex].alt}</span>
 					</div>
-					{#if enablePinDelete}
+					{#if enableDelete}
 						<div class="chart-view-actions">
 							<button
-								class="chart-action-btn"
-								class:active={charts[selectedChartIndex].is_pinned}
-								onclick={(e) => handlePinClick(e, charts[selectedChartIndex])}
-								title={charts[selectedChartIndex].is_pinned ? 'Unpin' : 'Pin'}
-							>
-								<Icon src={LuPin} size="14" />
-							</button>
-							<button
 								class="chart-action-btn delete"
-								onclick={(e) => handleDeleteClick(e, charts[selectedChartIndex])}
+								onclick={(e) => handleDeleteClick(e, charts[selectedChartIndex!])}
 								title="Delete"
 							>
 								<Icon src={LuTrash2} size="14" />
@@ -146,7 +127,6 @@
 					<button
 						class="chart-thumbnail"
 						class:active={isActive}
-						class:pinned={chart.is_pinned}
 						onclick={() => isActive ? closeLightbox() : openLightbox(index)}
 						title={isActive ? "Collapse (Esc)" : chart.alt}
 					>
@@ -163,16 +143,8 @@
 							{/if}
 						</div>
 					</button>
-					{#if enablePinDelete}
+					{#if enableDelete}
 						<div class="thumbnail-actions">
-							<button
-								class="thumbnail-action-btn"
-								class:active={chart.is_pinned}
-								onclick={(e) => handlePinClick(e, chart)}
-								title={chart.is_pinned ? 'Unpin' : 'Pin'}
-							>
-								<Icon src={LuPin} size="11" />
-							</button>
 							<button
 								class="thumbnail-action-btn delete"
 								onclick={(e) => handleDeleteClick(e, chart)}
@@ -252,11 +224,6 @@
 		outline-offset: 2px;
 	}
 
-	.chart-thumbnail.pinned {
-		outline: 1px solid var(--boss-accent);
-		outline-offset: 1px;
-	}
-
 	.chart-thumbnail img {
 		height: 100%;
 		width: auto;
@@ -320,10 +287,6 @@
 	.thumbnail-action-btn:hover {
 		background: hsl(var(--accent));
 		color: hsl(var(--foreground));
-	}
-
-	.thumbnail-action-btn.active {
-		color: var(--boss-accent);
 	}
 
 	.thumbnail-action-btn.delete:hover {
@@ -393,12 +356,6 @@
 	.chart-action-btn:hover {
 		background: hsl(var(--accent));
 		color: hsl(var(--foreground));
-	}
-
-	.chart-action-btn.active {
-		background: var(--boss-accent);
-		border-color: var(--boss-accent);
-		color: black;
 	}
 
 	.chart-action-btn.delete:hover {
