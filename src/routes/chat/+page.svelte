@@ -47,7 +47,9 @@
 	let textareaRef: HTMLTextAreaElement;
 
 	// User settings state
-	let selectedPersona = $state<'gunnar' | 'kirby'>(DEFAULT_PERSONA);
+	const PERSONAS = ['gunnar', 'kirby'] as const;
+	type Persona = (typeof PERSONAS)[number];
+	let selectedPersona = $state<Persona>(DEFAULT_PERSONA);
 
 	// File paste and library state
 	let showFilePaste = $state(false);
@@ -213,12 +215,13 @@
 		}
 	});
 
-	// Behavior 2: Toggle persona dropdown and insert name in input
-	async function togglePersona() {
-		selectedPersona = selectedPersona === 'gunnar' ? 'kirby' : 'gunnar';
+	// Behavior 2: Select persona from dropdown and insert name in input
+	async function selectPersona(persona: string) {
+		if (!PERSONAS.includes(persona as Persona)) return;
+		selectedPersona = persona as Persona;
 
 		// Insert persona name into input field
-		const name = selectedPersona.charAt(0).toUpperCase() + selectedPersona.slice(1);
+		const name = persona.charAt(0).toUpperCase() + persona.slice(1);
 		inputMessage = `${name}, ${inputMessage}`;
 
 		// Write to database - only update persona, preserve model settings
@@ -724,7 +727,8 @@
 
 					<PersonaDropdown
 						selectedPersona={selectedPersona}
-						onClick={() => togglePersona()}
+						personas={PERSONAS}
+						onSelect={selectPersona}
 					/>
 
 					<div class="icon-group">
