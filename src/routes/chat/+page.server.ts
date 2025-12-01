@@ -56,16 +56,18 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession, supabase 
 		.map((j) => j.superjournal_id)
 		.filter((id): id is string => id !== null);
 
-	// Fetch all journal superjournal_ids to find orphans
-	const { data: allJournals } = await monitor.track('fetchJournalIds', async () =>
+	// Only fetch journal records for superjournal IDs on current page (not ALL journals)
+	const currentPageIds = (messages || []).map((m) => m.id);
+	const { data: pageJournals } = await monitor.track('fetchJournalIds', async () =>
 		await supabase
 			.from('journal')
 			.select('superjournal_id')
 			.eq('user_id', user!.id)
+			.in('superjournal_id', currentPageIds)
 	);
 
 	const journalSuperjournalIds = new Set(
-		(allJournals || []).map((j) => j.superjournal_id).filter(Boolean)
+		(pageJournals || []).map((j) => j.superjournal_id).filter(Boolean)
 	);
 
 	// Find orphans: superjournal entries older than 10 minutes without journal entries

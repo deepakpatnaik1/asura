@@ -142,19 +142,19 @@
 			// Load charts for existing messages
 			await loadCharts();
 
-			// Trigger orphan recovery for any failed compressions
+			// Trigger orphan recovery in background (non-blocking, parallel)
 			if (data.orphans && data.orphans.length > 0) {
-				for (const orphan of data.orphans) {
-					try {
-						await fetch('/api/chat/compress', {
+				Promise.all(
+					data.orphans.map((orphan) =>
+						fetch('/api/chat/compress', {
 							method: 'POST',
 							headers: { 'Content-Type': 'application/json' },
 							body: JSON.stringify(orphan)
-						});
-					} catch (error) {
-						console.error('[Orphan Recovery] Failed to recover:', orphan.superjournal_id, error);
-					}
-				}
+						}).catch((error) =>
+							console.error('[Orphan Recovery] Failed:', orphan.superjournal_id, error)
+						)
+					)
+				);
 			}
 		})();
 
