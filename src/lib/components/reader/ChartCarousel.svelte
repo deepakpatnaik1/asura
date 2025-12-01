@@ -206,9 +206,9 @@
 	.chart-grid {
 		display: flex;
 		flex-direction: row;
-		gap: 0;
+		gap: 10px;
 		width: 100%;
-		padding: 0;
+		padding: 0 10px;
 		justify-content: center;
 		flex-wrap: nowrap;
 		overflow-x: auto;
@@ -258,9 +258,8 @@
 	}
 
 	.chart-thumbnail img {
-		width: 100%;
 		height: 100%;
-		object-fit: contain;
+		width: auto;
 		background: hsl(var(--background));
 		margin: 0;
 		padding: 0;
