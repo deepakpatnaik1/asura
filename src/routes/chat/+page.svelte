@@ -4,7 +4,7 @@
 	import { currentMessage, isLoading, sendMessage, abortCurrentMessage } from '$lib/stores/chat';
 	import { tick, onMount } from 'svelte';
 	import { DEFAULT_PERSONA } from '$lib/config/personas';
-	import { CHAT_CONFIG, scrollToTurn, scrollToBottom, getTurns } from '$lib/ui/scroll';
+	import { CHAT_CONFIG, scrollToTurn, scrollToLastTurn, getTurns } from '$lib/ui/scroll';
 	import { createConfirmation } from '$lib/composables';
 	import ScrollControls from '$lib/components/ScrollControls.svelte';
 	import MessageGroup from '$lib/components/MessageGroup.svelte';
@@ -259,10 +259,24 @@
 
 	});
 
-	// Scroll to bottom on initial load
-	onMount(() => {
+	// Scroll to last turn on initial load (boss card at top with 24px offset)
+	onMount(async () => {
+		// Disable browser scroll restoration to prevent race condition
+		if ('scrollRestoration' in history) {
+			history.scrollRestoration = 'manual';
+		}
+
 		if (allMessages.length > 0) {
-			scrollToBottom(CHAT_CONFIG);
+			// tick() waits for Svelte to flush reactive updates to DOM
+			// requestAnimationFrame waits for browser layout/paint
+			await tick();
+			requestAnimationFrame(() => {
+				const turns = getTurns(CHAT_CONFIG);
+				if (turns.length > 0) {
+					// Use instant scroll on page load (can't be interrupted by browser)
+					scrollToTurn(CHAT_CONFIG, turns[turns.length - 1], { behavior: 'instant' });
+				}
+			});
 		}
 	});
 
@@ -533,8 +547,8 @@
 				model_identifier: 'file-upload'
 			}];
 
-			// Scroll to bottom to show new content
-			setTimeout(() => scrollToBottom(CHAT_CONFIG), 100);
+			// Scroll to new turn (boss card at top with 24px offset)
+			setTimeout(() => scrollToLastTurn(CHAT_CONFIG), 100);
 		}
 
 		// Refresh file library if it's open
