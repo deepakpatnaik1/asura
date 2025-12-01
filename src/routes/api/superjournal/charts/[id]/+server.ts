@@ -94,7 +94,7 @@ export const DELETE: RequestHandler = async ({ params, locals: { safeGetSession,
 	}
 
 	const { error: storageError } = await supabase.storage
-		.from('articles')
+		.from('content')
 		.remove(filesToDelete);
 
 	if (storageError) {

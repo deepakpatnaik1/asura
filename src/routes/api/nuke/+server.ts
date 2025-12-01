@@ -44,16 +44,15 @@ export const POST: RequestHandler = async ({ locals: { safeGetSession, supabase 
 			.eq('content.mode', 'chat');
 
 		// 3. COLLECT STORAGE PATHS
-		const articlesBucketPaths: string[] = []; // superjournal charts use 'articles' bucket
-		const filesBucketPaths: string[] = []; // file charts use 'files' bucket
+		const storagePaths: string[] = [];
 
 		if (superjournalCharts && superjournalCharts.length > 0) {
 			for (const chart of superjournalCharts) {
 				if (chart.storage_path) {
-					articlesBucketPaths.push(chart.storage_path);
+					storagePaths.push(chart.storage_path);
 				}
 				if (chart.thumbnail_path) {
-					articlesBucketPaths.push(chart.thumbnail_path);
+					storagePaths.push(chart.thumbnail_path);
 				}
 			}
 		}
@@ -61,30 +60,21 @@ export const POST: RequestHandler = async ({ locals: { safeGetSession, supabase 
 		if (fileCharts && fileCharts.length > 0) {
 			for (const chart of fileCharts) {
 				if (chart.storage_path) {
-					filesBucketPaths.push(chart.storage_path);
+					storagePaths.push(chart.storage_path);
 				}
 				if (chart.thumbnail_path) {
-					filesBucketPaths.push(chart.thumbnail_path);
+					storagePaths.push(chart.thumbnail_path);
 				}
 			}
 		}
 
 		// 4. DELETE FROM SUPABASE STORAGE
-		if (articlesBucketPaths.length > 0) {
+		if (storagePaths.length > 0) {
 			const { error: storageError } = await supabase.storage
-				.from('articles')
-				.remove(articlesBucketPaths);
+				.from('content')
+				.remove(storagePaths);
 			if (storageError) {
-				log.warn('Failed to delete superjournal chart files', { error: storageError });
-			}
-		}
-
-		if (filesBucketPaths.length > 0) {
-			const { error: storageError } = await supabase.storage
-				.from('files')
-				.remove(filesBucketPaths);
-			if (storageError) {
-				log.warn('Failed to delete file chart files', { error: storageError });
+				log.warn('Failed to delete chart files from storage', { error: storageError });
 			}
 		}
 
@@ -138,7 +128,7 @@ export const POST: RequestHandler = async ({ locals: { safeGetSession, supabase 
 		log.info('Chat mode nuke complete', {
 			superjournalCharts: superjournalCharts?.length || 0,
 			fileCharts: fileCharts?.length || 0,
-			storageFilesDeleted: articlesBucketPaths.length + filesBucketPaths.length
+			storageFilesDeleted: storagePaths.length
 		});
 
 		return json({
@@ -147,7 +137,7 @@ export const POST: RequestHandler = async ({ locals: { safeGetSession, supabase 
 			deleted: {
 				superjournal_charts: superjournalCharts?.length || 0,
 				file_charts: fileCharts?.length || 0,
-				storage_files: articlesBucketPaths.length + filesBucketPaths.length
+				storage_files: storagePaths.length
 			}
 		});
 	} catch (error) {
