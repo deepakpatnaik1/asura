@@ -109,22 +109,6 @@
 </script>
 
 <div class="paste-box" class:has-error={processingError} style="--accent: {accentVar}">
-	{#if isProcessing}
-		<!-- Frosted Glass Overlay -->
-		<div class="processing-overlay"></div>
-		<div class="spinner-container">
-			<div class="spinner">
-				{#each Array(12) as _, i}
-					<div class="spinner-bar" style="--bar-index: {i}"></div>
-				{/each}
-			</div>
-			{#if processingStatus}
-				<div class="processing-status">{processingStatus}</div>
-			{/if}
-			<button class="abort-button" onclick={handleAbort}>Cancel</button>
-		</div>
-	{/if}
-
 	{#if processingError}
 		<!-- Error State -->
 		<div class="error-container">
@@ -136,28 +120,46 @@
 				<button class="close-button" onclick={onClose}>Close</button>
 			</div>
 		</div>
-	{:else if !isProcessing}
-		<!-- Paste Area -->
+	{:else}
+		<!-- Paste Area - always visible, content shows through overlay -->
 		<div
 			class="paste-area"
-			contenteditable="true"
+			contenteditable={!isProcessing}
 			onpaste={handlePaste}
 			data-placeholder={placeholder}
 		></div>
 
-		<!-- Toggle -->
-		<div class="toggle-container">
-			<span class="toggle-label" class:active={!isPersistent}>Ephemeral</span>
-			<button
-				class="toggle-switch"
-				class:on={isPersistent}
-				onclick={() => isPersistent = !isPersistent}
-				aria-label="Toggle persistent mode"
-			>
-				<span class="toggle-knob"></span>
-			</button>
-			<span class="toggle-label" class:active={isPersistent}>Persistent</span>
-		</div>
+		<!-- Toggle - hidden during processing -->
+		{#if !isProcessing}
+			<div class="toggle-container">
+				<span class="toggle-label" class:active={!isPersistent}>Ephemeral</span>
+				<button
+					class="toggle-switch"
+					class:on={isPersistent}
+					onclick={() => isPersistent = !isPersistent}
+					aria-label="Toggle persistent mode"
+				>
+					<span class="toggle-knob"></span>
+				</button>
+				<span class="toggle-label" class:active={isPersistent}>Persistent</span>
+			</div>
+		{/if}
+
+		<!-- Processing Overlay - shows on top of content -->
+		{#if isProcessing}
+			<div class="processing-overlay"></div>
+			<div class="spinner-container">
+				<div class="spinner">
+					{#each Array(12) as _, i}
+						<div class="spinner-bar" style="--bar-index: {i}"></div>
+					{/each}
+				</div>
+				{#if processingStatus}
+					<div class="processing-status">{processingStatus}</div>
+				{/if}
+				<button class="abort-button" onclick={handleAbort}>Cancel</button>
+			</div>
+		{/if}
 	{/if}
 </div>
 
@@ -201,15 +203,15 @@
 		line-height: 1.6 !important;
 	}
 
-	/* Processing Overlay */
+	/* Processing Overlay - translucent so content shows through */
 	.processing-overlay {
 		position: absolute;
 		top: 0;
 		left: 0;
 		right: 0;
 		bottom: 0;
-		background: rgba(0, 0, 0, 0.7);
-		backdrop-filter: blur(8px);
+		background: rgba(0, 0, 0, 0.5);
+		backdrop-filter: blur(10px);
 		border-radius: var(--boss-card-border-radius);
 		z-index: 25;
 	}

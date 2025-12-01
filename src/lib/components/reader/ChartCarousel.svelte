@@ -133,12 +133,12 @@
 						<img src={chart.thumbnail_url} alt={chart.alt} />
 						<div class="chart-overlay">
 							{#if isActive}
-								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-									<path d="M4 14h6v6M20 10h-6V4M10 14l-7 7M14 10l7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+								<svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+									<path d="M4 14h6v6M20 10h-6V4M10 14l-7 7M14 10l7-7" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
 								</svg>
 							{:else}
-								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-									<path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+								<svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+									<path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
 								</svg>
 							{/if}
 						</div>
@@ -241,9 +241,12 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
+		width: 28px;
+		height: 28px;
+		border-radius: 50%;
+		background: var(--reader-accent);
 		opacity: 0;
 		transition: opacity 0.2s ease;
-		color: var(--reader-accent);
 	}
 
 	.chart-thumbnail:hover .chart-overlay,
