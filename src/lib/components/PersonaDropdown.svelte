@@ -29,8 +29,9 @@
 
 	const displayName = $derived(capitalize(selectedPersona));
 
-	function handleToggle() {
+	function handleToggle(event: Event) {
 		if (interactive) {
+			event.stopPropagation();
 			isOpen = !isOpen;
 		}
 	}
@@ -56,7 +57,7 @@
 		class:interactive
 		class:open={isOpen}
 		onclick={handleToggle}
-		onkeydown={(e) => e.key === 'Enter' && handleToggle()}
+		onkeydown={(e) => e.key === 'Enter' && handleToggle(e)}
 		role={interactive ? 'button' : undefined}
 		tabindex={interactive ? 0 : undefined}
 	>
