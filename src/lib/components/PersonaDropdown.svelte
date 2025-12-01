@@ -118,12 +118,13 @@
 
 	.dropdown-menu {
 		position: absolute;
-		top: 100%;
+		bottom: 100%;
 		left: 0;
+		margin-bottom: 4px;
 		background: hsl(var(--background));
 		border: 1px solid hsl(var(--border));
 		border-radius: 6px;
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+		box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.3);
 		min-width: 120px;
 		z-index: 100;
 		overflow: hidden;
