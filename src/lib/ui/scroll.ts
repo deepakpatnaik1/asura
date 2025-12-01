@@ -113,6 +113,9 @@ export function getTurnNavigationState(config: ScrollConfig): {
 /**
  * Scroll to position a specific turn's boss card at top + 40px offset.
  * Manages spacer for last turn edge case.
+ *
+ * Note: Uses 'instant' by default because 'smooth' gets interrupted by
+ * focus management (handleGlobalClick/refocusInput) on button clicks.
  */
 export function scrollToTurn(
 	config: ScrollConfig,
@@ -133,7 +136,7 @@ export function scrollToTurn(
 
 	container.scrollTo({
 		top: Math.max(0, targetScrollTop),
-		behavior: options.behavior ?? 'smooth'
+		behavior: options.behavior ?? 'instant'
 	});
 }
 

@@ -4,7 +4,7 @@
 	import { currentMessage, isLoading, sendMessage, abortCurrentMessage } from '$lib/stores/chat';
 	import { tick, onMount } from 'svelte';
 	import { DEFAULT_PERSONA } from '$lib/config/personas';
-	import { CHAT_CONFIG, scrollToTurn, scrollToBottom, getTurns } from '$lib/ui/scroll';
+	import { CHAT_CONFIG, scrollToTurn, scrollToLastTurn, getTurns } from '$lib/ui/scroll';
 	import { createConfirmation } from '$lib/composables';
 	import ScrollControls from '$lib/components/ScrollControls.svelte';
 	import MessageGroup from '$lib/components/MessageGroup.svelte';
@@ -259,10 +259,15 @@
 
 	});
 
-	// Scroll to bottom on initial load
+	// Scroll to last turn on initial load (boss card at top with 24px offset)
+	// Double rAF waits for layout calculation before scrolling
 	onMount(() => {
 		if (allMessages.length > 0) {
-			scrollToBottom(CHAT_CONFIG);
+			requestAnimationFrame(() => {
+				requestAnimationFrame(() => {
+					scrollToLastTurn(CHAT_CONFIG);
+				});
+			});
 		}
 	});
 
