@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { requireAuth } from '$lib/api/require-auth';
 import { databaseError } from '$lib/api/errors';
-import { checkRateLimit, LIMITS } from '$lib/api/rate-limit';
+import { checkRateLimit } from '$lib/api/rate-limit';
 import { createLogger } from '$lib/api/logger';
 
 const EXPORT_SCHEMA_VERSION = '1.0.0';
@@ -19,9 +19,9 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 	const { userId } = auth;
 
 	// 2. RATE LIMIT CHECK
-	const rateLimitResult = checkRateLimit(userId, 'export', EXPORT_LIMIT);
+	const rateLimitResult = await checkRateLimit(userId, EXPORT_LIMIT, 'export');
 	if (!rateLimitResult.allowed) {
-		return rateLimitResult.response!;
+		return rateLimitResult.error;
 	}
 
 	log.info('Starting data export', { userId });
