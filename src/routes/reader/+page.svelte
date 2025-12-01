@@ -2,7 +2,7 @@
 	import { onMount, tick } from 'svelte';
 	import { Icon } from 'svelte-icons-pack';
 	import { LuPaperclip, LuFolder, LuCloudDownload, LuFlame } from 'svelte-icons-pack/lu';
-	import { READER_CONFIG, scrollToTurn, getTurns } from '$lib/ui/scroll';
+	import { READER_CONFIG } from '$lib/ui/scroll';
 	import { createConfirmation } from '$lib/composables';
 	import ScrollControls from '$lib/components/ScrollControls.svelte';
 	import MessageGroup from '$lib/components/MessageGroup.svelte';
@@ -95,11 +95,6 @@
 
 	// Load initial data on mount
 	onMount(() => {
-		// Disable browser scroll restoration to prevent race condition
-		if ('scrollRestoration' in history) {
-			history.scrollRestoration = 'manual';
-		}
-
 		if (typeof window !== 'undefined') {
 			localStorage.setItem('asura_app_mode', 'reader');
 			// Load articles from database
@@ -435,9 +430,8 @@
 				// Save as active article
 				await saveActiveArticle(articleId);
 
-				// Scroll behavior depends on context
+				// Scroll to top (only when manually switching articles, not on initial load)
 				if (scrollToTop) {
-					// Manual article switch: scroll to top to show article from beginning
 					const timeoutId = window.setTimeout(() => {
 						const container = document.querySelector('.reader-container') as HTMLElement | null;
 						if (container) {
@@ -445,19 +439,6 @@
 						}
 					}, 100);
 					pendingTimeouts.push(timeoutId);
-				} else {
-					// Initial load/refresh: scroll to last turn (resume where user left off)
-					// tick() waits for Svelte to flush reactive updates to DOM
-					// requestAnimationFrame waits for browser layout/paint
-					tick().then(() => {
-						requestAnimationFrame(() => {
-							const turns = getTurns(READER_CONFIG);
-							if (turns.length > 0) {
-								// Use instant scroll on page load (can't be interrupted by browser)
-								scrollToTurn(READER_CONFIG, turns[turns.length - 1], { behavior: 'instant' });
-							}
-						});
-					});
 				}
 			}
 		} catch (error) {
