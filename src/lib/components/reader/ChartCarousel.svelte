@@ -416,6 +416,7 @@
 		justify-content: flex-start;
 		padding: 24px;
 		overflow: auto;
+		overscroll-behavior: contain;
 	}
 
 	.chart-view-image img {
