@@ -14,7 +14,7 @@ import {
 	renderTableToSvg,
 	svgToPng
 } from '$lib/capabilities/table-extraction';
-import sharp from 'sharp';
+import { generateThumbnail } from '$lib/capabilities/image-extraction';
 
 let supabaseServiceRole: SupabaseClient | null = null;
 
@@ -29,19 +29,6 @@ export interface ExtractTablesParams {
 	superjournalId: string;
 	userId: string;
 	aiResponse: string;
-}
-
-/**
- * Generate 150x150 thumbnail from image buffer
- */
-async function generateThumbnail(imageBuffer: Buffer): Promise<Buffer> {
-	return await sharp(imageBuffer)
-		.resize(150, 150, {
-			fit: 'contain',
-			background: { r: 20, g: 20, b: 20, alpha: 1 }
-		})
-		.jpeg({ quality: 80 })
-		.toBuffer();
 }
 
 /**

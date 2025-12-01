@@ -1,28 +1,26 @@
 <script lang="ts">
 	/**
-	 * PasteArea - Unified paste area for chat and reader modes
+	 * PasteArea - Paste area for chat mode
 	 *
 	 * Accepts HTML (Firefox Reader Mode) or plain text (markdown, Claude docs).
 	 * Toggle controls ephemeral vs persistent storage treatment.
 	 */
 
 	interface Props {
-		mode: 'chat' | 'reader';
 		onClose: () => void;
 		onSuccess: (id: string, title: string, content: string, superjournalId?: string) => void;
 	}
 
-	let { mode, onClose, onSuccess }: Props = $props();
+	let { onClose, onSuccess }: Props = $props();
 
-	// Chat defaults to persistent, reader defaults to ephemeral
-	let isPersistent = $state(mode === 'chat');
+	let isPersistent = $state(true);
 	let isProcessing = $state(false);
 	let processingStatus = $state('');
 	let processingError = $state<string | null>(null);
 	let pastedContent = $state('');
 
-	const placeholder = mode === 'chat' ? 'Paste content here...' : 'Paste article here...';
-	const accentVar = mode === 'chat' ? 'var(--boss-accent)' : 'var(--reader-accent)';
+	const placeholder = 'Paste content here...';
+	const accentVar = 'var(--boss-accent)';
 
 	async function handlePaste(event: ClipboardEvent) {
 		event.preventDefault();
@@ -62,8 +60,7 @@
 		try {
 			processingStatus = isPersistent ? 'Generating artisan cut...' : 'Processing...';
 
-			const endpoint = mode === 'chat' ? '/api/chat/files' : '/api/reader/upload';
-			const response = await fetch(endpoint, {
+			const response = await fetch('/api/chat/files', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({

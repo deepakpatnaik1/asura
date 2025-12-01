@@ -32,8 +32,6 @@ export interface ExtractContentOptions {
 		info: (msg: string, data?: Record<string, unknown>) => void;
 		warn: (msg: string, data?: Record<string, unknown>) => void;
 	};
-	/** Reader mode sets is_relevant=true for AI filtering compatibility */
-	isReaderMode?: boolean;
 }
 
 export interface ExtractContentResult {
@@ -44,7 +42,7 @@ export interface ExtractContentResult {
  * Extract images and tables from HTML content, upload to storage, and create chart records.
  */
 export async function extractAndSaveCharts(options: ExtractContentOptions): Promise<ExtractContentResult> {
-	const { content, userId, contentId, supabase, log, isReaderMode } = options;
+	const { content, userId, contentId, supabase, log } = options;
 
 	const chartResults: Array<{
 		index: number;
@@ -141,9 +139,7 @@ export async function extractAndSaveCharts(options: ExtractContentOptions): Prom
 			chart_index: chart.index,
 			storage_path: chart.storage_path,
 			thumbnail_path: chart.thumbnail_path,
-			alt_text: chart.alt_text,
-			// Reader mode needs is_relevant for filtering
-			...(isReaderMode ? { is_relevant: true } : {})
+			alt_text: chart.alt_text
 		}));
 
 		const { error: chartInsertError } = await supabase

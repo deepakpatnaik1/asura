@@ -754,7 +754,6 @@
 	<!-- File Paste Area -->
 	{#if showFilePaste}
 		<PasteArea
-			mode="chat"
 			onClose={() => showFilePaste = false}
 			onSuccess={handleFilePasteSuccess}
 		/>

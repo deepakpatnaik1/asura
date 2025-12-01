@@ -62,9 +62,10 @@
 			<a href="/chat" class="sidebar-icon" class:active={$page.url.pathname === '/chat'} title="Chat">
 				<Icon src={LuMessageSquare} size="18" />
 			</a>
-			<a href="/reader" class="sidebar-icon" class:active={$page.url.pathname === '/reader'} title="E-Reader">
+			<!-- Reader mode deleted, icon placeholder -->
+			<span class="sidebar-icon disabled" title="E-Reader (coming soon)">
 				<Icon src={LuBook} size="18" />
-			</a>
+			</span>
 		</div>
 	</aside>
 	{/if}
@@ -123,7 +124,7 @@
 
 	<!-- Main content -->
 	<div class="main-content">
-		<ErrorBoundary mode={$page.url.pathname === '/reader' ? 'reader' : 'chat'}>
+		<ErrorBoundary mode="chat">
 			{@render children()}
 		</ErrorBoundary>
 	</div>
@@ -200,6 +201,16 @@
 		/* Reader mode (second icon) */
 		opacity: 1;
 		color: var(--reader-accent);
+	}
+
+	.sidebar-icon.disabled {
+		opacity: 0.3;
+		cursor: not-allowed;
+	}
+
+	.sidebar-icon.disabled:hover {
+		opacity: 0.3;
+		color: hsl(var(--foreground));
 	}
 
 	.main-content {
