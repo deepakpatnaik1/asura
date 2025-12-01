@@ -85,12 +85,12 @@ export const DELETE: RequestHandler = async ({ params, locals: { safeGetSession,
 		await supabase.storage.from('content').remove(storagePaths);
 	}
 
-	// 3. DELETE ASSOCIATED SUPERJOURNAL ENTRY (file marker in ai_response)
+	// 3. DELETE ASSOCIATED SUPERJOURNAL ENTRY (content marker in ai_response)
 	await supabase
 		.from('superjournal')
 		.delete()
 		.eq('user_id', userId)
-		.like('ai_response', `<!--file:${id}-->%`);
+		.like('ai_response', `<!--content:${id}-->%`);
 
 	// 4. DELETE CONTENT FROM DATABASE (CASCADE handles charts via FK)
 	const { error } = await supabase

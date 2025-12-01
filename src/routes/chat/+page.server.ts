@@ -86,8 +86,8 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession, supabase 
 		}));
 
 
-	// Expand content markers: <!--content:id--> or <!--file:id--> -> actual content from content table
-	const contentMarkerRegex = /^<!--(?:content|file):([a-f0-9-]+)-->(?:\n[\s\S]*)?$/;
+	// Expand content markers: <!--content:id--> -> actual content from content table
+	const contentMarkerRegex = /^<!--content:([a-f0-9-]+)-->(?:\n[\s\S]*)?$/;
 	const contentIds = (messages || [])
 		.map((msg) => msg.ai_response?.match(contentMarkerRegex)?.[1])
 		.filter((id): id is string => Boolean(id));

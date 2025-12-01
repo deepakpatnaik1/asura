@@ -507,10 +507,9 @@
 					// Revert on failure
 					files = originalFiles;
 				} else {
-					// Remove file upload message from UI (handle both old and new marker formats)
+					// Remove file upload message from UI
 					allMessages = allMessages.filter(m =>
-						!m.ai_response?.startsWith(`<!--content:${fileId}-->`) &&
-						!m.ai_response?.startsWith(`<!--file:${fileId}-->`)
+						!m.ai_response?.startsWith(`<!--content:${fileId}-->`)
 					);
 					// Reload file charts to remove deleted file's images from carousel
 					await loadFileCharts();

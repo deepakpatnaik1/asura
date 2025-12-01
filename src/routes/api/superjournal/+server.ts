@@ -58,8 +58,8 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supab
 	const totalCount = count ?? 0;
 	const hasMore = offset + limit < totalCount;
 
-	// Expand content markers: <!--content:id--> or <!--file:id--> -> actual content from content table
-	const contentMarkerRegex = /^<!--(?:content|file):([a-f0-9-]+)-->(?:\n[\s\S]*)?$/;
+	// Expand content markers: <!--content:id--> -> actual content from content table
+	const contentMarkerRegex = /^<!--content:([a-f0-9-]+)-->(?:\n[\s\S]*)?$/;
 	const contentIds = (messages || [])
 		.map((msg) => msg.ai_response?.match(contentMarkerRegex)?.[1])
 		.filter((id): id is string => Boolean(id));
