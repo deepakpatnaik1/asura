@@ -157,7 +157,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		}
 
 		// Create superjournal entry for display
-		// Note: Chat mode must have content_id=NULL per constraint. File ID is in <!--file:id--> marker.
+		// Stores only marker; content fetched from content table on display
 		const { data: sjEntry, error: sjError } = await supabase
 			.from('superjournal')
 			.insert({
@@ -165,7 +165,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				mode: 'chat',
 				persona_name: persona,
 				user_message: `Boss uploaded ${file.title}`,
-				ai_response: `<!--file:${file.id}-->\n${readableContent}`,
+				ai_response: `<!--content:${file.id}-->`,
 				model_identifier: 'file-upload'
 			})
 			.select('id')
