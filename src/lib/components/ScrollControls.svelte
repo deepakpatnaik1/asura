@@ -26,14 +26,14 @@
 		title="Next turn"
 		onclick={() => scrollToNextTurn(config)}
 	>
-		<Icon src={LuArrowDown} size="11" />
+		<Icon src={LuArrowDown} size="13" />
 	</button>
 	<button
 		class="control-btn"
 		title="Previous turn"
 		onclick={() => scrollToPreviousTurn(config)}
 	>
-		<Icon src={LuArrowUp} size="11" />
+		<Icon src={LuArrowUp} size="13" />
 	</button>
 </div>
 
