@@ -28,8 +28,8 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession, supabase 
 	const monitor = createQueryMonitor(log, 100); // 100ms threshold
 
 	// Fetch last N Superjournal entries, newest first (paginated)
-	const { data: messages, error, count } = await monitor.track('fetchSuperjournal', () =>
-		supabase
+	const { data: messages, error, count } = await monitor.track('fetchSuperjournal', async () =>
+		await supabase
 			.from('superjournal')
 			.select('*', { count: 'exact' })
 			.order('created_at', { ascending: false })
@@ -44,8 +44,8 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession, supabase 
 	const hasMore = totalCount > PAGE_SIZE;
 
 	// Fetch starred journal entries to get their superjournal_ids
-	const { data: starredJournals } = await monitor.track('fetchStarredJournals', () =>
-		supabase
+	const { data: starredJournals } = await monitor.track('fetchStarredJournals', async () =>
+		await supabase
 			.from('journal')
 			.select('superjournal_id')
 			.eq('is_starred', true)
@@ -57,8 +57,8 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession, supabase 
 		.filter((id): id is string => id !== null);
 
 	// Fetch all journal superjournal_ids to find orphans
-	const { data: allJournals } = await monitor.track('fetchJournalIds', () =>
-		supabase
+	const { data: allJournals } = await monitor.track('fetchJournalIds', async () =>
+		await supabase
 			.from('journal')
 			.select('superjournal_id')
 			.eq('user_id', user!.id)

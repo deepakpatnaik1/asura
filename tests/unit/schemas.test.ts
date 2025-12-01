@@ -10,7 +10,6 @@ import {
 	processArticleSchema,
 	readerChatSchema,
 	extractImagesSchema,
-	filterChartsSchema,
 	deleteArticleSchema,
 	validateSchema
 } from '$lib/schemas';
@@ -228,17 +227,6 @@ describe('extractImagesSchema', () => {
 			html: '<html></html>'
 		});
 		expect(result.success).toBe(false);
-	});
-});
-
-describe('filterChartsSchema', () => {
-	const validUuid = '550e8400-e29b-41d4-a716-446655440000';
-
-	it('accepts valid article_id', () => {
-		const result = filterChartsSchema.safeParse({
-			article_id: validUuid
-		});
-		expect(result.success).toBe(true);
 	});
 });
 
