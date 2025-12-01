@@ -507,8 +507,9 @@
 					// Revert on failure
 					files = originalFiles;
 				} else {
-					// Remove file upload message from UI
+					// Remove file upload message from UI (handle both old and new marker formats)
 					allMessages = allMessages.filter(m =>
+						!m.ai_response?.startsWith(`<!--content:${fileId}-->`) &&
 						!m.ai_response?.startsWith(`<!--file:${fileId}-->`)
 					);
 					// Reload file charts to remove deleted file's images from carousel
@@ -525,13 +526,13 @@
 	async function handleFilePasteSuccess(fileId: string, title: string, content: string, superjournalId?: string) {
 		console.log('[Files] Saved:', title, fileId, superjournalId);
 
-		// Add message to display
+		// Add message to display (marker + content for local display; DB stores only marker)
 		if (superjournalId) {
 			const now = new Date().toISOString();
 			allMessages = [...allMessages, {
 				id: superjournalId,
 				user_message: `Boss uploaded ${title}`,
-				ai_response: `<!--file:${fileId}-->\n${content}`,
+				ai_response: `<!--content:${fileId}-->\n${content}`,
 				persona_name: selectedPersona,
 				created_at: now,
 				formatted_timestamp: formatTimestamp(now),

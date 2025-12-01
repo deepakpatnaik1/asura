@@ -137,14 +137,14 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			title = await extractTitleFromHtml(content);
 		}
 
-		// Save to database
+		// Save to database (store readable text, not raw HTML)
 		const { data: file, error: insertError } = await supabase
 			.from('content')
 			.insert({
 				user_id: userId,
 				mode: 'chat',
 				title: title.slice(0, 255),
-				raw_content: content,
+				raw_content: readableContent,
 				artisan_cut: artisanCut,
 				is_enabled: true // Default to enabled so images show in carousel
 			})

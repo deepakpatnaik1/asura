@@ -86,11 +86,44 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession, supabase 
 		}));
 
 
-	// Format timestamps on the server to prevent hydration mismatch
-	const messagesWithFormattedTimestamps = (messages || []).map((msg) => ({
-		...msg,
-		formatted_timestamp: formatTimestamp(msg.created_at)
-	}));
+	// Expand content markers: <!--content:id--> or <!--file:id--> -> actual content from content table
+	const contentMarkerRegex = /^<!--(?:content|file):([a-f0-9-]+)-->(?:\n[\s\S]*)?$/;
+	const contentIds = (messages || [])
+		.map((msg) => msg.ai_response?.match(contentMarkerRegex)?.[1])
+		.filter((id): id is string => Boolean(id));
+
+	let contentMap = new Map<string, string>();
+	if (contentIds.length > 0) {
+		const { data: contents } = await monitor.track('fetchContentForMarkers', async () =>
+			await supabase
+				.from('content')
+				.select('id, raw_content')
+				.in('id', contentIds)
+		);
+
+		if (contents) {
+			for (const c of contents) {
+				contentMap.set(c.id, c.raw_content || '');
+			}
+		}
+	}
+
+	// Format timestamps and expand content markers
+	const messagesWithFormattedTimestamps = (messages || []).map((msg) => {
+		let aiResponse = msg.ai_response;
+		const match = aiResponse?.match(contentMarkerRegex);
+		if (match) {
+			const contentId = match[1];
+			const expandedContent = contentMap.get(contentId) || '';
+			// Always use new format in output
+			aiResponse = `<!--content:${contentId}-->\n${expandedContent}`;
+		}
+		return {
+			...msg,
+			ai_response: aiResponse,
+			formatted_timestamp: formatTimestamp(msg.created_at)
+		};
+	});
 
 	// Log query performance summary
 	const stats = monitor.getStats();
