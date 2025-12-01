@@ -66,15 +66,33 @@ export const DELETE: RequestHandler = async ({ params, locals: { safeGetSession,
 		return validationError('File ID is required', 'id');
 	}
 
-	// Delete associated superjournal entry (file marker in ai_response)
+	// 1. FETCH CHARTS TO GET FILE PATHS (before deletion)
+	const { data: charts } = await supabase
+		.from('charts')
+		.select('storage_path, thumbnail_path')
+		.eq('content_id', id)
+		.eq('user_id', userId);
+
+	// 2. DELETE FILES FROM SUPABASE STORAGE
+	const storagePaths: string[] = [];
+	if (charts && charts.length > 0) {
+		for (const chart of charts) {
+			if (chart.storage_path) storagePaths.push(chart.storage_path);
+			if (chart.thumbnail_path) storagePaths.push(chart.thumbnail_path);
+		}
+	}
+	if (storagePaths.length > 0) {
+		await supabase.storage.from('content').remove(storagePaths);
+	}
+
+	// 3. DELETE ASSOCIATED SUPERJOURNAL ENTRY (file marker in ai_response)
 	await supabase
 		.from('superjournal')
 		.delete()
 		.eq('user_id', userId)
 		.like('ai_response', `<!--file:${id}-->%`);
 
-	// Delete content (RLS ensures user can only delete their own content)
-	// Cascade handles charts deletion
+	// 4. DELETE CONTENT FROM DATABASE (CASCADE handles charts via FK)
 	const { error } = await supabase
 		.from('content')
 		.delete()

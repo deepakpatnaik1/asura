@@ -27,7 +27,6 @@ export interface ExtractContentOptions {
 	content: string;
 	userId: string;
 	contentId: string;
-	storageBucket: 'files' | 'articles';
 	supabase: SupabaseClient;
 	log: {
 		info: (msg: string, data?: Record<string, unknown>) => void;
@@ -45,7 +44,7 @@ export interface ExtractContentResult {
  * Extract images and tables from HTML content, upload to storage, and create chart records.
  */
 export async function extractAndSaveCharts(options: ExtractContentOptions): Promise<ExtractContentResult> {
-	const { content, userId, contentId, storageBucket, supabase, log, isReaderMode } = options;
+	const { content, userId, contentId, supabase, log, isReaderMode } = options;
 
 	const chartResults: Array<{
 		index: number;
@@ -54,7 +53,7 @@ export async function extractAndSaveCharts(options: ExtractContentOptions): Prom
 		alt_text: string;
 	}> = [];
 
-	const pathPrefix = storageBucket === 'files' ? 'file' : 'article';
+	const bucket = 'content';
 
 	// 1. Extract <img> tags
 	const images = await extractImages(content);
@@ -64,11 +63,11 @@ export async function extractAndSaveCharts(options: ExtractContentOptions): Prom
 			const imageExt = getImageExtension(imageBuffer);
 			const thumbnailBuffer = await generateThumbnail(imageBuffer);
 
-			const imagePath = `${pathPrefix}-images/${userId}/${contentId}/chart-${image.index}.${imageExt}`;
-			const thumbnailPath = `${pathPrefix}-thumbnails/${userId}/${contentId}/chart-${image.index}.jpg`;
+			const imagePath = `images/${userId}/${contentId}/chart-${image.index}.${imageExt}`;
+			const thumbnailPath = `thumbnails/${userId}/${contentId}/chart-${image.index}.jpg`;
 
-			await uploadImageToStorage(imageBuffer, storageBucket, imagePath);
-			await uploadThumbnailToStorage(thumbnailBuffer, storageBucket, thumbnailPath);
+			await uploadImageToStorage(imageBuffer, bucket, imagePath);
+			await uploadThumbnailToStorage(thumbnailBuffer, bucket, thumbnailPath);
 
 			chartResults.push({
 				index: image.index,
@@ -90,11 +89,11 @@ export async function extractAndSaveCharts(options: ExtractContentOptions): Prom
 			const pngBuffer = svgToPng(svg, width);
 			const thumbnailBuffer = await generateThumbnail(pngBuffer);
 
-			const storagePath = `${pathPrefix}-images/${userId}/${contentId}/table-${table.index}.svg`;
-			const thumbnailPath = `${pathPrefix}-thumbnails/${userId}/${contentId}/chart-${table.index}.jpg`;
+			const storagePath = `images/${userId}/${contentId}/table-${table.index}.svg`;
+			const thumbnailPath = `thumbnails/${userId}/${contentId}/chart-${table.index}.jpg`;
 
-			await uploadSvgToStorage(svgBuffer, storageBucket, storagePath);
-			await uploadThumbnailToStorage(thumbnailBuffer, storageBucket, thumbnailPath);
+			await uploadSvgToStorage(svgBuffer, bucket, storagePath);
+			await uploadThumbnailToStorage(thumbnailBuffer, bucket, thumbnailPath);
 
 			chartResults.push({
 				index: table.index,
@@ -117,11 +116,11 @@ export async function extractAndSaveCharts(options: ExtractContentOptions): Prom
 			const pngBuffer = svgToPng(svg, width);
 			const thumbnailBuffer = await generateThumbnail(pngBuffer);
 
-			const storagePath = `${pathPrefix}-images/${userId}/${contentId}/table-${table.index}.svg`;
-			const thumbnailPath = `${pathPrefix}-thumbnails/${userId}/${contentId}/chart-${table.index}.jpg`;
+			const storagePath = `images/${userId}/${contentId}/table-${table.index}.svg`;
+			const thumbnailPath = `thumbnails/${userId}/${contentId}/chart-${table.index}.jpg`;
 
-			await uploadSvgToStorage(svgBuffer, storageBucket, storagePath);
-			await uploadThumbnailToStorage(thumbnailBuffer, storageBucket, thumbnailPath);
+			await uploadSvgToStorage(svgBuffer, bucket, storagePath);
+			await uploadThumbnailToStorage(thumbnailBuffer, bucket, thumbnailPath);
 
 			chartResults.push({
 				index: table.index,

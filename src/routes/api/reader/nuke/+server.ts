@@ -48,31 +48,20 @@ export const POST: RequestHandler = async ({ locals: { safeGetSession, supabase 
 		log.warn('Failed to fetch article charts for cleanup', { error: chartsFetchError });
 	}
 
-	// 4. COLLECT ALL STORAGE PATHS
-	const imagePaths: string[] = [];
-	const thumbnailPaths: string[] = [];
+	// 4. COLLECT ALL STORAGE PATHS (stored as-is: images/... or thumbnails/...)
+	const storagePaths: string[] = [];
 
 	if (articleCharts && articleCharts.length > 0) {
 		for (const chart of articleCharts) {
-			if (chart.storage_path) {
-				imagePaths.push(chart.storage_path.replace('article-images/', ''));
-			}
-			if (chart.thumbnail_path) {
-				thumbnailPaths.push(chart.thumbnail_path.replace('article-thumbnails/', ''));
-			}
+			if (chart.storage_path) storagePaths.push(chart.storage_path);
+			if (chart.thumbnail_path) storagePaths.push(chart.thumbnail_path);
 		}
 	}
 
-	// 5. DELETE FROM SUPABASE STORAGE
-
-	if (imagePaths.length > 0) {
-		const { error } = await supabase.storage.from('article-images').remove(imagePaths);
-		if (error) log.warn('Failed to delete images from storage', { error });
-	}
-
-	if (thumbnailPaths.length > 0) {
-		const { error } = await supabase.storage.from('article-thumbnails').remove(thumbnailPaths);
-		if (error) log.warn('Failed to delete thumbnails from storage', { error });
+	// 5. DELETE FROM SUPABASE STORAGE (single content bucket)
+	if (storagePaths.length > 0) {
+		const { error } = await supabase.storage.from('content').remove(storagePaths);
+		if (error) log.warn('Failed to delete from storage', { error });
 	}
 
 	// 6. DELETE ALL READER CONTENT FROM DATABASE (CASCADE handles charts via FK)
@@ -88,7 +77,7 @@ export const POST: RequestHandler = async ({ locals: { safeGetSession, supabase 
 	}
 
 	const articleCount = articles?.length || 0;
-	const storageFilesDeleted = imagePaths.length + thumbnailPaths.length;
+	const storageFilesDeleted = storagePaths.length;
 
 	log.info('Reader mode nuke complete', {
 		articles: articleCount,

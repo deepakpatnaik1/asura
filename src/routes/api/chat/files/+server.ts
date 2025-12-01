@@ -182,7 +182,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			content,
 			userId,
 			contentId: file.id,
-			storageBucket: 'files',
 			supabase,
 			log
 		});

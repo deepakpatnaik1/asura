@@ -184,10 +184,7 @@ export async function downloadImage(imageSrc: string): Promise<Buffer> {
  */
 export async function generateThumbnail(imageBuffer: Buffer): Promise<Buffer> {
 	return await sharp(imageBuffer)
-		.resize(150, 150, {
-			fit: 'contain',
-			background: { r: 20, g: 20, b: 20, alpha: 1 }
-		})
+		.resize({ height: 150 })
 		.jpeg({ quality: 80 })
 		.toBuffer();
 }

@@ -90,24 +90,9 @@ export const DELETE: RequestHandler = async ({ request, locals: { safeGetSession
 		}
 	}
 
+	// Delete from content bucket (paths are stored as-is: images/... or thumbnails/...)
 	if (storagePaths.length > 0) {
-		// Group by bucket (extract bucket name from path)
-		const pdfPaths = storagePaths.filter((p) => p.startsWith('article-pdfs/'));
-		const imagePaths = storagePaths.filter((p) => p.startsWith('article-images/'));
-		const thumbnailPaths = storagePaths.filter((p) => p.startsWith('article-thumbnails/'));
-
-		// Delete from each bucket
-		if (pdfPaths.length > 0) {
-			await supabase.storage.from('article-pdfs').remove(pdfPaths.map((p) => p.replace('article-pdfs/', '')));
-		}
-
-		if (imagePaths.length > 0) {
-			await supabase.storage.from('article-images').remove(imagePaths.map((p) => p.replace('article-images/', '')));
-		}
-
-		if (thumbnailPaths.length > 0) {
-			await supabase.storage.from('article-thumbnails').remove(thumbnailPaths.map((p) => p.replace('article-thumbnails/', '')));
-		}
+		await supabase.storage.from('content').remove(storagePaths);
 	}
 
 	// 5. DELETE CONTENT FROM DATABASE (CASCADE handles charts via FK)

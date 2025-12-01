@@ -54,11 +54,11 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supab
 		);
 	}
 
-	// Transform storage paths to public URLs (bucket name: articles)
+	// Transform storage paths to public URLs (bucket name: content)
 	const transformedCharts = (charts || []).map((chart) => ({
 		id: chart.chart_index.toString(),
-		thumbnail_url: `${PUBLIC_SUPABASE_URL}/storage/v1/object/public/articles/${chart.thumbnail_path}`,
-		full_url: `${PUBLIC_SUPABASE_URL}/storage/v1/object/public/articles/${chart.storage_path}`,
+		thumbnail_url: `${PUBLIC_SUPABASE_URL}/storage/v1/object/public/content/${chart.thumbnail_path}`,
+		full_url: `${PUBLIC_SUPABASE_URL}/storage/v1/object/public/content/${chart.storage_path}`,
 		alt: chart.alt_text || `Chart ${chart.chart_index}`
 	}));
 

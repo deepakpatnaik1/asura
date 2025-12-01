@@ -72,8 +72,8 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supab
 			id: chart.id,
 			file_id: chart.content_id, // Keep API response naming for backwards compatibility
 			chart_index: chart.chart_index,
-			thumbnail_url: `${PUBLIC_SUPABASE_URL}/storage/v1/object/public/files/${chart.thumbnail_path}`,
-			full_url: `${PUBLIC_SUPABASE_URL}/storage/v1/object/public/files/${chart.storage_path}`,
+			thumbnail_url: `${PUBLIC_SUPABASE_URL}/storage/v1/object/public/content/${chart.thumbnail_path}`,
+			full_url: `${PUBLIC_SUPABASE_URL}/storage/v1/object/public/content/${chart.storage_path}`,
 			alt: chart.alt_text,
 			is_pinned: chart.is_pinned,
 			source: 'file' as const,

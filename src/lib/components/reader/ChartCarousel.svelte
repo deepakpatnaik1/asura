@@ -206,9 +206,9 @@
 	.chart-grid {
 		display: flex;
 		flex-direction: row;
-		gap: 8px;
+		gap: 0;
 		width: 100%;
-		padding: 12px 16px;
+		padding: 0;
 		justify-content: center;
 		flex-wrap: nowrap;
 		overflow-x: auto;
@@ -221,20 +221,22 @@
 	.chart-thumbnail-wrapper {
 		position: relative;
 		flex-shrink: 0;
+		margin: 0;
+		padding: 0;
 	}
 
 	.chart-thumbnail {
 		position: relative;
 		flex-shrink: 0;
-		width: auto;
 		height: 80px;
-		aspect-ratio: 1;
+		width: auto;
 		background: hsl(var(--background));
 		border: none;
 		overflow: hidden;
 		cursor: pointer;
 		transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-		padding: 4px;
+		padding: 0;
+		margin: 0;
 	}
 
 	.chart-thumbnail:hover {
@@ -260,6 +262,9 @@
 		height: 100%;
 		object-fit: contain;
 		background: hsl(var(--background));
+		margin: 0;
+		padding: 0;
+		display: block;
 	}
 
 	.chart-overlay {
