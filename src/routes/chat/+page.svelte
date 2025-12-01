@@ -220,9 +220,11 @@
 		if (!PERSONAS.includes(persona as Persona)) return;
 		selectedPersona = persona as Persona;
 
-		// Insert persona name into input field
+		// Replace any existing persona prefix, or prepend if none
 		const name = persona.charAt(0).toUpperCase() + persona.slice(1);
-		inputMessage = `${name}, ${inputMessage}`;
+		const personaPattern = new RegExp(`^(${PERSONAS.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join('|')}),?\\s*`, 'i');
+		const cleanedMessage = inputMessage.replace(personaPattern, '');
+		inputMessage = cleanedMessage ? `${name}, ${cleanedMessage}` : `${name}, `;
 
 		// Write to database - only update persona, preserve model settings
 		try {
