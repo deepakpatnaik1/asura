@@ -4,7 +4,7 @@
 	import { currentMessage, isLoading, sendMessage, abortCurrentMessage } from '$lib/stores/chat';
 	import { tick, onMount } from 'svelte';
 	import { DEFAULT_PERSONA } from '$lib/config/personas';
-	import { CHAT_CONFIG, scrollToTurn, scrollToLastTurn, scrollToBottom, getTurns } from '$lib/ui/scroll';
+	import { CHAT_CONFIG, scrollToTurn, scrollToLastTurn, getTurns } from '$lib/ui/scroll';
 	import { createConfirmation } from '$lib/composables';
 	import ScrollControls from '$lib/components/ScrollControls.svelte';
 	import MessageGroup from '$lib/components/MessageGroup.svelte';
@@ -538,8 +538,9 @@
 				model_identifier: 'file-upload'
 			}];
 
-			// Scroll to bottom to show new content
-			setTimeout(() => scrollToBottom(CHAT_CONFIG), 100);
+			// Force DOM update, then scroll to show boss card at top
+			await tick();
+			setTimeout(() => scrollToLastTurn(CHAT_CONFIG), 100);
 		}
 
 		// Refresh file library if it's open
