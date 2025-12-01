@@ -103,6 +103,9 @@
 			loadActiveArticle();
 		}
 
+		// Focus input bar on mount (when navigating to this page)
+		textareaRef?.focus();
+
 		// Cleanup on unmount
 		return () => {
 			pendingTimeouts.forEach(clearTimeout);
@@ -293,20 +296,47 @@
 		// Close article library on Escape
 		if (event.key === 'Escape' && showArticleLibrary) {
 			showArticleLibrary = false;
+			textareaRef?.focus();
+			return;
 		}
 
 		// Close paste area on Escape
 		if (event.key === 'Escape' && showPasteArea) {
 			showPasteArea = false;
+			textareaRef?.focus();
+			return;
 		}
 	}
 
-	// Auto-focus paste area when window regains focus
+	// Auto-focus management when window regains focus
 	function handleWindowFocus() {
 		if (showPasteArea) {
 			const pasteArea = document.querySelector('.paste-area') as HTMLElement;
 			pasteArea?.focus();
+		} else if (showArticleLibrary) {
+			// Library is open, don't steal focus
+		} else {
+			// Focus input bar
+			textareaRef?.focus();
 		}
+	}
+
+	// Refocus input bar after interactions that might steal focus
+	function refocusInput() {
+		if (!showPasteArea && !showArticleLibrary) {
+			textareaRef?.focus();
+		}
+	}
+
+	// Handle clicks - refocus input after click completes (unless clicking input/paste area)
+	function handleGlobalClick(event: MouseEvent) {
+		const target = event.target as HTMLElement;
+		// Don't interfere with paste area or input elements
+		if (target.closest('.paste-area') || target.closest('textarea') || target.closest('input')) {
+			return;
+		}
+		// Refocus input after a tick to let click handlers complete
+		setTimeout(refocusInput, 0);
 	}
 
 	// Toggle article library dropdown
@@ -513,11 +543,15 @@
 
 	// Handle clicks outside dropdown
 	function handleClickOutside(event: MouseEvent) {
-		if (!showArticleLibrary) return;
-		const dropdown = document.querySelector('.article-library-dropdown');
-		if (dropdown && !dropdown.contains(event.target as Node)) {
-			showArticleLibrary = false;
+		// Close article library if clicking outside
+		if (showArticleLibrary) {
+			const dropdown = document.querySelector('.article-library-dropdown');
+			if (dropdown && !dropdown.contains(event.target as Node)) {
+				showArticleLibrary = false;
+			}
 		}
+		// Refocus input after click (let handleGlobalClick handle this)
+		handleGlobalClick(event);
 	}
 
 	</script>

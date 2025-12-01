@@ -124,6 +124,9 @@
 			localStorage.setItem('asura_app_mode', 'chat');
 		}
 
+		// Focus input bar on mount (when navigating to this page)
+		textareaRef?.focus();
+
 		(async () => {
 			try {
 				const response = await fetch('/api/settings');
@@ -604,20 +607,47 @@
 		// Close file library on Escape
 		if (event.key === 'Escape' && showFileLibrary) {
 			showFileLibrary = false;
+			textareaRef?.focus();
+			return;
 		}
 
 		// Close file paste on Escape
 		if (event.key === 'Escape' && showFilePaste) {
 			showFilePaste = false;
+			textareaRef?.focus();
+			return;
 		}
 	}
 
-	// Auto-focus paste area when window regains focus
+	// Auto-focus management when window regains focus
 	function handleWindowFocus() {
 		if (showFilePaste) {
 			const pasteArea = document.querySelector('.paste-area') as HTMLElement;
 			pasteArea?.focus();
+		} else if (showFileLibrary) {
+			// Library is open, don't steal focus
+		} else {
+			// Focus input bar
+			textareaRef?.focus();
 		}
+	}
+
+	// Refocus input bar after interactions that might steal focus
+	function refocusInput() {
+		if (!showFilePaste && !showFileLibrary) {
+			textareaRef?.focus();
+		}
+	}
+
+	// Handle clicks - refocus input after click completes (unless clicking input/paste area)
+	function handleGlobalClick(event: MouseEvent) {
+		const target = event.target as HTMLElement;
+		// Don't interfere with paste area or input elements
+		if (target.closest('.paste-area') || target.closest('textarea') || target.closest('input')) {
+			return;
+		}
+		// Refocus input after a tick to let click handlers complete
+		setTimeout(refocusInput, 0);
 	}
 
 </script>
@@ -796,7 +826,7 @@
 
 </div>
 
-<svelte:window onkeydown={handleKeydown} onfocus={handleWindowFocus} />
+<svelte:window onkeydown={handleKeydown} onfocus={handleWindowFocus} onclick={handleGlobalClick} />
 
 <style>
 	/* Main Layout - Two-column grid (chat left, canvas right) */
