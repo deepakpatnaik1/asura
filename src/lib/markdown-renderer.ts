@@ -78,13 +78,15 @@ export async function renderMarkdown(markdown: string, mode: RenderMode = 'chat'
 			return `<span style="color: ${ACCENT}; font-weight: bold;">${num}.</span> ${rest}`;
 		}
 
-		// Regular line - escape HTML, then handle inline bold
+		// Regular line - escape HTML, then handle inline formatting
 		let escaped = line
 			.replace(/&/g, '&amp;')
 			.replace(/</g, '&lt;')
 			.replace(/>/g, '&gt;');
-		// Inline bold → just bold, no accent
+		// Inline bold → just bold (must come before italic)
 		escaped = escaped.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+		// Inline italic → just italic
+		escaped = escaped.replace(/\*([^*]+)\*/g, '<em>$1</em>');
 		return escaped;
 	}).join('<br>');
 
