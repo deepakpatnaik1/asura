@@ -11,6 +11,7 @@ import { requireAuth } from '$lib/api/require-auth';
 import { parseRequestJson } from '$lib/api/parse-json';
 import { createMessage } from '$lib/api/anthropic-client';
 import { DEFAULT_COMPRESSION_MODEL } from '$lib/config/models';
+import { DEFAULT_PERSONA } from '$lib/config/personas';
 import { FILE_ARTISAN_CUT_PROMPT } from '$lib/prompts/file-artisan-cut';
 import { databaseError, validationError, internalError } from '$lib/api/errors';
 import { createLogger } from '$lib/api/logger';
@@ -96,7 +97,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			.single();
 
 		const model = settings?.selected_compression_model || DEFAULT_COMPRESSION_MODEL;
-		const persona = settings?.selected_persona || 'gunnar';
+		const persona = settings?.selected_persona || DEFAULT_PERSONA;
 
 		// Generate readable content (strip images/tables) - always needed for display
 		const readableContent = await htmlToPlainText(content);

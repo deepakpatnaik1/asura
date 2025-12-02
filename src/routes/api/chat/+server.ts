@@ -10,7 +10,7 @@ import { buildContext } from '$lib/context-builder';
 import { DEFAULT_CONVERSATION_MODEL } from '$lib/config/models';
 import { getModelParams } from '$lib/config/model-params';
 import { DEFAULT_PERSONA } from '$lib/config/personas';
-import { PERSONA_GUNNAR, PERSONA_KIRBY, PERSONA_SAMARA } from '$lib/prompts';
+import { getPersonaPrompt } from '$lib/prompts';
 import {
 	converseStream,
 	saveToSuperjournal,
@@ -144,9 +144,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		log.info('Context built', { ...stats, model: conversationModel, persona });
 
 		// 7. Select persona prompt
-		let personaPrompt = PERSONA_GUNNAR;
-		if (persona === 'kirby') personaPrompt = PERSONA_KIRBY;
-		else if (persona === 'samara') personaPrompt = PERSONA_SAMARA;
+		const personaPrompt = getPersonaPrompt(persona);
 
 		// 8. Stream response
 		const stream = new ReadableStream({

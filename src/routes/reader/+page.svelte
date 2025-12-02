@@ -213,8 +213,12 @@
 	// Behavior 1: Auto-switch dropdown when typing persona name at start
 	$effect(() => {
 		const normalized = inputMessage.trim().toLowerCase();
-		if (normalized.startsWith('samara')) {
-			selectedPersona = 'samara';
+		const personas = data.personas || [];
+		for (const p of personas) {
+			if (p.mode === 'reader' && normalized.startsWith(p.name)) {
+				selectedPersona = p.name;
+				break;
+			}
 		}
 	});
 
