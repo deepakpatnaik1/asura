@@ -19,6 +19,25 @@ export async function renderMarkdown(markdown: string, mode: RenderMode = 'chat'
 	const results: string[] = [];
 
 	for (const line of lines) {
+		// Bold heading followed by action beat → split onto separate lines
+		// Pattern: **heading***action beat*
+		const boldPlusActionMatch = line.match(/^\*\*([^*]+)\*\*\*([^*]+)\*$/);
+		if (boldPlusActionMatch) {
+			const heading = boldPlusActionMatch[1]
+				.replace(/&/g, '&amp;')
+				.replace(/</g, '&lt;')
+				.replace(/>/g, '&gt;');
+			const action = boldPlusActionMatch[2]
+				.replace(/&/g, '&amp;')
+				.replace(/</g, '&lt;')
+				.replace(/>/g, '&gt;');
+			listIndent = 0;
+			results.push(`<strong style="color: ${ACCENT};">${heading}</strong>`);
+			results.push(''); // Blank line before action beat
+			results.push(`<em style="color: ${ACCENT};">${action}</em>`);
+			continue;
+		}
+
 		// Standalone bold line → bold + accent
 		// Use .+ to allow asterisks inside (for inline italics like *this*)
 		const boldLineMatch = line.match(/^\*\*(.+)\*\*$/);
@@ -144,6 +163,25 @@ export async function renderMarkdown(markdown: string, mode: RenderMode = 'chat'
 			rest = rest.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
 			listIndent = num.length + 2; // number + ". "
 			results.push(`<span style="display: flex; margin-left: 1.5em;"><span style="color: ${ACCENT}; font-weight: bold; flex-shrink: 0; margin-right: 0.5em;">${num}.</span><span>${rest}</span></span>`);
+			continue;
+		}
+
+		// Bold at start of line (but not standalone) → accent bold + rest
+		const boldStartMatch = line.match(/^\*\*([^*]+)\*\*(.+)$/);
+		if (boldStartMatch) {
+			const boldText = boldStartMatch[1]
+				.replace(/&/g, '&amp;')
+				.replace(/</g, '&lt;')
+				.replace(/>/g, '&gt;');
+			let rest = boldStartMatch[2]
+				.replace(/&/g, '&amp;')
+				.replace(/</g, '&lt;')
+				.replace(/>/g, '&gt;');
+			// Handle inline bold/italic in the rest
+			rest = rest.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+			rest = rest.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+			listIndent = 0;
+			results.push(`<strong style="color: ${ACCENT};">${boldText}</strong>${rest}`);
 			continue;
 		}
 
