@@ -1,7 +1,7 @@
 /**
- * Chat Files API - List and Upload
+ * Content Files API - List and Upload
  *
- * GET: List all user's files
+ * GET: List user's files filtered by mode (chat or reader)
  * POST: Upload and process pasted content, extract images and tables
  */
 
@@ -22,19 +22,25 @@ import { extractAndSaveCharts } from '$lib/capabilities/content-extraction';
 const MAX_CONTENT_SIZE = 100 * 1024;
 
 /**
- * GET /api/chat/files
- * List all user's files sorted by creation date (newest first)
+ * GET /api/chat/files?mode=chat|reader
+ * List user's files filtered by mode, sorted by creation date (newest first)
  */
-export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase } }) => {
+export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supabase } }) => {
 	const auth = await requireAuth(safeGetSession);
 	if (!auth.success) return auth.error;
 	const { userId } = auth;
+
+	// Get mode from query param, default to 'chat' for backwards compatibility
+	const mode = url.searchParams.get('mode') || 'chat';
+	if (mode !== 'chat' && mode !== 'reader') {
+		return validationError('Mode must be "chat" or "reader"', 'mode');
+	}
 
 	const { data, error } = await supabase
 		.from('content')
 		.select('id, title, is_enabled, created_at')
 		.eq('user_id', userId)
-		.eq('mode', 'chat')
+		.eq('mode', mode)
 		.order('created_at', { ascending: false });
 
 	if (error) {
@@ -56,10 +62,15 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 	const log = createLogger('FilesAPI', userId);
 
 	// Parse request body
-	const parseResult = await parseRequestJson<{ content: string; persistent?: boolean }>(request);
+	const parseResult = await parseRequestJson<{ content: string; persistent?: boolean; mode?: 'chat' | 'reader'; is_canon?: boolean }>(request);
 	if (!parseResult.success) return parseResult.error;
 
-	const { content, persistent = true } = parseResult.data;
+	const { content, persistent = true, mode = 'chat', is_canon = false } = parseResult.data;
+
+	// Validate mode
+	if (mode !== 'chat' && mode !== 'reader') {
+		return validationError('Mode must be "chat" or "reader"', 'mode');
+	}
 
 	// Validate content
 	if (!content || typeof content !== 'string') {
@@ -75,7 +86,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 	}
 
 	try {
-		log.info('Processing file upload', { contentLength: content.length, persistent });
+		log.info('Processing file upload', { contentLength: content.length, persistent, mode });
 
 		// Fetch user settings (compression model + persona)
 		const { data: settings } = await supabase
@@ -142,11 +153,12 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			.from('content')
 			.insert({
 				user_id: userId,
-				mode: 'chat',
+				mode,
 				title: title.slice(0, 255),
 				raw_content: readableContent,
 				artisan_cut: artisanCut,
-				is_enabled: true // Default to enabled so images show in carousel
+				is_enabled: true, // Default to enabled so images show in carousel
+				is_canon
 			})
 			.select('id, title')
 			.single();
@@ -162,11 +174,12 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			.from('superjournal')
 			.insert({
 				user_id: userId,
-				mode: 'chat',
+				mode,
 				persona_name: persona,
 				user_message: `Boss uploaded ${file.title}`,
 				ai_response: `<!--content:${file.id}-->`,
-				model_identifier: 'file-upload'
+				model_identifier: 'file-upload',
+				content_id: file.id // Link superjournal entry to content for reader mode filtering
 			})
 			.select('id')
 			.single();

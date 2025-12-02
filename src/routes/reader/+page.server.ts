@@ -24,15 +24,15 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession, supabase 
 		throw redirect(303, '/login');
 	}
 
-	const log = createLogger('ChatPageLoad', user?.id);
+	const log = createLogger('ReaderPageLoad', user?.id);
 	const monitor = createQueryMonitor(log, 100); // 100ms threshold
 
-	// Fetch last N Superjournal entries for CHAT mode, newest first (paginated)
+	// Fetch last N Superjournal entries for READER mode, newest first (paginated)
 	const { data: messages, error, count } = await monitor.track('fetchSuperjournal', async () =>
 		await supabase
 			.from('superjournal')
 			.select('*', { count: 'exact' })
-			.eq('mode', 'chat')
+			.eq('mode', 'reader')
 			.order('created_at', { ascending: false })
 			.limit(PAGE_SIZE)
 	);
@@ -44,14 +44,14 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession, supabase 
 	const totalCount = count ?? 0;
 	const hasMore = totalCount > PAGE_SIZE;
 
-	// Fetch starred journal entries to get their superjournal_ids (chat mode only)
+	// Fetch starred journal entries to get their superjournal_ids (reader mode only)
 	const { data: starredJournals } = await monitor.track('fetchStarredJournals', async () =>
 		await supabase
 			.from('journal')
 			.select('superjournal_id')
 			.eq('is_starred', true)
 			.eq('user_id', user!.id)
-			.eq('mode', 'chat')
+			.eq('mode', 'reader')
 	);
 
 	const starredIds = (starredJournals || [])
@@ -65,7 +65,7 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession, supabase 
 			.from('journal')
 			.select('superjournal_id')
 			.eq('user_id', user!.id)
-			.eq('mode', 'chat')
+			.eq('mode', 'reader')
 			.in('superjournal_id', currentPageIds)
 	);
 

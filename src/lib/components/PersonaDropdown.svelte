@@ -1,12 +1,15 @@
 <script lang="ts">
 	import { Icon } from 'svelte-icons-pack';
 	import { LuChevronDown } from 'svelte-icons-pack/lu';
+	import { CHAT_PERSONAS, READER_PERSONAS } from '$lib/config/personas';
 
 	interface Props {
 		/** Currently selected persona name */
 		selectedPersona: string;
 		/** List of available personas */
 		personas: readonly string[];
+		/** Current mode: 'chat' or 'reader' */
+		mode?: 'chat' | 'reader';
 		/** Whether the dropdown is interactive (clickable) */
 		interactive?: boolean;
 		/** Callback when persona is selected */
@@ -16,6 +19,7 @@
 	let {
 		selectedPersona,
 		personas,
+		mode = 'chat',
 		interactive = true,
 		onSelect
 	}: Props = $props();
@@ -29,6 +33,14 @@
 
 	const displayName = $derived(capitalize(selectedPersona));
 
+	// Check if persona is available in current mode
+	function isAvailable(persona: string): boolean {
+		if (mode === 'reader') {
+			return (READER_PERSONAS as readonly string[]).includes(persona);
+		}
+		return (CHAT_PERSONAS as readonly string[]).includes(persona);
+	}
+
 	function handleToggle(event: Event) {
 		if (interactive) {
 			event.stopPropagation();
@@ -37,6 +49,7 @@
 	}
 
 	function handleSelect(persona: string) {
+		if (!isAvailable(persona)) return;
 		isOpen = false;
 		onSelect?.(persona);
 	}
@@ -73,7 +86,9 @@
 				<button
 					class="dropdown-item"
 					class:selected={persona === selectedPersona}
+					class:disabled={!isAvailable(persona)}
 					onclick={() => handleSelect(persona)}
+					disabled={!isAvailable(persona)}
 				>
 					{capitalize(persona)}
 				</button>
@@ -149,5 +164,14 @@
 
 	.dropdown-item.selected {
 		color: var(--chat-accent);
+	}
+
+	.dropdown-item.disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
+	}
+
+	.dropdown-item.disabled:hover {
+		background: none;
 	}
 </style>

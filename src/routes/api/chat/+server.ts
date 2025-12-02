@@ -6,11 +6,11 @@
  */
 
 import type { RequestHandler } from './$types';
-import { buildContextForCalls1A1B } from '$lib/context-builder';
+import { buildContext } from '$lib/context-builder';
 import { DEFAULT_CONVERSATION_MODEL } from '$lib/config/models';
 import { getModelParams } from '$lib/config/model-params';
 import { DEFAULT_PERSONA } from '$lib/config/personas';
-import { PERSONA_GUNNAR, PERSONA_KIRBY } from '$lib/prompts';
+import { PERSONA_GUNNAR, PERSONA_KIRBY, PERSONA_SAMARA } from '$lib/prompts';
 import {
 	converseStream,
 	saveToSuperjournal,
@@ -54,24 +54,28 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		// 2. RATE LIMIT (waits silently if needed)
 		await waitForRateLimit(userId, RATE_LIMITS.ai);
 
-		// 3. Load user settings
-		const { data: settings } = await supabase
-			.from('user_settings')
-			.select('selected_conversation_model, selected_persona')
-			.eq('user_id', userId)
-			.single();
-
-		const conversationModel = settings?.selected_conversation_model || DEFAULT_CONVERSATION_MODEL;
-		const selectedPersona = settings?.selected_persona || DEFAULT_PERSONA;
-
-		// 4. Parse and validate request
+		// 3. Parse and validate request first (need mode for settings)
 		const parseResult = await parseRequestJson<unknown>(request);
 		if (!parseResult.success) return parseResult.error;
 
 		const validation = validateSchema(chatMessageSchema, parseResult.data);
 		if (!validation.success) return validation.error;
 
-		const { message, persona = selectedPersona, chart_id, chart_source } = validation.data;
+		const { message, persona: requestPersona, chart_id, chart_source, mode = 'chat', content_id } = validation.data;
+
+		// 4. Load user settings
+		const { data: settings } = await supabase
+			.from('user_settings')
+			.select('selected_conversation_model, selected_reader_model, selected_persona')
+			.eq('user_id', userId)
+			.single();
+
+		// Select model based on mode
+		const conversationModel = mode === 'reader'
+			? (settings?.selected_reader_model || DEFAULT_CONVERSATION_MODEL)
+			: (settings?.selected_conversation_model || DEFAULT_CONVERSATION_MODEL);
+		const selectedPersona = settings?.selected_persona || DEFAULT_PERSONA;
+		const persona = requestPersona || selectedPersona;
 
 		// 5. Fetch chart image if referenced
 		let chartImage: ChartImageData | null = null;
@@ -127,18 +131,22 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		// 6. Build context and get model params
 		const conversationParams = await getModelParams(conversationModel, 'conversation');
 
-		const { context, stats } = await buildContextForCalls1A1B(
+		const { context, stats } = await buildContext(
 			supabase,
 			userId,
 			persona,
 			conversationModel,
-			message
+			message,
+			mode,
+			content_id
 		);
 
 		log.info('Context built', { ...stats, model: conversationModel, persona });
 
 		// 7. Select persona prompt
-		const personaPrompt = persona === 'kirby' ? PERSONA_KIRBY : PERSONA_GUNNAR;
+		let personaPrompt = PERSONA_GUNNAR;
+		if (persona === 'kirby') personaPrompt = PERSONA_KIRBY;
+		else if (persona === 'samara') personaPrompt = PERSONA_SAMARA;
 
 		// 8. Stream response
 		const stream = new ReadableStream({
@@ -175,7 +183,9 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 						message,
 						aiResponse,
 						conversationModel,
-						persona
+						persona,
+						mode,
+						contentId: content_id
 					});
 
 					// Send completion event with real superjournal ID

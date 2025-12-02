@@ -44,36 +44,43 @@ export interface ParsedHtmlResult {
 }
 
 /**
- * Extract title from HTML content using Cheerio
+ * Extract title from HTML or markdown content
  *
- * Priority: <h1> > <title> > date-based fallback
+ * Priority: <h1> > <title> > markdown # header > date-based fallback
  *
- * @param html - Raw HTML string
+ * @param content - Raw HTML or markdown string
  * @param config - File reader configuration
  * @returns Extracted title
  */
 export async function extractTitleFromHtml(
-	html: string,
+	content: string,
 	config: FileReaderConfig = DEFAULT_FILE_READER_CONFIG
 ): Promise<string> {
 	let title = 'Untitled Article';
 
 	try {
-		const cheerio = await getCheerio();
-		const $ = cheerio.load(html);
-
-		// Try <h1> first
-		const h1Text = $('h1').first().text().trim();
-		if (h1Text) {
-			title = h1Text;
+		// First, try markdown header (works for plain text/markdown content)
+		const markdownMatch = content.match(/^#\s+(.+)$/m);
+		if (markdownMatch) {
+			title = markdownMatch[1].trim();
 		} else {
-			// Try <title> tag
-			const titleText = $('title').first().text().trim();
-			if (titleText) {
-				title = titleText;
+			// Try HTML parsing with Cheerio
+			const cheerio = await getCheerio();
+			const $ = cheerio.load(content);
+
+			// Try <h1> first
+			const h1Text = $('h1').first().text().trim();
+			if (h1Text) {
+				title = h1Text;
 			} else {
-				// Fallback to timestamp-based title
-				title = `Article ${new Date().toISOString().split('T')[0]}`;
+				// Try <title> tag
+				const titleText = $('title').first().text().trim();
+				if (titleText) {
+					title = titleText;
+				} else {
+					// Fallback to timestamp-based title
+					title = `Article ${new Date().toISOString().split('T')[0]}`;
+				}
 			}
 		}
 

@@ -28,6 +28,7 @@ async function getModelContextWindow(supabase: SupabaseClient, modelIdentifier: 
 }
 
 interface ContextComponents {
+	canon: string; // Canon content (shared across all modes)
 	superjournal: string;
 	files: string; // Enabled user files (artisan cuts)
 	starred: string;
@@ -40,6 +41,7 @@ interface ContextComponents {
 interface ContextStats {
 	totalTokens: number;
 	components: {
+		canon: number;
 		superjournal: number;
 		files: number;
 		starred: number;
@@ -72,15 +74,20 @@ interface RankedVectorResult extends VectorSearchResult {
 }
 
 /**
- * Builds complete context for Call 1A and Call 1B
+ * Builds memory context for AI conversations
  * Enforces 40% context window cap with priority-based truncation
+ *
+ * For reader mode with contentId: simplified context (superjournal only for that content)
+ * For chat mode or reader without contentId: full context (all 6 queries)
  */
-export async function buildContextForCalls1A1B(
+export async function buildContext(
 	supabase: SupabaseClient,
 	userId: string,
 	personaName: string = DEFAULT_PERSONA,
 	modelIdentifier: string,
-	userQuery?: string // Optional: enables vector search (Priority 5)
+	userQuery?: string, // Optional: enables vector search (Priority 5)
+	mode: string = 'chat', // Conversation space: 'chat' or 'reader'
+	contentId?: string // For reader mode: filter to specific content
 ): Promise<StructuredContext> {
 	// Get model's context window and calculate budget
 	const contextWindow = await getModelContextWindow(supabase, modelIdentifier);
@@ -88,6 +95,7 @@ export async function buildContextForCalls1A1B(
 
 	// Initialize context components
 	const components: ContextComponents = {
+		canon: '',
 		superjournal: '',
 		files: '',
 		starred: '',
@@ -99,6 +107,81 @@ export async function buildContextForCalls1A1B(
 
 	let totalTokens = 0;
 
+	// Priority 0: Canon content (always injected, ignores mode)
+	const { data: canonData } = await supabase
+		.from('content')
+		.select('title, artisan_cut, raw_content, created_at')
+		.eq('user_id', userId)
+		.eq('is_canon', true)
+		.order('created_at', { ascending: true });
+
+	if (canonData && canonData.length > 0) {
+		const canonText = formatCanonContent(canonData);
+		components.canon = canonText;
+		totalTokens += estimateTokens(canonText);
+	}
+
+	// Reader mode with contentId: content-centric context
+	// Samara sees the article content + conversation history about that article
+	if (mode === 'reader' && contentId) {
+		// Fetch both the article content and conversation history in parallel
+		const [contentResult, superjournalResult] = await Promise.all([
+			// Fetch the actual article content
+			supabase
+				.from('content')
+				.select('title, raw_content, artisan_cut')
+				.eq('id', contentId)
+				.eq('user_id', userId)
+				.single(),
+			// Fetch conversation history for this article
+			supabase
+				.from('superjournal')
+				.select('user_message, ai_response, persona_name, created_at')
+				.eq('user_id', userId)
+				.eq('mode', 'reader')
+				.eq('content_id', contentId)
+				.order('created_at', { ascending: false })
+				.limit(MEMORY.superjournalLimit)
+		]);
+
+		// Include the article content (prefer artisan_cut if available, else raw_content)
+		if (contentResult.data) {
+			const articleContent = contentResult.data.artisan_cut || contentResult.data.raw_content;
+			if (articleContent) {
+				const filesText = `--- CURRENT ARTICLE ---\n[${contentResult.data.title}]\n${articleContent}\n\n`;
+				components.files = filesText;
+				totalTokens += estimateTokens(filesText);
+			}
+		}
+
+		// Include conversation history
+		if (superjournalResult.data && superjournalResult.data.length > 0) {
+			const superjournalText = formatSuperjournalHistory(superjournalResult.data.reverse());
+			components.superjournal = superjournalText;
+			totalTokens += estimateTokens(superjournalText);
+		}
+
+		const finalContext = assembleContext(components);
+		return {
+			context: finalContext,
+			components,
+			stats: {
+				totalTokens,
+				components: {
+					canon: estimateTokens(components.canon),
+					superjournal: estimateTokens(components.superjournal),
+					files: estimateTokens(components.files),
+					starred: 0,
+					instructions: 0,
+					journal: 0,
+					highSalienceArcs: 0,
+					otherArcs: 0
+				}
+			}
+		};
+	}
+
+	// Full context for chat mode (or reader without contentId)
 	// Run all queries in parallel - budget checks happen during assembly
 	const [
 		superjournalResult,
@@ -112,15 +195,16 @@ export async function buildContextForCalls1A1B(
 			.from('superjournal')
 			.select('user_message, ai_response, persona_name, created_at')
 			.eq('user_id', userId)
+			.eq('mode', mode)
 			.order('created_at', { ascending: false })
 			.limit(MEMORY.superjournalLimit),
 
 		// Priority 1.5: Enabled files (user-uploaded content)
 		supabase
 			.from('content')
-			.select('title, artisan_cut, created_at')
+			.select('title, artisan_cut, raw_content, created_at')
 			.eq('user_id', userId)
-			.eq('mode', 'chat')
+			.eq('mode', mode)
 			.eq('is_enabled', true)
 			.order('created_at', { ascending: false }),
 
@@ -130,6 +214,7 @@ export async function buildContextForCalls1A1B(
 			.select('boss_essence, persona_essence, persona_name, created_at')
 			.eq('is_starred', true)
 			.eq('user_id', userId)
+			.eq('mode', mode)
 			.order('created_at', { ascending: false }),
 
 		// Priority 3: Instructions (global + current persona)
@@ -138,6 +223,7 @@ export async function buildContextForCalls1A1B(
 			.select('boss_essence, persona_essence, decision_arc_summary, persona_name, created_at')
 			.eq('is_instruction', true)
 			.eq('user_id', userId)
+			.eq('mode', mode)
 			.or(`instruction_scope.eq.global,instruction_scope.eq.${personaName}`)
 			.order('created_at', { ascending: false }),
 
@@ -146,6 +232,7 @@ export async function buildContextForCalls1A1B(
 			.from('journal')
 			.select('boss_essence, persona_essence, decision_arc_summary, persona_name, created_at')
 			.eq('user_id', userId)
+			.eq('mode', mode)
 			.order('created_at', { ascending: false })
 			.limit(MEMORY.lastNJournalEntries)
 	]);
@@ -215,7 +302,8 @@ export async function buildContextForCalls1A1B(
 			.from('journal')
 			.select('id', { count: 'exact', head: true })
 			.eq('is_instruction', false)
-			.eq('user_id', userId);
+			.eq('user_id', userId)
+			.eq('mode', mode);
 
 		if (journalCount && journalCount > MEMORY.vectorSearchThreshold) {
 			try {
@@ -234,6 +322,7 @@ export async function buildContextForCalls1A1B(
 							.from('superjournal')
 							.select('id')
 							.eq('user_id', userId)
+							.eq('mode', mode)
 							.order('created_at', { ascending: false })
 							.limit(MEMORY.superjournalLimit),
 						supabase
@@ -241,6 +330,7 @@ export async function buildContextForCalls1A1B(
 							.select('id')
 							.eq('is_instruction', false)
 							.eq('user_id', userId)
+							.eq('mode', mode)
 							.order('created_at', { ascending: false })
 							.limit(MEMORY.lastNJournalEntries)
 					]);
@@ -268,7 +358,8 @@ export async function buildContextForCalls1A1B(
 						query_embedding: JSON.stringify(queryVector),
 						match_count: 50,
 						exclude_ids: excludeIds,
-						user_id_filter: userId
+						user_id_filter: userId,
+						mode_filter: mode
 					});
 
 					if (vectorResults && vectorResults.length > 0) {
@@ -304,6 +395,7 @@ export async function buildContextForCalls1A1B(
 	const stats: ContextStats = {
 		totalTokens,
 		components: {
+			canon: estimateTokens(components.canon),
 			superjournal: estimateTokens(components.superjournal),
 			files: estimateTokens(components.files),
 			starred: estimateTokens(components.starred),
@@ -369,25 +461,46 @@ ${entry.persona_name}: ${entry.persona_essence}`
 	return `--- RECENT MEMORY (Last ${MEMORY.lastNJournalEntries} Compressed Turns) ---\n${formatted}\n\n`;
 }
 
-// Format enabled files (artisan cuts)
+// Format enabled files (artisan cuts, or raw content for ephemeral)
 function formatEnabledFiles(
 	entries: Array<{
 		title: string;
-		artisan_cut: string;
+		artisan_cut: string | null;
+		raw_content: string | null;
 		created_at: string;
 	}>
 ): string {
 	if (entries.length === 0) return '';
 
 	const formatted = entries
-		.map(
-			(entry) =>
-				`[File: ${entry.title}]
-${entry.artisan_cut}`
-		)
+		.map((entry) => {
+			const content = entry.artisan_cut || entry.raw_content || '';
+			return `[File: ${entry.title}]\n${content}`;
+		})
 		.join('\n\n');
 
 	return `--- ENABLED FILES (User-Uploaded Content) ---\n${formatted}\n\n`;
+}
+
+// Format canon content (shared across all modes)
+function formatCanonContent(
+	entries: Array<{
+		title: string;
+		artisan_cut: string | null;
+		raw_content: string | null;
+		created_at: string;
+	}>
+): string {
+	if (entries.length === 0) return '';
+
+	const formatted = entries
+		.map((entry) => {
+			const content = entry.artisan_cut || entry.raw_content || '';
+			return `[Canon: ${entry.title}]\n${content}`;
+		})
+		.join('\n\n');
+
+	return `--- CANON (Shared Knowledge) ---\n${formatted}\n\n`;
 }
 
 // Format starred messages
@@ -521,8 +634,9 @@ function truncateArcsToFit(
 // Assemble all context components into final string
 function assembleContext(components: ContextComponents): string {
 	const parts = [
+		components.canon, // Canon first (shared knowledge across all modes)
 		components.superjournal,
-		components.files, // After superjournal, before starred
+		components.files,
 		components.starred,
 		components.instructions,
 		components.journal,

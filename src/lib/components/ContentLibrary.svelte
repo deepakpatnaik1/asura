@@ -2,14 +2,18 @@
 	/**
 	 * ContentLibrary - Unified dropdown for files (chat) and articles (reader)
 	 *
-	 * Features:
-	 * - Toggle checkbox for context inclusion (both modes)
-	 * - Click title to rename (inline edit)
-	 * - Delete with confirmation handled by parent
+	 * Chat mode:
+	 * - Checkbox toggle for context injection (multi-select)
+	 * - Files can be enabled/disabled independently
+	 *
+	 * Reader mode:
+	 * - Radio button behavior (single select)
+	 * - Clicking row selects that article as active content
+	 * - Only one article can be active at a time
 	 */
 	import { tick } from 'svelte';
 	import { Icon } from 'svelte-icons-pack';
-	import { LuTrash2, LuCheck } from 'svelte-icons-pack/lu';
+	import { LuTrash2, LuCheck, LuCircle } from 'svelte-icons-pack/lu';
 
 	interface ContentItem {
 		id: string;
@@ -34,6 +38,14 @@
 	const accentVar = mode === 'chat' ? 'var(--boss-accent)' : 'var(--reader-accent)';
 	const emptyText = mode === 'chat' ? 'No files yet' : 'No articles yet';
 
+	// Check if item is selected (different logic per mode)
+	function isItemActive(item: ContentItem): boolean {
+		if (mode === 'reader') {
+			return item.id === currentItemId;
+		}
+		return item.is_enabled ?? false;
+	}
+
 	// Editing state
 	let editingId = $state<string | null>(null);
 	let editingTitle = $state('');
@@ -49,8 +61,16 @@
 
 	function handleToggleClick(item: ContentItem, event: MouseEvent) {
 		event.stopPropagation();
-		if (onToggle) {
-			onToggle(item.id, item.is_enabled ?? false);
+		if (mode === 'reader') {
+			// Reader mode: radio behavior - select this item
+			if (onSelect) {
+				onSelect(item.id);
+			}
+		} else {
+			// Chat mode: checkbox behavior - toggle enabled state
+			if (onToggle) {
+				onToggle(item.id, item.is_enabled ?? false);
+			}
 		}
 	}
 
@@ -100,19 +120,32 @@
 		{#each items as item}
 			<div
 				class="content-item"
-				class:active={item.is_enabled || currentItemId === item.id}
+				class:active={isItemActive(item)}
 				onclick={() => handleRowClick(item)}
 			>
-				<button
-					class="toggle-btn"
-					class:active={item.is_enabled}
-					onclick={(e) => handleToggleClick(item, e)}
-					title={item.is_enabled ? 'Disable context injection' : 'Enable context injection'}
-				>
-					{#if item.is_enabled}
-						<Icon src={LuCheck} size="9" />
-					{/if}
-				</button>
+				{#if mode === 'reader'}
+					<!-- Reader mode: Radio button (single select) -->
+					<button
+						class="radio-btn"
+						class:active={item.id === currentItemId}
+						onclick={(e) => handleToggleClick(item, e)}
+						title="Select this article"
+					>
+						<span class="radio-dot"></span>
+					</button>
+				{:else}
+					<!-- Chat mode: Checkbox (multi-select toggle) -->
+					<button
+						class="toggle-btn"
+						class:active={item.is_enabled}
+						onclick={(e) => handleToggleClick(item, e)}
+						title={item.is_enabled ? 'Disable context injection' : 'Enable context injection'}
+					>
+						{#if item.is_enabled}
+							<Icon src={LuCheck} size="9" />
+						{/if}
+					</button>
+				{/if}
 				<div class="content-info">
 					{#if editingId === item.id}
 						<input
@@ -220,6 +253,46 @@
 		border-color: var(--accent);
 		color: black;
 		opacity: 1;
+	}
+
+	/* Radio button for reader mode (single select) */
+	.radio-btn {
+		width: 13px;
+		height: 13px;
+		margin-left: 12px;
+		border-radius: 50%;
+		border: 1px solid hsl(var(--border));
+		background: transparent;
+		cursor: pointer;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		opacity: 0.4;
+		transition: all 0.15s;
+		flex-shrink: 0;
+		padding: 0;
+	}
+
+	.radio-btn:hover {
+		opacity: 0.8;
+		border-color: var(--accent);
+	}
+
+	.radio-btn .radio-dot {
+		width: 7px;
+		height: 7px;
+		border-radius: 50%;
+		background: transparent;
+		transition: background 0.15s;
+	}
+
+	.radio-btn.active {
+		border-color: var(--accent);
+		opacity: 1;
+	}
+
+	.radio-btn.active .radio-dot {
+		background: var(--accent);
 	}
 
 	.content-info {

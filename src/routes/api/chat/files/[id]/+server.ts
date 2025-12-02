@@ -36,12 +36,12 @@ export const PUT: RequestHandler = async ({ params, request, locals: { safeGetSe
 	}
 
 	// Update content (RLS ensures user can only update their own content)
+	// No mode filter - user owns the content, ID is unique
 	const { data, error } = await supabase
 		.from('content')
 		.update({ is_enabled, updated_at: new Date().toISOString() })
 		.eq('id', id)
 		.eq('user_id', userId)
-		.eq('mode', 'chat')
 		.select('id')
 		.single();
 
@@ -93,12 +93,12 @@ export const DELETE: RequestHandler = async ({ params, locals: { safeGetSession,
 		.like('ai_response', `<!--content:${id}-->%`);
 
 	// 4. DELETE CONTENT FROM DATABASE (CASCADE handles charts via FK)
+	// No mode filter - user owns the content, ID is unique
 	const { error } = await supabase
 		.from('content')
 		.delete()
 		.eq('id', id)
-		.eq('user_id', userId)
-		.eq('mode', 'chat');
+		.eq('user_id', userId);
 
 	if (error) {
 		return databaseError('Failed to delete file');

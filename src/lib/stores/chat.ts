@@ -23,7 +23,9 @@ export async function sendMessage(
 	userMessage: string,
 	persona?: string,
 	chartId?: string,
-	chartSource?: 'file' | 'superjournal'
+	chartSource?: 'file' | 'superjournal',
+	mode: 'chat' | 'reader' = 'chat',
+	contentId?: string // active content for reader mode
 ): Promise<void> {
 	// Create new abort controller for this request
 	currentAbortController = new AbortController();
@@ -47,11 +49,14 @@ export async function sendMessage(
 	isLoading.set(true);
 
 	try {
-		// Build request body with optional chart reference
-		const body: Record<string, unknown> = { message: userMessage, persona };
+		// Build request body with optional chart reference and mode
+		const body: Record<string, unknown> = { message: userMessage, persona, mode };
 		if (chartId && chartSource) {
 			body.chart_id = chartId;
 			body.chart_source = chartSource;
+		}
+		if (contentId) {
+			body.content_id = contentId;
 		}
 
 		const response = await fetchWithTimeout('/api/chat', {

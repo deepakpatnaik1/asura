@@ -15,7 +15,7 @@ export {
 
 // Context Injection
 export {
-	buildContextForCalls1A1B,
+	buildContext,
 	DEFAULT_CONTEXT_INJECTION_CONFIG,
 	BASIC_CONTEXT_INJECTION_CONFIG,
 	type StructuredContext,

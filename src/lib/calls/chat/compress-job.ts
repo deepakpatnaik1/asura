@@ -54,6 +54,20 @@ export async function runCompressJob(params: CompressJobParams): Promise<void> {
 	const supabase = getSupabaseServiceRole();
 
 	const doCompression = async () => {
+		// Fetch mode from superjournal first - reader mode skips compression entirely
+		const { data: sjData } = await supabase
+			.from('superjournal')
+			.select('mode')
+			.eq('id', superjournalId)
+			.single();
+		const mode = sjData?.mode || 'chat';
+
+		// Reader mode: no compression/journal - conversations stay in superjournal only
+		if (mode === 'reader') {
+			log.debug('Skipping compression for reader mode', { superjournalId });
+			return;
+		}
+
 		// Read selected compression model from user_settings table
 		const { data: settings } = await supabase
 			.from('user_settings')
@@ -117,7 +131,7 @@ export async function runCompressJob(params: CompressJobParams): Promise<void> {
 			journalId = existingJournal.id;
 			log.info('Updated existing journal', { journalId, wasStarred: existingJournal.is_starred });
 		} else {
-			// Insert new row
+			// Insert new row (journal is chat-only, reader mode skipped above)
 			const { data: journalData, error: journalError } = await supabase
 				.from('journal')
 				.insert({

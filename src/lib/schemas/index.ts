@@ -18,7 +18,10 @@ export const uuidSchema = z.string().uuid('Invalid ID format');
 export const nonEmptyString = z.string().min(1, 'Required');
 
 /** Persona enum (allowed values) */
-export const personaSchema = z.enum(['gunnar', 'kirby']);
+export const personaSchema = z.enum(['gunnar', 'kirby', 'samara']);
+
+/** Mode enum (chat or reader) */
+export const modeSchema = z.enum(['chat', 'reader']);
 
 // ============================================================================
 // Chat Schemas
@@ -34,7 +37,9 @@ export const chatMessageSchema = z.object({
 		.max(50000, 'Message too long (max 50000 characters)'),
 	persona: personaSchema.optional(),
 	chart_id: z.string().uuid().optional(),
-	chart_source: chartSourceSchema.optional()
+	chart_source: chartSourceSchema.optional(),
+	mode: modeSchema.optional(),
+	content_id: z.string().uuid().optional() // active content for reader mode
 });
 
 /** POST /api/chat/compress - Orphan recovery compression */

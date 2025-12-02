@@ -62,10 +62,9 @@
 			<a href="/chat" class="sidebar-icon" class:active={$page.url.pathname === '/chat'} title="Chat">
 				<Icon src={LuMessageSquare} size="18" />
 			</a>
-			<!-- Reader mode deleted, icon placeholder -->
-			<span class="sidebar-icon disabled" title="E-Reader (coming soon)">
+			<a href="/reader" class="sidebar-icon" class:active={$page.url.pathname === '/reader'} title="Reader">
 				<Icon src={LuBook} size="18" />
-			</span>
+			</a>
 		</div>
 	</aside>
 	{/if}

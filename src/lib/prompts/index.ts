@@ -7,6 +7,7 @@
 // Personas
 export { PERSONA_GUNNAR } from './personas/gunnar';
 export { PERSONA_KIRBY } from './personas/kirby';
+export { PERSONA_SAMARA } from './personas/samara';
 
 // Chat prompts
 export { CONVERSE_PROMPT } from './converse';

@@ -1,19 +1,23 @@
 <script lang="ts">
 	/**
-	 * PasteArea - Paste area for chat mode
+	 * PasteArea - Paste area for chat and reader modes
 	 *
 	 * Accepts HTML (Firefox Reader Mode) or plain text (markdown, Claude docs).
 	 * Toggle controls ephemeral vs persistent storage treatment.
+	 * Mode parameter determines which content pool this belongs to.
 	 */
 
 	interface Props {
 		onClose: () => void;
 		onSuccess: (id: string, title: string, content: string, superjournalId?: string) => void;
+		mode?: 'chat' | 'reader';
 	}
 
-	let { onClose, onSuccess }: Props = $props();
+	let { onClose, onSuccess, mode = 'chat' }: Props = $props();
 
-	let isPersistent = $state(true);
+	// Reader mode defaults to ephemeral, chat mode defaults to persistent
+	let isPersistent = $state(mode === 'chat');
+	let isCanon = $state(false); // Canon = shared knowledge across all modes
 	let isProcessing = $state(false);
 	let processingStatus = $state('');
 	let processingError = $state<string | null>(null);
@@ -65,7 +69,9 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					content,
-					persistent: isPersistent
+					persistent: isPersistent,
+					mode,
+					is_canon: isCanon
 				})
 			});
 
@@ -128,17 +134,33 @@
 
 		<!-- Toggle - hidden during processing -->
 		{#if !isProcessing}
-			<div class="toggle-container">
-				<span class="toggle-label" class:active={!isPersistent}>Ephemeral</span>
-				<button
-					class="toggle-switch"
-					class:on={isPersistent}
-					onclick={() => isPersistent = !isPersistent}
-					aria-label="Toggle persistent mode"
-				>
-					<span class="toggle-knob"></span>
-				</button>
-				<span class="toggle-label" class:active={isPersistent}>Persistent</span>
+			<div class="controls-row">
+				<div class="toggle-container">
+					<span class="toggle-label" class:active={!isPersistent}>Ephemeral</span>
+					<button
+						class="toggle-switch"
+						class:on={isPersistent}
+						onclick={() => isPersistent = !isPersistent}
+						aria-label="Toggle persistent mode"
+					>
+						<span class="toggle-knob"></span>
+					</button>
+					<span class="toggle-label" class:active={isPersistent}>Persistent</span>
+				</div>
+
+				<label class="canon-checkbox">
+					<button
+						class="checkbox-btn"
+						class:checked={isCanon}
+						onclick={() => isCanon = !isCanon}
+						aria-label="Toggle canon"
+					>
+						{#if isCanon}
+							<span class="checkmark">✓</span>
+						{/if}
+					</button>
+					<span class="checkbox-label" class:active={isCanon}>Canon</span>
+				</label>
 			</div>
 		{/if}
 
@@ -330,12 +352,19 @@
 		opacity: 1;
 	}
 
+	/* Controls row */
+	.controls-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-top: 12px;
+	}
+
 	/* Toggle */
 	.toggle-container {
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		margin-top: 12px;
 	}
 
 	.toggle-label {
@@ -380,5 +409,51 @@
 	.toggle-switch.on .toggle-knob {
 		transform: translateX(10px);
 		background: hsl(var(--background));
+	}
+
+	/* Canon checkbox */
+	.canon-checkbox {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		cursor: pointer;
+	}
+
+	.checkbox-btn {
+		width: 13px;
+		height: 13px;
+		border-radius: 2px;
+		border: 1px solid hsl(var(--border));
+		background: transparent;
+		cursor: pointer;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: hsl(var(--foreground));
+		transition: all 0.15s;
+		padding: 0;
+	}
+
+	.checkbox-btn.checked {
+		background: var(--accent);
+		border-color: var(--accent);
+		opacity: 1;
+	}
+
+	.checkmark {
+		font-size: 9px;
+		color: hsl(var(--background));
+		font-weight: bold;
+	}
+
+	.checkbox-label {
+		font-size: 1em;
+		color: hsl(var(--foreground));
+		opacity: 0.4;
+		transition: opacity 0.2s;
+	}
+
+	.checkbox-label.active {
+		opacity: 1;
 	}
 </style>

@@ -12,7 +12,7 @@
  */
 
 export {
-	buildContextForCalls1A1B,
+	buildContext,
 	type StructuredContext
 } from '$lib/context-builder';
 

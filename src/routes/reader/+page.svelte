@@ -3,7 +3,7 @@
 	import { LuPaperclip, LuFolder, LuCloudDownload, LuFlame } from 'svelte-icons-pack/lu';
 	import { currentMessage, isLoading, sendMessage, abortCurrentMessage } from '$lib/stores/chat';
 	import { tick, onMount } from 'svelte';
-	import { DEFAULT_PERSONA, PERSONAS, CHAT_PERSONAS } from '$lib/config/personas';
+	import { DEFAULT_READER_PERSONA, PERSONAS, READER_PERSONAS } from '$lib/config/personas';
 	import { CHAT_CONFIG, scrollToTurn, scrollToLastTurn, getTurns } from '$lib/ui/scroll';
 	import { createConfirmation } from '$lib/composables';
 	import ScrollControls from '$lib/components/ScrollControls.svelte';
@@ -48,7 +48,10 @@
 
 	// User settings state
 	type Persona = (typeof PERSONAS)[number];
-	let selectedPersona = $state<Persona>(DEFAULT_PERSONA);
+	let selectedPersona = $state<Persona>(DEFAULT_READER_PERSONA);
+
+	// Active content tracking (content-centric reader mode)
+	let activeContentId = $state<string | null>(null);
 
 	// File paste and library state
 	let showFilePaste = $state(false);
@@ -122,7 +125,7 @@
 	onMount(() => {
 		// Persist mode to localStorage
 		if (typeof window !== 'undefined') {
-			localStorage.setItem('asura_app_mode', 'chat');
+			localStorage.setItem('asura_app_mode', 'reader');
 		}
 
 		// Focus input bar on mount (when navigating to this page)
@@ -133,7 +136,11 @@
 				const response = await fetch('/api/settings');
 				if (response.ok) {
 					const settingsData = await response.json();
-					selectedPersona = settingsData.selected_persona || DEFAULT_PERSONA;
+					selectedPersona = settingsData.selected_persona || DEFAULT_READER_PERSONA;
+					// Restore active content from user settings
+					if (settingsData.active_content_id) {
+						activeContentId = settingsData.active_content_id;
+					}
 				}
 			} catch (error) {
 				console.error('Failed to load settings:', error);
@@ -188,7 +195,7 @@
 
 		isLoadingMore = true;
 		try {
-			const response = await fetch(`/api/superjournal?offset=${currentOffset}&limit=50&mode=chat`);
+			const response = await fetch(`/api/superjournal?offset=${currentOffset}&limit=50&mode=reader`);
 			if (response.ok) {
 				const result = await response.json();
 				// Prepend older messages (they come newest first, so reverse and prepend)
@@ -207,16 +214,14 @@
 	// Behavior 1: Auto-switch dropdown when typing persona name at start
 	$effect(() => {
 		const normalized = inputMessage.trim().toLowerCase();
-		if (normalized.startsWith('gunnar')) {
-			selectedPersona = 'gunnar';
-		} else if (normalized.startsWith('kirby')) {
-			selectedPersona = 'kirby';
+		if (normalized.startsWith('samara')) {
+			selectedPersona = 'samara';
 		}
 	});
 
 	// Behavior 2: Select persona from dropdown and insert name in input
 	async function selectPersona(persona: string) {
-		if (!(CHAT_PERSONAS as readonly string[]).includes(persona)) return;
+		if (!(READER_PERSONAS as readonly string[]).includes(persona)) return;
 		selectedPersona = persona as Persona;
 
 		// Replace any existing persona prefix, or prepend if none
@@ -291,8 +296,8 @@
 			chartSource = selectedChart.source;
 		}
 
-		// Send message and wait for response
-		await sendMessage(message, selectedPersona, chartId, chartSource);
+		// Send message and wait for response (reader mode with active content)
+		await sendMessage(message, selectedPersona, chartId, chartSource, 'reader', activeContentId ?? undefined);
 
 		// Add the completed message to allMessages
 		if ($currentMessage) {
@@ -453,7 +458,7 @@
 
 	async function loadFiles() {
 		try {
-			const response = await fetch('/api/chat/files');
+			const response = await fetch('/api/chat/files?mode=reader');
 			if (response.ok) {
 				const data = await response.json();
 				files = data.files || [];
@@ -493,6 +498,25 @@
 		}
 	}
 
+	async function selectContent(contentId: string) {
+		// Switch active content - this changes which conversation is displayed
+		activeContentId = contentId;
+		showFileLibrary = false;
+
+		// Persist to user settings
+		try {
+			await fetch('/api/settings', {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ active_content_id: contentId })
+			});
+		} catch (error) {
+			console.error('Failed to save active content:', error);
+		}
+
+		// TODO: Filter allMessages by content_id or reload from server
+	}
+
 	function handleFileDeleteClick(fileId: string, event: MouseEvent) {
 		event.stopPropagation();
 		fileDeleteConfirm.start(fileId, async () => {
@@ -528,6 +552,20 @@
 
 	async function handleFilePasteSuccess(fileId: string, title: string, content: string, superjournalId?: string) {
 		console.log('[Files] Saved:', title, fileId, superjournalId);
+
+		// Set this as the active content for subsequent messages
+		activeContentId = fileId;
+
+		// Persist to user settings
+		try {
+			await fetch('/api/settings', {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ active_content_id: fileId })
+			});
+		} catch (error) {
+			console.error('Failed to save active content:', error);
+		}
 
 		// Add message to display (marker + content for local display; DB stores only marker)
 		if (superjournalId) {
@@ -639,51 +677,65 @@
 	<!-- Messages Area -->
 	<div class="messages-area">
 		<div class="messages-content">
-			<!-- Load More Button -->
-			{#if hasMore}
-				<button
-					class="load-more-btn"
-					onclick={loadMoreMessages}
-					disabled={isLoadingMore}
-				>
-					{isLoadingMore ? 'Loading...' : 'Load older messages'}
-				</button>
+			{#if !activeContentId && allMessages.length === 0}
+				<!-- Empty state: prompt to paste content -->
+				<div class="empty-state">
+					<div class="empty-icon">
+						<Icon src={LuPaperclip} size="32" />
+					</div>
+					<h3>No content selected</h3>
+					<p>Paste an article to start a conversation with Samara</p>
+					<button class="paste-btn" onclick={handlePaperclipClick}>
+						Paste Article
+					</button>
+				</div>
+			{:else}
+				<!-- Load More Button -->
+				{#if hasMore}
+					<button
+						class="load-more-btn"
+						onclick={loadMoreMessages}
+						disabled={isLoadingMore}
+					>
+						{isLoadingMore ? 'Loading...' : 'Load older messages'}
+					</button>
+				{/if}
+
+				{#each allMessages as msg, index}
+					<MessageGroup
+						userMessage={msg.user_message}
+						aiResponse={msg.ai_response}
+						personaName={msg.persona_name}
+						mode="reader"
+						turnNumber={index + 1}
+						timestamp={msg.formatted_timestamp}
+						isStarred={starredIds.has(msg.id)}
+						isCopied={copiedMessageId === msg.id}
+						showActions={true}
+						onStar={() => handleStarToggle(msg.id)}
+						onCopy={() => handleCopyTurn(msg.id, msg.user_message, msg.ai_response, msg.persona_name)}
+						onDelete={() => handleMessageDeleteClick(msg.id)}
+					/>
+				{/each}
+
+				<!-- Show loading state for new message being sent -->
+				{#if $isLoading && $currentMessage}
+					<MessageGroup
+						userMessage={$currentMessage.boss}
+						aiResponse={$currentMessage.ai}
+						personaName={selectedPersona}
+						mode="reader"
+						turnNumber={allMessages.length + 1}
+						timestamp={$currentMessage.timestamp}
+						isLoading={true}
+						showActions={true}
+						onDelete={handleAbortCurrentMessage}
+					/>
+				{/if}
+
+				<!-- Scroll anchor -->
+				<div bind:this={messagesEndRef}></div>
 			{/if}
-
-			{#each allMessages as msg, index}
-				<MessageGroup
-					userMessage={msg.user_message}
-					aiResponse={msg.ai_response}
-					personaName={msg.persona_name}
-					mode="chat"
-					turnNumber={index + 1}
-					timestamp={msg.formatted_timestamp}
-					isStarred={starredIds.has(msg.id)}
-					isCopied={copiedMessageId === msg.id}
-					showActions={true}
-					onStar={() => handleStarToggle(msg.id)}
-					onCopy={() => handleCopyTurn(msg.id, msg.user_message, msg.ai_response, msg.persona_name)}
-					onDelete={() => handleMessageDeleteClick(msg.id)}
-				/>
-			{/each}
-
-			<!-- Show loading state for new message being sent -->
-			{#if $isLoading && $currentMessage}
-				<MessageGroup
-					userMessage={$currentMessage.boss}
-					aiResponse={$currentMessage.ai}
-					personaName={selectedPersona}
-					mode="chat"
-					turnNumber={allMessages.length + 1}
-					timestamp={$currentMessage.timestamp}
-					isLoading={true}
-					showActions={true}
-					onDelete={handleAbortCurrentMessage}
-				/>
-			{/if}
-
-			<!-- Scroll anchor -->
-			<div bind:this={messagesEndRef}></div>
 		</div>
 	</div>
 
@@ -714,11 +766,12 @@
 						</button>
 						{#if showFileLibrary}
 						<ContentLibrary
-							mode="chat"
+							mode="reader"
 							items={files}
-							currentItemId={null}
+							currentItemId={activeContentId}
 							isDeleting={isDeletingFile}
 							onToggle={toggleFile}
+							onSelect={selectContent}
 							onDelete={handleFileDeleteClick}
 						/>
 					{/if}
@@ -729,7 +782,7 @@
 					<PersonaDropdown
 						selectedPersona={selectedPersona}
 						personas={PERSONAS}
-						mode="chat"
+						mode="reader"
 						onSelect={selectPersona}
 					/>
 
@@ -760,6 +813,7 @@
 	<!-- File Paste Area -->
 	{#if showFilePaste}
 		<PasteArea
+			mode="reader"
 			onClose={() => showFilePaste = false}
 			onSuccess={handleFilePasteSuccess}
 		/>
@@ -771,7 +825,7 @@
 		isOpen={deleteConfirm.isActive}
 		progress={deleteConfirm.progress}
 		onCancel={() => deleteConfirm.cancel()}
-		mode="chat"
+		mode="reader"
 	/>
 
 	<!-- Nuke Confirmation Modal -->
@@ -779,7 +833,7 @@
 		isOpen={nukeConfirm.isActive}
 		progress={nukeConfirm.progress}
 		onCancel={() => nukeConfirm.cancel()}
-		mode="chat"
+		mode="reader"
 	/>
 
 	<!-- File Delete Confirmation Modal -->
@@ -787,7 +841,7 @@
 		isOpen={fileDeleteConfirm.isActive}
 		progress={fileDeleteConfirm.progress}
 		onCancel={() => fileDeleteConfirm.cancel()}
-		mode="chat"
+		mode="reader"
 	/>
 
 	<!-- Chart Delete Confirmation Modal -->
@@ -795,7 +849,7 @@
 		isOpen={chartDeleteConfirm.isActive}
 		progress={chartDeleteConfirm.progress}
 		onCancel={() => chartDeleteConfirm.cancel()}
-		mode="chat"
+		mode="reader"
 	/>
 
 	<!-- Canvas Area with Charts -->
@@ -1024,5 +1078,52 @@
 	.load-more-btn:disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
+	}
+
+	/* Empty State */
+	.empty-state {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 16px;
+		padding: 80px 24px;
+		text-align: center;
+		color: hsl(var(--muted-foreground));
+	}
+
+	.empty-icon {
+		opacity: 0.4;
+		color: var(--reader-accent, hsl(var(--foreground)));
+	}
+
+	.empty-state h3 {
+		font-size: 1.25rem;
+		font-weight: 500;
+		color: hsl(var(--foreground));
+		margin: 0;
+	}
+
+	.empty-state p {
+		font-size: 0.9rem;
+		margin: 0;
+		max-width: 280px;
+	}
+
+	.paste-btn {
+		background: transparent;
+		color: var(--reader-accent, var(--boss-accent));
+		border: 1px solid var(--reader-accent, var(--boss-accent));
+		border-radius: 6px;
+		padding: 12px 24px;
+		font-weight: 500;
+		cursor: pointer;
+		transition: all 0.2s;
+		margin-top: 8px;
+	}
+
+	.paste-btn:hover {
+		background: var(--reader-accent, var(--boss-accent));
+		color: hsl(var(--background));
 	}
 </style>
