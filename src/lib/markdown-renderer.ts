@@ -61,10 +61,12 @@ export async function renderMarkdown(markdown: string, mode: RenderMode = 'chat'
 				.replace(/&/g, '&amp;')
 				.replace(/</g, '&lt;')
 				.replace(/>/g, '&gt;');
-			const rest = numBoldMatch[3]
+			let rest = numBoldMatch[3]
 				.replace(/&/g, '&amp;')
 				.replace(/</g, '&lt;')
 				.replace(/>/g, '&gt;');
+			rest = rest.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+			rest = rest.replace(/\*([^*]+)\*/g, '<em>$1</em>');
 			listIndent = num.length + 2; // "1. " = number + ". "
 			results.push(`<span style="display: flex; margin-left: 1.5em;"><span style="color: ${ACCENT}; font-weight: bold; flex-shrink: 0; margin-right: 0.5em;">${num}.</span><span><strong style="color: ${ACCENT};">${boldText}</strong>${rest}</span></span>`);
 			continue;
@@ -77,10 +79,12 @@ export async function renderMarkdown(markdown: string, mode: RenderMode = 'chat'
 				.replace(/&/g, '&amp;')
 				.replace(/</g, '&lt;')
 				.replace(/>/g, '&gt;');
-			const rest = bulletBoldMatch[2]
+			let rest = bulletBoldMatch[2]
 				.replace(/&/g, '&amp;')
 				.replace(/</g, '&lt;')
 				.replace(/>/g, '&gt;');
+			rest = rest.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+			rest = rest.replace(/\*([^*]+)\*/g, '<em>$1</em>');
 			listIndent = 2; // "- " = 2 chars
 			results.push(`<span style="display: flex; margin-left: 1.5em;"><span style="color: ${ACCENT}; flex-shrink: 0; margin-right: 0.5em;">◦</span><span><strong style="color: ${ACCENT};">${boldText}</strong>${rest}</span></span>`);
 			continue;
@@ -159,8 +163,8 @@ export async function renderMarkdown(markdown: string, mode: RenderMode = 'chat'
 				.replace(/&/g, '&amp;')
 				.replace(/</g, '&lt;')
 				.replace(/>/g, '&gt;');
-			// Inline bold → just bold
 			rest = rest.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+			rest = rest.replace(/\*([^*]+)\*/g, '<em>$1</em>');
 			listIndent = num.length + 2; // number + ". "
 			results.push(`<span style="display: flex; margin-left: 1.5em;"><span style="color: ${ACCENT}; font-weight: bold; flex-shrink: 0; margin-right: 0.5em;">${num}.</span><span>${rest}</span></span>`);
 			continue;
