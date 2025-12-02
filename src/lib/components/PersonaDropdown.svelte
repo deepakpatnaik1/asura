@@ -1,13 +1,18 @@
 <script lang="ts">
 	import { Icon } from 'svelte-icons-pack';
 	import { LuChevronDown } from 'svelte-icons-pack/lu';
-	import { CHAT_PERSONAS, READER_PERSONAS } from '$lib/config/personas';
+
+	interface Persona {
+		name: string;
+		display_name: string;
+		mode: string;
+	}
 
 	interface Props {
 		/** Currently selected persona name */
 		selectedPersona: string;
-		/** List of available personas */
-		personas: readonly string[];
+		/** List of available personas from DB */
+		personas: Persona[];
 		/** Current mode: 'chat' or 'reader' */
 		mode?: 'chat' | 'reader';
 		/** Whether the dropdown is interactive (clickable) */
@@ -26,19 +31,15 @@
 
 	let isOpen = $state(false);
 
-	// Capitalize persona name for display
-	function capitalize(name: string): string {
-		return name.charAt(0).toUpperCase() + name.slice(1);
-	}
-
-	const displayName = $derived(capitalize(selectedPersona));
+	// Get display name from personas data
+	const displayName = $derived(
+		personas.find(p => p.name === selectedPersona)?.display_name || selectedPersona
+	);
 
 	// Check if persona is available in current mode
-	function isAvailable(persona: string): boolean {
-		if (mode === 'reader') {
-			return (READER_PERSONAS as readonly string[]).includes(persona);
-		}
-		return (CHAT_PERSONAS as readonly string[]).includes(persona);
+	function isAvailable(personaName: string): boolean {
+		const persona = personas.find(p => p.name === personaName);
+		return persona?.mode === mode;
 	}
 
 	function handleToggle(event: Event) {
@@ -85,12 +86,12 @@
 			{#each personas as persona}
 				<button
 					class="dropdown-item"
-					class:selected={persona === selectedPersona}
-					class:disabled={!isAvailable(persona)}
-					onclick={() => handleSelect(persona)}
-					disabled={!isAvailable(persona)}
+					class:selected={persona.name === selectedPersona}
+					class:disabled={!isAvailable(persona.name)}
+					onclick={() => handleSelect(persona.name)}
+					disabled={!isAvailable(persona.name)}
 				>
-					{capitalize(persona)}
+					{persona.display_name}
 				</button>
 			{/each}
 		</div>

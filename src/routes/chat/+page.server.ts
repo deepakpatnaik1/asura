@@ -128,6 +128,15 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession, supabase 
 		};
 	});
 
+	// Fetch personas from database
+	const { data: personas } = await monitor.track('fetchPersonas', async () =>
+		await supabase
+			.from('personas')
+			.select('name, display_name, mode')
+			.eq('is_active', true)
+			.order('name')
+	);
+
 	// Log query performance summary
 	const stats = monitor.getStats();
 	if (stats.slowQueries > 0) {
@@ -151,6 +160,7 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession, supabase 
 		orphans,
 		user,
 		hasMore,
-		totalCount
+		totalCount,
+		personas: personas || []
 	};
 };

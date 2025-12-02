@@ -3,7 +3,7 @@
 	import { LuPaperclip, LuFolder, LuCloudDownload, LuFlame } from 'svelte-icons-pack/lu';
 	import { currentMessage, isLoading, sendMessage, abortCurrentMessage } from '$lib/stores/chat';
 	import { tick, onMount } from 'svelte';
-	import { DEFAULT_PERSONA, PERSONAS, CHAT_PERSONAS } from '$lib/config/personas';
+	import { DEFAULT_PERSONA } from '$lib/config/personas';
 	import { CHAT_CONFIG, scrollToTurn, scrollToLastTurn, getTurns } from '$lib/ui/scroll';
 	import { createConfirmation } from '$lib/composables';
 	import ScrollControls from '$lib/components/ScrollControls.svelte';
@@ -47,8 +47,7 @@
 	let textareaRef: HTMLTextAreaElement;
 
 	// User settings state
-	type Persona = (typeof PERSONAS)[number];
-	let selectedPersona = $state<Persona>(DEFAULT_PERSONA);
+	let selectedPersona = $state<string>(DEFAULT_PERSONA);
 
 	// File paste and library state
 	let showFilePaste = $state(false);
@@ -216,12 +215,15 @@
 
 	// Behavior 2: Select persona from dropdown and insert name in input
 	async function selectPersona(persona: string) {
-		if (!(CHAT_PERSONAS as readonly string[]).includes(persona)) return;
-		selectedPersona = persona as Persona;
+		// Check if persona is available in chat mode
+		const personas = data.personas || [];
+		const personaData = personas.find((p) => p.name === persona);
+		if (!personaData || personaData.mode !== 'chat') return;
+		selectedPersona = persona;
 
 		// Replace any existing persona prefix, or prepend if none
-		const name = persona.charAt(0).toUpperCase() + persona.slice(1);
-		const personaPattern = new RegExp(`^(${PERSONAS.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join('|')}),?\\s*`, 'i');
+		const name = personaData.display_name;
+		const personaPattern = new RegExp(`^(${personas.map((p) => p.display_name).join('|')}),?\\s*`, 'i');
 		const cleanedMessage = inputMessage.replace(personaPattern, '');
 		inputMessage = cleanedMessage ? `${name}, ${cleanedMessage}` : `${name}, `;
 
@@ -728,7 +730,7 @@
 
 					<PersonaDropdown
 						selectedPersona={selectedPersona}
-						personas={PERSONAS}
+						personas={data.personas || []}
 						mode="chat"
 						onSelect={selectPersona}
 					/>
