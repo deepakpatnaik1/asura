@@ -82,7 +82,7 @@
 	}
 
 	.progress-bar.reader {
-		background: var(--reader-accent);
+		background: #991b1b;
 	}
 
 	.modal-actions {
