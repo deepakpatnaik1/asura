@@ -85,6 +85,8 @@
 							<button
 								class="action-btn"
 								class:starred={isStarred}
+								class:chat={mode === 'chat'}
+								class:reader={mode === 'reader'}
 								title={isStarred ? 'Unstar' : 'Star'}
 								onclick={onStar}
 							>
@@ -95,6 +97,8 @@
 							<button
 								class="action-btn"
 								class:copied={isCopied}
+								class:chat={mode === 'chat'}
+								class:reader={mode === 'reader'}
 								title="Copy"
 								onclick={onCopy}
 							>
@@ -246,22 +250,40 @@
 		opacity: 1;
 	}
 
-	.action-btn.starred {
+	.action-btn.starred.chat {
 		opacity: 1;
-		color: rgb(217, 133, 107);
+		color: var(--boss-accent);
 	}
 
-	.action-btn.starred :global(svg) {
-		fill: rgb(217, 133, 107);
+	.action-btn.starred.chat :global(svg) {
+		fill: var(--boss-accent);
 	}
 
-	.action-btn.copied {
+	.action-btn.starred.reader {
 		opacity: 1;
-		color: rgb(217, 133, 107);
+		color: var(--reader-accent);
 	}
 
-	.action-btn.copied :global(svg) {
-		fill: rgb(217, 133, 107);
+	.action-btn.starred.reader :global(svg) {
+		fill: var(--reader-accent);
+	}
+
+	.action-btn.copied.chat {
+		opacity: 1;
+		color: var(--boss-accent);
+	}
+
+	.action-btn.copied.chat :global(svg) {
+		fill: var(--boss-accent);
+	}
+
+	.action-btn.copied.reader {
+		opacity: 1;
+		color: var(--reader-accent);
+	}
+
+	.action-btn.copied.reader :global(svg) {
+		fill: var(--reader-accent);
 	}
 
 	.timestamp {
