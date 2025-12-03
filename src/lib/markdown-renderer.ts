@@ -102,6 +102,26 @@ export async function renderMarkdown(markdown: string, mode: RenderMode = 'chat'
 			continue;
 		}
 
+		// Markdown headers (# ## ###) → accent colored, sized by level
+		// H4-H6 are ignored (not rendered as headers)
+		// With margin annotation (h1, h2, h3) that's visible but not selectable
+		const headerMatch = line.match(/^(#{1,3})\s+(.+)$/);
+		if (headerMatch) {
+			const level = headerMatch[1].length;
+			const content = headerMatch[2]
+				.replace(/&/g, '&amp;')
+				.replace(/</g, '&lt;')
+				.replace(/>/g, '&gt;');
+			// Size decreases with level: h1=1.45em, h2=1.3em, h3=1.15em
+			const sizes = ['1.45em', '1.3em', '1.15em'];
+			const fontSize = sizes[level - 1];
+			const label = `h${level}`;
+			listIndent = 0;
+			// Position relative container with absolute-positioned label outside text flow
+			results.push(`<span style="position: relative; display: flex; align-items: center;"><span style="position: absolute; left: -2.5em; font-size: 0.7em; opacity: 0.3; user-select: none; pointer-events: none;">${label}</span><strong style="color: ${ACCENT}; font-size: ${fontSize};">${content}</strong></span>`);
+			continue;
+		}
+
 		// Horizontal rule (---) → decorative flourish divider
 		if (line.match(/^-{3,}$/)) {
 			listIndent = 0;
