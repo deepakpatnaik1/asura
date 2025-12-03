@@ -13,7 +13,7 @@ import { databaseError, notFoundError, validationError } from '$lib/api/errors';
 
 /**
  * PUT /api/chat/files/[id]
- * Toggle file enabled state for context injection
+ * Update content: toggle enabled state or rename title
  */
 export const PUT: RequestHandler = async ({ params, request, locals: { safeGetSession, supabase } }) => {
 	const auth = await requireAuth(safeGetSession);
@@ -26,27 +26,47 @@ export const PUT: RequestHandler = async ({ params, request, locals: { safeGetSe
 	}
 
 	// Parse request body
-	const parseResult = await parseRequestJson<{ is_enabled: boolean }>(request);
+	const parseResult = await parseRequestJson<{ is_enabled?: boolean; title?: string }>(request);
 	if (!parseResult.success) return parseResult.error;
 
-	const { is_enabled } = parseResult.data;
+	const { is_enabled, title } = parseResult.data;
 
-	if (typeof is_enabled !== 'boolean') {
-		return validationError('is_enabled must be a boolean', 'is_enabled');
+	// Build update object with only provided fields
+	const updateData: { is_enabled?: boolean; title?: string; updated_at: string } = {
+		updated_at: new Date().toISOString()
+	};
+
+	if (typeof is_enabled === 'boolean') {
+		updateData.is_enabled = is_enabled;
+	}
+
+	if (typeof title === 'string') {
+		const trimmedTitle = title.trim();
+		if (trimmedTitle.length === 0) {
+			return validationError('Title cannot be empty', 'title');
+		}
+		if (trimmedTitle.length > 255) {
+			return validationError('Title must be 255 characters or less', 'title');
+		}
+		updateData.title = trimmedTitle;
+	}
+
+	// Must have at least one field to update
+	if (updateData.is_enabled === undefined && updateData.title === undefined) {
+		return validationError('Must provide is_enabled or title to update', 'body');
 	}
 
 	// Update content (RLS ensures user can only update their own content)
-	// No mode filter - user owns the content, ID is unique
 	const { data, error } = await supabase
 		.from('content')
-		.update({ is_enabled, updated_at: new Date().toISOString() })
+		.update(updateData)
 		.eq('id', id)
 		.eq('user_id', userId)
 		.select('id')
 		.single();
 
 	if (error || !data) {
-		return notFoundError('File not found');
+		return notFoundError('Content not found');
 	}
 
 	return json({ success: true });

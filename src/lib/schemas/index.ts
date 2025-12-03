@@ -54,13 +54,21 @@ export const compressSchema = z.object({
 // Settings Schemas
 // ============================================================================
 
+/** Chat persona enum */
+export const chatPersonaSchema = z.enum(['gunnar', 'kirby']);
+
+/** Reader persona enum */
+export const readerPersonaSchema = z.enum(['samara']);
+
 /** PUT /api/settings - Update user settings */
 export const settingsUpdateSchema = z.object({
 	selected_conversation_model: z.string().optional(),
 	selected_compression_model: z.string().optional(),
 	selected_reader_model: z.string().optional(),
 	selected_embedding_model: z.string().optional(),
-	active_content_id: z.string().uuid().nullable().optional()
+	active_content_id: z.string().uuid().nullable().optional(),
+	selected_persona_chat: chatPersonaSchema.optional(),
+	selected_persona_reader: readerPersonaSchema.optional()
 }).refine(
 	(data) => Object.keys(data).length > 0,
 	{ message: 'At least one field must be provided' }

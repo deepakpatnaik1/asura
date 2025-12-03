@@ -92,4 +92,25 @@
     font-family: "iA Writer Quattro V", system-ui, -apple-system, sans-serif;
     font-size: 8pt;
   }
+
+  /* Text selection styling - clean highlighting */
+  ::selection {
+    background: rgba(255, 255, 255, 0.2);
+    color: inherit;
+  }
+
+  /* Make structural elements non-selectable, only text selectable */
+  button,
+  .action-btn,
+  .action-icons,
+  .message-actions,
+  .turn-indicator,
+  .message-label,
+  .timestamp,
+  .control-btn,
+  .input-bar,
+  .sidebar,
+  svg {
+    user-select: none;
+  }
 }

@@ -132,7 +132,7 @@
 				const response = await fetch('/api/settings');
 				if (response.ok) {
 					const settingsData = await response.json();
-					selectedPersona = settingsData.selected_persona || DEFAULT_PERSONA;
+					selectedPersona = settingsData.selected_persona_chat || DEFAULT_PERSONA;
 				}
 			} catch (error) {
 				console.error('Failed to load settings:', error);
@@ -235,7 +235,7 @@
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
-					selected_persona: selectedPersona
+					selected_persona_chat: selectedPersona
 				})
 			});
 		} catch (error) {
@@ -499,6 +499,35 @@
 		}
 	}
 
+	async function renameFile(fileId: string, newTitle: string) {
+		const oldTitle = files.find((f) => f.id === fileId)?.title;
+
+		// Optimistic update
+		files = files.map((f) =>
+			f.id === fileId ? { ...f, title: newTitle } : f
+		);
+
+		try {
+			const response = await fetch(`/api/chat/files/${fileId}`, {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ title: newTitle })
+			});
+
+			if (!response.ok) {
+				// Revert on failure
+				files = files.map((f) =>
+					f.id === fileId ? { ...f, title: oldTitle || '' } : f
+				);
+			}
+		} catch (error) {
+			// Revert on failure
+			files = files.map((f) =>
+				f.id === fileId ? { ...f, title: oldTitle || '' } : f
+			);
+		}
+	}
+
 	function handleFileDeleteClick(fileId: string, event: MouseEvent) {
 		event.stopPropagation();
 		fileDeleteConfirm.start(fileId, async () => {
@@ -606,6 +635,16 @@
 			textareaRef?.focus();
 			return;
 		}
+
+		// Clear text selection on Escape
+		if (event.key === 'Escape') {
+			const selection = window.getSelection();
+			if (selection && selection.toString().length > 0) {
+				selection.removeAllRanges();
+				textareaRef?.focus();
+				return;
+			}
+		}
 	}
 
 	// Auto-focus management when window regains focus
@@ -633,6 +672,11 @@
 		const target = event.target as HTMLElement;
 		// Don't interfere with paste area or input elements
 		if (target.closest('.paste-area') || target.closest('textarea') || target.closest('input')) {
+			return;
+		}
+		// Don't refocus if user has selected text (would clear selection)
+		const selection = window.getSelection();
+		if (selection && selection.toString().length > 0) {
 			return;
 		}
 		// Refocus input after a tick to let click handlers complete
@@ -725,6 +769,7 @@
 							currentItemId={null}
 							isDeleting={isDeletingFile}
 							onToggle={toggleFile}
+							onRename={renameFile}
 							onDelete={handleFileDeleteClick}
 						/>
 					{/if}

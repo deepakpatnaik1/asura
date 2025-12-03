@@ -3,17 +3,50 @@ import type { RequestHandler } from './$types';
 import { requireAuth } from '$lib/api/require-auth';
 import { notFoundError, databaseError, internalError } from '$lib/api/errors';
 
-// Toggle starred status for a superjournal entry
-// Creates placeholder journal row if compression hasn't run yet
-export const PATCH: RequestHandler = async ({ params, locals: { supabase, safeGetSession } }) => {
+/**
+ * Toggle starred status for a superjournal entry
+ *
+ * Mode-aware behavior:
+ * - chat: Stars journal entry (creates placeholder if compression pending)
+ * - reader: Stars superjournal entry directly (no journal in reader mode)
+ */
+export const PATCH: RequestHandler = async ({ url, params, locals: { supabase, safeGetSession } }) => {
 	// 1. AUTHENTICATION CHECK
 	const auth = await requireAuth(safeGetSession);
 	if (!auth.success) return auth.error;
 	const { userId } = auth;
 	const { id } = params;
+	const mode = url.searchParams.get('mode') || 'chat';
 
 	try {
-		// Check if journal entry exists
+		// READER MODE: Toggle star directly on superjournal
+		if (mode === 'reader') {
+			const { data: superjournal } = await supabase
+				.from('superjournal')
+				.select('id, is_starred')
+				.eq('id', id)
+				.eq('user_id', userId)
+				.single();
+
+			if (!superjournal) {
+				return notFoundError('Superjournal entry');
+			}
+
+			const newStarredStatus = !superjournal.is_starred;
+			const { error: updateError } = await supabase
+				.from('superjournal')
+				.update({ is_starred: newStarredStatus })
+				.eq('id', id)
+				.eq('user_id', userId);
+
+			if (updateError) {
+				return databaseError('Failed to update starred status');
+			}
+
+			return json({ success: true, id, is_starred: newStarredStatus });
+		}
+
+		// CHAT MODE: Toggle star on journal entry
 		const { data: journalEntry } = await supabase
 			.from('journal')
 			.select('id, is_starred')
