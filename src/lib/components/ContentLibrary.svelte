@@ -19,6 +19,7 @@
 		id: string;
 		title: string;
 		is_enabled?: boolean;
+		is_canon?: boolean;
 		created_at: string;
 	}
 
@@ -123,7 +124,10 @@
 				class:active={isItemActive(item)}
 				onclick={() => handleRowClick(item)}
 			>
-				{#if mode === 'reader'}
+				{#if item.is_canon}
+					<!-- Canon: no toggle, always injected -->
+					<span class="canon-spacer"></span>
+				{:else if mode === 'reader'}
 					<!-- Reader mode: Radio button (single select) -->
 					<button
 						class="radio-btn"
@@ -293,6 +297,14 @@
 
 	.radio-btn.active .radio-dot {
 		background: var(--accent);
+	}
+
+	/* Spacer for canon items (no toggle) */
+	.canon-spacer {
+		width: 13px;
+		height: 13px;
+		margin-left: 12px;
+		flex-shrink: 0;
 	}
 
 	.content-info {

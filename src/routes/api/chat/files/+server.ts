@@ -39,7 +39,7 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supab
 
 	const { data, error } = await supabase
 		.from('content')
-		.select('id, title, is_enabled, created_at')
+		.select('id, title, is_enabled, is_canon, created_at')
 		.eq('user_id', userId)
 		.eq('mode', mode)
 		.order('created_at', { ascending: false });
