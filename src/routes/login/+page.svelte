@@ -1,6 +1,12 @@
 <script lang="ts">
+	const { data } = $props();
+
+	const errorMessages: Record<string, string> = {
+		auth_failed: 'Authentication failed. Please try again.'
+	};
+
 	let loading = $state(false);
-	let error = $state('');
+	let error = $state(data.error ? errorMessages[data.error] ?? data.error : '');
 
 	async function signInWithGoogle() {
 		loading = true;

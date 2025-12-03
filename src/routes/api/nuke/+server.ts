@@ -1,23 +1,29 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { requireAuth } from '$lib/api/require-auth';
-import { databaseError, internalError } from '$lib/api/errors';
+import { databaseError, internalError, validationError } from '$lib/api/errors';
 import { createLogger } from '$lib/api/logger';
+import { modeSchema } from '$lib/schemas';
 
 /**
- * Chat Mode Nuke Endpoint
+ * Mode-Aware Nuke Endpoint
  *
  * POST /api/nuke
- * Deletes all chat mode data for the current user:
+ * Body: { mode: 'chat' | 'reader' }
+ *
+ * Deletes all conversation data for the specified mode only:
  * 1. charts (superjournal + file charts, with storage cleanup)
- * 2. superjournal (cascades to journal)
- * 3. files
- * 4. user_settings (reset)
+ * 2. superjournal (cascades to journal for chat mode)
+ * 3. content (files/articles)
+ *
+ * User settings are preserved.
+ *
+ * CRITICAL: Mode param is required. Each mode's data is strictly isolated.
  *
  * Response: { success: true, deleted: { ... } } or { error: { message, code } }
  */
 
-export const POST: RequestHandler = async ({ locals: { safeGetSession, supabase } }) => {
+export const POST: RequestHandler = async ({ request, locals: { safeGetSession, supabase } }) => {
 	const log = createLogger('NukeAPI');
 
 	try {
@@ -26,22 +32,31 @@ export const POST: RequestHandler = async ({ locals: { safeGetSession, supabase 
 		if (!auth.success) return auth.error;
 		const { userId } = auth;
 
-		log.info('Starting chat mode nuke', { userId });
+		// 2. VALIDATE MODE PARAM
+		const body = await request.json();
+		const modeResult = modeSchema.safeParse(body.mode);
+		if (!modeResult.success) {
+			return validationError('mode parameter is required (chat or reader)');
+		}
+		const mode = modeResult.data;
 
-		// 2. FETCH CHARTS FOR STORAGE CLEANUP (superjournal + file charts)
+		log.info('Starting nuke', { userId, mode });
+
+		// 3. FETCH CHARTS FOR STORAGE CLEANUP (superjournal + file charts for this mode)
 		const { data: superjournalCharts } = await supabase
 			.from('charts')
-			.select('storage_path, thumbnail_path')
+			.select('storage_path, thumbnail_path, superjournal!inner(mode)')
 			.eq('user_id', userId)
-			.not('superjournal_id', 'is', null);
+			.not('superjournal_id', 'is', null)
+			.eq('superjournal.mode', mode);
 
-		// Fetch content charts (chat mode content)
+		// Fetch content charts (content for this mode)
 		const { data: fileCharts } = await supabase
 			.from('charts')
 			.select('storage_path, thumbnail_path, content!inner(mode)')
 			.eq('user_id', userId)
 			.not('content_id', 'is', null)
-			.eq('content.mode', 'chat');
+			.eq('content.mode', mode);
 
 		// 3. COLLECT STORAGE PATHS
 		const storagePaths: string[] = [];
@@ -78,54 +93,37 @@ export const POST: RequestHandler = async ({ locals: { safeGetSession, supabase 
 			}
 		}
 
-		// 5. DELETE CHARTS (superjournal + content charts for chat mode)
-		// Note: CASCADE deletes will also handle this, but explicit delete ensures storage cleanup happened first
-		const { error: chartsError } = await supabase
-			.from('charts')
-			.delete()
-			.eq('user_id', userId)
-			.or('superjournal_id.not.is.null,content_id.not.is.null');
+		// 5. Charts will be cascade-deleted when superjournal/content are deleted
+		// Storage cleanup already happened above
 
-		if (chartsError) {
-			log.error('Failed to delete charts', { error: chartsError });
-			return databaseError('Failed to delete charts');
-		}
-
-		// 6. DELETE CHAT CONTENT (files)
+		// 6. DELETE CONTENT (files/articles) for this mode
 		const { error: contentError } = await supabase
 			.from('content')
 			.delete()
 			.eq('user_id', userId)
-			.eq('mode', 'chat');
+			.eq('mode', mode);
 
 		if (contentError) {
 			log.error('Failed to delete content', { error: contentError });
 			return databaseError('Failed to delete content');
 		}
 
-		// 7. DELETE SUPERJOURNAL (cascades to journal via FK)
+		// 7. DELETE SUPERJOURNAL for this mode (cascades to journal via FK for chat mode)
 		const { error: superjournalError } = await supabase
 			.from('superjournal')
 			.delete()
-			.eq('user_id', userId);
+			.eq('user_id', userId)
+			.eq('mode', mode);
 
 		if (superjournalError) {
 			log.error('Failed to delete superjournal', { error: superjournalError });
 			return databaseError('Failed to delete superjournal data');
 		}
 
-		// 8. DELETE USER SETTINGS (reset)
-		const { error: settingsError } = await supabase
-			.from('user_settings')
-			.delete()
-			.eq('user_id', userId);
+		// User settings are preserved - nuke only deletes conversation data
 
-		if (settingsError) {
-			log.error('Failed to delete settings', { error: settingsError });
-			return databaseError('Failed to delete settings');
-		}
-
-		log.info('Chat mode nuke complete', {
+		log.info('Nuke complete', {
+			mode,
 			superjournalCharts: superjournalCharts?.length || 0,
 			fileCharts: fileCharts?.length || 0,
 			storageFilesDeleted: storagePaths.length
@@ -133,8 +131,9 @@ export const POST: RequestHandler = async ({ locals: { safeGetSession, supabase 
 
 		return json({
 			success: true,
-			message: 'All chat mode data has been deleted',
+			message: `All ${mode} mode data has been deleted`,
 			deleted: {
+				mode,
 				superjournal_charts: superjournalCharts?.length || 0,
 				file_charts: fileCharts?.length || 0,
 				storage_files: storagePaths.length

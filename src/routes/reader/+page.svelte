@@ -65,10 +65,10 @@
 	let isDeletingFile = $state(false);
 
 	// Confirmation composables (replaces manual timer state)
-	const nukeConfirm = createConfirmation();
 	const deleteConfirm = createConfirmation();
 	const fileDeleteConfirm = createConfirmation();
 	const chartDeleteConfirm = createConfirmation();
+	const nukeConfirm = createConfirmation();
 
 	// Track timeout IDs for cleanup on unmount
 	let pendingTimeouts: number[] = [];
@@ -169,10 +169,10 @@
 		return () => {
 			pendingTimeouts.forEach(clearTimeout);
 			pendingTimeouts = [];
-			nukeConfirm.cleanup();
 			deleteConfirm.cleanup();
 			fileDeleteConfirm.cleanup();
 			chartDeleteConfirm.cleanup();
+			nukeConfirm.cleanup();
 		};
 	});
 
@@ -422,27 +422,6 @@
 			});
 	}
 
-	function handleNukeClick() {
-		nukeConfirm.start('nuke', async () => {
-			try {
-				const response = await fetch('/api/nuke', {
-					method: 'POST'
-				});
-
-				if (!response.ok) {
-					throw new Error('Failed to nuke database');
-				}
-
-				// Clear local state
-				allMessages = [];
-				allCharts = [];
-				currentMessage.set(null);
-			} catch (error) {
-				console.error('Nuke error:', error);
-			}
-		});
-	}
-
 	// File paste handlers
 	async function handlePaperclipClick() {
 		showFileLibrary = false;
@@ -629,6 +608,34 @@
 		});
 	}
 
+	// Nuke handler - deletes all reader mode data
+	function handleNukeClick() {
+		nukeConfirm.start('nuke', async () => {
+			try {
+				const response = await fetch('/api/nuke', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ mode: 'reader' })
+				});
+
+				if (!response.ok) {
+					throw new Error('Failed to nuke reader data');
+				}
+
+				// Clear local state
+				allMessages = [];
+				allCharts = [];
+				superjournalCharts = [];
+				fileCharts = [];
+				files = [];
+				activeContentId = null;
+				currentMessage.set(null);
+			} catch (error) {
+				console.error('Nuke error:', error);
+			}
+		});
+	}
+
 	// Keyboard shortcuts
 	function handleKeydown(event: KeyboardEvent) {
 		// Close file library on Escape
@@ -796,7 +803,7 @@
 						<ScrollControls config={CHAT_CONFIG} />
 					</div>
 
-					<button class="control-btn settings-btn" title="Nuke all history" onclick={handleNukeClick}><Icon src={LuFlame} size="11" /></button>
+					<button class="control-btn settings-btn" title="Nuke all reader history" onclick={handleNukeClick}><Icon src={LuFlame} size="11" /></button>
 				</div>
 				<textarea
 					placeholder="Type your message..."
@@ -834,13 +841,6 @@
 		mode="reader"
 	/>
 
-	<!-- Nuke Confirmation Modal -->
-	<ConfirmationModal
-		isOpen={nukeConfirm.isActive}
-		progress={nukeConfirm.progress}
-		onCancel={() => nukeConfirm.cancel()}
-		mode="reader"
-	/>
 
 	<!-- File Delete Confirmation Modal -->
 	<ConfirmationModal
@@ -855,6 +855,14 @@
 		isOpen={chartDeleteConfirm.isActive}
 		progress={chartDeleteConfirm.progress}
 		onCancel={() => chartDeleteConfirm.cancel()}
+		mode="reader"
+	/>
+
+	<!-- Nuke Confirmation Modal -->
+	<ConfirmationModal
+		isOpen={nukeConfirm.isActive}
+		progress={nukeConfirm.progress}
+		onCancel={() => nukeConfirm.cancel()}
 		mode="reader"
 	/>
 
@@ -959,13 +967,6 @@
 		color: var(--boss-accent);
 	}
 
-	.icon-group {
-		display: flex;
-		align-items: center;
-		gap: var(--action-icon-gap);
-		margin-left: 12px;
-	}
-
 	.settings-btn {
 		color: rgb(239, 68, 68);
 	}
@@ -979,6 +980,13 @@
 		.settings-btn {
 			margin-left: auto;
 		}
+	}
+
+	.icon-group {
+		display: flex;
+		align-items: center;
+		gap: var(--action-icon-gap);
+		margin-left: 12px;
 	}
 
 	.input-container {

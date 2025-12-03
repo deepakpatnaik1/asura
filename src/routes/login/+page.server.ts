@@ -1,7 +1,7 @@
 import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ locals: { safeGetSession } }) => {
+export const load: PageServerLoad = async ({ url, locals: { safeGetSession } }) => {
 	// If already logged in, redirect to home
 	const { session } = await safeGetSession();
 
@@ -9,5 +9,6 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession } }) => {
 		throw redirect(303, '/');
 	}
 
-	return {};
+	const error = url.searchParams.get('error');
+	return { error };
 };
