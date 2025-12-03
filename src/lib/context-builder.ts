@@ -122,7 +122,7 @@ export async function buildContext(
 	// Samara sees the article content + conversation history about that article
 	if (mode === 'reader' && contentId) {
 		// Fetch article content, conversation history, and starred items in parallel
-		const [contentResult, superjournalResult, starredJournalResult, starredSuperjournalResult] =
+		const [contentResult, superjournalResult, starredSuperjournalResult] =
 			await Promise.all([
 				// Fetch the actual article content
 				supabase
@@ -140,14 +140,7 @@ export async function buildContext(
 					.eq('content_id', contentId)
 					.order('created_at', { ascending: false })
 					.limit(MEMORY.superjournalLimit),
-				// Starred from journal (chat mode stars, compressed) - mode-agnostic
-				supabase
-					.from('journal')
-					.select('boss_essence, persona_essence, persona_name, created_at')
-					.eq('is_starred', true)
-					.eq('user_id', userId)
-					.order('created_at', { ascending: false }),
-				// Starred from superjournal (reader mode stars, full text)
+				// Starred from superjournal (reader mode stars only - mode separation)
 				supabase
 					.from('superjournal')
 					.select('user_message, ai_response, persona_name, created_at')
@@ -174,11 +167,10 @@ export async function buildContext(
 			totalTokens += estimateTokens(superjournalText);
 		}
 
-		// Include starred items (mode-agnostic: both chat and reader stars)
-		const journalStars = starredJournalResult.data || [];
+		// Include starred items (reader mode only - mode separation)
 		const superjournalStars = starredSuperjournalResult.data || [];
-		if (journalStars.length > 0 || superjournalStars.length > 0) {
-			const starredText = formatCombinedStarred(journalStars, superjournalStars);
+		if (superjournalStars.length > 0) {
+			const starredText = formatReaderStarred(superjournalStars);
 			components.starred = starredText;
 			totalTokens += estimateTokens(starredText);
 		}
@@ -208,7 +200,6 @@ export async function buildContext(
 		superjournalResult,
 		filesResult,
 		starredJournalResult,
-		starredSuperjournalResult,
 		journalResult
 	] = await Promise.all([
 		// Priority 1: Last N Superjournal turns (working memory)
@@ -229,23 +220,13 @@ export async function buildContext(
 			.eq('is_enabled', true)
 			.order('created_at', { ascending: false }),
 
-		// Priority 2a: Starred from journal (chat mode stars, compressed)
-		// Mode-agnostic: all journal stars go to both personas
+		// Priority 2: Starred from journal (chat mode stars only - mode separation)
 		supabase
 			.from('journal')
 			.select('boss_essence, persona_essence, persona_name, created_at')
 			.eq('is_starred', true)
 			.eq('user_id', userId)
-			.order('created_at', { ascending: false }),
-
-		// Priority 2b: Starred from superjournal (reader mode stars, full text)
-		// Reader stars stored in superjournal since reader mode has no journal
-		supabase
-			.from('superjournal')
-			.select('user_message, ai_response, persona_name, created_at')
-			.eq('is_starred', true)
-			.eq('user_id', userId)
-			.eq('mode', 'reader')
+			.eq('mode', mode)
 			.order('created_at', { ascending: false }),
 
 		// Priority 3: Last N Journal turns (recent memory)
@@ -277,14 +258,9 @@ export async function buildContext(
 		}
 	}
 
-	// Priority 2: Starred (combined from journal + superjournal)
-	const hasJournalStars = starredJournalResult.data && starredJournalResult.data.length > 0;
-	const hasSuperjournalStars = starredSuperjournalResult.data && starredSuperjournalResult.data.length > 0;
-	if (hasJournalStars || hasSuperjournalStars) {
-		const starredText = formatCombinedStarred(
-			starredJournalResult.data || [],
-			starredSuperjournalResult.data || []
-		);
+	// Priority 2: Starred (chat mode: journal stars only - mode separation)
+	if (starredJournalResult.data && starredJournalResult.data.length > 0) {
+		const starredText = formatStarredMessages(starredJournalResult.data);
 		const starredTokens = estimateTokens(starredText);
 		if (totalTokens + starredTokens <= contextBudget) {
 			components.starred = starredText;
@@ -516,7 +492,7 @@ function formatCanonContent(
 	return `--- CANON (Shared Knowledge) ---\n${formatted}\n\n`;
 }
 
-// Format starred messages
+// Format starred messages (chat mode: from journal - boss message only)
 function formatStarredMessages(
 	entries: Array<{
 		boss_essence: string;
@@ -531,53 +507,32 @@ function formatStarredMessages(
 		.map(
 			(entry) =>
 				`[Starred - ${formatTimestamp(entry.created_at)}]
-User: ${entry.boss_essence}
-${entry.persona_name}: ${entry.persona_essence}`
+User: ${entry.boss_essence}`
 		)
 		.join('\n\n');
 
 	return `--- STARRED MESSAGES (User-Pinned Memory) ---\n${formatted}\n\n`;
 }
 
-// Format combined starred (from journal + superjournal)
-function formatCombinedStarred(
-	journalStars: Array<{
-		boss_essence: string;
-		persona_essence: string;
-		persona_name: string;
-		created_at: string;
-	}>,
-	superjournalStars: Array<{
+// Format reader starred messages (reader mode: from superjournal)
+function formatReaderStarred(
+	entries: Array<{
 		user_message: string;
 		ai_response: string;
 		persona_name: string;
 		created_at: string;
 	}>
 ): string {
-	const allStars: Array<{ text: string; created_at: string }> = [];
+	if (entries.length === 0) return '';
 
-	// Add journal stars (compressed)
-	for (const entry of journalStars) {
-		allStars.push({
-			text: `[Starred - ${formatTimestamp(entry.created_at)}]\nUser: ${entry.boss_essence}\n${entry.persona_name}: ${entry.persona_essence}`,
-			created_at: entry.created_at
-		});
-	}
+	const formatted = entries
+		.map(
+			(entry) =>
+				`[Starred - ${formatTimestamp(entry.created_at)}]
+User: ${entry.user_message}`
+		)
+		.join('\n\n');
 
-	// Add superjournal stars (full text, reader mode)
-	for (const entry of superjournalStars) {
-		allStars.push({
-			text: `[Starred - ${formatTimestamp(entry.created_at)}]\nUser: ${entry.user_message}\n${entry.persona_name}: ${entry.ai_response}`,
-			created_at: entry.created_at
-		});
-	}
-
-	if (allStars.length === 0) return '';
-
-	// Sort by created_at ascending
-	allStars.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-
-	const formatted = allStars.map((s) => s.text).join('\n\n');
 	return `--- STARRED MESSAGES (User-Pinned Memory) ---\n${formatted}\n\n`;
 }
 
