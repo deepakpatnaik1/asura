@@ -135,13 +135,14 @@
 		<!-- Toggle - hidden during processing -->
 		{#if !isProcessing}
 			<div class="controls-row">
-				<div class="toggle-container">
+				<div class="toggle-container" class:disabled={mode === 'reader'}>
 					<span class="toggle-label" class:active={!isPersistent}>Ephemeral</span>
 					<button
 						class="toggle-switch"
 						class:on={isPersistent}
-						onclick={() => isPersistent = !isPersistent}
+						onclick={() => { if (mode !== 'reader') isPersistent = !isPersistent; }}
 						aria-label="Toggle persistent mode"
+						disabled={mode === 'reader'}
 					>
 						<span class="toggle-knob"></span>
 					</button>
@@ -376,6 +377,15 @@
 
 	.toggle-label.active {
 		opacity: 1;
+	}
+
+	.toggle-container.disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
+	}
+
+	.toggle-container.disabled .toggle-switch {
+		cursor: not-allowed;
 	}
 
 	.toggle-switch {
