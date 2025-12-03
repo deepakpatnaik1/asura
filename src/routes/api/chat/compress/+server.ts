@@ -87,8 +87,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				decision_arc_summary: compressionJson.decision_arc_summary || 'No arc generated',
 				salience_score: compressionJson.salience_score || 5,
 				is_starred: false,
-				is_instruction: compressionJson.is_instruction || false,
-				instruction_scope: compressionJson.instruction_scope || null,
 				file_name: null,
 				file_type: null,
 				embedding: null

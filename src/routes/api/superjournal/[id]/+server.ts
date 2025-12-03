@@ -60,8 +60,6 @@ export const PATCH: RequestHandler = async ({ params, locals: { supabase, safeGe
 			decision_arc_summary: 'Pending compression',
 			salience_score: 5,
 			is_starred: true,
-			is_instruction: false,
-			instruction_scope: null,
 			embedding: null
 		});
 

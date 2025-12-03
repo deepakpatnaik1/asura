@@ -24,8 +24,6 @@ export interface JournalEntry {
 	decision_arc_summary: string;
 	salience_score: number;
 	is_starred: boolean;
-	is_instruction: boolean;
-	instruction_scope: string | null;
 	embedding: string | null;
 	created_at: string;
 }
@@ -65,8 +63,6 @@ export const testJournal1: JournalEntry = {
 		'Boss sought architectural guidance; Gunnar provided structured explanation of separation of concerns, modularity, abstraction, and encapsulation',
 	salience_score: 7,
 	is_starred: false,
-	is_instruction: false,
-	instruction_scope: null,
 	embedding: null,
 	created_at: '2024-11-20T10:01:00.000Z'
 };

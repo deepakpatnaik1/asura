@@ -32,7 +32,6 @@ interface ContextComponents {
 	superjournal: string;
 	files: string; // Enabled user files (artisan cuts)
 	starred: string;
-	instructions: string;
 	journal: string;
 	highSalienceArcs: string;
 	otherArcs: string;
@@ -45,7 +44,6 @@ interface ContextStats {
 		superjournal: number;
 		files: number;
 		starred: number;
-		instructions: number;
 		journal: number;
 		highSalienceArcs: number;
 		otherArcs: number;
@@ -99,7 +97,6 @@ export async function buildContext(
 		superjournal: '',
 		files: '',
 		starred: '',
-		instructions: '',
 		journal: '',
 		highSalienceArcs: '',
 		otherArcs: ''
@@ -124,25 +121,41 @@ export async function buildContext(
 	// Reader mode with contentId: content-centric context
 	// Samara sees the article content + conversation history about that article
 	if (mode === 'reader' && contentId) {
-		// Fetch both the article content and conversation history in parallel
-		const [contentResult, superjournalResult] = await Promise.all([
-			// Fetch the actual article content
-			supabase
-				.from('content')
-				.select('title, raw_content, artisan_cut')
-				.eq('id', contentId)
-				.eq('user_id', userId)
-				.single(),
-			// Fetch conversation history for this article
-			supabase
-				.from('superjournal')
-				.select('user_message, ai_response, persona_name, created_at')
-				.eq('user_id', userId)
-				.eq('mode', 'reader')
-				.eq('content_id', contentId)
-				.order('created_at', { ascending: false })
-				.limit(MEMORY.superjournalLimit)
-		]);
+		// Fetch article content, conversation history, and starred items in parallel
+		const [contentResult, superjournalResult, starredJournalResult, starredSuperjournalResult] =
+			await Promise.all([
+				// Fetch the actual article content
+				supabase
+					.from('content')
+					.select('title, raw_content, artisan_cut')
+					.eq('id', contentId)
+					.eq('user_id', userId)
+					.single(),
+				// Fetch conversation history for this article
+				supabase
+					.from('superjournal')
+					.select('user_message, ai_response, persona_name, created_at')
+					.eq('user_id', userId)
+					.eq('mode', 'reader')
+					.eq('content_id', contentId)
+					.order('created_at', { ascending: false })
+					.limit(MEMORY.superjournalLimit),
+				// Starred from journal (chat mode stars, compressed) - mode-agnostic
+				supabase
+					.from('journal')
+					.select('boss_essence, persona_essence, persona_name, created_at')
+					.eq('is_starred', true)
+					.eq('user_id', userId)
+					.order('created_at', { ascending: false }),
+				// Starred from superjournal (reader mode stars, full text)
+				supabase
+					.from('superjournal')
+					.select('user_message, ai_response, persona_name, created_at')
+					.eq('is_starred', true)
+					.eq('user_id', userId)
+					.eq('mode', 'reader')
+					.order('created_at', { ascending: false })
+			]);
 
 		// Include the article content (prefer artisan_cut if available, else raw_content)
 		if (contentResult.data) {
@@ -161,6 +174,15 @@ export async function buildContext(
 			totalTokens += estimateTokens(superjournalText);
 		}
 
+		// Include starred items (mode-agnostic: both chat and reader stars)
+		const journalStars = starredJournalResult.data || [];
+		const superjournalStars = starredSuperjournalResult.data || [];
+		if (journalStars.length > 0 || superjournalStars.length > 0) {
+			const starredText = formatCombinedStarred(journalStars, superjournalStars);
+			components.starred = starredText;
+			totalTokens += estimateTokens(starredText);
+		}
+
 		const finalContext = assembleContext(components);
 		return {
 			context: finalContext,
@@ -171,8 +193,7 @@ export async function buildContext(
 					canon: estimateTokens(components.canon),
 					superjournal: estimateTokens(components.superjournal),
 					files: estimateTokens(components.files),
-					starred: 0,
-					instructions: 0,
+					starred: estimateTokens(components.starred),
 					journal: 0,
 					highSalienceArcs: 0,
 					otherArcs: 0
@@ -186,8 +207,8 @@ export async function buildContext(
 	const [
 		superjournalResult,
 		filesResult,
-		starredResult,
-		instructionsResult,
+		starredJournalResult,
+		starredSuperjournalResult,
 		journalResult
 	] = await Promise.all([
 		// Priority 1: Last N Superjournal turns (working memory)
@@ -208,26 +229,26 @@ export async function buildContext(
 			.eq('is_enabled', true)
 			.order('created_at', { ascending: false }),
 
-		// Priority 2: Starred messages (user-curated memory)
+		// Priority 2a: Starred from journal (chat mode stars, compressed)
+		// Mode-agnostic: all journal stars go to both personas
 		supabase
 			.from('journal')
 			.select('boss_essence, persona_essence, persona_name, created_at')
 			.eq('is_starred', true)
 			.eq('user_id', userId)
-			.eq('mode', mode)
 			.order('created_at', { ascending: false }),
 
-		// Priority 3: Instructions (global + current persona)
+		// Priority 2b: Starred from superjournal (reader mode stars, full text)
+		// Reader stars stored in superjournal since reader mode has no journal
 		supabase
-			.from('journal')
-			.select('boss_essence, persona_essence, decision_arc_summary, persona_name, created_at')
-			.eq('is_instruction', true)
+			.from('superjournal')
+			.select('user_message, ai_response, persona_name, created_at')
+			.eq('is_starred', true)
 			.eq('user_id', userId)
-			.eq('mode', mode)
-			.or(`instruction_scope.eq.global,instruction_scope.eq.${personaName}`)
+			.eq('mode', 'reader')
 			.order('created_at', { ascending: false }),
 
-		// Priority 4: Last N Journal turns (recent memory)
+		// Priority 3: Last N Journal turns (recent memory)
 		supabase
 			.from('journal')
 			.select('boss_essence, persona_essence, decision_arc_summary, persona_name, created_at')
@@ -256,9 +277,14 @@ export async function buildContext(
 		}
 	}
 
-	// Priority 2: Starred
-	if (starredResult.data && starredResult.data.length > 0) {
-		const starredText = formatStarredMessages(starredResult.data.reverse());
+	// Priority 2: Starred (combined from journal + superjournal)
+	const hasJournalStars = starredJournalResult.data && starredJournalResult.data.length > 0;
+	const hasSuperjournalStars = starredSuperjournalResult.data && starredSuperjournalResult.data.length > 0;
+	if (hasJournalStars || hasSuperjournalStars) {
+		const starredText = formatCombinedStarred(
+			starredJournalResult.data || [],
+			starredSuperjournalResult.data || []
+		);
 		const starredTokens = estimateTokens(starredText);
 		if (totalTokens + starredTokens <= contextBudget) {
 			components.starred = starredText;
@@ -266,17 +292,7 @@ export async function buildContext(
 		}
 	}
 
-	// Priority 3: Instructions
-	if (instructionsResult.data && instructionsResult.data.length > 0) {
-		const instructionsText = formatInstructions(instructionsResult.data.reverse());
-		const instructionsTokens = estimateTokens(instructionsText);
-		if (totalTokens + instructionsTokens <= contextBudget) {
-			components.instructions = instructionsText;
-			totalTokens += instructionsTokens;
-		}
-	}
-
-	// Priority 4: Journal (with truncation if needed)
+	// Priority 3: Journal (with truncation if needed)
 	if (journalResult.data && journalResult.data.length > 0) {
 		const journalData = journalResult.data.reverse();
 		const journalText = formatJournalHistory(journalData);
@@ -296,12 +312,11 @@ export async function buildContext(
 		}
 	}
 
-	// Priority 5: Vector search (only if userQuery provided and journal count > threshold)
+	// Priority 4: Vector search (only if userQuery provided and journal count > threshold)
 	if (userQuery) {
 		const { count: journalCount } = await supabase
 			.from('journal')
 			.select('id', { count: 'exact', head: true })
-			.eq('is_instruction', false)
 			.eq('user_id', userId)
 			.eq('mode', mode);
 
@@ -328,7 +343,6 @@ export async function buildContext(
 						supabase
 							.from('journal')
 							.select('id')
-							.eq('is_instruction', false)
 							.eq('user_id', userId)
 							.eq('mode', mode)
 							.order('created_at', { ascending: false })
@@ -399,7 +413,6 @@ export async function buildContext(
 			superjournal: estimateTokens(components.superjournal),
 			files: estimateTokens(components.files),
 			starred: estimateTokens(components.starred),
-			instructions: estimateTokens(components.instructions),
 			journal: estimateTokens(components.journal),
 			highSalienceArcs: estimateTokens(components.highSalienceArcs),
 			otherArcs: estimateTokens(components.otherArcs)
@@ -526,28 +539,46 @@ ${entry.persona_name}: ${entry.persona_essence}`
 	return `--- STARRED MESSAGES (User-Pinned Memory) ---\n${formatted}\n\n`;
 }
 
-// Format instructions (behavioral directives)
-function formatInstructions(
-	entries: Array<{
+// Format combined starred (from journal + superjournal)
+function formatCombinedStarred(
+	journalStars: Array<{
 		boss_essence: string;
 		persona_essence: string;
-		decision_arc_summary: string;
+		persona_name: string;
+		created_at: string;
+	}>,
+	superjournalStars: Array<{
+		user_message: string;
+		ai_response: string;
 		persona_name: string;
 		created_at: string;
 	}>
 ): string {
-	if (entries.length === 0) return '';
+	const allStars: Array<{ text: string; created_at: string }> = [];
 
-	const formatted = entries
-		.map(
-			(entry) =>
-				`[Instruction - ${formatTimestamp(entry.created_at)}]
-User: ${entry.boss_essence}
-${entry.persona_name}: ${entry.persona_essence}`
-		)
-		.join('\n\n');
+	// Add journal stars (compressed)
+	for (const entry of journalStars) {
+		allStars.push({
+			text: `[Starred - ${formatTimestamp(entry.created_at)}]\nUser: ${entry.boss_essence}\n${entry.persona_name}: ${entry.persona_essence}`,
+			created_at: entry.created_at
+		});
+	}
 
-	return `--- BEHAVIORAL INSTRUCTIONS (Persistent Directives) ---\n${formatted}\n\n`;
+	// Add superjournal stars (full text, reader mode)
+	for (const entry of superjournalStars) {
+		allStars.push({
+			text: `[Starred - ${formatTimestamp(entry.created_at)}]\nUser: ${entry.user_message}\n${entry.persona_name}: ${entry.ai_response}`,
+			created_at: entry.created_at
+		});
+	}
+
+	if (allStars.length === 0) return '';
+
+	// Sort by created_at ascending
+	allStars.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
+	const formatted = allStars.map((s) => s.text).join('\n\n');
+	return `--- STARRED MESSAGES (User-Pinned Memory) ---\n${formatted}\n\n`;
 }
 
 // Format vector search results
@@ -638,7 +669,6 @@ function assembleContext(components: ContextComponents): string {
 		components.superjournal,
 		components.files,
 		components.starred,
-		components.instructions,
 		components.journal,
 		components.highSalienceArcs,
 		components.otherArcs

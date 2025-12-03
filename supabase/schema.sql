@@ -93,8 +93,6 @@ CREATE TABLE journal (
     decision_arc_summary TEXT NOT NULL,        -- Reasoning summary
     salience_score INTEGER NOT NULL CHECK (salience_score >= 1 AND salience_score <= 10),
     is_starred BOOLEAN NOT NULL DEFAULT false,
-    is_instruction BOOLEAN NOT NULL DEFAULT false,  -- Behavioral directive flag
-    instruction_scope TEXT,                    -- 'global', 'gunnar', 'kirby', or NULL
     file_name TEXT,                            -- Associated file (deprecated)
     file_type TEXT,                            -- File MIME type (deprecated)
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -104,7 +102,6 @@ CREATE TABLE journal (
 -- Indexes
 -- idx_journal_embedding: HNSW index for fast cosine similarity search
 -- idx_journal_salience_score: Priority ordering
--- journal_instruction_scope_idx: Partial index for instructions
 
 
 -- ============================================================================

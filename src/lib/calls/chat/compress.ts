@@ -24,8 +24,6 @@ export interface CompressResult {
 	persona_essence: string;
 	decision_arc_summary: string;
 	salience_score: number;
-	is_instruction?: boolean;
-	instruction_scope?: string | null;
 }
 
 /**
@@ -85,8 +83,6 @@ export async function compress(params: CompressParams): Promise<CompressResult> 
 		persona_name: parsed.persona_name || personaName,
 		persona_essence: parsed.persona_essence || aiResponse,
 		decision_arc_summary: parsed.decision_arc_summary || 'No arc generated',
-		salience_score: parsed.salience_score || 5,
-		is_instruction: parsed.is_instruction || false,
-		instruction_scope: parsed.instruction_scope || null
+		salience_score: parsed.salience_score || 5
 	};
 }

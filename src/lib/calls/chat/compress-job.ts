@@ -96,8 +96,7 @@ export async function runCompressJob(params: CompressJobParams): Promise<void> {
 		});
 
 		log.debug('Compression output', {
-			salienceScore: compressionJson.salience_score,
-			isInstruction: compressionJson.is_instruction
+			salienceScore: compressionJson.salience_score
 		});
 
 		// Check if placeholder journal row exists (created by star button)
@@ -119,9 +118,7 @@ export async function runCompressJob(params: CompressJobParams): Promise<void> {
 					boss_essence: compressionJson.boss_essence || userMessage,
 					persona_essence: compressionJson.persona_essence || aiResponse,
 					decision_arc_summary: compressionJson.decision_arc_summary || 'No arc generated',
-					salience_score: compressionJson.salience_score || 5,
-					is_instruction: compressionJson.is_instruction || false,
-					instruction_scope: compressionJson.instruction_scope || null
+					salience_score: compressionJson.salience_score || 5
 				})
 				.eq('id', existingJournal.id);
 
@@ -143,8 +140,6 @@ export async function runCompressJob(params: CompressJobParams): Promise<void> {
 					decision_arc_summary: compressionJson.decision_arc_summary || 'No arc generated',
 					salience_score: compressionJson.salience_score || 5,
 					is_starred: false,
-					is_instruction: compressionJson.is_instruction || false,
-					instruction_scope: compressionJson.instruction_scope || null,
 					file_name: null,
 					file_type: null,
 					embedding: null
