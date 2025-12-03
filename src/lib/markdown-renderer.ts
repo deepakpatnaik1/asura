@@ -8,8 +8,11 @@ export type RenderMode = 'chat' | 'reader';
 export async function renderMarkdown(markdown: string, mode: RenderMode = 'chat'): Promise<string> {
 	const ACCENT = mode === 'chat' ? CHAT_ACCENT : READER_ACCENT;
 
+	// Strip content markers (<!--content:uuid-->) used for lazy loading
+	let processed = markdown.replace(/<!--content:[a-f0-9-]+-->\n?/gi, '');
+
 	// Em dash (—) → en dash (–) with single space each side
-	let processed = markdown.replace(/\s*—\s*/g, ' – ');
+	processed = processed.replace(/\s*—\s*/g, ' – ');
 
 	// Track indentation for continuation lines
 	let listIndent = 0;
