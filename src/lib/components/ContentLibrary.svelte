@@ -32,9 +32,17 @@
 		onSelect?: (itemId: string) => void;
 		onRename?: (itemId: string, newTitle: string) => void;
 		onDelete: (itemId: string, event: MouseEvent) => void;
+		onClear?: () => void;
 	}
 
-	let { mode, items, currentItemId, isDeleting, onToggle, onSelect, onRename, onDelete }: Props = $props();
+	let { mode, items, currentItemId, isDeleting, onToggle, onSelect, onRename, onDelete, onClear }: Props = $props();
+
+	// Check if there's anything to clear (reactive)
+	const hasSelection = $derived(
+		mode === 'reader'
+			? currentItemId !== null
+			: items.some(item => item.is_enabled)
+	);
 
 	const accentVar = mode === 'chat' ? 'var(--boss-accent)' : 'var(--reader-accent)';
 	const emptyText = mode === 'chat' ? 'No files yet' : 'No articles yet';
@@ -118,6 +126,11 @@
 	{#if items.length === 0}
 		<div class="dropdown-empty">{emptyText}</div>
 	{:else}
+		{#if onClear && hasSelection}
+			<button class="clear-btn" onclick={onClear}>
+				Clear selection
+			</button>
+		{/if}
 		{#each items as item}
 			<div
 				class="content-item"
@@ -201,6 +214,24 @@
 		text-align: center;
 		color: hsl(var(--muted-foreground));
 		font-size: 1em;
+	}
+
+	.clear-btn {
+		width: 100%;
+		padding: 10px 16px;
+		background: transparent;
+		border: none;
+		border-bottom: 1px solid hsl(var(--border));
+		color: hsl(var(--muted-foreground));
+		font-size: 0.9em;
+		cursor: pointer;
+		text-align: left;
+		transition: all 0.15s;
+	}
+
+	.clear-btn:hover {
+		background: hsl(var(--accent) / 0.3);
+		color: hsl(var(--foreground));
 	}
 
 	.content-item {
