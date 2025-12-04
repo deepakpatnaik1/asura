@@ -11,7 +11,7 @@
 	import ConfirmationModal from '$lib/components/ConfirmationModal.svelte';
 	import PersonaDropdown from '$lib/components/PersonaDropdown.svelte';
 	import InputBar from '$lib/components/InputBar.svelte';
-	import ChartCarousel from '$lib/components/ChartCarousel.svelte';
+	import CanvasContainer from '$lib/components/CanvasContainer.svelte';
 	import PasteArea from '$lib/components/PasteArea.svelte';
 	import ContentLibrary from '$lib/components/ContentLibrary.svelte';
 
@@ -895,8 +895,9 @@
 		mode="todo"
 	/>
 
-	<!-- Canvas Area with Charts -->
-	<ChartCarousel
+	<!-- Canvas Area -->
+	<CanvasContainer
+		mode="todo"
 		charts={allCharts}
 		bind:selectedChartIndex
 		bind:showLightbox

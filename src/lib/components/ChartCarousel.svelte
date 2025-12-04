@@ -164,7 +164,6 @@
 	.canvas-area {
 		grid-area: canvas;
 		background: hsl(var(--background));
-		border-left: 1px solid hsl(var(--border) / 0.3);
 		display: flex;
 		flex-direction: column;
 		justify-content: flex-end;
