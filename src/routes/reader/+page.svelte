@@ -520,6 +520,22 @@
 		}
 	}
 
+	async function clearSelection() {
+		activeContentId = null;
+		showFileLibrary = false;
+
+		// Persist to user settings
+		try {
+			await fetch('/api/settings', {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ active_content_id: null })
+			});
+		} catch (error) {
+			console.error('Failed to clear active content:', error);
+		}
+	}
+
 	function handleFileDeleteClick(fileId: string, event: MouseEvent) {
 		event.stopPropagation();
 		fileDeleteConfirm.start(fileId, async () => {
@@ -777,7 +793,7 @@
 				<div class="input-controls">
 					<!-- Paperclip icon - opens paste area -->
 					<button
-						class="control-btn"
+						class="control-btn hit-target"
 						class:active={showFilePaste}
 						title="Paste file content"
 						onclick={handlePaperclipClick}
@@ -788,7 +804,7 @@
 					<!-- Folder icon - opens file library -->
 					<div class="folder-wrapper">
 						<button
-							class="control-btn"
+							class="control-btn hit-target"
 							class:active={showFileLibrary}
 							title="File library"
 							onclick={handleFolderClick}
@@ -804,11 +820,12 @@
 							onToggle={toggleFile}
 							onSelect={selectContent}
 							onDelete={handleFileDeleteClick}
+							onClear={clearSelection}
 						/>
 					{/if}
 					</div>
 
-					<button class="control-btn" title="Download from cloud"><Icon src={LuCloudDownload} size="11" /></button>
+					<button class="control-btn hit-target" title="Download from cloud"><Icon src={LuCloudDownload} size="11" /></button>
 
 					<PersonaDropdown
 						selectedPersona={selectedPersona}
@@ -821,7 +838,7 @@
 						<ScrollControls config={CHAT_CONFIG} />
 					</div>
 
-					<button class="control-btn settings-btn" title="Nuke all reader history" onclick={handleNukeClick}><Icon src={LuFlame} size="11" /></button>
+					<button class="control-btn hit-target settings-btn" title="Nuke all reader history" onclick={handleNukeClick}><Icon src={LuFlame} size="11" /></button>
 				</div>
 				<textarea
 					placeholder="Type your message..."

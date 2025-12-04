@@ -523,6 +523,34 @@
 		}
 	}
 
+	async function clearAllFiles() {
+		// Get all enabled file IDs
+		const enabledFiles = files.filter(f => f.is_enabled);
+		if (enabledFiles.length === 0) return;
+
+		// Optimistic update
+		files = files.map(f => ({ ...f, is_enabled: false }));
+		showFileLibrary = false;
+
+		// Disable all enabled files
+		try {
+			await Promise.all(
+				enabledFiles.map(f =>
+					fetch(`/api/chat/files/${f.id}`, {
+						method: 'PUT',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({ is_enabled: false })
+					})
+				)
+			);
+			await loadFileCharts();
+		} catch (error) {
+			console.error('Failed to clear files:', error);
+			// Reload to get correct state
+			await loadFiles();
+		}
+	}
+
 	async function renameFile(fileId: string, newTitle: string) {
 		const oldTitle = files.find((f) => f.id === fileId)?.title;
 
@@ -768,7 +796,7 @@
 				<div class="input-controls">
 					<!-- Paperclip icon - opens paste area -->
 					<button
-						class="control-btn"
+						class="control-btn hit-target"
 						class:active={showFilePaste}
 						title="Paste file content"
 						onclick={handlePaperclipClick}
@@ -779,7 +807,7 @@
 					<!-- Folder icon - opens file library -->
 					<div class="folder-wrapper">
 						<button
-							class="control-btn"
+							class="control-btn hit-target"
 							class:active={showFileLibrary}
 							title="File library"
 							onclick={handleFolderClick}
@@ -795,11 +823,12 @@
 							onToggle={toggleFile}
 							onRename={renameFile}
 							onDelete={handleFileDeleteClick}
+							onClear={clearAllFiles}
 						/>
 					{/if}
 					</div>
 
-					<button class="control-btn" title="Download from cloud"><Icon src={LuCloudDownload} size="11" /></button>
+					<button class="control-btn hit-target" title="Download from cloud"><Icon src={LuCloudDownload} size="11" /></button>
 
 					<PersonaDropdown
 						selectedPersona={selectedPersona}
@@ -812,7 +841,7 @@
 						<ScrollControls config={CHAT_CONFIG} />
 					</div>
 
-					<button class="control-btn settings-btn" title="Nuke all history" onclick={handleNukeClick}><Icon src={LuFlame} size="11" /></button>
+					<button class="control-btn hit-target settings-btn" title="Nuke all history" onclick={handleNukeClick}><Icon src={LuFlame} size="11" /></button>
 				</div>
 				<textarea
 					placeholder="Type your message..."

@@ -113,4 +113,20 @@
   svg {
     user-select: none;
   }
+
+  /* Expanded hit targets for icon buttons - adds invisible 44px touch target */
+  .hit-target {
+    position: relative;
+  }
+
+  .hit-target::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+  }
 }

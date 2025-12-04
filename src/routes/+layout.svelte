@@ -59,10 +59,10 @@
 	{#if !isLoginPage}
 	<aside class="sidebar">
 		<div class="sidebar-icons">
-			<a href="/chat" class="sidebar-icon" class:active={$page.url.pathname === '/chat'} title="Chat">
+			<a href="/chat" class="sidebar-icon hit-target" class:active={$page.url.pathname === '/chat'} title="Chat">
 				<Icon src={LuMessageSquare} size="18" />
 			</a>
-			<a href="/reader" class="sidebar-icon" class:active={$page.url.pathname === '/reader'} title="Reader">
+			<a href="/reader" class="sidebar-icon hit-target" class:active={$page.url.pathname === '/reader'} title="Reader">
 				<Icon src={LuBook} size="18" />
 			</a>
 		</div>
@@ -102,13 +102,13 @@
 	<!-- User controls (top-right, hidden on login) -->
 	{#if !isLoginPage}
 	<div class="user-controls">
-		<button class="logout-btn" onclick={handleLogout} title="Sign out">
+		<button class="logout-btn hit-target" onclick={handleLogout} title="Sign out">
 			<Icon src={LuLogOut} size="18" />
 		</button>
 	</div>
 
 	<!-- Settings button (bottom-right) -->
-	<button class="settings-btn-fixed" onclick={() => showSettings = true} title="Settings">
+	<button class="settings-btn-fixed hit-target" onclick={() => showSettings = true} title="Settings">
 		<Icon src={LuSettings} size="18" />
 	</button>
 	{/if}

@@ -14,7 +14,7 @@
 
 <div class="scroll-controls">
 	<button
-		class="control-btn"
+		class="control-btn hit-target"
 		class:active={autoScroll.isActive}
 		title={autoScroll.isActive ? 'Stop auto-scroll' : 'Start auto-scroll'}
 		onclick={autoScroll.toggle}
@@ -22,14 +22,14 @@
 		<Icon src={autoScroll.isActive ? LuPause : LuPlay} size="11" />
 	</button>
 	<button
-		class="control-btn"
+		class="control-btn hit-target"
 		title="Next turn"
 		onclick={() => scrollToNextTurn(config)}
 	>
 		<Icon src={LuArrowDown} size="13" />
 	</button>
 	<button
-		class="control-btn"
+		class="control-btn hit-target"
 		title="Previous turn"
 		onclick={() => scrollToPreviousTurn(config)}
 	>

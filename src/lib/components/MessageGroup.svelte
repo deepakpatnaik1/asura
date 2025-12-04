@@ -83,7 +83,7 @@
 					<div class="action-icons">
 						{#if onStar}
 							<button
-								class="action-btn"
+								class="action-btn hit-target"
 								class:starred={isStarred}
 								class:chat={mode === 'chat'}
 								class:reader={mode === 'reader'}
@@ -95,7 +95,7 @@
 						{/if}
 						{#if onCopy}
 							<button
-								class="action-btn"
+								class="action-btn hit-target"
 								class:copied={isCopied}
 								class:chat={mode === 'chat'}
 								class:reader={mode === 'reader'}
@@ -106,7 +106,7 @@
 							</button>
 						{/if}
 						{#if onDelete}
-							<button class="action-btn" title="Delete" onclick={onDelete}>
+							<button class="action-btn hit-target" title="Delete" onclick={onDelete}>
 								<Icon src={LuTrash2} size="11" />
 							</button>
 						{/if}
