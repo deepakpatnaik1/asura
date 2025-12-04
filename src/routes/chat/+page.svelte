@@ -49,6 +49,12 @@
 	// User settings state
 	let selectedPersona = $state<string>(DEFAULT_PERSONA);
 
+	// Helper to get persona prefix for input field
+	function getPersonaPrefix(): string {
+		const persona = data.personas?.find((p) => p.name === selectedPersona);
+		return persona ? `${persona.display_name}, ` : '';
+	}
+
 	// File paste and library state
 	let showFilePaste = $state(false);
 	let showFileLibrary = $state(false);
@@ -138,6 +144,9 @@
 				console.error('Failed to load settings:', error);
 				// Fallback to defaults if database read fails
 			}
+
+			// Pre-fill input with persona prefix
+			inputMessage = getPersonaPrefix();
 
 			// Load charts for existing messages
 			await loadCharts();
@@ -268,7 +277,7 @@
 		if (!inputMessage.trim() || $isLoading) return;
 
 		const message = inputMessage.trim();
-		inputMessage = '';
+		inputMessage = getPersonaPrefix();
 		resetTextareaHeight();
 
 		// Get selected chart info if lightbox is open

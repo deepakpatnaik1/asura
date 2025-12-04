@@ -49,6 +49,12 @@
 	// User settings state
 	let selectedPersona = $state<string>(DEFAULT_TODO_PERSONA);
 
+	// Helper to get persona prefix for input field
+	function getPersonaPrefix(): string {
+		const persona = data.personas?.find((p) => p.name === selectedPersona);
+		return persona ? `${persona.display_name}, ` : '';
+	}
+
 	// File paste and library state
 	let showFilePaste = $state(false);
 	let showFileLibrary = $state(false);
@@ -133,6 +139,8 @@
 				if (response.ok) {
 					const settingsData = await response.json();
 					selectedPersona = settingsData.selected_persona_todo || DEFAULT_TODO_PERSONA;
+					// Initialize input with persona prefix
+					inputMessage = getPersonaPrefix();
 				}
 			} catch (error) {
 				console.error('Failed to load settings:', error);
@@ -268,7 +276,7 @@
 		if (!inputMessage.trim() || $isLoading) return;
 
 		const message = inputMessage.trim();
-		inputMessage = '';
+		inputMessage = getPersonaPrefix();
 		resetTextareaHeight();
 
 		// Get selected chart info if lightbox is open

@@ -49,6 +49,12 @@
 	// User settings state
 	let selectedPersona = $state<string>(DEFAULT_READER_PERSONA);
 
+	// Helper to get persona prefix for input field
+	function getPersonaPrefix(): string {
+		const persona = data.personas?.find((p) => p.name === selectedPersona);
+		return persona ? `${persona.display_name}, ` : '';
+	}
+
 	// Active content tracking (content-centric reader mode)
 	let activeContentId = $state<string | null>(null);
 
@@ -140,6 +146,8 @@
 					if (settingsData.active_content_id) {
 						activeContentId = settingsData.active_content_id;
 					}
+					// Initialize input with persona prefix
+					inputMessage = getPersonaPrefix();
 				}
 			} catch (error) {
 				console.error('Failed to load settings:', error);
@@ -275,7 +283,7 @@
 		if (!inputMessage.trim() || $isLoading) return;
 
 		const message = inputMessage.trim();
-		inputMessage = '';
+		inputMessage = getPersonaPrefix();
 		resetTextareaHeight();
 
 		// Get selected chart info if lightbox is open
