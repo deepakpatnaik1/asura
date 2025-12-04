@@ -38,7 +38,7 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession, supabase 
 	);
 
 	if (error) {
-		return { messages: [], starredIds: [], orphans: [], user, hasMore: false, totalCount: 0 };
+		return { messages: [], starredIds: [], user, hasMore: false, totalCount: 0 };
 	}
 
 	const totalCount = count ?? 0;
@@ -57,37 +57,6 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession, supabase 
 	const starredIds = (starredJournals || [])
 		.map((j) => j.superjournal_id)
 		.filter((id): id is string => id !== null);
-
-	// Only fetch journal records for superjournal IDs on current page (not ALL journals)
-	const currentPageIds = (messages || []).map((m) => m.id);
-	const { data: pageJournals } = await monitor.track('fetchJournalIds', async () =>
-		await supabase
-			.from('journal')
-			.select('superjournal_id')
-			.eq('user_id', user!.id)
-			.eq('mode', 'chat')
-			.in('superjournal_id', currentPageIds)
-	);
-
-	const journalSuperjournalIds = new Set(
-		(pageJournals || []).map((j) => j.superjournal_id).filter(Boolean)
-	);
-
-	// Find orphans: superjournal entries older than 10 minutes without journal entries
-	const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-	const orphans = (messages || [])
-		.filter((msg) => {
-			const isOld = msg.created_at < tenMinutesAgo;
-			const hasNoJournal = !journalSuperjournalIds.has(msg.id);
-			return isOld && hasNoJournal;
-		})
-		.map((msg) => ({
-			superjournal_id: msg.id,
-			user_message: msg.user_message,
-			ai_response: msg.ai_response,
-			persona_name: msg.persona_name
-		}));
-
 
 	// Expand content markers: <!--content:id--> -> actual content from content table
 	const contentMarkerRegex = /^<!--content:([a-f0-9-]+)-->(?:\n[\s\S]*)?$/;
@@ -157,7 +126,6 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession, supabase 
 	return {
 		messages: messagesWithFormattedTimestamps,
 		starredIds,
-		orphans,
 		user,
 		hasMore,
 		totalCount,
