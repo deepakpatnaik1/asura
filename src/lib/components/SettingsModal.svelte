@@ -6,6 +6,7 @@
 		DEFAULT_CONVERSATION_MODEL,
 		DEFAULT_COMPRESSION_MODEL,
 		DEFAULT_READER_MODEL,
+		DEFAULT_TODO_MODEL,
 		EMBEDDING_MODEL
 	} from '$lib/config/models';
 
@@ -27,6 +28,7 @@
 	let selectedConversationModel = $state<string>('');
 	let selectedCompressionModel = $state<string>('');
 	let selectedReaderModel = $state<string>('');
+	let selectedTodoModel = $state<string>('');
 	let selectedEmbeddingModel = $state<string>('');
 	let isLoading = $state(true);
 	let isSaving = $state(false);
@@ -54,6 +56,7 @@
 			selectedCompressionModel =
 				settings.selected_compression_model || DEFAULT_COMPRESSION_MODEL;
 			selectedReaderModel = settings.selected_reader_model || DEFAULT_READER_MODEL;
+			selectedTodoModel = settings.selected_todo_model || DEFAULT_TODO_MODEL;
 			selectedEmbeddingModel = settings.selected_embedding_model || EMBEDDING_MODEL;
 
 			isLoading = false;
@@ -77,6 +80,7 @@
 					selected_conversation_model: selectedConversationModel,
 					selected_compression_model: selectedCompressionModel,
 					selected_reader_model: selectedReaderModel,
+					selected_todo_model: selectedTodoModel,
 					selected_embedding_model: selectedEmbeddingModel
 				})
 			});
@@ -194,6 +198,18 @@
 						{/each}
 					</select>
 					<p class="help-text">Used for article processing and summarization</p>
+				</div>
+
+				<div class="settings-section">
+					<label for="todo-model">Todo Model</label>
+					<select id="todo-model" bind:value={selectedTodoModel}>
+						{#each models.filter(m => m.model_type === 'text_generation') as model}
+							<option value={model.model_identifier}>
+								{model.model_name} ({model.provider})
+							</option>
+						{/each}
+					</select>
+					<p class="help-text">Used for todo mode conversations</p>
 				</div>
 
 				<div class="settings-section">

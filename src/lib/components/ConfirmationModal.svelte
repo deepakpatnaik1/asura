@@ -1,4 +1,6 @@
 <script lang="ts">
+	import type { Mode } from '$lib/config/modes';
+
 	interface Props {
 		/** Whether the modal is visible */
 		isOpen: boolean;
@@ -8,8 +10,8 @@
 		message?: string;
 		/** Cancel button click handler */
 		onCancel: () => void;
-		/** Mode for accent color: 'chat' or 'reader' */
-		mode?: 'chat' | 'reader';
+		/** Mode for accent color */
+		mode?: Mode;
 	}
 
 	let {

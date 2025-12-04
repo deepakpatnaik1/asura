@@ -1,12 +1,11 @@
-import { CHAT_ACCENT, READER_ACCENT } from '$lib/config/colors';
-
-export type RenderMode = 'chat' | 'reader';
+import { CHAT_ACCENT, READER_ACCENT, TODO_ACCENT } from '$lib/config/colors';
+import type { Mode } from '$lib/config/modes';
 
 /**
  * EXPERIMENT: Raw output with selective formatting
  */
-export async function renderMarkdown(markdown: string, mode: RenderMode = 'chat'): Promise<string> {
-	const ACCENT = mode === 'chat' ? CHAT_ACCENT : READER_ACCENT;
+export async function renderMarkdown(markdown: string, mode: Mode = 'chat'): Promise<string> {
+	const ACCENT = mode === 'chat' ? CHAT_ACCENT : mode === 'reader' ? READER_ACCENT : TODO_ACCENT;
 
 	// Strip content markers (<!--content:uuid-->) used for lazy loading
 	let processed = markdown.replace(/<!--content:[a-f0-9-]+-->\n?/gi, '');

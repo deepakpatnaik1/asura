@@ -21,5 +21,8 @@ export const DEFAULT_COMPRESSION_MODEL = 'claude-haiku-4-5-20251001' as const;
 /** Default e-reader model - Claude 4.5 Haiku */
 export const DEFAULT_READER_MODEL = 'claude-haiku-4-5-20251001' as const;
 
+/** Default todo model - Claude 4.5 Haiku */
+export const DEFAULT_TODO_MODEL = 'claude-haiku-4-5-20251001' as const;
+
 /** Default embedding model for vector search - Voyage AI v3 (1024 dimensions) */
 export const EMBEDDING_MODEL = 'voyage-3' as const;

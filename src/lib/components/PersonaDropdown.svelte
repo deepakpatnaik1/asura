@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Icon } from 'svelte-icons-pack';
 	import { LuChevronDown } from 'svelte-icons-pack/lu';
+	import type { Mode } from '$lib/config/modes';
 
 	interface Persona {
 		name: string;
@@ -13,8 +14,8 @@
 		selectedPersona: string;
 		/** List of available personas from DB */
 		personas: Persona[];
-		/** Current mode: 'chat' or 'reader' */
-		mode?: 'chat' | 'reader';
+		/** Current mode */
+		mode?: Mode;
 		/** Whether the dropdown is interactive (clickable) */
 		interactive?: boolean;
 		/** Callback when persona is selected */

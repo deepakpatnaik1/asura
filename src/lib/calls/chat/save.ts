@@ -9,6 +9,7 @@ import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
 import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { createLogger } from '$lib/api/logger';
+import type { Mode } from '$lib/config/modes';
 import { runCompressJob } from './compress-job';
 import { runExtractTablesJob } from './extract-tables';
 import { scheduleRetries } from './retry';
@@ -29,7 +30,7 @@ export interface SaveConversationParams {
 	aiResponse: string;
 	conversationModel: string;
 	persona: string;
-	mode?: 'chat' | 'reader';
+	mode?: Mode;
 	contentId?: string; // article ID for reader mode
 }
 

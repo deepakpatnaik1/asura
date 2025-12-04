@@ -1,5 +1,6 @@
 import { writable } from 'svelte/store';
 import { fetchWithTimeout } from '$lib/utils/fetch-with-retry';
+import type { Mode } from '$lib/config/modes';
 
 interface Message {
 	id: string;
@@ -24,7 +25,7 @@ export async function sendMessage(
 	persona?: string,
 	chartId?: string,
 	chartSource?: 'file' | 'superjournal',
-	mode: 'chat' | 'reader' = 'chat',
+	mode: Mode = 'chat',
 	contentId?: string // active content for reader mode
 ): Promise<void> {
 	// Create new abort controller for this request

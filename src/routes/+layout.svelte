@@ -3,7 +3,7 @@
 	import { onMount, tick } from 'svelte';
 	import { page } from '$app/stores';
 	import { Icon } from 'svelte-icons-pack';
-	import { LuMessageSquare, LuBook, LuLogOut, LuSettings, LuChevronDown, LuPlus, LuWifiOff } from 'svelte-icons-pack/lu';
+	import { LuMessageSquare, LuBook, LuListChecks, LuLogOut, LuSettings, LuChevronDown, LuPlus, LuWifiOff } from 'svelte-icons-pack/lu';
 	import SettingsModal from '$lib/components/SettingsModal.svelte';
 	import ErrorBoundary from '$lib/components/ErrorBoundary.svelte';
 	import { isConnected, initConnectivityListeners, cleanupConnectivityListeners } from '$lib/stores/connectivity';
@@ -64,6 +64,9 @@
 			</a>
 			<a href="/reader" class="sidebar-icon hit-target" class:active={$page.url.pathname === '/reader'} title="Reader">
 				<Icon src={LuBook} size="18" />
+			</a>
+			<a href="/todo" class="sidebar-icon hit-target" class:active={$page.url.pathname === '/todo'} title="Todo">
+				<Icon src={LuListChecks} size="18" />
 			</a>
 		</div>
 	</aside>
@@ -200,6 +203,12 @@
 		/* Reader mode (second icon) */
 		opacity: 1;
 		color: var(--reader-accent);
+	}
+
+	.sidebar-icon.active:nth-child(3) {
+		/* Todo mode (third icon) */
+		opacity: 1;
+		color: var(--todo-accent);
 	}
 
 	.sidebar-icon.disabled {

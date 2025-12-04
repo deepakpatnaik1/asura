@@ -14,6 +14,7 @@
 	import { tick } from 'svelte';
 	import { Icon } from 'svelte-icons-pack';
 	import { LuTrash2, LuCheck, LuCircle } from 'svelte-icons-pack/lu';
+	import type { Mode } from '$lib/config/modes';
 
 	interface ContentItem {
 		id: string;
@@ -24,7 +25,7 @@
 	}
 
 	interface Props {
-		mode: 'chat' | 'reader';
+		mode: Mode;
 		items: ContentItem[];
 		currentItemId: string | null;
 		isDeleting: boolean;

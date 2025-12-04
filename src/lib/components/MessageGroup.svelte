@@ -2,6 +2,7 @@
 	import { Icon } from 'svelte-icons-pack';
 	import { LuStar, LuCopy, LuTrash2 } from 'svelte-icons-pack/lu';
 	import { renderMarkdown } from '$lib/markdown-renderer';
+	import type { Mode } from '$lib/config/modes';
 
 	interface Props {
 		/** User message content */
@@ -10,8 +11,8 @@
 		aiResponse: string;
 		/** Persona name to display */
 		personaName: string;
-		/** Mode for accent color: 'chat' or 'reader' */
-		mode: 'chat' | 'reader';
+		/** Mode for accent color */
+		mode: Mode;
 		/** Optional turn number */
 		turnNumber?: number;
 		/** Optional timestamp string */

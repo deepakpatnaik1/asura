@@ -6,6 +6,7 @@
  */
 
 import { z } from 'zod';
+import { MODES, type Mode } from '$lib/config/modes';
 
 // ============================================================================
 // Common Validators
@@ -20,8 +21,11 @@ export const nonEmptyString = z.string().min(1, 'Required');
 /** Persona enum (allowed values) */
 export const personaSchema = z.enum(['gunnar', 'kirby', 'samara']);
 
-/** Mode enum (chat or reader) */
-export const modeSchema = z.enum(['chat', 'reader']);
+/** Mode enum (chat, reader, or todo) - derived from MODES constant */
+export const modeSchema = z.enum(MODES);
+
+/** Re-export Mode type for convenience */
+export type { Mode };
 
 // ============================================================================
 // Chat Schemas
@@ -65,6 +69,7 @@ export const settingsUpdateSchema = z.object({
 	selected_conversation_model: z.string().optional(),
 	selected_compression_model: z.string().optional(),
 	selected_reader_model: z.string().optional(),
+	selected_todo_model: z.string().optional(),
 	selected_embedding_model: z.string().optional(),
 	active_content_id: z.string().uuid().nullable().optional(),
 	selected_persona_chat: chatPersonaSchema.optional(),
