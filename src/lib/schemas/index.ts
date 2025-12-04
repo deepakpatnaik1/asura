@@ -19,7 +19,7 @@ export const uuidSchema = z.string().uuid('Invalid ID format');
 export const nonEmptyString = z.string().min(1, 'Required');
 
 /** Persona enum (allowed values) */
-export const personaSchema = z.enum(['gunnar', 'kirby', 'samara']);
+export const personaSchema = z.enum(['gunnar', 'kirby', 'samara', 'alicja']);
 
 /** Mode enum (chat, reader, or todo) - derived from MODES constant */
 export const modeSchema = z.enum(MODES);
@@ -64,6 +64,9 @@ export const chatPersonaSchema = z.enum(['gunnar', 'kirby']);
 /** Reader persona enum */
 export const readerPersonaSchema = z.enum(['samara']);
 
+/** Todo persona enum */
+export const todoPersonaSchema = z.enum(['alicja']);
+
 /** PUT /api/settings - Update user settings */
 export const settingsUpdateSchema = z.object({
 	selected_conversation_model: z.string().optional(),
@@ -73,7 +76,8 @@ export const settingsUpdateSchema = z.object({
 	selected_embedding_model: z.string().optional(),
 	active_content_id: z.string().uuid().nullable().optional(),
 	selected_persona_chat: chatPersonaSchema.optional(),
-	selected_persona_reader: readerPersonaSchema.optional()
+	selected_persona_reader: readerPersonaSchema.optional(),
+	selected_persona_todo: todoPersonaSchema.optional()
 }).refine(
 	(data) => Object.keys(data).length > 0,
 	{ message: 'At least one field must be provided' }

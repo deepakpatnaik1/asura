@@ -3,7 +3,7 @@
 	import { LuPaperclip, LuFolder, LuCloudDownload, LuFlame } from 'svelte-icons-pack/lu';
 	import { currentMessage, isLoading, sendMessage, abortCurrentMessage } from '$lib/stores/chat';
 	import { tick, onMount } from 'svelte';
-	import { DEFAULT_PERSONA } from '$lib/config/personas';
+	import { DEFAULT_TODO_PERSONA } from '$lib/config/personas';
 	import { CHAT_CONFIG, scrollToTurn, scrollToLastTurn, getTurns } from '$lib/ui/scroll';
 	import { createConfirmation } from '$lib/composables';
 	import ScrollControls from '$lib/components/ScrollControls.svelte';
@@ -47,7 +47,7 @@
 	let textareaRef: HTMLTextAreaElement;
 
 	// User settings state
-	let selectedPersona = $state<string>(DEFAULT_PERSONA);
+	let selectedPersona = $state<string>(DEFAULT_TODO_PERSONA);
 
 	// File paste and library state
 	let showFilePaste = $state(false);
@@ -132,8 +132,7 @@
 				const response = await fetch('/api/settings');
 				if (response.ok) {
 					const settingsData = await response.json();
-					// Use chat persona for now (todo persona not yet in DB)
-					selectedPersona = settingsData.selected_persona_chat || DEFAULT_PERSONA;
+					selectedPersona = settingsData.selected_persona_todo || DEFAULT_TODO_PERSONA;
 				}
 			} catch (error) {
 				console.error('Failed to load settings:', error);
@@ -221,7 +220,7 @@
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
-					selected_persona_chat: selectedPersona
+					selected_persona_todo: selectedPersona
 				})
 			});
 		} catch (error) {

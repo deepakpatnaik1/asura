@@ -15,9 +15,10 @@ We will work on the open docs.
 
 ## What Is Asura?
 
-AI chat app with two modes:
+AI chat app with three modes:
 - **Chat**: Strategic conversations with Gunnar (mentor) or Kirby (marketer)
 - **Reader**: Article discussion with Samara (teacher)
+- **Todo**: Task management with Alicja (TBD)
 
 ## Tech Stack
 
@@ -52,6 +53,7 @@ src/
 ├── routes/
 │   ├── chat/             # Chat mode UI
 │   ├── reader/           # Reader mode UI
+│   ├── todo/             # Todo mode UI
 │   └── api/              # REST endpoints
 └── supabase/migrations/  # DB schema
 ```
@@ -107,8 +109,9 @@ src/
 - **Gunnar** (chat): YC mentor, challenges assumptions
 - **Kirby** (chat): Guerrilla marketer, bold ideas
 - **Samara** (reader): Deep reading teacher, pattern recognition
+- **Alicja** (todo): TBD
 
-Stored per mode: `selected_persona_chat`, `selected_persona_reader`
+Stored per mode: `selected_persona_chat`, `selected_persona_reader`, `selected_persona_todo`
 
 ## Charts
 
