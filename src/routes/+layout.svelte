@@ -102,18 +102,20 @@
 		</aside>
 	{/if} -->
 
-	<!-- User controls (top-right, hidden on login) -->
+	<!-- Right sidebar (hidden on login) -->
 	{#if !isLoginPage}
-	<div class="user-controls">
-		<button class="logout-btn hit-target" onclick={handleLogout} title="Sign out">
-			<Icon src={LuLogOut} size="18" />
-		</button>
-	</div>
-
-	<!-- Settings button (bottom-right) -->
-	<button class="settings-btn-fixed hit-target" onclick={() => showSettings = true} title="Settings">
-		<Icon src={LuSettings} size="18" />
-	</button>
+	<aside class="right-sidebar">
+		<div class="right-sidebar-top">
+			<button class="sidebar-btn hit-target" onclick={handleLogout} title="Sign out">
+				<Icon src={LuLogOut} size="18" />
+			</button>
+		</div>
+		<div class="right-sidebar-bottom">
+			<button class="sidebar-btn hit-target" onclick={() => showSettings = true} title="Settings">
+				<Icon src={LuSettings} size="18" />
+			</button>
+		</div>
+	</aside>
 	{/if}
 
 	<!-- Offline indicator -->
@@ -226,46 +228,44 @@
 		height: 100vh;
 	}
 
-	/* User controls (top-right) */
-	.user-controls {
+	/* Right sidebar */
+	.right-sidebar {
 		position: fixed;
-		top: 24px;
-		right: 24px;
-		z-index: 100;
+		right: 0;
+		top: 0;
+		bottom: 0;
+		width: 60px;
+		background: hsl(var(--background));
+		border-left: 1px solid hsl(var(--border));
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: space-between;
+		padding: 24px 0;
+		z-index: 5;
 	}
 
-	.logout-btn {
+	.right-sidebar-top,
+	.right-sidebar-bottom {
+		display: flex;
+		flex-direction: column;
+		gap: 16px;
+	}
+
+	.sidebar-btn {
+		background: transparent;
+		border: none;
+		color: hsl(var(--foreground));
+		cursor: pointer;
+		padding: 4px;
+		opacity: 0.5;
+		transition: opacity 0.15s ease;
 		display: flex;
 		align-items: center;
-		padding: 4px;
-		border: none;
-		background: transparent;
-		color: hsl(var(--foreground));
-		cursor: pointer;
-		transition: opacity 0.15s ease;
-		opacity: 0.5;
+		justify-content: center;
 	}
 
-	.logout-btn:hover {
-		opacity: 1;
-	}
-
-	/* Settings button (bottom-right) */
-	.settings-btn-fixed {
-		position: fixed;
-		bottom: 24px;
-		right: 24px;
-		padding: 4px;
-		border: none;
-		background: transparent;
-		color: hsl(var(--foreground));
-		cursor: pointer;
-		transition: opacity 0.15s ease;
-		z-index: 100;
-		opacity: 0.5;
-	}
-
-	.settings-btn-fixed:hover {
+	.sidebar-btn:hover {
 		opacity: 1;
 	}
 

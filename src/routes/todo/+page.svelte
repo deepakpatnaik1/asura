@@ -919,7 +919,8 @@
 			'messages canvas'
 			'input canvas';
 		height: 100vh;
-		margin-left: 60px; /* Account for sidebar */
+		margin-left: 60px; /* Account for left sidebar */
+		margin-right: 60px; /* Account for right sidebar */
 		overflow-y: auto;
 		background: hsl(var(--background));
 		color: hsl(var(--foreground));
