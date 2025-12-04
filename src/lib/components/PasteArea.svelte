@@ -140,7 +140,7 @@
 					<button
 						class="toggle-switch"
 						class:on={isPersistent}
-						onclick={() => { if (mode !== 'reader') isPersistent = !isPersistent; }}
+						onclick={() => { if (mode !== 'reader') { isPersistent = !isPersistent; if (!isPersistent) isCanon = false; } }}
 						aria-label="Toggle persistent mode"
 						disabled={mode === 'reader'}
 					>
@@ -149,12 +149,13 @@
 					<span class="toggle-label" class:active={isPersistent}>Persistent</span>
 				</div>
 
-				<label class="canon-checkbox">
+				<label class="canon-checkbox" class:disabled={!isPersistent}>
 					<button
 						class="checkbox-btn"
 						class:checked={isCanon}
-						onclick={() => isCanon = !isCanon}
+						onclick={() => { if (isPersistent) isCanon = !isCanon; }}
 						aria-label="Toggle canon"
+						disabled={!isPersistent}
 					>
 						{#if isCanon}
 							<span class="checkmark">✓</span>
@@ -465,5 +466,14 @@
 
 	.checkbox-label.active {
 		opacity: 1;
+	}
+
+	.canon-checkbox.disabled {
+		opacity: 0.3;
+		cursor: not-allowed;
+	}
+
+	.canon-checkbox.disabled .checkbox-btn {
+		cursor: not-allowed;
 	}
 </style>
