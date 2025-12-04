@@ -484,8 +484,28 @@
 	}
 
 	async function selectContent(contentId: string) {
-		// Switch active content - this changes which conversation is displayed
-		activeContentId = contentId;
+		// Call open endpoint to create message turn showing content
+		try {
+			const response = await fetch(`/api/chat/files/${contentId}/open`, {
+				method: 'POST'
+			});
+
+			if (response.ok) {
+				const data = await response.json();
+				// Add message to UI
+				allMessages = [...allMessages, data.message];
+				// Update active content
+				activeContentId = contentId;
+				// Reload charts
+				await loadFileCharts();
+				// Scroll to new message
+				await tick();
+				scrollToLastTurn(CHAT_CONFIG);
+			}
+		} catch (error) {
+			console.error('Failed to open content:', error);
+		}
+
 		showFileLibrary = false;
 
 		// Persist to user settings
@@ -498,8 +518,6 @@
 		} catch (error) {
 			console.error('Failed to save active content:', error);
 		}
-
-		// TODO: Filter allMessages by content_id or reload from server
 	}
 
 	function handleFileDeleteClick(fileId: string, event: MouseEvent) {
@@ -1035,8 +1053,8 @@
 
 	.send-button {
 		background: transparent;
-		color: var(--boss-accent);
-		border: 1px solid var(--boss-accent);
+		color: var(--reader-accent);
+		border: 1px solid var(--reader-accent);
 		border-radius: 6px;
 		padding: 12px 24px;
 		font-weight: 500;
@@ -1045,7 +1063,7 @@
 	}
 
 	.send-button:hover {
-		background: var(--boss-accent);
+		background: var(--reader-accent);
 		color: hsl(var(--background));
 	}
 
@@ -1066,7 +1084,7 @@
 	}
 
 	.send-button:hover:not(:disabled) {
-		background: var(--boss-accent);
+		background: var(--reader-accent);
 		color: hsl(var(--background));
 	}
 

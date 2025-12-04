@@ -476,20 +476,44 @@
 		);
 
 		try {
-			const response = await fetch(`/api/chat/files/${fileId}`, {
-				method: 'PUT',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ is_enabled: !currentState })
-			});
+			if (!currentState) {
+				// Enabling: call open endpoint to create message turn
+				const response = await fetch(`/api/chat/files/${fileId}/open`, {
+					method: 'POST'
+				});
 
-			if (!response.ok) {
-				// Revert on failure
-				files = files.map((f) =>
-					f.id === fileId ? { ...f, is_enabled: currentState } : f
-				);
+				if (!response.ok) {
+					// Revert on failure
+					files = files.map((f) =>
+						f.id === fileId ? { ...f, is_enabled: currentState } : f
+					);
+				} else {
+					const data = await response.json();
+					// Add message to UI
+					allMessages = [...allMessages, data.message];
+					// Reload charts
+					await loadFileCharts();
+					// Scroll to new message
+					await tick();
+					scrollToLastTurn(CHAT_CONFIG);
+				}
 			} else {
-				// Reload file charts to reflect enabled/disabled state
-				await loadFileCharts();
+				// Disabling: just update the flag
+				const response = await fetch(`/api/chat/files/${fileId}`, {
+					method: 'PUT',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ is_enabled: false })
+				});
+
+				if (!response.ok) {
+					// Revert on failure
+					files = files.map((f) =>
+						f.id === fileId ? { ...f, is_enabled: currentState } : f
+					);
+				} else {
+					// Reload file charts to reflect disabled state
+					await loadFileCharts();
+				}
 			}
 		} catch (error) {
 			// Revert on failure
