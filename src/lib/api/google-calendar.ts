@@ -10,8 +10,11 @@ const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const CALENDAR_API_BASE = 'https://www.googleapis.com/calendar/v3';
 
-// Read-only scope for Phase 2
-const SCOPES = ['https://www.googleapis.com/auth/calendar.events.readonly'];
+// Read-only scopes for Phase 2
+const SCOPES = [
+	'https://www.googleapis.com/auth/calendar.readonly', // List calendars
+	'https://www.googleapis.com/auth/calendar.events.readonly' // Read events
+];
 
 export interface GoogleTokens {
 	access_token: string;
@@ -141,7 +144,9 @@ export async function fetchCalendarEvents(
 	});
 
 	if (!calendarsResponse.ok) {
-		throw new Error('Failed to fetch calendar list');
+		const errorText = await calendarsResponse.text();
+		console.error('Calendar list API error:', calendarsResponse.status, errorText);
+		throw new Error(`Failed to fetch calendar list: ${calendarsResponse.status}`);
 	}
 
 	const calendarsData = await calendarsResponse.json();
