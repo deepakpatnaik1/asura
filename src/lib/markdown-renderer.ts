@@ -1,4 +1,4 @@
-import { CHAT_ACCENT, READER_ACCENT, TODO_ACCENT } from '$lib/config/colors';
+import { CHAT_ACCENT, READER_ACCENT, TODO_ACCENT, CHAT_ACCENT_BG, READER_ACCENT_BG, TODO_ACCENT_BG } from '$lib/config/colors';
 import type { Mode } from '$lib/config/modes';
 
 /**
@@ -6,6 +6,7 @@ import type { Mode } from '$lib/config/modes';
  */
 export async function renderMarkdown(markdown: string, mode: Mode = 'chat'): Promise<string> {
 	const ACCENT = mode === 'chat' ? CHAT_ACCENT : mode === 'reader' ? READER_ACCENT : TODO_ACCENT;
+	const ACCENT_BG = mode === 'chat' ? CHAT_ACCENT_BG : mode === 'reader' ? READER_ACCENT_BG : TODO_ACCENT_BG;
 
 	// Strip content markers (<!--content:uuid-->) used for lazy loading
 	let processed = markdown.replace(/<!--content:[a-f0-9-]+-->\n?/gi, '');
@@ -208,6 +209,15 @@ export async function renderMarkdown(markdown: string, mode: Mode = 'chat'): Pro
 			rest = rest.replace(/\*([^*]+)\*/g, '<em>$1</em>');
 			listIndent = 0;
 			results.push(`<strong style="color: ${ACCENT};">${boldText}</strong>${rest}`);
+			continue;
+		}
+
+		// Tool call indicator → styled pill badge (same bg as boss card)
+		const toolMatch = line.match(/^⟨([^⟩]+)⟩$/);
+		if (toolMatch) {
+			const toolName = toolMatch[1];
+			listIndent = 0;
+			results.push(`<span style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; font-family: monospace; margin: 4px 0;">⟨${toolName}⟩</span>`);
 			continue;
 		}
 

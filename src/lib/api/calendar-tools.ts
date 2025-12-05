@@ -62,7 +62,7 @@ export const CREATE_EVENT_TOOL: Anthropic.Tool = {
 			},
 			timezone: {
 				type: 'string',
-				description: 'IANA timezone (e.g., "America/Los_Angeles", "Europe/London"). Defaults to America/Los_Angeles if not specified.'
+				description: 'IANA timezone (e.g., "Europe/Berlin", "America/Los_Angeles"). Defaults to Europe/Berlin if not specified.'
 			},
 			recurrence: {
 				type: 'string',
@@ -258,7 +258,7 @@ async function executeCreateEvent(
 	try {
 		const isAllDay = input.all_day === true;
 		// Default timezone - TODO: get from user settings
-		const timeZone = (input.timezone as string) || 'America/Los_Angeles';
+		const timeZone = (input.timezone as string) || 'Europe/Berlin';
 
 		const eventInput: CreateEventInput = {
 			summary: input.summary as string,
