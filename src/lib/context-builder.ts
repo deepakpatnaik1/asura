@@ -35,6 +35,7 @@ interface ContextComponents {
 	journal: string;
 	highSalienceArcs: string;
 	otherArcs: string;
+	workData: string; // Todo mode: current todos and tags
 }
 
 interface ContextStats {
@@ -47,6 +48,7 @@ interface ContextStats {
 		journal: number;
 		highSalienceArcs: number;
 		otherArcs: number;
+		workData: number;
 	};
 }
 
@@ -99,7 +101,8 @@ export async function buildContext(
 		starred: '',
 		journal: '',
 		highSalienceArcs: '',
-		otherArcs: ''
+		otherArcs: '',
+		workData: ''
 	};
 
 	let totalTokens = 0;
@@ -188,7 +191,8 @@ export async function buildContext(
 					starred: estimateTokens(components.starred),
 					journal: 0,
 					highSalienceArcs: 0,
-					otherArcs: 0
+					otherArcs: 0,
+					workData: 0
 				}
 			}
 		};
@@ -238,6 +242,37 @@ export async function buildContext(
 			.order('created_at', { ascending: false })
 			.limit(MEMORY.lastNJournalEntries)
 	]);
+
+	// Priority 0.5: Work data for todo mode (todos, tags, and diary)
+	if (mode === 'todo') {
+		const [todosResult, tagsResult, diaryResult] = await Promise.all([
+			supabase
+				.from('todos')
+				.select('id, description, tags, status, created_at, scheduled_for, times_pushed')
+				.eq('user_id', userId)
+				.eq('status', 'open')
+				.order('created_at', { ascending: false }),
+			supabase
+				.from('tags')
+				.select('name')
+				.eq('user_id', userId)
+				.order('name', { ascending: true }),
+			supabase
+				.from('founder_diary')
+				.select('id, description, tags, logged_at')
+				.eq('user_id', userId)
+				.order('logged_at', { ascending: false })
+				.limit(20)
+		]);
+
+		const workDataText = formatWorkData(
+			todosResult.data || [],
+			(tagsResult.data || []).map(t => t.name),
+			diaryResult.data || []
+		);
+		components.workData = workDataText;
+		totalTokens += estimateTokens(workDataText);
+	}
 
 	// Assemble context with budget checks (in priority order)
 
@@ -391,7 +426,8 @@ export async function buildContext(
 			starred: estimateTokens(components.starred),
 			journal: estimateTokens(components.journal),
 			highSalienceArcs: estimateTokens(components.highSalienceArcs),
-			otherArcs: estimateTokens(components.otherArcs)
+			otherArcs: estimateTokens(components.otherArcs),
+			workData: estimateTokens(components.workData)
 		}
 	};
 
@@ -617,10 +653,73 @@ function truncateArcsToFit(
 }
 
 
+// Format work data (todos, tags, and diary) for todo mode context
+function formatWorkData(
+	todos: Array<{
+		id: string;
+		description: string;
+		tags: string[];
+		status: string;
+		created_at: string;
+		scheduled_for: string | null;
+		times_pushed: number;
+	}>,
+	tags: string[],
+	diary: Array<{
+		id: string;
+		description: string;
+		tags: string[];
+		logged_at: string;
+	}>
+): string {
+	const currentTime = new Date().toISOString();
+
+	const todosJson = JSON.stringify(
+		todos.map((t) => ({
+			id: t.id,
+			description: t.description,
+			tags: t.tags,
+			created_at: t.created_at,
+			scheduled_for: t.scheduled_for,
+			times_pushed: t.times_pushed
+		})),
+		null,
+		2
+	);
+
+	const diaryJson = JSON.stringify(
+		diary.map((d) => ({
+			id: d.id,
+			description: d.description,
+			tags: d.tags,
+			logged_at: d.logged_at
+		})),
+		null,
+		2
+	);
+
+	const tagsJson = JSON.stringify(tags);
+
+	return `--- WORK DATA (Todos, Tags & Diary) ---
+<work_data>
+<current_time>${currentTime}</current_time>
+<tags>${tagsJson}</tags>
+<todos>
+${todosJson}
+</todos>
+<recent_diary>
+${diaryJson}
+</recent_diary>
+</work_data>
+
+`;
+}
+
 // Assemble all context components into final string
 function assembleContext(components: ContextComponents): string {
 	const parts = [
 		components.canon, // Canon first (shared knowledge across all modes)
+		components.workData, // Work data for todo mode (before superjournal so Alicja sees todos first)
 		components.superjournal,
 		components.files,
 		components.starred,

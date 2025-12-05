@@ -25,6 +25,9 @@
 	$effect(() => {
 		if (refreshTrigger > 0) {
 			fetchCalendarEvents();
+			fetchScheduledTodos();
+			fetchUnscheduledTodos();
+			fetchDiaryEntries();
 		}
 	});
 
@@ -43,7 +46,7 @@
 		fullDate: Date;
 		isToday: boolean;
 		dateKey: string;
-		events: { time: string | null; title: string; type: 'calendar' | 'todo' }[];
+		events: { time: string | null; title: string; type: 'calendar' | 'todo'; tags?: string[] }[];
 	}
 
 	interface FutureEvent {
@@ -80,10 +83,18 @@
 				const result = transformEventsToCards(data.events);
 				nearTermDays = result.nearTerm;
 				futureMonths = result.future;
+				// Merge scheduled todos if already loaded
+				if (scheduledTodos.length > 0) {
+					mergeScheduledTodosIntoDays();
+				}
 			} else {
 				// Show next 7 days with no events
 				nearTermDays = generateEmptyDays(7);
 				futureMonths = [];
+				// Merge scheduled todos if already loaded
+				if (scheduledTodos.length > 0) {
+					mergeScheduledTodosIntoDays();
+				}
 			}
 		} catch (err) {
 			console.error('Failed to fetch calendar events:', err);
@@ -169,8 +180,23 @@
 			});
 		}
 
-		// Group future events by month (only dates with events)
+		// Group future events by month
 		const futureByMonth = new Map<string, { month: string; year: number; events: FutureEvent[] }>();
+
+		// Always include the rest of the current month (even if no events)
+		const currentMonthKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+		const currentMonthName = today.toLocaleDateString('en-US', { month: 'long' });
+		const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+		const nearTermEndDay = nearTermCutoff.getDate();
+
+		// Only add current month section if there are days after near-term
+		if (nearTermCutoff.getMonth() === today.getMonth() && nearTermEndDay <= lastDayOfMonth) {
+			futureByMonth.set(currentMonthKey, {
+				month: currentMonthName,
+				year: today.getFullYear(),
+				events: []
+			});
+		}
 
 		for (const [dateStr, dayEvents] of eventsByDate) {
 			// Skip near-term dates
@@ -202,20 +228,12 @@
 		const sortedMonths = Array.from(futureByMonth.entries()).sort(([a], [b]) => a.localeCompare(b));
 
 		for (const [, monthData] of sortedMonths) {
-			if (monthData.events.length === 0) continue;
-
 			// Sort events by date
 			monthData.events.sort((a, b) => a.date - b.date);
 
-			// Calculate date range for display
-			const firstDate = monthData.events[0].date;
-			const lastDate = monthData.events[monthData.events.length - 1].date;
-			const dateRange =
-				firstDate === lastDate ? `${firstDate}` : `${firstDate}–${lastDate}`;
-
 			future.push({
 				month: monthData.month,
-				dateRange,
+				dateRange: String(monthData.year),
 				events: monthData.events
 			});
 		}
@@ -251,20 +269,179 @@
 		}
 	}
 
-	// Mock data for todos/done - Phase 3/4 will replace
-	const mockTodos = [
-		{ id: '1', text: 'Write investor update', tag: 'investor' },
-		{ id: '2', text: 'Review term sheet', tag: 'legal' },
-		{ id: '3', text: 'Blog post draft', tag: 'marketing' }
-	];
+	// Todo state
+	interface Todo {
+		id: string;
+		description: string;
+		tags: string[];
+		status: 'open' | 'completed';
+		created_at: string;
+		completed_at: string | null;
+		scheduled_for: string | null;
+		times_pushed: number;
+	}
 
-	const mockDone = [
-		{ id: '1', text: 'Sent deck to LP', time: '2:15pm' },
-		{ id: '2', text: 'Fixed auth bug', time: '11:30am' },
-		{ id: '3', text: 'Closed Series A docs', time: 'yesterday 4:45pm' },
-		{ id: '4', text: 'Drafted pitch deck', time: 'Dec 2 9:30am' },
-		{ id: '5', text: 'Called accountant', time: 'Dec 1 3:15pm' }
-	];
+	let unscheduledTodos = $state<Todo[]>([]);
+	let scheduledTodos = $state<Todo[]>([]);
+	let todosLoading = $state(false);
+
+	function formatRelativeTime(isoString: string): string {
+		const date = new Date(isoString);
+		const now = new Date();
+		const diffMs = now.getTime() - date.getTime();
+		const diffMins = Math.floor(diffMs / 60000);
+		const diffHours = Math.floor(diffMs / 3600000);
+		const diffDays = Math.floor(diffMs / 86400000);
+
+		if (diffMins < 1) return 'just now';
+		if (diffMins < 60) return `${diffMins}m ago`;
+		if (diffHours < 24) return `${diffHours}h ago`;
+		if (diffDays === 1) return 'yesterday';
+		if (diffDays < 7) return `${diffDays}d ago`;
+		return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+	}
+
+	// Typography normalization: em dash (—) → en dash (–) with spaces
+	function normalizeText(text: string): string {
+		return text.replace(/\s*—\s*/g, ' – ');
+	}
+
+	// Fetch todos on mount
+	$effect(() => {
+		fetchUnscheduledTodos();
+		fetchScheduledTodos();
+	});
+
+	async function fetchUnscheduledTodos() {
+		todosLoading = true;
+		try {
+			const response = await fetch('/api/todos?status=open&scheduled=false');
+			const data = await response.json();
+			if (data.todos) {
+				unscheduledTodos = data.todos;
+			}
+		} catch (err) {
+			console.error('Failed to fetch unscheduled todos:', err);
+		} finally {
+			todosLoading = false;
+		}
+	}
+
+	async function fetchScheduledTodos() {
+		try {
+			const response = await fetch('/api/todos?status=open&scheduled=true');
+			const data = await response.json();
+			if (data.todos) {
+				scheduledTodos = data.todos;
+				// Re-merge with calendar events
+				if (nearTermDays.length > 0) {
+					mergeScheduledTodosIntoDays();
+				}
+			}
+		} catch (err) {
+			console.error('Failed to fetch scheduled todos:', err);
+		}
+	}
+
+	function mergeScheduledTodosIntoDays() {
+		// Add scheduled todos to their respective day cards
+		nearTermDays = nearTermDays.map(day => {
+			// Filter out old todo events, keep only calendar events
+			const calendarEvents = day.events.filter(e => e.type === 'calendar');
+
+			// Find todos scheduled for this day
+			const dayTodos = scheduledTodos
+				.filter(todo => todo.scheduled_for === day.dateKey)
+				.map(todo => ({
+					time: null,
+					title: todo.description,
+					type: 'todo' as const,
+					tags: todo.tags
+				}));
+
+			return {
+				...day,
+				events: [...calendarEvents, ...dayTodos]
+			};
+		});
+	}
+
+	// Founder Diary state
+	interface DiaryEntry {
+		id: string;
+		description: string;
+		tags: string[];
+		logged_at: string;
+	}
+
+	interface DiaryDay {
+		date: number;
+		day: string;
+		month: string;
+		year: number;
+		dateKey: string;
+		isToday: boolean;
+		entries: DiaryEntry[];
+	}
+
+	let diaryEntries = $state<DiaryEntry[]>([]);
+	let diaryDays = $state<DiaryDay[]>([]);
+	let diaryLoading = $state(false);
+
+	// Fetch diary entries on mount
+	$effect(() => {
+		fetchDiaryEntries();
+	});
+
+	async function fetchDiaryEntries() {
+		diaryLoading = true;
+		try {
+			const response = await fetch('/api/diary');
+			const data = await response.json();
+			if (data.entries) {
+				diaryEntries = data.entries;
+				diaryDays = groupDiaryByDate(data.entries);
+			}
+		} catch (err) {
+			console.error('Failed to fetch diary entries:', err);
+		} finally {
+			diaryLoading = false;
+		}
+	}
+
+	function groupDiaryByDate(entries: DiaryEntry[]): DiaryDay[] {
+		const today = new Date();
+		const todayKey = today.toISOString().split('T')[0];
+
+		// Group entries by date
+		const byDate = new Map<string, DiaryEntry[]>();
+		for (const entry of entries) {
+			const dateKey = entry.logged_at.split('T')[0];
+			if (!byDate.has(dateKey)) {
+				byDate.set(dateKey, []);
+			}
+			byDate.get(dateKey)!.push(entry);
+		}
+
+		// Convert to DiaryDay array, sorted by date ascending (oldest first)
+		const days: DiaryDay[] = [];
+		const sortedDates = Array.from(byDate.keys()).sort((a, b) => a.localeCompare(b));
+
+		for (const dateKey of sortedDates) {
+			const date = new Date(dateKey + 'T12:00:00');
+			days.push({
+				date: date.getDate(),
+				day: date.toLocaleDateString('en-US', { weekday: 'long' }),
+				month: date.toLocaleDateString('en-US', { month: 'long' }),
+				year: date.getFullYear(),
+				dateKey,
+				isToday: dateKey === todayKey,
+				entries: byDate.get(dateKey)!
+			});
+		}
+
+		return days;
+	}
 </script>
 
 <CanvasFrame {mode}>
@@ -306,16 +483,14 @@
 								</div>
 								<div class="day-events">
 									{#each day.events as event}
-										<div class="event" class:todo-event={event.type === 'todo'}>
-											{#if event.type === 'calendar'}
-												<span class="event-bullet">&#9642;</span>
-											{:else}
-												<span class="event-bullet todo">&#9670;</span>
-											{/if}
-											{#if event.time}
-												<span class="event-time">{event.time}</span>
-											{/if}
-											<span class="event-title">{event.title}</span>
+										<div class="event">
+											<span class="event-time">{event.time ?? 'todo'}</span>
+											<div class="event-content">
+												<span class="event-title">{normalizeText(event.title)}</span>
+												{#if event.tags && event.tags.length > 0}
+													<span class="event-tag">#{event.tags.join(' #')}</span>
+												{/if}
+											</div>
 										</div>
 									{/each}
 								</div>
@@ -330,12 +505,16 @@
 									<span class="month-range">{month.dateRange}</span>
 								</div>
 								<div class="month-events">
-									{#each month.events as event}
-										<div class="future-event">
-											<span class="future-date">{event.date}</span>
-											<span class="future-title">{event.title}</span>
-										</div>
-									{/each}
+									{#if month.events.length === 0}
+										<div class="empty-month">(empty)</div>
+									{:else}
+										{#each month.events as event}
+											<div class="future-event">
+												<span class="future-date">{event.date}</span>
+												<span class="future-title">{normalizeText(event.title)}</span>
+											</div>
+										{/each}
+									{/if}
 								</div>
 							</div>
 						{/each}
@@ -343,37 +522,74 @@
 				</div>
 			</div>
 
-			<!-- Todos Pane -->
+			<!-- Todos Pane (unscheduled only) -->
 			<div class="pane todos-pane">
-				<div class="pane-header">Todo <span class="count">&middot; {mockTodos.length}</span></div>
+				<div class="pane-header">
+					To-Dos
+					{#if todosLoading}
+						<span class="loading-indicator">...</span>
+					{/if}
+				</div>
 				<div class="pane-content">
 					<div class="todo-list">
-						{#each mockTodos as todo}
-							<div class="todo-item">
-								<span class="todo-circle">&#9675;</span>
-								<div class="todo-content">
-									<span class="todo-text">{todo.text}</span>
-									<span class="todo-tag">#{todo.tag}</span>
+						{#each unscheduledTodos as todo (todo.id)}
+								<div class="todo-item">
+									<div class="todo-content">
+										<span class="todo-text">{normalizeText(todo.description)}</span>
+										<div class="todo-meta">
+											{#if todo.tags.length > 0}
+												<span class="todo-tag">#{todo.tags.join(' #')}</span>
+											{/if}
+											<span class="todo-time">{formatRelativeTime(todo.created_at)}</span>
+											{#if todo.times_pushed > 0}
+												<span class="todo-pushed">· pushed {todo.times_pushed}x</span>
+											{/if}
+										</div>
+									</div>
 								</div>
-							</div>
 						{/each}
 					</div>
 				</div>
 			</div>
 
-			<!-- Done Pane -->
+			<!-- Founder Diary Pane -->
 			<div class="pane done-pane">
-				<div class="pane-header">Done <span class="count">&middot; {mockDone.length}</span></div>
+				<div class="pane-header">
+					Founder Diary
+					{#if diaryLoading}
+						<span class="loading-indicator">...</span>
+					{/if}
+				</div>
 				<div class="pane-content">
-					<div class="done-list">
-						{#each mockDone as item}
-							<div class="done-item">
-								<span class="done-check">&#10003;</span>
-								<span class="done-text">{item.text}</span>
-								<span class="done-time">{item.time}</span>
+					{#if diaryDays.length === 0 && !diaryLoading}
+						<div class="empty-state">No diary entries yet</div>
+					{:else}
+						{@const seenMonths = new Set<string>()}
+						{#each diaryDays as day (day.dateKey)}
+							{@const monthYearKey = `${day.month}-${day.year}`}
+							{@const isFirstInMonth = !seenMonths.has(monthYearKey)}
+							{@const _ = seenMonths.add(monthYearKey)}
+							<div class="diary-day">
+								<div class="day-header">
+									<span class="day-date">{day.date}</span>
+									<span class="day-name">{day.day}</span>
+									{#if isFirstInMonth}
+										<span class="day-month-year">{day.month} {day.year}</span>
+									{/if}
+								</div>
+								<div class="diary-entries">
+									{#each day.entries as entry (entry.id)}
+										<div class="diary-entry">
+											<span class="diary-text">{normalizeText(entry.description)}</span>
+											{#if entry.tags.length > 0}
+												<span class="diary-tag">#{entry.tags.join(' #')}</span>
+											{/if}
+										</div>
+									{/each}
+								</div>
 							</div>
 						{/each}
-					</div>
+					{/if}
 				</div>
 			</div>
 		</div>
@@ -406,6 +622,12 @@
 		display: flex;
 		align-items: center;
 		gap: var(--spacing-md);
+	}
+
+	.calendar-pane .pane-header,
+	.todos-pane .pane-header,
+	.done-pane .pane-header {
+		color: var(--accent);
 	}
 
 	.pane-header .count {
@@ -498,40 +720,48 @@
 		line-height: 1;
 	}
 
-	.day-name {
+	.calendar-pane .day-name {
 		font-size: var(--font-body);
-		color: hsl(var(--muted-foreground));
+		color: var(--accent);
+	}
+
+	.done-pane .day-name {
+		font-size: var(--font-body);
+		color: var(--accent);
+	}
+
+	.done-pane .day-month-year {
+		font-size: var(--font-body);
+		color: var(--accent);
 	}
 
 	.event {
 		display: flex;
-		align-items: center;
+		align-items: baseline;
 		gap: var(--spacing-sm);
 		padding: var(--spacing-xs) 0;
 		font-size: var(--font-body);
 	}
 
-	.event-bullet {
-		color: hsl(var(--muted-foreground) / 0.6);
-		font-size: 7px;
-	}
-
-	.event-bullet.todo {
-		color: var(--accent);
-		font-size: 8px;
-	}
-
 	.event-time {
 		color: hsl(var(--muted-foreground) / 0.7);
-		min-width: 32px;
+		min-width: 52px;
+	}
+
+	.event-content {
+		display: flex;
+		flex-direction: column;
+		gap: 1px;
 	}
 
 	.event-title {
 		color: hsl(var(--foreground));
 	}
 
-	.todo-event .event-title {
+	.event-tag {
+		font-size: var(--font-caption);
 		color: var(--accent);
+		opacity: 0.8;
 	}
 
 	/* Calendar Pane - Future Months */
@@ -548,19 +778,18 @@
 	.month-header {
 		display: flex;
 		align-items: baseline;
-		gap: var(--spacing-md);
+		gap: var(--spacing-xs);
 		margin-bottom: var(--spacing-lg);
 	}
 
 	.month-name {
-		font-size: var(--font-section-header);
-		font-weight: var(--font-weight-semibold);
-		color: hsl(var(--foreground));
+		font-size: var(--font-body);
+		color: var(--accent);
 	}
 
 	.month-range {
 		font-size: var(--font-body);
-		color: hsl(var(--muted-foreground) / 0.7);
+		color: var(--accent);
 	}
 
 	.month-events {
@@ -601,13 +830,6 @@
 	.todo-item {
 		display: flex;
 		align-items: flex-start;
-		gap: var(--spacing-md);
-	}
-
-	.todo-circle {
-		color: hsl(var(--muted-foreground) / 0.5);
-		font-size: var(--font-body);
-		line-height: 1.4;
 	}
 
 	.todo-content {
@@ -618,7 +840,14 @@
 
 	.todo-text {
 		font-size: var(--font-body);
-		color: hsl(var(--foreground));
+		color: var(--accent);
+	}
+
+	.todo-meta {
+		display: flex;
+		align-items: center;
+		gap: var(--spacing-sm);
+		flex-wrap: wrap;
 	}
 
 	.todo-tag {
@@ -627,35 +856,60 @@
 		opacity: 0.8;
 	}
 
-	/* Done Pane */
-	.done-list {
+	.todo-time {
+		font-size: var(--font-caption);
+		color: hsl(var(--muted-foreground) / 0.5);
+	}
+
+	.todo-pushed {
+		font-size: var(--font-caption);
+		color: hsl(var(--muted-foreground) / 0.5);
+	}
+
+	.empty-state {
+		font-size: var(--font-body);
+		color: hsl(var(--muted-foreground) / 0.5);
+		font-style: italic;
+		padding: var(--spacing-md) 0;
+	}
+
+	.empty-month {
+		font-size: var(--font-caption);
+		color: hsl(var(--muted-foreground) / 0.5);
+		font-style: italic;
+	}
+
+	.loading-indicator {
+		font-size: var(--font-caption);
+		color: hsl(var(--muted-foreground) / 0.5);
+	}
+
+	/* Founder Diary Pane */
+	.diary-day {
+		margin-bottom: var(--spacing-2xl);
+	}
+
+	.diary-entries {
 		display: flex;
 		flex-direction: column;
-		gap: var(--spacing-md);
+		gap: var(--spacing-sm);
 	}
 
-	.done-item {
-		display: grid;
-		grid-template-columns: auto 1fr auto;
-		align-items: baseline;
-		gap: var(--spacing-md);
+	.diary-entry {
+		display: flex;
+		flex-direction: column;
+		gap: 1px;
+		padding: var(--spacing-xs) 0;
+	}
+
+	.diary-text {
 		font-size: var(--font-body);
-	}
-
-	.done-check {
-		color: var(--accent);
-		font-size: var(--font-caption);
-		transform: scaleY(1.2);
-		display: inline-block;
-	}
-
-	.done-text {
 		color: hsl(var(--foreground));
 	}
 
-	.done-time {
-		color: hsl(var(--muted-foreground) / 0.6);
+	.diary-tag {
 		font-size: var(--font-caption);
-		text-align: right;
+		color: var(--accent);
+		opacity: 0.8;
 	}
 </style>

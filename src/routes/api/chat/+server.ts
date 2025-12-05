@@ -22,6 +22,14 @@ import {
 	type ToolExecutor
 } from '$lib/calls';
 import { CALENDAR_TOOLS, executeCalendarTool, type CalendarToolContext } from '$lib/api/calendar-tools';
+import {
+	TODO_TOOLS,
+	executeTodoTool,
+	isTodoTool,
+	createEmptyMutations,
+	type TodoToolContext,
+	type TodoMutations
+} from '$lib/api/todo-tools';
 import { refreshAccessToken } from '$lib/api/google-calendar';
 import { createClient } from '@supabase/supabase-js';
 import { PUBLIC_SUPABASE_URL } from '$env/static/public';
@@ -158,12 +166,26 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		// 7. Select persona prompt
 		const personaPrompt = getPersonaPrompt(persona);
 
-		// 8. Set up tools for todo mode (calendar operations)
+		// 8. Set up tools for todo mode (calendar + todo operations)
 		let tools: Anthropic.Tool[] | undefined;
 		let toolExecutor: ToolExecutor | undefined;
+		let todoMutations: TodoMutations | undefined;
 
 		if (mode === 'todo') {
-			// Get Google Calendar tokens for tool execution
+			// Initialize mutations tracker
+			todoMutations = createEmptyMutations();
+
+			// Todo tool context (always available)
+			const todoContext: TodoToolContext = {
+				supabase,
+				userId
+			};
+
+			// Start with todo tools (always available)
+			const allTools: Anthropic.Tool[] = [...TODO_TOOLS];
+			let calendarContext: CalendarToolContext | null = null;
+
+			// Get Google Calendar tokens for calendar tools
 			const { data: tokens } = await supabase
 				.from('google_tokens')
 				.select('access_token, refresh_token, expires_at')
@@ -195,11 +217,25 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 					}
 				}
 
-				// Create tool context and executor
-				const calendarContext: CalendarToolContext = { accessToken };
-				tools = CALENDAR_TOOLS;
-				toolExecutor = async (toolName, input) => executeCalendarTool(toolName, input, calendarContext);
+				calendarContext = { accessToken };
+				allTools.push(...CALENDAR_TOOLS);
 			}
+
+			tools = allTools;
+
+			// Combined tool executor routes to appropriate handler
+			toolExecutor = async (toolName, input) => {
+				if (isTodoTool(toolName)) {
+					return executeTodoTool(toolName, input, todoContext, todoMutations!);
+				} else if (calendarContext) {
+					return executeCalendarTool(toolName, input, calendarContext);
+				} else {
+					return {
+						success: false,
+						message: `Calendar not connected. Connect Google Calendar to use ${toolName}.`
+					};
+				}
+			};
 		}
 
 		// 9. Stream response
@@ -244,12 +280,15 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 						contentId: content_id
 					});
 
-					// Send completion event with real superjournal ID
+					// Send completion event with real superjournal ID and mutations
 					const doneData = JSON.stringify({
 						type: 'done',
 						timestamp: new Date().toISOString(),
 						model_identifier: conversationModel,
-						superjournal_id: superjournalId
+						superjournal_id: superjournalId,
+						...(todoMutations && {
+							mutations: todoMutations
+						})
 					});
 					controller.enqueue(encoder.encode(`data: ${doneData}\n\n`));
 					controller.close();
