@@ -63,6 +63,7 @@
 	<div class="canvas-content">
 		{#if activeCanvas === 'carousel'}
 			<ChartCarousel
+				{mode}
 				{charts}
 				bind:selectedChartIndex
 				bind:showLightbox
@@ -84,43 +85,35 @@
 <style>
 	.canvas-container {
 		grid-area: canvas;
-		display: grid;
-		grid-template-rows: 1fr auto;
-		grid-template-columns: auto 1fr;
-		grid-template-areas:
-			'content content'
-			'switcher content-bottom';
 		height: 100vh;
 		position: sticky;
 		top: 0;
-		align-self: start;
-		border-left: 1px solid hsl(var(--border) / 0.3);
+		border-left: 1px solid hsl(var(--border) / var(--border-opacity));
 	}
 
 	.canvas-content {
-		grid-area: content;
-		grid-row: 1 / -1;
-		grid-column: 1 / -1;
+		width: 100%;
+		height: 100%;
 		display: flex;
 		flex-direction: column;
 	}
 
-	/* Remove canvas-area grid positioning from ChartCarousel - it's handled here */
-	.canvas-content :global(.canvas-area) {
-		grid-area: unset;
-		position: relative;
+	/* Ensure canvas frame fills container */
+	.canvas-content :global(.canvas-frame) {
 		height: 100%;
 	}
 
 	.canvas-switcher-area {
-		grid-area: switcher;
 		position: absolute;
-		bottom: -1px;
-		left: -1px;
+		bottom: 0;
+		left: 0;
 		z-index: 10;
+		height: var(--input-bar-height);
+		display: flex;
+		align-items: center;
 		background: hsl(var(--background) / 0.9);
-		border-top: 1px solid hsl(var(--border) / 0.3);
-		border-right: 1px solid hsl(var(--border) / 0.3);
+		border-top: 1px solid hsl(var(--border) / var(--border-opacity));
+		border-right: 1px solid hsl(var(--border) / var(--border-opacity));
 		border-top-right-radius: 8px;
 	}
 </style>

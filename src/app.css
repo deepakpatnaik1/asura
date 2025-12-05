@@ -49,7 +49,31 @@
     --todo-bg: rgba(59, 130, 246, 0.08);
     --todo-accent: rgb(59, 130, 246);
 
-    /* Layout system - Master variable: content text width */
+    /* =================================================================
+       LAYOUT SYSTEM - Single Source of Truth
+       All values must match src/lib/config/layout.ts
+       ================================================================= */
+
+    /* Source values */
+    --sidebar-width: 48px;
+    --layout-padding: 24px;
+    --input-bar-height: 100px;
+    --input-bar-icons-height: 19px;
+    --input-bar-gap: 8px;
+    --input-bar-textarea-height: 44px;
+    --border-opacity: 0.3;
+
+    /* Derived values (calculated from source) */
+    --input-bar-content-height: 71px;  /* icons + gap + textarea */
+    --input-bar-vertical-padding: 14.5px;  /* (height - content) / 2 */
+
+    /* Legacy aliases (for backwards compatibility) */
+    --input-bar-min-height: var(--input-bar-height);
+
+    /* =================================================================
+       CONTENT LAYOUT
+       ================================================================= */
+
     --content-text-width: 450px; /* Width of text field + send button combined */
 
     /* Spacing system - Figma-like design */

@@ -58,7 +58,7 @@
 	<!-- Sidebar (hidden on login) -->
 	{#if !isLoginPage}
 	<aside class="sidebar">
-		<div class="sidebar-icons">
+		<div class="sidebar-top">
 			<a href="/chat" class="sidebar-icon hit-target" class:active={$page.url.pathname === '/chat'} title="Chat">
 				<Icon src={LuMessageSquare} size="18" />
 			</a>
@@ -68,6 +68,14 @@
 			<a href="/todo" class="sidebar-icon hit-target" class:active={$page.url.pathname === '/todo'} title="Todo">
 				<Icon src={LuListChecks} size="18" />
 			</a>
+		</div>
+		<div class="sidebar-bottom">
+			<button class="sidebar-icon hit-target" onclick={() => showSettings = true} title="Settings">
+				<Icon src={LuSettings} size="18" />
+			</button>
+			<button class="sidebar-icon hit-target" onclick={handleLogout} title="Sign out">
+				<Icon src={LuLogOut} size="18" />
+			</button>
 		</div>
 	</aside>
 	{/if}
@@ -101,22 +109,6 @@
 			{/if}
 		</aside>
 	{/if} -->
-
-	<!-- Right sidebar (hidden on login) -->
-	{#if !isLoginPage}
-	<aside class="right-sidebar">
-		<div class="right-sidebar-top">
-			<button class="sidebar-btn hit-target" onclick={handleLogout} title="Sign out">
-				<Icon src={LuLogOut} size="18" />
-			</button>
-		</div>
-		<div class="right-sidebar-bottom">
-			<button class="sidebar-btn hit-target" onclick={() => showSettings = true} title="Settings">
-				<Icon src={LuSettings} size="18" />
-			</button>
-		</div>
-	</aside>
-	{/if}
 
 	<!-- Offline indicator -->
 	{#if !$isConnected && !isLoginPage}
@@ -158,18 +150,19 @@
 		left: 0;
 		top: 0;
 		bottom: 0;
-		width: 60px;
+		width: var(--sidebar-width);
 		background: hsl(var(--background));
 		border-right: 1px solid hsl(var(--border));
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		justify-content: flex-start;
-		padding-top: 24px;
+		justify-content: space-between;
+		padding: var(--layout-padding) 0;
 		z-index: 5;
 	}
 
-	.sidebar-icons {
+	.sidebar-top,
+	.sidebar-bottom {
 		display: flex;
 		flex-direction: column;
 		gap: 16px;
@@ -228,51 +221,10 @@
 		height: 100vh;
 	}
 
-	/* Right sidebar */
-	.right-sidebar {
-		position: fixed;
-		right: 0;
-		top: 0;
-		bottom: 0;
-		width: 60px;
-		background: hsl(var(--background));
-		border-left: 1px solid hsl(var(--border));
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: space-between;
-		padding: 24px 0;
-		z-index: 5;
-	}
-
-	.right-sidebar-top,
-	.right-sidebar-bottom {
-		display: flex;
-		flex-direction: column;
-		gap: 16px;
-	}
-
-	.sidebar-btn {
-		background: transparent;
-		border: none;
-		color: hsl(var(--foreground));
-		cursor: pointer;
-		padding: 4px;
-		opacity: 0.5;
-		transition: opacity 0.15s ease;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-	}
-
-	.sidebar-btn:hover {
-		opacity: 1;
-	}
-
 	/* Article Pane (Library) */
 	.article-pane {
 		position: fixed;
-		left: 60px; /* Accounts for sidebar width */
+		left: var(--sidebar-width);
 		top: 0;
 		bottom: 0;
 		width: 240px;
@@ -286,7 +238,7 @@
 	}
 
 	.article-pane.collapsed {
-		width: 60px;
+		width: var(--sidebar-width);
 	}
 
 	.article-pane-header {

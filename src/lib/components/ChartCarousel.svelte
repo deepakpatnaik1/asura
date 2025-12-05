@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * ChartCarousel - Canvas area with thumbnail grid and lightbox
+	 * ChartCarousel - Canvas with thumbnail grid and lightbox
 	 *
 	 * Displays extracted chart images from articles with expand/collapse functionality.
 	 * Uses bindable props so parent can read lightbox state for Q&A context.
@@ -9,6 +9,8 @@
 
 	import { Icon } from 'svelte-icons-pack';
 	import { LuTrash2 } from 'svelte-icons-pack/lu';
+	import type { Mode } from '$lib/config/modes';
+	import CanvasFrame from '$lib/components/CanvasFrame.svelte';
 
 	interface Chart {
 		id: string;
@@ -18,6 +20,7 @@
 	}
 
 	interface Props {
+		mode: Mode;
 		charts: Chart[];
 		selectedChartIndex?: number | null;
 		showLightbox?: boolean;
@@ -28,6 +31,7 @@
 	}
 
 	let {
+		mode,
 		charts,
 		selectedChartIndex = $bindable(null),
 		showLightbox = $bindable(false),
@@ -78,9 +82,9 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<div class="canvas-area">
-	{#if charts.length > 0}
-		{#if showLightbox && selectedChartIndex !== null}
+<CanvasFrame {mode}>
+	{#snippet content()}
+		{#if charts.length > 0 && showLightbox && selectedChartIndex !== null}
 			<!-- Full-size chart view -->
 			<div class="canvas-chart-view">
 				<div class="chart-view-header">
@@ -118,75 +122,63 @@
 				</div>
 			</div>
 		{/if}
-
-		<!-- Thumbnail grid -->
-		<div class="chart-grid">
-			{#each charts as chart, index}
-				{@const isActive = showLightbox && selectedChartIndex === index}
-				<div class="chart-thumbnail-wrapper">
-					<button
-						class="chart-thumbnail"
-						class:active={isActive}
-						onclick={() => isActive ? closeLightbox() : openLightbox(index)}
-						title={isActive ? "Collapse (Esc)" : chart.alt}
-					>
-						<img src={chart.thumbnail_url} alt={chart.alt} />
-						<div class="chart-overlay">
-							{#if isActive}
-								<svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-									<path d="M4 14h6v6M20 10h-6V4M10 14l-7 7M14 10l7-7" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-								</svg>
-							{:else}
-								<svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-									<path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-								</svg>
-							{/if}
-						</div>
-					</button>
-					{#if enableDelete}
-						<div class="thumbnail-actions">
-							<button
-								class="thumbnail-action-btn delete"
-								onclick={(e) => handleDeleteClick(e, chart)}
-								title="Delete"
-							>
-								<Icon src={LuTrash2} size="11" />
-							</button>
-						</div>
-					{/if}
-				</div>
-			{/each}
-		</div>
-	{/if}
-</div>
+	{/snippet}
+	{#snippet footer()}
+		{#if charts.length > 0}
+			<!-- Thumbnail grid -->
+			<div class="chart-grid">
+				{#each charts as chart, index}
+					{@const isActive = showLightbox && selectedChartIndex === index}
+					<div class="chart-thumbnail-wrapper">
+						<button
+							class="chart-thumbnail"
+							class:active={isActive}
+							onclick={() => isActive ? closeLightbox() : openLightbox(index)}
+							title={isActive ? "Collapse (Esc)" : chart.alt}
+						>
+							<img src={chart.thumbnail_url} alt={chart.alt} />
+							<div class="chart-overlay">
+								{#if isActive}
+									<svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+										<path d="M4 14h6v6M20 10h-6V4M10 14l-7 7M14 10l7-7" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+									</svg>
+								{:else}
+									<svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+										<path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+									</svg>
+								{/if}
+							</div>
+						</button>
+						{#if enableDelete}
+							<div class="thumbnail-actions">
+								<button
+									class="thumbnail-action-btn delete"
+									onclick={(e) => handleDeleteClick(e, chart)}
+									title="Delete"
+								>
+									<Icon src={LuTrash2} size="11" />
+								</button>
+							</div>
+						{/if}
+					</div>
+				{/each}
+			</div>
+		{/if}
+	{/snippet}
+</CanvasFrame>
 
 <style>
-	.canvas-area {
-		grid-area: canvas;
-		background: hsl(var(--background));
-		display: flex;
-		flex-direction: column;
-		justify-content: flex-end;
-		overflow: hidden;
-		position: sticky;
-		top: 0;
-		height: 100vh;
-		align-self: start;
-	}
-
 	.chart-grid {
 		display: flex;
 		flex-direction: row;
 		gap: 10px;
 		width: 100%;
-		padding: 0 10px;
+		padding: 0 10px 0 44px; /* Extra left padding for canvas switcher */
 		justify-content: center;
 		flex-wrap: nowrap;
 		overflow-x: auto;
-		flex-shrink: 0;
-		height: 104px;
+		height: 100%;
 		align-items: center;
-		background: hsl(var(--background));
 	}
 
 	.chart-thumbnail-wrapper {
@@ -297,7 +289,7 @@
 	}
 
 	.canvas-chart-view {
-		flex: 1;
+		height: 100%;
 		width: 100%;
 		display: flex;
 		flex-direction: column;
@@ -316,6 +308,7 @@
 		align-items: center;
 		padding: 16px;
 		border-bottom: 1px solid hsl(var(--border) / 0.3);
+		flex-shrink: 0;
 	}
 
 	.chart-view-info {
@@ -375,6 +368,7 @@
 		padding: 24px;
 		overflow: auto;
 		overscroll-behavior: contain;
+		min-height: 0;
 	}
 
 	.chart-view-image img {

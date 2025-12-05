@@ -918,8 +918,7 @@
 			'messages canvas'
 			'input canvas';
 		height: 100vh;
-		margin-left: 60px; /* Account for left sidebar */
-		margin-right: 60px; /* Account for right sidebar */
+		margin-left: var(--sidebar-width); /* Account for sidebar */
 		overflow-y: auto;
 		background: hsl(var(--background));
 		color: hsl(var(--foreground));
@@ -943,7 +942,7 @@
 	/* Messages Area - middle column */
 	.messages-area {
 		grid-area: messages;
-		padding: 24px;
+		padding: var(--layout-padding);
 		position: relative;
 	}
 
@@ -960,10 +959,15 @@
 		background: hsl(var(--card));
 		border-top: 1px solid hsl(var(--chat-border));
 		border-right: 1px solid hsl(var(--chat-border));
-		padding: 16px 24px;
+		padding: 0 var(--layout-padding);
+		min-height: var(--input-bar-height);
+		box-sizing: border-box;
 		position: sticky;
 		bottom: 0;
 		z-index: 10;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
 	}
 
 	.input-controls {

@@ -6,10 +6,10 @@
 	 *
 	 * Things 3 inspired calendar pane with big dates.
 	 * Flat chronological accomplishments list.
-	 * Tag filters at bottom of todos pane.
 	 */
 
 	import type { Mode } from '$lib/config/modes';
+	import CanvasFrame from '$lib/components/CanvasFrame.svelte';
 
 	interface Props {
 		mode: Mode;
@@ -60,8 +60,6 @@
 		{ id: '5', text: 'Called accountant', time: 'Dec 1 3:15pm' }
 	];
 
-	const allTags = ['investor', 'legal', 'marketing'];
-
 	function getAccentColor(): string {
 		switch (mode) {
 			case 'chat':
@@ -76,88 +74,88 @@
 	}
 </script>
 
-<div class="productivity-canvas" style:--accent={getAccentColor()}>
-	<!-- Calendar Pane -->
-	<div class="pane calendar-pane">
-		<div class="pane-header">Calendar</div>
-		<div class="pane-content">
-			{#each mockCalendar as day}
-				<div class="day-card">
-					<div class="day-header">
-						<span class="day-date">{day.date}</span>
-						<span class="day-name">{day.day}</span>
-					</div>
-					<div class="day-events">
-						{#if day.events.length === 0}
-							<div class="empty-day">(empty)</div>
-						{:else}
-							{#each day.events as event}
-								<div class="event" class:todo-event={event.type === 'todo'}>
-									{#if event.type === 'calendar'}
-										<span class="event-bullet">&#9642;</span>
-									{:else}
-										<span class="event-bullet todo">&#9670;</span>
-									{/if}
-									{#if event.time}
-										<span class="event-time">{event.time}</span>
-									{/if}
-									<span class="event-title">{event.title}</span>
+<CanvasFrame {mode}>
+	{#snippet content()}
+		<div class="productivity-canvas" style:--accent={getAccentColor()}>
+			<!-- Calendar Pane -->
+			<div class="pane calendar-pane">
+				<div class="pane-header">Calendar</div>
+				<div class="pane-content">
+					{#each mockCalendar as day}
+						<div class="day-card">
+							<div class="day-header">
+								<span class="day-date">{day.date}</span>
+								<span class="day-name">{day.day}</span>
+							</div>
+							<div class="day-events">
+								{#if day.events.length === 0}
+									<div class="empty-day">(empty)</div>
+								{:else}
+									{#each day.events as event}
+										<div class="event" class:todo-event={event.type === 'todo'}>
+											{#if event.type === 'calendar'}
+												<span class="event-bullet">&#9642;</span>
+											{:else}
+												<span class="event-bullet todo">&#9670;</span>
+											{/if}
+											{#if event.time}
+												<span class="event-time">{event.time}</span>
+											{/if}
+											<span class="event-title">{event.title}</span>
+										</div>
+									{/each}
+								{/if}
+							</div>
+						</div>
+					{/each}
+				</div>
+			</div>
+
+			<!-- Todos Pane -->
+			<div class="pane todos-pane">
+				<div class="pane-header">Todos <span class="count">&middot; {mockTodos.length}</span></div>
+				<div class="pane-content">
+					<div class="todo-list">
+						{#each mockTodos as todo}
+							<div class="todo-item">
+								<span class="todo-circle">&#9675;</span>
+								<div class="todo-content">
+									<span class="todo-text">{todo.text}</span>
+									<span class="todo-tag">#{todo.tag}</span>
 								</div>
-							{/each}
-						{/if}
+							</div>
+						{/each}
 					</div>
 				</div>
-			{/each}
-		</div>
-	</div>
+			</div>
 
-	<!-- Todos Pane -->
-	<div class="pane todos-pane">
-		<div class="pane-header">Todos <span class="count">&middot; {mockTodos.length}</span></div>
-		<div class="pane-content">
-			<div class="todo-list">
-				{#each mockTodos as todo}
-					<div class="todo-item">
-						<span class="todo-circle">&#9675;</span>
-						<div class="todo-content">
-							<span class="todo-text">{todo.text}</span>
-							<span class="todo-tag">#{todo.tag}</span>
-						</div>
+			<!-- Done Pane -->
+			<div class="pane done-pane">
+				<div class="pane-header">Done <span class="count">&middot; {mockDone.length}</span></div>
+				<div class="pane-content">
+					<div class="done-list">
+						{#each mockDone as item}
+							<div class="done-item">
+								<span class="done-check">&#10003;</span>
+								<span class="done-text">{item.text}</span>
+								<span class="done-time">{item.time}</span>
+							</div>
+						{/each}
 					</div>
-				{/each}
+				</div>
 			</div>
 		</div>
-		<div class="tag-filters">
-			{#each allTags as tag}
-				<button class="tag-pill">#{tag}</button>
-			{/each}
-		</div>
-	</div>
-
-	<!-- Done Pane -->
-	<div class="pane done-pane">
-		<div class="pane-header">Done <span class="count">&middot; {mockDone.length}</span></div>
-		<div class="pane-content">
-			<div class="done-list">
-				{#each mockDone as item}
-					<div class="done-item">
-						<span class="done-check">&#10003;</span>
-						<span class="done-text">{item.text}</span>
-						<span class="done-time">{item.time}</span>
-					</div>
-				{/each}
-			</div>
-		</div>
-	</div>
-</div>
+	{/snippet}
+	{#snippet footer()}
+		<!-- Empty footer for now - maintains layout alignment -->
+	{/snippet}
+</CanvasFrame>
 
 <style>
 	.productivity-canvas {
 		height: 100%;
 		display: grid;
 		grid-template-columns: 1fr 1fr 1fr;
-		gap: 1px;
-		background: hsl(var(--border) / 0.3);
 	}
 
 	.pane {
@@ -165,6 +163,11 @@
 		display: flex;
 		flex-direction: column;
 		min-height: 0;
+		border-right: 1px solid hsl(var(--border) / var(--border-opacity));
+	}
+
+	.pane:last-child {
+		border-right: none;
 	}
 
 	.pane-header {
@@ -288,31 +291,6 @@
 		font-size: 10px;
 		color: var(--accent);
 		opacity: 0.8;
-	}
-
-	.tag-filters {
-		padding: 10px 12px;
-		display: flex;
-		flex-wrap: wrap;
-		gap: 4px;
-		border-top: 1px solid hsl(var(--border) / 0.3);
-		flex-shrink: 0;
-	}
-
-	.tag-pill {
-		background: hsl(var(--muted));
-		border: none;
-		border-radius: 10px;
-		padding: 3px 8px;
-		font-size: 10px;
-		color: hsl(var(--muted-foreground));
-		cursor: pointer;
-		transition: all 0.15s ease;
-	}
-
-	.tag-pill:hover {
-		background: hsl(var(--accent) / 0.2);
-		color: var(--accent);
 	}
 
 	/* Done Pane */

@@ -6,34 +6,29 @@
 	import { Icon } from 'svelte-icons-pack';
 	import { LuStickyNote } from 'svelte-icons-pack/lu';
 	import type { Mode } from '$lib/config/modes';
+	import CanvasFrame from '$lib/components/CanvasFrame.svelte';
 
 	interface Props {
 		mode: Mode;
 	}
 
 	let { mode }: Props = $props();
-
-	function getModeAccentVar(mode: Mode): string {
-		switch (mode) {
-			case 'chat':
-				return 'var(--boss-accent)';
-			case 'reader':
-				return 'var(--reader-accent)';
-			case 'todo':
-				return 'var(--todo-accent)';
-			default:
-				return 'var(--boss-accent)';
-		}
-	}
 </script>
 
-<div class="notes-canvas" style:--accent={getModeAccentVar(mode)}>
-	<div class="placeholder">
-		<Icon src={LuStickyNote} size="48" />
-		<h3>Notes</h3>
-		<p>Scratch pad coming soon</p>
-	</div>
-</div>
+<CanvasFrame {mode}>
+	{#snippet content()}
+		<div class="notes-canvas">
+			<div class="placeholder">
+				<Icon src={LuStickyNote} size="48" />
+				<h3>Notes</h3>
+				<p>Scratch pad coming soon</p>
+			</div>
+		</div>
+	{/snippet}
+	{#snippet footer()}
+		<!-- Empty footer for layout alignment -->
+	{/snippet}
+</CanvasFrame>
 
 <style>
 	.notes-canvas {
