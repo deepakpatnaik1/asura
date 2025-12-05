@@ -243,26 +243,27 @@ export async function buildContext(
 			.limit(MEMORY.lastNJournalEntries)
 	]);
 
-	// Priority 0.5: Work data for todo mode (todos, tags, and diary)
+	// Priority 0.5: Work data for todo mode (all todos, all diary, all tags)
 	if (mode === 'todo') {
 		const [todosResult, tagsResult, diaryResult] = await Promise.all([
+			// All todos (open + completed) for pattern recognition
 			supabase
 				.from('todos')
-				.select('id, description, tags, status, created_at, scheduled_for, times_pushed')
+				.select('id, description, tags, status, created_at, completed_at, scheduled_for, times_pushed')
 				.eq('user_id', userId)
-				.eq('status', 'open')
-				.order('created_at', { ascending: false }),
+				.order('created_at', { ascending: true }),
+			// All tags
 			supabase
 				.from('tags')
 				.select('name')
 				.eq('user_id', userId)
 				.order('name', { ascending: true }),
+			// All diary entries for emotional arc
 			supabase
 				.from('founder_diary')
 				.select('id, description, tags, logged_at')
 				.eq('user_id', userId)
-				.order('logged_at', { ascending: false })
-				.limit(20)
+				.order('logged_at', { ascending: true })
 		]);
 
 		const workDataText = formatWorkData(
@@ -661,6 +662,7 @@ function formatWorkData(
 		tags: string[];
 		status: string;
 		created_at: string;
+		completed_at: string | null;
 		scheduled_for: string | null;
 		times_pushed: number;
 	}>,
@@ -679,7 +681,9 @@ function formatWorkData(
 			id: t.id,
 			description: t.description,
 			tags: t.tags,
+			status: t.status,
 			created_at: t.created_at,
+			completed_at: t.completed_at,
 			scheduled_for: t.scheduled_for,
 			times_pushed: t.times_pushed
 		})),
@@ -700,16 +704,16 @@ function formatWorkData(
 
 	const tagsJson = JSON.stringify(tags);
 
-	return `--- WORK DATA (Todos, Tags & Diary) ---
+	return `--- WORK DATA (All Todos, Tags & Founder Diary) ---
 <work_data>
 <current_time>${currentTime}</current_time>
 <tags>${tagsJson}</tags>
 <todos>
 ${todosJson}
 </todos>
-<recent_diary>
+<founder_diary>
 ${diaryJson}
-</recent_diary>
+</founder_diary>
 </work_data>
 
 `;
