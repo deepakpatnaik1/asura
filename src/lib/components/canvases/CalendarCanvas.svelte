@@ -10,6 +10,8 @@
 
 	import type { Mode } from '$lib/config/modes';
 	import CanvasFrame from '$lib/components/CanvasFrame.svelte';
+	import { Icon } from 'svelte-icons-pack';
+	import { LuRefreshCw } from 'svelte-icons-pack/lu';
 
 	interface Props {
 		mode: Mode;
@@ -17,35 +19,136 @@
 
 	let { mode }: Props = $props();
 
-	// Mock data - will be replaced with real data from database
-	const mockCalendar = [
-		{
-			date: 4,
-			day: 'Wednesday',
-			month: 'December',
-			events: [
-				{ time: '10am', title: 'Standup', type: 'calendar' as const },
-				{ time: '2pm', title: 'Board prep', type: 'calendar' as const },
-				{ time: null, title: 'Ship auth fix', type: 'todo' as const }
-			]
-		},
-		{
-			date: 5,
-			day: 'Thursday',
-			month: 'December',
-			events: [
-				{ time: '9am', title: 'Investor call', type: 'calendar' as const },
-				{ time: '3pm', title: 'Design review', type: 'calendar' as const }
-			]
-		},
-		{
-			date: 6,
-			day: 'Friday',
-			month: 'December',
-			events: []
-		}
-	];
+	// Calendar state
+	interface CalendarEvent {
+		id: string;
+		summary: string;
+		start: { dateTime?: string; date?: string };
+		end: { dateTime?: string; date?: string };
+	}
 
+	interface DayCard {
+		date: number;
+		day: string;
+		month: string;
+		fullDate: Date;
+		events: { time: string | null; title: string; type: 'calendar' | 'todo' }[];
+	}
+
+	let calendarConnected = $state(false);
+	let calendarLoading = $state(false);
+	let calendarDays = $state<DayCard[]>([]);
+
+	// Fetch calendar events on mount
+	$effect(() => {
+		fetchCalendarEvents();
+	});
+
+	async function fetchCalendarEvents() {
+		calendarLoading = true;
+		try {
+			const response = await fetch('/api/google/calendar/events');
+			const data = await response.json();
+
+			calendarConnected = data.connected;
+
+			if (data.connected && data.events) {
+				calendarDays = transformEventsToCards(data.events);
+			} else {
+				// Show next 7 days with no events
+				calendarDays = generateEmptyDays(7);
+			}
+		} catch (err) {
+			console.error('Failed to fetch calendar events:', err);
+			calendarDays = generateEmptyDays(7);
+		} finally {
+			calendarLoading = false;
+		}
+	}
+
+	function generateEmptyDays(count: number): DayCard[] {
+		const days: DayCard[] = [];
+		const today = new Date();
+
+		for (let i = 0; i < count; i++) {
+			const date = new Date(today);
+			date.setDate(date.getDate() + i);
+
+			days.push({
+				date: date.getDate(),
+				day: date.toLocaleDateString('en-US', { weekday: 'long' }),
+				month: date.toLocaleDateString('en-US', { month: 'long' }),
+				fullDate: date,
+				events: []
+			});
+		}
+
+		return days;
+	}
+
+	function transformEventsToCards(events: CalendarEvent[]): DayCard[] {
+		// Group events by date
+		const eventsByDate = new Map<string, CalendarEvent[]>();
+		const today = new Date();
+
+		// Initialize next 14 days
+		for (let i = 0; i < 14; i++) {
+			const date = new Date(today);
+			date.setDate(date.getDate() + i);
+			const key = date.toISOString().split('T')[0];
+			eventsByDate.set(key, []);
+		}
+
+		// Add events to their dates
+		for (const event of events) {
+			const dateStr = event.start.dateTime
+				? event.start.dateTime.split('T')[0]
+				: event.start.date;
+			if (dateStr && eventsByDate.has(dateStr)) {
+				eventsByDate.get(dateStr)!.push(event);
+			}
+		}
+
+		// Convert to DayCard array
+		const days: DayCard[] = [];
+		for (const [dateStr, dayEvents] of eventsByDate) {
+			const date = new Date(dateStr + 'T12:00:00');
+
+			days.push({
+				date: date.getDate(),
+				day: date.toLocaleDateString('en-US', { weekday: 'long' }),
+				month: date.toLocaleDateString('en-US', { month: 'long' }),
+				fullDate: date,
+				events: dayEvents.map((e) => ({
+					time: formatEventTime(e),
+					title: e.summary || '(No title)',
+					type: 'calendar' as const
+				}))
+			});
+		}
+
+		// Sort by date
+		days.sort((a, b) => a.fullDate.getTime() - b.fullDate.getTime());
+
+		return days;
+	}
+
+	function formatEventTime(event: CalendarEvent): string | null {
+		if (event.start.date) {
+			return null; // All-day event
+		}
+		if (event.start.dateTime) {
+			const date = new Date(event.start.dateTime);
+			return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase();
+		}
+		return null;
+	}
+
+	function connectCalendar() {
+		window.location.href = '/api/google/calendar/authorize';
+	}
+
+	// Mock data for todos/done - Phase 3/4 will replace
 	const mockTodos = [
 		{ id: '1', text: 'Write investor update', tag: 'investor' },
 		{ id: '2', text: 'Review term sheet', tag: 'legal' },
@@ -79,35 +182,56 @@
 		<div class="productivity-canvas" style:--accent={getAccentColor()}>
 			<!-- Calendar Pane -->
 			<div class="pane calendar-pane">
-				<div class="pane-header">Calendar</div>
+				<div class="pane-header">
+					<span>Calendar</span>
+					{#if calendarConnected}
+						<button
+							class="sync-button"
+							class:spinning={calendarLoading}
+							onclick={fetchCalendarEvents}
+							disabled={calendarLoading}
+							title="Sync calendar"
+						>
+							<Icon src={LuRefreshCw} size="12" />
+						</button>
+					{:else}
+						<button class="connect-button" onclick={connectCalendar}>
+							Connect
+						</button>
+					{/if}
+				</div>
 				<div class="pane-content">
-					{#each mockCalendar as day}
-						<div class="day-card">
-							<div class="day-header">
-								<span class="day-date">{day.date}</span>
-								<span class="day-name">{day.day}</span>
+					{#if calendarLoading && calendarDays.length === 0}
+						<div class="loading">Loading...</div>
+					{:else}
+						{#each calendarDays as day}
+							<div class="day-card">
+								<div class="day-header">
+									<span class="day-date">{day.date}</span>
+									<span class="day-name">{day.day}</span>
+								</div>
+								<div class="day-events">
+									{#if day.events.length === 0}
+										<div class="empty-day">(empty)</div>
+									{:else}
+										{#each day.events as event}
+											<div class="event" class:todo-event={event.type === 'todo'}>
+												{#if event.type === 'calendar'}
+													<span class="event-bullet">&#9642;</span>
+												{:else}
+													<span class="event-bullet todo">&#9670;</span>
+												{/if}
+												{#if event.time}
+													<span class="event-time">{event.time}</span>
+												{/if}
+												<span class="event-title">{event.title}</span>
+											</div>
+										{/each}
+									{/if}
+								</div>
 							</div>
-							<div class="day-events">
-								{#if day.events.length === 0}
-									<div class="empty-day">(empty)</div>
-								{:else}
-									{#each day.events as event}
-										<div class="event" class:todo-event={event.type === 'todo'}>
-											{#if event.type === 'calendar'}
-												<span class="event-bullet">&#9642;</span>
-											{:else}
-												<span class="event-bullet todo">&#9670;</span>
-											{/if}
-											{#if event.time}
-												<span class="event-time">{event.time}</span>
-											{/if}
-											<span class="event-title">{event.title}</span>
-										</div>
-									{/each}
-								{/if}
-							</div>
-						</div>
-					{/each}
+						{/each}
+					{/if}
 				</div>
 			</div>
 
@@ -175,10 +299,63 @@
 		font-size: 11px;
 		color: hsl(var(--muted-foreground));
 		flex-shrink: 0;
+		display: flex;
+		align-items: center;
+		gap: 8px;
 	}
 
 	.pane-header .count {
 		opacity: 0.6;
+	}
+
+	.sync-button,
+	.connect-button {
+		background: none;
+		border: none;
+		padding: 2px 6px;
+		cursor: pointer;
+		color: hsl(var(--muted-foreground));
+		border-radius: 4px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.sync-button:hover,
+	.connect-button:hover {
+		background: hsl(var(--muted) / 0.3);
+		color: var(--accent);
+	}
+
+	.sync-button:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.connect-button {
+		font-size: 10px;
+		color: var(--accent);
+		border: 1px solid var(--accent);
+	}
+
+	.loading {
+		font-size: 10px;
+		color: hsl(var(--muted-foreground) / 0.6);
+		font-style: italic;
+		padding: 8px 0;
+	}
+
+	.sync-button.spinning :global(svg) {
+		animation: spin 1s linear infinite;
+	}
+
+	@keyframes spin {
+		from {
+			transform: rotate(0deg);
+		}
+		to {
+			transform: rotate(360deg);
+		}
 	}
 
 	.pane-content {
