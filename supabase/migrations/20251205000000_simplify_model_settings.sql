@@ -8,15 +8,25 @@ ALTER TABLE user_settings
 ADD COLUMN IF NOT EXISTS selected_chat_model TEXT,
 ADD COLUMN IF NOT EXISTS selected_work_model TEXT;
 
--- Migrate data: conversation model becomes chat model
-UPDATE user_settings
-SET selected_chat_model = selected_conversation_model
-WHERE selected_chat_model IS NULL AND selected_conversation_model IS NOT NULL;
+-- Migrate data (only if old columns exist)
+DO $$
+BEGIN
+  -- Migrate conversation model to chat model
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+             WHERE table_name = 'user_settings' AND column_name = 'selected_conversation_model') THEN
+    UPDATE user_settings
+    SET selected_chat_model = selected_conversation_model
+    WHERE selected_chat_model IS NULL AND selected_conversation_model IS NOT NULL;
+  END IF;
 
--- Migrate data: todo model becomes work model
-UPDATE user_settings
-SET selected_work_model = selected_todo_model
-WHERE selected_work_model IS NULL AND selected_todo_model IS NOT NULL;
+  -- Migrate todo model to work model
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+             WHERE table_name = 'user_settings' AND column_name = 'selected_todo_model') THEN
+    UPDATE user_settings
+    SET selected_work_model = selected_todo_model
+    WHERE selected_work_model IS NULL AND selected_todo_model IS NOT NULL;
+  END IF;
+END $$;
 
 -- Drop old columns
 ALTER TABLE user_settings
