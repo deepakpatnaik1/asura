@@ -10,7 +10,8 @@ import { databaseError } from '$lib/api/errors';
  * Fetches calendar events for the next 14 days.
  * Auto-refreshes access token if expired.
  */
-export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase } }) => {
+export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supabase } }) => {
+	const daysAhead = Math.min(parseInt(url.searchParams.get('days') || '90'), 180);
 	// 1. AUTHENTICATION CHECK
 	const auth = await requireAuth(safeGetSession);
 	if (!auth.success) return auth.error;
@@ -57,7 +58,7 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 
 	// 4. FETCH EVENTS
 	try {
-		const events = await fetchCalendarEvents(accessToken, 14);
+		const events = await fetchCalendarEvents(accessToken, daysAhead);
 		return json({ connected: true, events });
 	} catch (err) {
 		console.error('Failed to fetch events:', err);

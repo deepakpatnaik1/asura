@@ -11,7 +11,7 @@
 	import type { Mode } from '$lib/config/modes';
 	import CanvasFrame from '$lib/components/CanvasFrame.svelte';
 	import { Icon } from 'svelte-icons-pack';
-	import { LuRefreshCw } from 'svelte-icons-pack/lu';
+	import { LuRefreshCw, LuHome } from 'svelte-icons-pack/lu';
 
 	interface Props {
 		mode: Mode;
@@ -32,28 +32,35 @@
 		day: string;
 		month: string;
 		fullDate: Date;
+		isToday: boolean;
+		dateKey: string;
 		events: { time: string | null; title: string; type: 'calendar' | 'todo' }[];
 	}
 
 	let calendarConnected = $state(false);
 	let calendarLoading = $state(false);
 	let calendarDays = $state<DayCard[]>([]);
+	let daysLoaded = $state(90);
+	let loadingMore = $state(false);
+	let paneContentRef = $state<HTMLDivElement | null>(null);
+	let todayRef = $state<HTMLDivElement | null>(null);
+	let sentinelRef = $state<HTMLDivElement | null>(null);
 
 	// Fetch calendar events on mount
 	$effect(() => {
 		fetchCalendarEvents();
 	});
 
-	async function fetchCalendarEvents() {
+	async function fetchCalendarEvents(days: number = daysLoaded) {
 		calendarLoading = true;
 		try {
-			const response = await fetch('/api/google/calendar/events');
+			const response = await fetch(`/api/google/calendar/events?days=${days}`);
 			const data = await response.json();
 
 			calendarConnected = data.connected;
 
 			if (data.connected && data.events) {
-				calendarDays = transformEventsToCards(data.events);
+				calendarDays = transformEventsToCards(data.events, days);
 			} else {
 				// Show next 7 days with no events
 				calendarDays = generateEmptyDays(7);
@@ -66,19 +73,67 @@
 		}
 	}
 
+	async function loadMoreDays() {
+		if (loadingMore || daysLoaded >= 180) return;
+		loadingMore = true;
+		const newDays = Math.min(daysLoaded + 30, 180);
+		try {
+			const response = await fetch(`/api/google/calendar/events?days=${newDays}`);
+			const data = await response.json();
+			if (data.connected && data.events) {
+				calendarDays = transformEventsToCards(data.events, newDays);
+				daysLoaded = newDays;
+			}
+		} catch (err) {
+			console.error('Failed to load more days:', err);
+		} finally {
+			loadingMore = false;
+		}
+	}
+
+	function scrollToToday() {
+		todayRef?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+	}
+
+	// Action to track today's element (bind:this can't use ternary)
+	function trackTodayElement(node: HTMLElement, isToday: boolean) {
+		if (isToday) {
+			todayRef = node;
+		}
+	}
+
+	// Setup Intersection Observer for infinite scroll
+	$effect(() => {
+		if (!sentinelRef) return;
+		const observer = new IntersectionObserver(
+			(entries) => {
+				if (entries[0].isIntersecting && !loadingMore) {
+					loadMoreDays();
+				}
+			},
+			{ rootMargin: '100px' }
+		);
+		observer.observe(sentinelRef);
+		return () => observer.disconnect();
+	});
+
 	function generateEmptyDays(count: number): DayCard[] {
 		const days: DayCard[] = [];
 		const today = new Date();
+		const todayKey = today.toISOString().split('T')[0];
 
 		for (let i = 0; i < count; i++) {
 			const date = new Date(today);
 			date.setDate(date.getDate() + i);
+			const dateKey = date.toISOString().split('T')[0];
 
 			days.push({
 				date: date.getDate(),
 				day: date.toLocaleDateString('en-US', { weekday: 'long' }),
 				month: date.toLocaleDateString('en-US', { month: 'long' }),
 				fullDate: date,
+				isToday: dateKey === todayKey,
+				dateKey,
 				events: []
 			});
 		}
@@ -86,13 +141,14 @@
 		return days;
 	}
 
-	function transformEventsToCards(events: CalendarEvent[]): DayCard[] {
+	function transformEventsToCards(events: CalendarEvent[], dayCount: number): DayCard[] {
 		// Group events by date
 		const eventsByDate = new Map<string, CalendarEvent[]>();
 		const today = new Date();
+		const todayKey = today.toISOString().split('T')[0];
 
-		// Initialize next 14 days
-		for (let i = 0; i < 14; i++) {
+		// Initialize days
+		for (let i = 0; i < dayCount; i++) {
 			const date = new Date(today);
 			date.setDate(date.getDate() + i);
 			const key = date.toISOString().split('T')[0];
@@ -119,6 +175,8 @@
 				day: date.toLocaleDateString('en-US', { weekday: 'long' }),
 				month: date.toLocaleDateString('en-US', { month: 'long' }),
 				fullDate: date,
+				isToday: dateStr === todayKey,
+				dateKey: dateStr,
 				events: dayEvents.map((e) => ({
 					time: formatEventTime(e),
 					title: e.summary || '(No title)',
@@ -185,14 +243,17 @@
 				<div class="pane-header">
 					<span>Calendar</span>
 					{#if calendarConnected}
+						<button class="today-button hit-target" onclick={scrollToToday} title="Jump to today">
+							<Icon src={LuHome} size="11" />
+						</button>
 						<button
-							class="sync-button"
+							class="sync-button hit-target"
 							class:spinning={calendarLoading}
-							onclick={fetchCalendarEvents}
+							onclick={() => fetchCalendarEvents()}
 							disabled={calendarLoading}
 							title="Sync calendar"
 						>
-							<Icon src={LuRefreshCw} size="12" />
+							<Icon src={LuRefreshCw} size="11" />
 						</button>
 					{:else}
 						<button class="connect-button" onclick={connectCalendar}>
@@ -200,37 +261,39 @@
 						</button>
 					{/if}
 				</div>
-				<div class="pane-content">
+				<div class="pane-content" bind:this={paneContentRef}>
 					{#if calendarLoading && calendarDays.length === 0}
 						<div class="loading">Loading...</div>
 					{:else}
-						{#each calendarDays as day}
-							<div class="day-card">
+						{#each calendarDays as day (day.dateKey)}
+							<div class="day-card" use:trackTodayElement={day.isToday}>
 								<div class="day-header">
 									<span class="day-date">{day.date}</span>
 									<span class="day-name">{day.day}</span>
 								</div>
 								<div class="day-events">
-									{#if day.events.length === 0}
-										<div class="empty-day">(empty)</div>
-									{:else}
-										{#each day.events as event}
-											<div class="event" class:todo-event={event.type === 'todo'}>
-												{#if event.type === 'calendar'}
-													<span class="event-bullet">&#9642;</span>
-												{:else}
-													<span class="event-bullet todo">&#9670;</span>
-												{/if}
-												{#if event.time}
-													<span class="event-time">{event.time}</span>
-												{/if}
-												<span class="event-title">{event.title}</span>
-											</div>
-										{/each}
-									{/if}
+									{#each day.events as event}
+										<div class="event" class:todo-event={event.type === 'todo'}>
+											{#if event.type === 'calendar'}
+												<span class="event-bullet">&#9642;</span>
+											{:else}
+												<span class="event-bullet todo">&#9670;</span>
+											{/if}
+											{#if event.time}
+												<span class="event-time">{event.time}</span>
+											{/if}
+											<span class="event-title">{event.title}</span>
+										</div>
+									{/each}
 								</div>
 							</div>
 						{/each}
+						<!-- Sentinel for infinite scroll -->
+						<div class="scroll-sentinel" bind:this={sentinelRef}>
+							{#if loadingMore}
+								<span class="loading-more">Loading more...</span>
+							{/if}
+						</div>
 					{/if}
 				</div>
 			</div>
@@ -287,15 +350,11 @@
 		display: flex;
 		flex-direction: column;
 		min-height: 0;
-		border-right: 1px solid hsl(var(--border) / var(--border-opacity));
-	}
-
-	.pane:last-child {
-		border-right: none;
+		overflow: hidden;
 	}
 
 	.pane-header {
-		padding: 12px 12px 8px;
+		padding: 12px 0 8px;
 		font-size: 11px;
 		color: hsl(var(--muted-foreground));
 		flex-shrink: 0;
@@ -338,6 +397,23 @@
 		border: 1px solid var(--accent);
 	}
 
+	.today-button {
+		background: none;
+		border: none;
+		padding: 2px 6px;
+		cursor: pointer;
+		color: hsl(var(--muted-foreground));
+		border-radius: 4px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.today-button:hover {
+		background: hsl(var(--muted) / 0.3);
+		color: var(--accent);
+	}
+
 	.loading {
 		font-size: 10px;
 		color: hsl(var(--muted-foreground) / 0.6);
@@ -361,12 +437,26 @@
 	.pane-content {
 		flex: 1;
 		overflow-y: auto;
-		padding: 0 12px;
+		overscroll-behavior: contain;
 	}
 
 	/* Calendar Pane */
 	.day-card {
 		margin-bottom: 16px;
+	}
+
+
+	.scroll-sentinel {
+		height: 20px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.loading-more {
+		font-size: 10px;
+		color: hsl(var(--muted-foreground) / 0.6);
+		font-style: italic;
 	}
 
 	.day-header {
@@ -386,16 +476,6 @@
 	.day-name {
 		font-size: 11px;
 		color: hsl(var(--muted-foreground));
-	}
-
-	.day-events {
-		padding-left: 2px;
-	}
-
-	.empty-day {
-		font-size: 10px;
-		color: hsl(var(--muted-foreground) / 0.5);
-		font-style: italic;
 	}
 
 	.event {

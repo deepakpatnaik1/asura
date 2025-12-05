@@ -90,6 +90,8 @@
 		position: sticky;
 		top: 0;
 		border-left: 1px solid hsl(var(--border) / var(--border-opacity));
+		overflow: hidden;
+		overscroll-behavior: contain;
 	}
 
 	.canvas-content {

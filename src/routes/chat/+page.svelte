@@ -921,7 +921,7 @@
 			'input canvas';
 		height: 100vh;
 		margin-left: var(--sidebar-width); /* Account for sidebar */
-		overflow-y: auto;
+		overflow: hidden;
 		background: hsl(var(--background));
 		color: hsl(var(--foreground));
 		position: relative;
@@ -946,6 +946,8 @@
 		grid-area: messages;
 		padding: var(--layout-padding);
 		position: relative;
+		overflow-y: auto;
+		overscroll-behavior: contain;
 	}
 
 	.messages-content {
