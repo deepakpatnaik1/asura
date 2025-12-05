@@ -7,7 +7,7 @@
 
 import type { RequestHandler } from './$types';
 import { buildContext } from '$lib/context-builder';
-import { DEFAULT_CONVERSATION_MODEL } from '$lib/config/models';
+import { DEFAULT_CHAT_MODEL, DEFAULT_READER_MODEL } from '$lib/config/models';
 import { getModelParams } from '$lib/config/model-params';
 import { DEFAULT_PERSONA, DEFAULT_READER_PERSONA } from '$lib/config/personas';
 import { getPersonaPrompt } from '$lib/prompts';
@@ -66,14 +66,14 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		// 4. Load user settings
 		const { data: settings } = await supabase
 			.from('user_settings')
-			.select('selected_conversation_model, selected_reader_model, selected_persona_chat, selected_persona_reader')
+			.select('selected_chat_model, selected_reader_model, selected_persona_chat, selected_persona_reader')
 			.eq('user_id', userId)
 			.single();
 
 		// Select model and persona based on mode
 		const conversationModel = mode === 'reader'
-			? (settings?.selected_reader_model || DEFAULT_CONVERSATION_MODEL)
-			: (settings?.selected_conversation_model || DEFAULT_CONVERSATION_MODEL);
+			? (settings?.selected_reader_model || DEFAULT_READER_MODEL)
+			: (settings?.selected_chat_model || DEFAULT_CHAT_MODEL);
 		const selectedPersona = mode === 'reader'
 			? (settings?.selected_persona_reader || DEFAULT_READER_PERSONA)
 			: (settings?.selected_persona_chat || DEFAULT_PERSONA);

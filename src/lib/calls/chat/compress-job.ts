@@ -9,7 +9,7 @@ import { VoyageAIClient } from 'voyageai';
 import { VOYAGE_API_KEY, SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
 import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { DEFAULT_COMPRESSION_MODEL, EMBEDDING_MODEL } from '$lib/config/models';
+import { DEFAULT_CHAT_MODEL, EMBEDDING_MODEL } from '$lib/config/models';
 import { getModelParams } from '$lib/config/model-params';
 import { createLogger } from '$lib/api/logger';
 import { compress } from './compress';
@@ -68,14 +68,14 @@ export async function runCompressJob(params: CompressJobParams): Promise<void> {
 			return;
 		}
 
-		// Read selected compression model from user_settings table
+		// Read selected chat model from user_settings table (used for compression)
 		const { data: settings } = await supabase
 			.from('user_settings')
-			.select('selected_compression_model')
+			.select('selected_chat_model')
 			.eq('user_id', userId)
 			.single();
 
-		const compressionModel = settings?.selected_compression_model || DEFAULT_COMPRESSION_MODEL;
+		const compressionModel = settings?.selected_chat_model || DEFAULT_CHAT_MODEL;
 
 		// Fetch compression parameters from database
 		const compressionParams = await getModelParams(compressionModel, 'compression');

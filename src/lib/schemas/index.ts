@@ -69,10 +69,9 @@ export const todoPersonaSchema = z.enum(['alicja']);
 
 /** PUT /api/settings - Update user settings */
 export const settingsUpdateSchema = z.object({
-	selected_conversation_model: z.string().optional(),
-	selected_compression_model: z.string().optional(),
+	selected_chat_model: z.string().optional(),
 	selected_reader_model: z.string().optional(),
-	selected_todo_model: z.string().optional(),
+	selected_work_model: z.string().optional(),
 	selected_embedding_model: z.string().optional(),
 	active_content_id: z.string().uuid().nullable().optional(),
 	selected_persona_chat: chatPersonaSchema.optional(),

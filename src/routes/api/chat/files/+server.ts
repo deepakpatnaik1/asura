@@ -10,7 +10,7 @@ import type { RequestHandler } from './$types';
 import { requireAuth } from '$lib/api/require-auth';
 import { parseRequestJson } from '$lib/api/parse-json';
 import { createMessage } from '$lib/api/anthropic-client';
-import { DEFAULT_COMPRESSION_MODEL } from '$lib/config/models';
+import { DEFAULT_CHAT_MODEL } from '$lib/config/models';
 import { DEFAULT_PERSONA, DEFAULT_READER_PERSONA } from '$lib/config/personas';
 import { FILE_ARTISAN_CUT_PROMPT } from '$lib/prompts/file-artisan-cut';
 import { databaseError, validationError, internalError } from '$lib/api/errors';
@@ -89,14 +89,14 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 	try {
 		log.info('Processing file upload', { contentLength: content.length, persistent, mode });
 
-		// Fetch user settings (compression model + persona based on mode)
+		// Fetch user settings (chat model for artisan cut + persona based on mode)
 		const { data: settings } = await supabase
 			.from('user_settings')
-			.select('selected_compression_model, selected_persona_chat, selected_persona_reader')
+			.select('selected_chat_model, selected_persona_chat, selected_persona_reader')
 			.eq('user_id', userId)
 			.single();
 
-		const model = settings?.selected_compression_model || DEFAULT_COMPRESSION_MODEL;
+		const model = settings?.selected_chat_model || DEFAULT_CHAT_MODEL;
 		const persona = mode === 'reader'
 			? (settings?.selected_persona_reader || DEFAULT_READER_PERSONA)
 			: (settings?.selected_persona_chat || DEFAULT_PERSONA);

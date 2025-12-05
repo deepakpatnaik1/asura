@@ -3,10 +3,9 @@
 	import { Icon } from 'svelte-icons-pack';
 	import { LuX } from 'svelte-icons-pack/lu';
 	import {
-		DEFAULT_CONVERSATION_MODEL,
-		DEFAULT_COMPRESSION_MODEL,
+		DEFAULT_CHAT_MODEL,
 		DEFAULT_READER_MODEL,
-		DEFAULT_TODO_MODEL,
+		DEFAULT_WORK_MODEL,
 		EMBEDDING_MODEL
 	} from '$lib/config/models';
 
@@ -25,10 +24,9 @@
 	}
 
 	let models = $state<Model[]>([]);
-	let selectedConversationModel = $state<string>('');
-	let selectedCompressionModel = $state<string>('');
+	let selectedChatModel = $state<string>('');
 	let selectedReaderModel = $state<string>('');
-	let selectedTodoModel = $state<string>('');
+	let selectedWorkModel = $state<string>('');
 	let selectedEmbeddingModel = $state<string>('');
 	let isLoading = $state(true);
 	let isSaving = $state(false);
@@ -51,12 +49,9 @@
 				throw new Error('Failed to fetch settings');
 			}
 			const settings = await settingsRes.json();
-			selectedConversationModel =
-				settings.selected_conversation_model || DEFAULT_CONVERSATION_MODEL;
-			selectedCompressionModel =
-				settings.selected_compression_model || DEFAULT_COMPRESSION_MODEL;
+			selectedChatModel = settings.selected_chat_model || DEFAULT_CHAT_MODEL;
 			selectedReaderModel = settings.selected_reader_model || DEFAULT_READER_MODEL;
-			selectedTodoModel = settings.selected_todo_model || DEFAULT_TODO_MODEL;
+			selectedWorkModel = settings.selected_work_model || DEFAULT_WORK_MODEL;
 			selectedEmbeddingModel = settings.selected_embedding_model || EMBEDDING_MODEL;
 
 			isLoading = false;
@@ -77,10 +72,9 @@
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
-					selected_conversation_model: selectedConversationModel,
-					selected_compression_model: selectedCompressionModel,
+					selected_chat_model: selectedChatModel,
 					selected_reader_model: selectedReaderModel,
-					selected_todo_model: selectedTodoModel,
+					selected_work_model: selectedWorkModel,
 					selected_embedding_model: selectedEmbeddingModel
 				})
 			});
@@ -165,31 +159,19 @@
 			{:else}
 				<!-- Model Selection -->
 				<div class="settings-section">
-					<label for="conversation-model">Conversation Model</label>
-					<select id="conversation-model" bind:value={selectedConversationModel}>
+					<label for="chat-model">Chat Mode Model</label>
+					<select id="chat-model" bind:value={selectedChatModel}>
 						{#each models.filter(m => m.model_type === 'text_generation') as model}
 							<option value={model.model_identifier}>
 								{model.model_name} ({model.provider})
 							</option>
 						{/each}
 					</select>
-					<p class="help-text">Used for chat responses and thinking</p>
+					<p class="help-text">Used for chat conversations and memory compression</p>
 				</div>
 
 				<div class="settings-section">
-					<label for="compression-model">Artisan Cut Model</label>
-					<select id="compression-model" bind:value={selectedCompressionModel}>
-						{#each models.filter(m => m.model_type === 'text_generation') as model}
-							<option value={model.model_identifier}>
-								{model.model_name} ({model.provider})
-							</option>
-						{/each}
-					</select>
-					<p class="help-text">Used for memory compression and file processing</p>
-				</div>
-
-				<div class="settings-section">
-					<label for="reader-model">E-Reader Model</label>
+					<label for="reader-model">Reader Mode Model</label>
 					<select id="reader-model" bind:value={selectedReaderModel}>
 						{#each models.filter(m => m.model_type === 'text_generation') as model}
 							<option value={model.model_identifier}>
@@ -197,19 +179,19 @@
 							</option>
 						{/each}
 					</select>
-					<p class="help-text">Used for article processing and summarization</p>
+					<p class="help-text">Used for article processing and discussion</p>
 				</div>
 
 				<div class="settings-section">
-					<label for="todo-model">Todo Model</label>
-					<select id="todo-model" bind:value={selectedTodoModel}>
+					<label for="work-model">Work Mode Model</label>
+					<select id="work-model" bind:value={selectedWorkModel}>
 						{#each models.filter(m => m.model_type === 'text_generation') as model}
 							<option value={model.model_identifier}>
 								{model.model_name} ({model.provider})
 							</option>
 						{/each}
 					</select>
-					<p class="help-text">Used for todo mode conversations</p>
+					<p class="help-text">Used for work mode conversations with Alicja</p>
 				</div>
 
 				<div class="settings-section">
