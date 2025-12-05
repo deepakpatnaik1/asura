@@ -52,6 +52,36 @@ export const LAYOUT = {
 	border: {
 		/** Opacity for subtle borders (dividers, panes) */
 		opacity: 0.3
+	},
+
+	/** Typography - font sizes in px */
+	typography: {
+		/** Smallest text (tags, timestamps, secondary info) */
+		caption: 10,
+		/** Standard body text */
+		body: 11,
+		/** Section headers, month names */
+		sectionHeader: 13,
+		/** Large display text (big date numbers) */
+		display: 20
+	},
+
+	/** Font weights */
+	fontWeight: {
+		normal: 400,
+		medium: 500,
+		semibold: 600
+	},
+
+	/** Spacing scale in px (use for margins, gaps, padding) */
+	spacing: {
+		xs: 3,
+		sm: 6,
+		md: 8,
+		lg: 10,
+		xl: 12,
+		'2xl': 16,
+		'3xl': 20
 	}
 } as const;
 
@@ -109,6 +139,7 @@ export const CANVAS = {
 
 export function getCSSVariables(): Record<string, string> {
 	return {
+		// Layout
 		'--sidebar-width': `${LAYOUT.sidebar.width}px`,
 		'--layout-padding': `${LAYOUT.padding.base}px`,
 		'--input-bar-height': `${LAYOUT.inputBar.height}px`,
@@ -117,7 +148,25 @@ export function getCSSVariables(): Record<string, string> {
 		'--input-bar-textarea-height': `${LAYOUT.inputBar.textareaHeight}px`,
 		'--input-bar-content-height': `${DERIVED.inputBarContentHeight}px`,
 		'--input-bar-vertical-padding': `${DERIVED.inputBarVerticalPadding}px`,
-		'--border-opacity': `${LAYOUT.border.opacity}`
+		// Border
+		'--border-opacity': `${LAYOUT.border.opacity}`,
+		// Typography
+		'--font-caption': `${LAYOUT.typography.caption}px`,
+		'--font-body': `${LAYOUT.typography.body}px`,
+		'--font-section-header': `${LAYOUT.typography.sectionHeader}px`,
+		'--font-display': `${LAYOUT.typography.display}px`,
+		// Font weights
+		'--font-weight-normal': `${LAYOUT.fontWeight.normal}`,
+		'--font-weight-medium': `${LAYOUT.fontWeight.medium}`,
+		'--font-weight-semibold': `${LAYOUT.fontWeight.semibold}`,
+		// Spacing
+		'--spacing-xs': `${LAYOUT.spacing.xs}px`,
+		'--spacing-sm': `${LAYOUT.spacing.sm}px`,
+		'--spacing-md': `${LAYOUT.spacing.md}px`,
+		'--spacing-lg': `${LAYOUT.spacing.lg}px`,
+		'--spacing-xl': `${LAYOUT.spacing.xl}px`,
+		'--spacing-2xl': `${LAYOUT.spacing['2xl']}px`,
+		'--spacing-3xl': `${LAYOUT.spacing['3xl']}px`
 	};
 }
 

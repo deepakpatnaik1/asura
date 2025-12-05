@@ -10,10 +10,10 @@ const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const CALENDAR_API_BASE = 'https://www.googleapis.com/calendar/v3';
 
-// Read-only scopes for Phase 2
+// Full access scopes for calendar operations
 const SCOPES = [
 	'https://www.googleapis.com/auth/calendar.readonly', // List calendars
-	'https://www.googleapis.com/auth/calendar.events.readonly' // Read events
+	'https://www.googleapis.com/auth/calendar.events' // Read/write events
 ];
 
 export interface GoogleTokens {
@@ -25,11 +25,52 @@ export interface GoogleTokens {
 export interface CalendarEvent {
 	id: string;
 	summary: string;
-	start: { dateTime?: string; date?: string };
-	end: { dateTime?: string; date?: string };
+	start: { dateTime?: string; date?: string; timeZone?: string };
+	end: { dateTime?: string; date?: string; timeZone?: string };
 	description?: string;
 	location?: string;
-	attendees?: { email: string; responseStatus: string }[];
+	attendees?: { email: string; responseStatus?: string }[];
+	conferenceData?: {
+		createRequest?: { requestId: string };
+		entryPoints?: { entryPointType: string; uri: string }[];
+	};
+	recurrence?: string[];
+	reminders?: {
+		useDefault: boolean;
+		overrides?: { method: string; minutes: number }[];
+	};
+	colorId?: string;
+}
+
+export interface CreateEventInput {
+	summary: string;
+	start: { dateTime?: string; date?: string; timeZone?: string };
+	end: { dateTime?: string; date?: string; timeZone?: string };
+	description?: string;
+	location?: string;
+	attendees?: { email: string }[];
+	addGoogleMeet?: boolean;
+	recurrence?: string[];
+	reminders?: {
+		useDefault: boolean;
+		overrides?: { method: string; minutes: number }[];
+	};
+	colorId?: string;
+}
+
+export interface UpdateEventInput {
+	summary?: string;
+	start?: { dateTime?: string; date?: string; timeZone?: string };
+	end?: { dateTime?: string; date?: string; timeZone?: string };
+	description?: string;
+	location?: string;
+	attendees?: { email: string }[];
+	recurrence?: string[];
+	reminders?: {
+		useDefault: boolean;
+		overrides?: { method: string; minutes: number }[];
+	};
+	colorId?: string;
 }
 
 /**
@@ -189,4 +230,131 @@ async function fetchEventsFromCalendar(
 
 	const data = await response.json();
 	return data.items || [];
+}
+
+/**
+ * Get the "work" calendar ID, or fallback to primary
+ */
+export async function getWorkCalendarId(accessToken: string): Promise<string> {
+	const calendarsResponse = await fetch(`${CALENDAR_API_BASE}/users/me/calendarList`, {
+		headers: { Authorization: `Bearer ${accessToken}` }
+	});
+
+	if (!calendarsResponse.ok) {
+		return 'primary';
+	}
+
+	const calendarsData = await calendarsResponse.json();
+	const workCalendar = calendarsData.items?.find(
+		(cal: { summary: string }) => cal.summary.toLowerCase() === 'work'
+	);
+
+	return workCalendar?.id || 'primary';
+}
+
+/**
+ * Create a new calendar event
+ */
+export async function createCalendarEvent(
+	accessToken: string,
+	calendarId: string,
+	event: CreateEventInput
+): Promise<CalendarEvent> {
+	const body: Record<string, unknown> = {
+		summary: event.summary,
+		start: event.start,
+		end: event.end
+	};
+
+	if (event.description) body.description = event.description;
+	if (event.location) body.location = event.location;
+	if (event.attendees) body.attendees = event.attendees;
+	if (event.recurrence) body.recurrence = event.recurrence;
+	if (event.reminders) body.reminders = event.reminders;
+	if (event.colorId) body.colorId = event.colorId;
+
+	// Google Meet integration
+	if (event.addGoogleMeet) {
+		body.conferenceData = {
+			createRequest: {
+				requestId: crypto.randomUUID()
+			}
+		};
+	}
+
+	const params = new URLSearchParams();
+	if (event.addGoogleMeet) {
+		params.set('conferenceDataVersion', '1');
+	}
+
+	const url = `${CALENDAR_API_BASE}/calendars/${encodeURIComponent(calendarId)}/events${params.toString() ? '?' + params : ''}`;
+
+	const response = await fetch(url, {
+		method: 'POST',
+		headers: {
+			Authorization: `Bearer ${accessToken}`,
+			'Content-Type': 'application/json'
+		},
+		body: JSON.stringify(body)
+	});
+
+	if (!response.ok) {
+		const error = await response.text();
+		throw new Error(`Failed to create event: ${error}`);
+	}
+
+	return response.json();
+}
+
+/**
+ * Update an existing calendar event
+ */
+export async function updateCalendarEvent(
+	accessToken: string,
+	calendarId: string,
+	eventId: string,
+	updates: UpdateEventInput
+): Promise<CalendarEvent> {
+	const response = await fetch(
+		`${CALENDAR_API_BASE}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
+		{
+			method: 'PATCH',
+			headers: {
+				Authorization: `Bearer ${accessToken}`,
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify(updates)
+		}
+	);
+
+	if (!response.ok) {
+		const error = await response.text();
+		throw new Error(`Failed to update event: ${error}`);
+	}
+
+	return response.json();
+}
+
+/**
+ * Delete a calendar event
+ */
+export async function deleteCalendarEvent(
+	accessToken: string,
+	calendarId: string,
+	eventId: string
+): Promise<void> {
+	const response = await fetch(
+		`${CALENDAR_API_BASE}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
+		{
+			method: 'DELETE',
+			headers: {
+				Authorization: `Bearer ${accessToken}`
+			}
+		}
+	);
+
+	if (!response.ok) {
+		const error = await response.text();
+		throw new Error(`Failed to delete event: ${error}`);
+	}
 }

@@ -6,10 +6,11 @@
  */
 
 import type { RequestHandler } from './$types';
+import type Anthropic from '@anthropic-ai/sdk';
 import { buildContext } from '$lib/context-builder';
-import { DEFAULT_CHAT_MODEL, DEFAULT_READER_MODEL } from '$lib/config/models';
+import { DEFAULT_CHAT_MODEL, DEFAULT_READER_MODEL, DEFAULT_WORK_MODEL } from '$lib/config/models';
 import { getModelParams } from '$lib/config/model-params';
-import { DEFAULT_PERSONA, DEFAULT_READER_PERSONA } from '$lib/config/personas';
+import { DEFAULT_PERSONA, DEFAULT_READER_PERSONA, DEFAULT_TODO_PERSONA } from '$lib/config/personas';
 import { getPersonaPrompt } from '$lib/prompts';
 import {
 	converseStream,
@@ -17,8 +18,11 @@ import {
 	triggerBackgroundJobs,
 	getProviderType,
 	assertProviderSupported,
-	type ChartImageData
+	type ChartImageData,
+	type ToolExecutor
 } from '$lib/calls';
+import { CALENDAR_TOOLS, executeCalendarTool, type CalendarToolContext } from '$lib/api/calendar-tools';
+import { refreshAccessToken } from '$lib/api/google-calendar';
 import { createClient } from '@supabase/supabase-js';
 import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
@@ -66,17 +70,23 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		// 4. Load user settings
 		const { data: settings } = await supabase
 			.from('user_settings')
-			.select('selected_chat_model, selected_reader_model, selected_persona_chat, selected_persona_reader')
+			.select('selected_chat_model, selected_reader_model, selected_work_model, selected_persona_chat, selected_persona_reader, selected_persona_todo')
 			.eq('user_id', userId)
 			.single();
 
 		// Select model and persona based on mode
-		const conversationModel = mode === 'reader'
-			? (settings?.selected_reader_model || DEFAULT_READER_MODEL)
-			: (settings?.selected_chat_model || DEFAULT_CHAT_MODEL);
-		const selectedPersona = mode === 'reader'
-			? (settings?.selected_persona_reader || DEFAULT_READER_PERSONA)
-			: (settings?.selected_persona_chat || DEFAULT_PERSONA);
+		let conversationModel: string;
+		let selectedPersona: string;
+		if (mode === 'reader') {
+			conversationModel = settings?.selected_reader_model || DEFAULT_READER_MODEL;
+			selectedPersona = settings?.selected_persona_reader || DEFAULT_READER_PERSONA;
+		} else if (mode === 'todo') {
+			conversationModel = settings?.selected_work_model || DEFAULT_WORK_MODEL;
+			selectedPersona = settings?.selected_persona_todo || DEFAULT_TODO_PERSONA;
+		} else {
+			conversationModel = settings?.selected_chat_model || DEFAULT_CHAT_MODEL;
+			selectedPersona = settings?.selected_persona_chat || DEFAULT_PERSONA;
+		}
 		const persona = requestPersona || selectedPersona;
 
 		// 5. Fetch chart image if referenced
@@ -148,7 +158,51 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		// 7. Select persona prompt
 		const personaPrompt = getPersonaPrompt(persona);
 
-		// 8. Stream response
+		// 8. Set up tools for todo mode (calendar operations)
+		let tools: Anthropic.Tool[] | undefined;
+		let toolExecutor: ToolExecutor | undefined;
+
+		if (mode === 'todo') {
+			// Get Google Calendar tokens for tool execution
+			const { data: tokens } = await supabase
+				.from('google_tokens')
+				.select('access_token, refresh_token, expires_at')
+				.eq('user_id', userId)
+				.single();
+
+			if (tokens) {
+				let accessToken = tokens.access_token;
+				const expiresAt = new Date(tokens.expires_at);
+				const now = new Date();
+
+				// Refresh if expires in less than 5 minutes
+				if (expiresAt.getTime() - now.getTime() < 5 * 60 * 1000) {
+					try {
+						const refreshed = await refreshAccessToken(tokens.refresh_token);
+						accessToken = refreshed.access_token;
+
+						// Update stored token
+						await supabase
+							.from('google_tokens')
+							.update({
+								access_token: refreshed.access_token,
+								expires_at: refreshed.expires_at.toISOString(),
+								updated_at: new Date().toISOString()
+							})
+							.eq('user_id', userId);
+					} catch (err) {
+						log.warn('Calendar token refresh failed', { error: err instanceof Error ? err.message : 'Unknown' });
+					}
+				}
+
+				// Create tool context and executor
+				const calendarContext: CalendarToolContext = { accessToken };
+				tools = CALENDAR_TOOLS;
+				toolExecutor = async (toolName, input) => executeCalendarTool(toolName, input, calendarContext);
+			}
+		}
+
+		// 9. Stream response
 		const stream = new ReadableStream({
 			async start(controller) {
 				const encoder = new TextEncoder();
@@ -161,7 +215,9 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 						model: conversationModel,
 						maxTokens: conversationParams.max_tokens,
 						temperature: conversationParams.temperature,
-						chartImage
+						chartImage,
+						tools,
+						toolExecutor
 					});
 
 					let result;

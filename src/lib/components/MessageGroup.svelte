@@ -11,8 +11,12 @@
 		aiResponse: string;
 		/** Persona name to display */
 		personaName: string;
-		/** Mode for accent color */
+		/** Mode for markdown rendering */
 		mode: Mode;
+		/** Accent color for this mode */
+		accentColor: string;
+		/** Accent background color for this mode */
+		accentBg: string;
 		/** Optional turn number */
 		turnNumber?: number;
 		/** Optional timestamp string */
@@ -40,6 +44,8 @@
 		aiResponse,
 		personaName,
 		mode,
+		accentColor,
+		accentBg,
 		turnNumber,
 		timestamp,
 		isStarred = false,
@@ -72,38 +78,36 @@
 
 <!-- Boss Message -->
 <div class="message-group">
-	<div class="boss-message" class:chat={mode === 'chat'} class:reader={mode === 'reader'}>
+	<div class="boss-message" style="background: {accentBg};">
 		{#if turnNumber !== undefined}
 			<div class="turn-indicator">turn {turnNumber}</div>
 		{/if}
 
 		<div class="message-header">
-			<span class="message-label boss-label" class:chat={mode === 'chat'} class:reader={mode === 'reader'}>Boss</span>
+			<span class="message-label boss-label" style="color: {accentColor}; border-bottom-color: {accentColor};">Boss</span>
 			{#if showActions}
 				<div class="message-actions">
 					<div class="action-icons">
 						{#if onStar}
 							<button
 								class="action-btn hit-target"
-								class:starred={isStarred}
-								class:chat={mode === 'chat'}
-								class:reader={mode === 'reader'}
+								class:active={isStarred}
+								style={isStarred ? `color: ${accentColor};` : ''}
 								title={isStarred ? 'Unstar' : 'Star'}
 								onclick={onStar}
 							>
-								<Icon src={LuStar} size="11" />
+								<Icon src={LuStar} size="11" color={isStarred ? accentColor : undefined} />
 							</button>
 						{/if}
 						{#if onCopy}
 							<button
 								class="action-btn hit-target"
-								class:copied={isCopied}
-								class:chat={mode === 'chat'}
-								class:reader={mode === 'reader'}
+								class:active={isCopied}
+								style={isCopied ? `color: ${accentColor};` : ''}
 								title="Copy"
 								onclick={onCopy}
 							>
-								<Icon src={LuCopy} size="11" />
+								<Icon src={LuCopy} size="11" color={isCopied ? accentColor : undefined} />
 							</button>
 						{/if}
 						{#if onDelete}
@@ -164,14 +168,6 @@
 		position: relative;
 	}
 
-	.boss-message.chat {
-		background: var(--boss-bg);
-	}
-
-	.boss-message.reader {
-		background: var(--reader-bg);
-	}
-
 	/* AI Message - no background */
 	.ai-message {
 		position: relative;
@@ -199,16 +195,7 @@
 	.boss-label {
 		position: relative;
 		top: -1px;
-	}
-
-	.boss-label.chat {
-		color: var(--boss-accent);
-		border-bottom: 1px solid var(--boss-accent);
-	}
-
-	.boss-label.reader {
-		color: var(--reader-accent);
-		border-bottom: 1px solid var(--reader-accent);
+		border-bottom: 1px solid;
 	}
 
 	.ai-label {
@@ -251,40 +238,8 @@
 		opacity: 1;
 	}
 
-	.action-btn.starred.chat {
+	.action-btn.active {
 		opacity: 1;
-		color: var(--boss-accent);
-	}
-
-	.action-btn.starred.chat :global(svg) {
-		fill: var(--boss-accent);
-	}
-
-	.action-btn.starred.reader {
-		opacity: 1;
-		color: var(--reader-accent);
-	}
-
-	.action-btn.starred.reader :global(svg) {
-		fill: var(--reader-accent);
-	}
-
-	.action-btn.copied.chat {
-		opacity: 1;
-		color: var(--boss-accent);
-	}
-
-	.action-btn.copied.chat :global(svg) {
-		fill: var(--boss-accent);
-	}
-
-	.action-btn.copied.reader {
-		opacity: 1;
-		color: var(--reader-accent);
-	}
-
-	.action-btn.copied.reader :global(svg) {
-		fill: var(--reader-accent);
 	}
 
 	.timestamp {

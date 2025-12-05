@@ -4,6 +4,7 @@
 	import { currentMessage, isLoading, sendMessage, abortCurrentMessage } from '$lib/stores/chat';
 	import { tick, onMount } from 'svelte';
 	import { DEFAULT_PERSONA } from '$lib/config/personas';
+	import { getAccentColor, getAccentBgColor } from '$lib/config/colors';
 	import { CHAT_CONFIG, scrollToTurn, scrollToLastTurn, getTurns } from '$lib/ui/scroll';
 	import { createConfirmation } from '$lib/composables';
 	import ScrollControls from '$lib/components/ScrollControls.svelte';
@@ -752,6 +753,8 @@
 					aiResponse={msg.ai_response}
 					personaName={msg.persona_name}
 					mode="chat"
+					accentColor={getAccentColor('chat')}
+					accentBg={getAccentBgColor('chat')}
 					turnNumber={index + 1}
 					timestamp={msg.formatted_timestamp}
 					isStarred={starredIds.has(msg.id)}
@@ -770,6 +773,8 @@
 					aiResponse={$currentMessage.ai}
 					personaName={selectedPersona}
 					mode="chat"
+					accentColor={getAccentColor('chat')}
+					accentBg={getAccentBgColor('chat')}
 					turnNumber={allMessages.length + 1}
 					timestamp={$currentMessage.timestamp}
 					isLoading={true}

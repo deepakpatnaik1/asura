@@ -28,10 +28,10 @@
 		<div class="modal-content" onclick={(e) => e.stopPropagation()}>
 			<p class="modal-text">{message}</p>
 			<div class="progress-container">
-				<div class="progress-bar" class:chat={mode === 'chat'} class:reader={mode === 'reader'} style="width: {progress}%"></div>
+				<div class="progress-bar" class:chat={mode === 'chat'} class:reader={mode === 'reader'} class:todo={mode === 'todo'} style="width: {progress}%"></div>
 			</div>
 			<div class="modal-actions">
-				<button class="cancel-btn" class:chat={mode === 'chat'} class:reader={mode === 'reader'} onclick={onCancel}>Cancel</button>
+				<button class="cancel-btn" class:chat={mode === 'chat'} class:reader={mode === 'reader'} class:todo={mode === 'todo'} onclick={onCancel}>Cancel</button>
 			</div>
 		</div>
 	</div>
@@ -87,6 +87,10 @@
 		background: #991b1b;
 	}
 
+	.progress-bar.todo {
+		background: #991b1b;
+	}
+
 	.modal-actions {
 		display: flex;
 		justify-content: center;
@@ -119,6 +123,16 @@
 
 	.cancel-btn.reader:hover {
 		background: var(--reader-accent);
+		color: hsl(var(--background));
+	}
+
+	.cancel-btn.todo {
+		color: var(--todo-accent);
+		border-color: var(--todo-accent);
+	}
+
+	.cancel-btn.todo:hover {
+		background: var(--todo-accent);
 		color: hsl(var(--background));
 	}
 </style>

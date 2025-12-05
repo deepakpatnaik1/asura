@@ -63,6 +63,26 @@
     --input-bar-textarea-height: 44px;
     --border-opacity: 0.3;
 
+    /* Typography */
+    --font-caption: 10px;
+    --font-body: 11px;
+    --font-section-header: 13px;
+    --font-display: 20px;
+
+    /* Font weights */
+    --font-weight-normal: 400;
+    --font-weight-medium: 500;
+    --font-weight-semibold: 600;
+
+    /* Spacing scale */
+    --spacing-xs: 3px;
+    --spacing-sm: 6px;
+    --spacing-md: 8px;
+    --spacing-lg: 10px;
+    --spacing-xl: 12px;
+    --spacing-2xl: 16px;
+    --spacing-3xl: 20px;
+
     /* Derived values (calculated from source) */
     --input-bar-content-height: 71px;  /* icons + gap + textarea */
     --input-bar-vertical-padding: 14.5px;  /* (height - content) / 2 */

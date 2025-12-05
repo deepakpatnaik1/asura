@@ -3,7 +3,7 @@
  *
  * Handles the main conversation streaming with a persona.
  * Takes prepared inputs, returns async generator of chunks.
- * Supports Brave Search tool use for web lookups.
+ * Supports configurable tool use (Brave Search, Calendar, etc).
  */
 
 import Anthropic from '@anthropic-ai/sdk';
@@ -21,6 +21,14 @@ export interface ChartImageData {
 	mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
 }
 
+/**
+ * Generic tool executor function type
+ */
+export type ToolExecutor = (
+	toolName: string,
+	input: Record<string, unknown>
+) => Promise<{ success: boolean; message: string; data?: unknown }>;
+
 export interface ConverseParams {
 	personaPrompt: string;
 	context: string;
@@ -29,6 +37,8 @@ export interface ConverseParams {
 	maxTokens: number;
 	temperature: number;
 	chartImage?: ChartImageData | null;
+	tools?: Anthropic.Tool[];
+	toolExecutor?: ToolExecutor;
 }
 
 export interface ConverseResult {
@@ -50,7 +60,10 @@ export interface ConverseResult {
 export async function* converseStream(
 	params: ConverseParams
 ): AsyncGenerator<string, ConverseResult, unknown> {
-	const { personaPrompt, context, message, model, maxTokens, temperature, chartImage } = params;
+	const { personaPrompt, context, message, model, maxTokens, temperature, chartImage, tools, toolExecutor } = params;
+
+	// Determine which tools to use - custom tools or default Brave Search
+	const activeTools = tools || [BRAVE_SEARCH_TOOL];
 
 	// Build system prompt with cache breakpoints
 	const systemPromptWithCache: Anthropic.Messages.TextBlockParam[] = [
@@ -118,7 +131,7 @@ export async function* converseStream(
 				temperature,
 				system: systemPromptWithCache,
 				messages: conversationMessages,
-				tools: [BRAVE_SEARCH_TOOL]
+				tools: activeTools
 			},
 			{
 				headers: {
@@ -151,21 +164,41 @@ export async function* converseStream(
 			const toolResults: Anthropic.MessageParam[] = [];
 
 			for (const toolBlock of toolUseBlocks) {
-				if (toolBlock.name === 'brave_search') {
+				// Emit tool call indicator to UI
+				const toolIndicator = `\n⟨${toolBlock.name}⟩\n`;
+				fullResponse += toolIndicator;
+				yield toolIndicator;
+
+				let resultContent: string;
+
+				// Use custom executor if provided, otherwise handle built-in tools
+				if (toolExecutor) {
+					const result = await toolExecutor(
+						toolBlock.name,
+						toolBlock.input as Record<string, unknown>
+					);
+					resultContent = result.success
+						? `Success: ${result.message}${result.data ? `\nData: ${JSON.stringify(result.data)}` : ''}`
+						: `Error: ${result.message}`;
+				} else if (toolBlock.name === 'brave_search') {
+					// Default Brave Search handling
 					const searchQuery = (toolBlock.input as { query: string }).query;
 					const searchResults = await executeBraveSearch(searchQuery);
-
-					toolResults.push({
-						role: 'user',
-						content: [
-							{
-								type: 'tool_result',
-								tool_use_id: toolBlock.id,
-								content: searchResults || 'Search failed. Please continue without search results.'
-							}
-						]
-					});
+					resultContent = searchResults || 'Search failed. Please continue without search results.';
+				} else {
+					resultContent = `Unknown tool: ${toolBlock.name}`;
 				}
+
+				toolResults.push({
+					role: 'user',
+					content: [
+						{
+							type: 'tool_result',
+							tool_use_id: toolBlock.id,
+							content: resultContent
+						}
+					]
+				});
 			}
 
 			// Add assistant's tool use + results to conversation

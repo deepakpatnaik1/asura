@@ -4,6 +4,7 @@
 	import { currentMessage, isLoading, sendMessage, abortCurrentMessage } from '$lib/stores/chat';
 	import { tick, onMount } from 'svelte';
 	import { DEFAULT_TODO_PERSONA } from '$lib/config/personas';
+	import { getAccentColor, getAccentBgColor } from '$lib/config/colors';
 	import { CHAT_CONFIG, scrollToTurn, scrollToLastTurn, getTurns } from '$lib/ui/scroll';
 	import { createConfirmation } from '$lib/composables';
 	import ScrollControls from '$lib/components/ScrollControls.svelte';
@@ -45,6 +46,9 @@
 	let inputMessage = $state('');
 	let messagesEndRef: HTMLDivElement;
 	let textareaRef: HTMLTextAreaElement;
+
+	// Calendar refresh trigger - increment to refresh after tool use
+	let calendarRefreshTrigger = $state(0);
 
 	// User settings state
 	let selectedPersona = $state<string>(DEFAULT_TODO_PERSONA);
@@ -311,6 +315,9 @@
 
 			// Clear current message after adding to history
 			currentMessage.set(null);
+
+			// Refresh calendar (in case tool created/modified events)
+			calendarRefreshTrigger++;
 
 			// Reload charts after delay (allow backend to process tables)
 			const timeoutId = window.setTimeout(() => loadCharts(), 2000);
@@ -751,6 +758,8 @@
 					aiResponse={msg.ai_response}
 					personaName={msg.persona_name}
 					mode="todo"
+					accentColor={getAccentColor('todo')}
+					accentBg={getAccentBgColor('todo')}
 					turnNumber={index + 1}
 					timestamp={msg.formatted_timestamp}
 					isStarred={starredIds.has(msg.id)}
@@ -769,6 +778,8 @@
 					aiResponse={$currentMessage.ai}
 					personaName={selectedPersona}
 					mode="todo"
+					accentColor={getAccentColor('todo')}
+					accentBg={getAccentBgColor('todo')}
 					turnNumber={allMessages.length + 1}
 					timestamp={$currentMessage.timestamp}
 					isLoading={true}
@@ -903,6 +914,7 @@
 		bind:showLightbox
 		enableDelete={true}
 		onDelete={handleChartDeleteClick}
+		{calendarRefreshTrigger}
 	/>
 
 </div>

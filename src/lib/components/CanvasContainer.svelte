@@ -31,6 +31,8 @@
 		showLightbox?: boolean;
 		enableDelete?: boolean;
 		onDelete?: (chartId: string) => void;
+		// Calendar-specific props
+		calendarRefreshTrigger?: number;
 	}
 
 	let {
@@ -39,7 +41,8 @@
 		selectedChartIndex = $bindable(null),
 		showLightbox = $bindable(false),
 		enableDelete = false,
-		onDelete
+		onDelete,
+		calendarRefreshTrigger = 0
 	}: Props = $props();
 
 	let activeCanvas = $state<CanvasType>(DEFAULT_CANVAS);
@@ -72,7 +75,7 @@
 				{onDelete}
 			/>
 		{:else if activeCanvas === 'calendar'}
-			<CalendarCanvas {mode} />
+			<CalendarCanvas {mode} refreshTrigger={calendarRefreshTrigger} />
 		{:else if activeCanvas === 'notes'}
 			<NotesCanvas {mode} />
 		{/if}

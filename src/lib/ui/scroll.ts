@@ -24,13 +24,13 @@ export interface ScrollConfig {
 }
 
 export const CHAT_CONFIG: ScrollConfig = {
-	containerSelector: '.chat-container',
+	containerSelector: '.messages-area',
 	contentSelector: '.messages-content',
 	turnSelector: '.boss-message'
 };
 
 export const READER_CONFIG: ScrollConfig = {
-	containerSelector: '.reader-container',
+	containerSelector: '.messages-area',
 	contentSelector: '.messages-content',
 	turnSelector: '.boss-message'
 };
