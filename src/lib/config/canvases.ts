@@ -17,17 +17,17 @@ export const DEFAULT_CANVAS: CanvasType = 'carousel';
 export const CANVAS_META: Record<CanvasType, { icon: string; label: string; description: string }> = {
 	carousel: {
 		icon: 'LuLayoutGrid',
-		label: 'Charts',
+		label: 'Gallery',
 		description: 'Images and tables from content'
 	},
 	calendar: {
 		icon: 'LuCalendar',
-		label: 'Calendar',
-		description: 'Schedule view'
+		label: 'Planner',
+		description: 'Calendar, Todo, Done'
 	},
 	notes: {
 		icon: 'LuStickyNote',
-		label: 'Notes',
+		label: 'Scratch',
 		description: 'Markdown scratch pad'
 	}
 };

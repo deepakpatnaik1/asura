@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * ChartCarousel - Canvas with thumbnail grid and lightbox
+	 * ChartCarousel - Gallery canvas with thumbnail grid and lightbox
 	 *
 	 * Displays extracted chart images from articles with expand/collapse functionality.
 	 * Uses bindable props so parent can read lightbox state for Q&A context.

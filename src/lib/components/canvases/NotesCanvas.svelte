@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * NotesCanvas - Placeholder for markdown scratch pad
+	 * NotesCanvas - Scratch canvas: Markdown scratch pad
 	 */
 
 	import { Icon } from 'svelte-icons-pack';

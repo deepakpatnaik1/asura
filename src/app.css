@@ -44,7 +44,7 @@
     --reader-accent: rgb(16, 185, 129);
     --reader-accent-bg: rgba(16, 185, 129, 0.08); /* For progress pane active state */
 
-    /* Todo mode accent (electric blue) */
+    /* Work mode accent (electric blue) */
     /* Source: src/lib/config/colors.ts - TODO_ACCENT, TODO_ACCENT_BG */
     --todo-bg: rgba(59, 130, 246, 0.08);
     --todo-accent: rgb(59, 130, 246);

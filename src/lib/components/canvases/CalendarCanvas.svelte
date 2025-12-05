@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * CalendarCanvas - Three-pane productivity workspace
+	 * CalendarCanvas - Planner canvas: Three-pane productivity workspace
 	 *
 	 * Calendar | Todos | Done
 	 *
@@ -113,7 +113,7 @@
 
 			<!-- Todos Pane -->
 			<div class="pane todos-pane">
-				<div class="pane-header">Todos <span class="count">&middot; {mockTodos.length}</span></div>
+				<div class="pane-header">Todo <span class="count">&middot; {mockTodos.length}</span></div>
 				<div class="pane-content">
 					<div class="todo-list">
 						{#each mockTodos as todo}

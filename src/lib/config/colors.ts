@@ -15,7 +15,7 @@ export const CHAT_ACCENT_BG = 'rgba(217, 133, 107, 0.08)';
 export const READER_ACCENT = 'rgb(16, 185, 129)';
 export const READER_ACCENT_BG = 'rgba(16, 185, 129, 0.08)';
 
-// Todo mode (electric blue)
+// Work mode (electric blue)
 export const TODO_ACCENT = 'rgb(59, 130, 246)';
 export const TODO_ACCENT_BG = 'rgba(59, 130, 246, 0.08)';
 

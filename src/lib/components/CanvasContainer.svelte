@@ -5,6 +5,7 @@
 	 * Wraps canvas content with a vertical icon tab switcher.
 	 * Manages active canvas state per mode (localStorage).
 	 * Passes mode-specific props to child canvas components.
+	 * Available canvases: Gallery, Planner, Scratch
 	 */
 
 	import { DEFAULT_CANVAS, type CanvasType } from '$lib/config/canvases';
@@ -14,7 +15,7 @@
 	import CalendarCanvas from './canvases/CalendarCanvas.svelte';
 	import NotesCanvas from './canvases/NotesCanvas.svelte';
 
-	// Chart type for carousel canvas
+	// Chart type for Gallery canvas
 	interface Chart {
 		id: string;
 		thumbnail_url: string;
@@ -24,7 +25,7 @@
 
 	interface Props {
 		mode: Mode;
-		// Carousel-specific props (passed through when carousel is active)
+		// Gallery-specific props (passed through when Gallery canvas is active)
 		charts?: Chart[];
 		selectedChartIndex?: number | null;
 		showLightbox?: boolean;

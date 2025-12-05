@@ -65,7 +65,7 @@
 			<a href="/reader" class="sidebar-icon hit-target" class:active={$page.url.pathname === '/reader'} title="Reader">
 				<Icon src={LuBook} size="18" />
 			</a>
-			<a href="/todo" class="sidebar-icon hit-target" class:active={$page.url.pathname === '/todo'} title="Todo">
+			<a href="/todo" class="sidebar-icon hit-target" class:active={$page.url.pathname === '/todo'} title="Work">
 				<Icon src={LuListChecks} size="18" />
 			</a>
 		</div>
@@ -201,7 +201,7 @@
 	}
 
 	.sidebar-icon.active:nth-child(3) {
-		/* Todo mode (third icon) */
+		/* Work mode (third icon) */
 		opacity: 1;
 		color: var(--todo-accent);
 	}
