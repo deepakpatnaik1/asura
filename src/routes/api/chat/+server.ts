@@ -10,7 +10,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { buildContext } from '$lib/context-builder';
 import { DEFAULT_CHAT_MODEL, DEFAULT_READER_MODEL, DEFAULT_WORK_MODEL } from '$lib/config/models';
 import { getModelParams } from '$lib/config/model-params';
-import { DEFAULT_PERSONA, DEFAULT_READER_PERSONA, DEFAULT_TODO_PERSONA } from '$lib/config/personas';
+import { DEFAULT_PERSONA, DEFAULT_READER_PERSONA, DEFAULT_TODO_PERSONA, getPersonaTools } from '$lib/config/personas';
 import { getPersonaPrompt } from '$lib/prompts';
 import {
 	converseStream,
@@ -31,6 +31,7 @@ import {
 	type TodoMutations
 } from '$lib/api/todo-tools';
 import { refreshAccessToken } from '$lib/api/google-calendar';
+import { BRAVE_SEARCH_TOOL, executeBraveSearch } from '$lib/api/brave-search';
 import { createClient } from '@supabase/supabase-js';
 import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
@@ -165,26 +166,27 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		// 7. Select persona prompt
 		const personaPrompt = getPersonaPrompt(persona);
 
-		// 8. Set up tools for todo mode (calendar + todo operations)
+		// 8. Set up tools based on persona configuration
 		let tools: Anthropic.Tool[] | undefined;
 		let toolExecutor: ToolExecutor | undefined;
 		let todoMutations: TodoMutations | undefined;
 
-		if (mode === 'todo') {
-			// Initialize mutations tracker
+		const personaTools = getPersonaTools(persona);
+
+		if (personaTools.length > 0) {
+			// Persona has tools configured (e.g., Alicja)
 			todoMutations = createEmptyMutations();
 
-			// Todo tool context (always available)
 			const todoContext: TodoToolContext = {
 				supabase,
 				userId
 			};
 
-			// Start with todo tools (always available)
-			const allTools: Anthropic.Tool[] = [...TODO_TOOLS];
+			// Start with TODO_TOOLS + BRAVE_SEARCH_TOOL (everyone gets web search)
+			const allTools: Anthropic.Tool[] = [...TODO_TOOLS, BRAVE_SEARCH_TOOL];
 			let calendarContext: CalendarToolContext | null = null;
 
-			// Get Google Calendar tokens for calendar tools
+			// Add calendar tools if user has Google Calendar tokens
 			const { data: tokens } = await supabase
 				.from('google_tokens')
 				.select('access_token, refresh_token, expires_at')
@@ -202,7 +204,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 						const refreshed = await refreshAccessToken(tokens.refresh_token);
 						accessToken = refreshed.access_token;
 
-						// Update stored token
 						await supabase
 							.from('google_tokens')
 							.update({
@@ -222,9 +223,17 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 
 			tools = allTools;
 
-			// Combined tool executor routes to appropriate handler
+			// Tool executor handles todo, calendar, and web search
 			toolExecutor = async (toolName, input) => {
-				if (isTodoTool(toolName)) {
+				if (toolName === 'brave_search') {
+					// Web search (available to all personas)
+					const searchQuery = (input as { query: string }).query;
+					const searchResults = await executeBraveSearch(searchQuery);
+					return {
+						success: !!searchResults,
+						message: searchResults || 'Search failed'
+					};
+				} else if (isTodoTool(toolName)) {
 					return executeTodoTool(toolName, input, todoContext, todoMutations!);
 				} else if (calendarContext) {
 					return executeCalendarTool(toolName, input, calendarContext);
@@ -236,6 +245,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				}
 			};
 		}
+		// Else: tools = undefined, converse.ts defaults to BRAVE_SEARCH_TOOL only
 
 		// 9. Stream response
 		const stream = new ReadableStream({
