@@ -616,7 +616,6 @@
 					userMessage={msg.user_message}
 					aiResponse={msg.ai_response}
 					personaName={msg.persona_name}
-					mode="chat"
 					accentColor={msgAccentColor}
 					accentBg={msgAccentBg}
 					turnNumber={index + 1}
@@ -635,7 +634,6 @@
 					userMessage={$currentMessage.boss}
 					aiResponse={$currentMessage.ai}
 					personaName={selectedPersona}
-					mode="chat"
 					accentColor={currentAccentColor}
 					accentBg={currentAccentBg}
 					turnNumber={allMessages.length + 1}

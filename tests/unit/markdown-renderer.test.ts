@@ -6,7 +6,10 @@
 
 import { describe, it, expect } from 'vitest';
 import { renderMarkdown } from '$lib/markdown-renderer';
-import { CHAT_ACCENT, READER_ACCENT } from '$lib/config/colors';
+import { getPersonaAccentColor } from '$lib/config/colors';
+
+const GUNNAR_ACCENT = getPersonaAccentColor('gunnar');
+const SAMARA_ACCENT = getPersonaAccentColor('samara');
 
 describe('renderMarkdown', () => {
 	describe('basic rendering', () => {
@@ -31,20 +34,20 @@ describe('renderMarkdown', () => {
 	describe('headings', () => {
 		it('renders h1 with accent color', async () => {
 			const result = await renderMarkdown('# Heading 1');
-			expect(result).toContain(CHAT_ACCENT);
+			expect(result).toContain(GUNNAR_ACCENT);
 			expect(result).toContain('Heading 1');
 			expect(result).toContain('font-weight: bold');
 		});
 
 		it('renders h2 with same styling as h1', async () => {
 			const result = await renderMarkdown('## Heading 2');
-			expect(result).toContain(CHAT_ACCENT);
+			expect(result).toContain(GUNNAR_ACCENT);
 			expect(result).toContain('Heading 2');
 		});
 
 		it('renders h3 with same styling', async () => {
 			const result = await renderMarkdown('### Heading 3');
-			expect(result).toContain(CHAT_ACCENT);
+			expect(result).toContain(GUNNAR_ACCENT);
 		});
 
 		it('strips hash symbols', async () => {
@@ -94,7 +97,7 @@ describe('renderMarkdown', () => {
 			const result = await renderMarkdown('- Item 1\n- Item 2\n- Item 3');
 			expect(result).toContain('<ul');
 			expect(result).toContain('<li');
-			expect(result).toContain(CHAT_ACCENT);
+			expect(result).toContain(GUNNAR_ACCENT);
 			expect(result).toContain('Item 1');
 		});
 
@@ -102,7 +105,7 @@ describe('renderMarkdown', () => {
 			const result = await renderMarkdown('1. First\n2. Second\n3. Third');
 			expect(result).toContain('<ol');
 			expect(result).toContain('<li');
-			expect(result).toContain(CHAT_ACCENT);
+			expect(result).toContain(GUNNAR_ACCENT);
 			expect(result).toContain('1.');
 		});
 
@@ -118,20 +121,20 @@ describe('renderMarkdown', () => {
 		});
 	});
 
-	describe('mode switching', () => {
-		it('uses chat accent color by default', async () => {
-			const result = await renderMarkdown('# Heading', 'chat');
-			expect(result).toContain(CHAT_ACCENT);
+	describe('persona switching', () => {
+		it('uses gunnar accent color by default', async () => {
+			const result = await renderMarkdown('# Heading', 'gunnar');
+			expect(result).toContain(GUNNAR_ACCENT);
 		});
 
-		it('uses reader accent color in reader mode', async () => {
-			const result = await renderMarkdown('# Heading', 'reader');
-			expect(result).toContain(READER_ACCENT);
+		it('uses samara accent color for samara persona', async () => {
+			const result = await renderMarkdown('# Heading', 'samara');
+			expect(result).toContain(SAMARA_ACCENT);
 		});
 
-		it('applies reader accent to lists in reader mode', async () => {
-			const result = await renderMarkdown('- Item', 'reader');
-			expect(result).toContain(READER_ACCENT);
+		it('applies samara accent to lists for samara persona', async () => {
+			const result = await renderMarkdown('- Item', 'samara');
+			expect(result).toContain(SAMARA_ACCENT);
 		});
 	});
 

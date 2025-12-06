@@ -13,7 +13,7 @@
 	 * - footerPadding (bottom) - matches input bar's derived bottom padding
 	 *
 	 * Usage:
-	 * <CanvasFrame mode={mode}>
+	 * <CanvasFrame>
 	 *   {#snippet content()}
 	 *     <!-- Your canvas content here -->
 	 *   {/snippet}
@@ -24,36 +24,20 @@
 	 */
 
 	import type { Snippet } from 'svelte';
-	import type { Mode } from '$lib/config/modes';
 	import { CANVAS_CONFIG } from '$lib/config/canvas';
 
 	interface Props {
-		mode: Mode;
 		content: Snippet;
 		footer?: Snippet;
 	}
 
-	let { mode, content, footer }: Props = $props();
-
-	function getAccentColor(): string {
-		switch (mode) {
-			case 'chat':
-				return 'var(--boss-accent)';
-			case 'reader':
-				return 'var(--reader-accent)';
-			case 'todo':
-				return 'var(--todo-accent)';
-			default:
-				return 'var(--boss-accent)';
-		}
-	}
+	let { content, footer }: Props = $props();
 
 	const { framePadding, footer: footerConfig, debug } = CANVAS_CONFIG;
 </script>
 
 <div
 	class="canvas-frame"
-	style:--accent={getAccentColor()}
 	style:--frame-padding="{framePadding}px"
 	style:--footer-padding="{footerConfig.padding}px"
 	style:--footer-content-height="{footerConfig.contentHeight}px"

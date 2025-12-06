@@ -2,20 +2,17 @@
 	import { Icon } from 'svelte-icons-pack';
 	import { LuStar, LuCopy, LuTrash2 } from 'svelte-icons-pack/lu';
 	import { renderMarkdown } from '$lib/markdown-renderer';
-	import type { Mode } from '$lib/config/modes';
 
 	interface Props {
 		/** User message content */
 		userMessage: string;
 		/** AI response content (markdown) */
 		aiResponse: string;
-		/** Persona name to display */
+		/** Persona name (used for display and markdown styling) */
 		personaName: string;
-		/** Mode for markdown rendering */
-		mode: Mode;
-		/** Accent color for this mode */
+		/** Accent color for this persona */
 		accentColor: string;
-		/** Accent background color for this mode */
+		/** Accent background color for this persona */
 		accentBg: string;
 		/** Optional turn number */
 		turnNumber?: number;
@@ -43,7 +40,6 @@
 		userMessage,
 		aiResponse,
 		personaName,
-		mode,
 		accentColor,
 		accentBg,
 		turnNumber,
@@ -67,7 +63,7 @@
 
 	$effect(() => {
 		if (aiResponse) {
-			renderMarkdown(aiResponse, mode).then((html) => {
+			renderMarkdown(aiResponse, personaName).then((html) => {
 				renderedHtml = html;
 			});
 		} else {

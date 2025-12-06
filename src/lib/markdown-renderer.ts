@@ -1,12 +1,12 @@
-import { CHAT_ACCENT, READER_ACCENT, TODO_ACCENT, CHAT_ACCENT_BG, READER_ACCENT_BG, TODO_ACCENT_BG } from '$lib/config/colors';
-import type { Mode } from '$lib/config/modes';
+import { getPersonaAccentColor, getPersonaAccentBg } from '$lib/config/colors';
+import { DEFAULT_PERSONA } from '$lib/config/personas';
 
 /**
  * EXPERIMENT: Raw output with selective formatting
  */
-export async function renderMarkdown(markdown: string, mode: Mode = 'chat'): Promise<string> {
-	const ACCENT = mode === 'chat' ? CHAT_ACCENT : mode === 'reader' ? READER_ACCENT : TODO_ACCENT;
-	const ACCENT_BG = mode === 'chat' ? CHAT_ACCENT_BG : mode === 'reader' ? READER_ACCENT_BG : TODO_ACCENT_BG;
+export async function renderMarkdown(markdown: string, persona: string = DEFAULT_PERSONA): Promise<string> {
+	const ACCENT = getPersonaAccentColor(persona);
+	const ACCENT_BG = getPersonaAccentBg(persona);
 
 	// Strip content markers (<!--content:uuid-->) used for lazy loading
 	let processed = markdown.replace(/<!--content:[a-f0-9-]+-->\n?/gi, '');

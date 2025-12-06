@@ -8,18 +8,15 @@
 	 * Flat chronological accomplishments list.
 	 */
 
-	import type { Mode } from '$lib/config/modes';
-	import { getAccentColor } from '$lib/config/colors';
 	import CanvasFrame from '$lib/components/CanvasFrame.svelte';
 	import { Icon } from 'svelte-icons-pack';
 	import { LuRefreshCw } from 'svelte-icons-pack/lu';
 
 	interface Props {
-		mode: Mode;
 		refreshTrigger?: number; // Increment to trigger refresh
 	}
 
-	let { mode, refreshTrigger = 0 }: Props = $props();
+	let { refreshTrigger = 0 }: Props = $props();
 
 	// Refresh when trigger changes
 	$effect(() => {
@@ -444,9 +441,9 @@
 	}
 </script>
 
-<CanvasFrame {mode}>
+<CanvasFrame>
 	{#snippet content()}
-		<div class="productivity-canvas" style:--accent={getAccentColor(mode)}>
+		<div class="productivity-canvas">
 			<!-- Calendar Pane -->
 			<div class="pane calendar-pane">
 				<div class="pane-header">
@@ -627,7 +624,7 @@
 	.calendar-pane .pane-header,
 	.todos-pane .pane-header,
 	.done-pane .pane-header {
-		color: var(--accent);
+		color: hsl(var(--foreground));
 	}
 
 	.pane-header .count {
@@ -652,7 +649,7 @@
 	.connect-button:hover,
 	.disconnect-button:hover {
 		background: hsl(var(--muted) / var(--border-opacity));
-		color: var(--accent);
+		color: hsl(var(--foreground));
 	}
 
 	.sync-button:disabled {
@@ -666,8 +663,8 @@
 	}
 
 	.connect-button {
-		color: var(--accent);
-		border: 1px solid var(--accent);
+		color: hsl(var(--foreground));
+		border: 1px solid hsl(var(--foreground));
 	}
 
 	.disconnect-button {
@@ -716,23 +713,23 @@
 	.day-date {
 		font-size: var(--font-display);
 		font-weight: var(--font-weight-semibold);
-		color: var(--accent);
+		color: hsl(var(--foreground));
 		line-height: 1;
 	}
 
 	.calendar-pane .day-name {
 		font-size: var(--font-body);
-		color: var(--accent);
+		color: hsl(var(--foreground));
 	}
 
 	.done-pane .day-name {
 		font-size: var(--font-body);
-		color: var(--accent);
+		color: hsl(var(--foreground));
 	}
 
 	.done-pane .day-month-year {
 		font-size: var(--font-body);
-		color: var(--accent);
+		color: hsl(var(--foreground));
 	}
 
 	.event {
@@ -760,7 +757,7 @@
 
 	.event-tag {
 		font-size: var(--font-caption);
-		color: var(--accent);
+		color: hsl(var(--foreground));
 		opacity: 0.8;
 	}
 
@@ -784,12 +781,12 @@
 
 	.month-name {
 		font-size: var(--font-body);
-		color: var(--accent);
+		color: hsl(var(--foreground));
 	}
 
 	.month-range {
 		font-size: var(--font-body);
-		color: var(--accent);
+		color: hsl(var(--foreground));
 	}
 
 	.month-events {
@@ -806,7 +803,7 @@
 	}
 
 	.future-date {
-		color: var(--accent);
+		color: hsl(var(--foreground));
 		font-weight: var(--font-weight-medium);
 		min-width: 18px;
 	}
@@ -840,7 +837,7 @@
 
 	.todo-text {
 		font-size: var(--font-body);
-		color: var(--accent);
+		color: hsl(var(--foreground));
 	}
 
 	.todo-meta {
@@ -852,7 +849,7 @@
 
 	.todo-tag {
 		font-size: var(--font-caption);
-		color: var(--accent);
+		color: hsl(var(--foreground));
 		opacity: 0.8;
 	}
 
@@ -909,7 +906,7 @@
 
 	.diary-tag {
 		font-size: var(--font-caption);
-		color: var(--accent);
+		color: hsl(var(--foreground));
 		opacity: 0.8;
 	}
 </style>
