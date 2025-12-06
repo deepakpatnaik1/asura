@@ -2,7 +2,7 @@ import { VOYAGE_API_KEY } from '$env/static/private';
 import { VoyageAIClient } from 'voyageai';
 import { EMBEDDING_MODEL } from '$lib/config/models';
 import { MEMORY } from '$lib/config/memory';
-import { DEFAULT_PERSONA } from '$lib/config/personas';
+import { DEFAULT_PERSONA, personaHasContextChunk } from '$lib/config/personas';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 const voyage = new VoyageAIClient({ apiKey: VOYAGE_API_KEY });
@@ -77,17 +77,21 @@ interface RankedVectorResult extends VectorSearchResult {
  * Builds memory context for AI conversations
  * Enforces 40% context window cap with priority-based truncation
  *
- * For reader mode with contentId: simplified context (superjournal only for that content)
- * For chat mode or reader without contentId: full context (all 6 queries)
+ * Context injection is config-driven via persona.contextChunks:
+ * - working: Last N superjournal turns (unified across all personas)
+ * - recent: Compressed journal summaries
+ * - semantic: Vector search results
+ * - canon: is_canon=true content (always included)
+ * - active: Currently selected content (via contentId)
+ * - todos, diary, tags, time: Productivity data
  */
 export async function buildContext(
 	supabase: SupabaseClient,
 	userId: string,
 	personaName: string = DEFAULT_PERSONA,
 	modelIdentifier: string,
-	userQuery?: string, // Optional: enables vector search (Priority 5)
-	mode: string = 'chat', // Conversation space: 'chat' or 'reader'
-	contentId?: string // For reader mode: filter to specific content
+	userQuery?: string, // Optional: enables vector search
+	contentId?: string // Currently selected content from library
 ): Promise<StructuredContext> {
 	// Get model's context window and calculate budget
 	const contextWindow = await getModelContextWindow(supabase, modelIdentifier);
@@ -107,196 +111,178 @@ export async function buildContext(
 
 	let totalTokens = 0;
 
-	// Priority 0: Canon content (always injected, ignores mode)
-	const { data: canonData } = await supabase
-		.from('content')
-		.select('title, artisan_cut, raw_content, created_at')
-		.eq('user_id', userId)
-		.eq('is_canon', true)
-		.order('created_at', { ascending: true });
+	// Helper to check if persona wants a chunk
+	const hasChunk = (chunk: Parameters<typeof personaHasContextChunk>[1]) =>
+		personaHasContextChunk(personaName, chunk);
 
-	if (canonData && canonData.length > 0) {
-		const canonText = formatCanonContent(canonData);
-		components.canon = canonText;
-		totalTokens += estimateTokens(canonText);
+	// Priority 0: Canon content (always injected if persona has 'canon' chunk)
+	if (hasChunk('canon')) {
+		const { data: canonData } = await supabase
+			.from('content')
+			.select('title, artisan_cut, raw_content, created_at')
+			.eq('user_id', userId)
+			.eq('is_canon', true)
+			.order('created_at', { ascending: true });
+
+		if (canonData && canonData.length > 0) {
+			const canonText = formatCanonContent(canonData);
+			components.canon = canonText;
+			totalTokens += estimateTokens(canonText);
+		}
 	}
 
-	// Reader mode with contentId: content-centric context
-	// Samara sees the article content + conversation history about that article
-	if (mode === 'reader' && contentId) {
-		// Fetch article content, conversation history, and starred items in parallel
-		const [contentResult, superjournalResult, starredSuperjournalResult] =
-			await Promise.all([
-				// Fetch the actual article content
-				supabase
-					.from('content')
-					.select('title, raw_content, artisan_cut')
-					.eq('id', contentId)
-					.eq('user_id', userId)
-					.single(),
-				// Fetch conversation history for this article
-				supabase
-					.from('superjournal')
-					.select('user_message, ai_response, persona_name, created_at')
-					.eq('user_id', userId)
-					.eq('mode', 'reader')
-					.eq('content_id', contentId)
-					.order('created_at', { ascending: false })
-					.limit(MEMORY.superjournalLimit),
-				// Starred from superjournal (reader mode stars only - mode separation)
-				supabase
-					.from('superjournal')
-					.select('user_message, ai_response, persona_name, created_at')
-					.eq('is_starred', true)
-					.eq('user_id', userId)
-					.eq('mode', 'reader')
-					.order('created_at', { ascending: false })
-			]);
+	// Priority 0.5: Active content (currently selected file from library)
+	if (hasChunk('active') && contentId) {
+		const { data: contentData } = await supabase
+			.from('content')
+			.select('title, raw_content, artisan_cut')
+			.eq('id', contentId)
+			.eq('user_id', userId)
+			.single();
 
-		// Include the article content (prefer artisan_cut if available, else raw_content)
-		if (contentResult.data) {
-			const articleContent = contentResult.data.artisan_cut || contentResult.data.raw_content;
+		if (contentData) {
+			const articleContent = contentData.artisan_cut || contentData.raw_content;
 			if (articleContent) {
-				const filesText = `--- CURRENT ARTICLE ---\n[${contentResult.data.title}]\n${articleContent}\n\n`;
+				const filesText = `--- ACTIVE CONTENT ---\n[${contentData.title}]\n${articleContent}\n\n`;
 				components.files = filesText;
 				totalTokens += estimateTokens(filesText);
 			}
 		}
-
-		// Include conversation history
-		if (superjournalResult.data && superjournalResult.data.length > 0) {
-			const superjournalText = formatSuperjournalHistory(superjournalResult.data.reverse());
-			components.superjournal = superjournalText;
-			totalTokens += estimateTokens(superjournalText);
-		}
-
-		// Include starred items (reader mode only - mode separation)
-		const superjournalStars = starredSuperjournalResult.data || [];
-		if (superjournalStars.length > 0) {
-			const starredText = formatReaderStarred(superjournalStars);
-			components.starred = starredText;
-			totalTokens += estimateTokens(starredText);
-		}
-
-		const finalContext = assembleContext(components);
-		return {
-			context: finalContext,
-			components,
-			stats: {
-				totalTokens,
-				components: {
-					canon: estimateTokens(components.canon),
-					superjournal: estimateTokens(components.superjournal),
-					files: estimateTokens(components.files),
-					starred: estimateTokens(components.starred),
-					journal: 0,
-					highSalienceArcs: 0,
-					otherArcs: 0,
-					workData: 0
-				}
-			}
-		};
 	}
 
-	// Full context for chat mode (or reader without contentId)
-	// Run all queries in parallel - budget checks happen during assembly
-	const [
-		superjournalResult,
-		filesResult,
-		starredJournalResult,
-		journalResult
-	] = await Promise.all([
-		// Priority 1: Last N Superjournal turns (working memory)
-		supabase
-			.from('superjournal')
-			.select('user_message, ai_response, persona_name, created_at')
-			.eq('user_id', userId)
-			.eq('mode', mode)
-			.order('created_at', { ascending: false })
-			.limit(MEMORY.superjournalLimit),
+	// Priority 0.5: Work data (todos, diary, tags, time)
+	// Check individual chunks - some personas may want todos but not calendar
+	const wantsTodos = hasChunk('todos');
+	const wantsDiary = hasChunk('diary');
+	const wantsTags = hasChunk('tags');
+	const wantsTime = hasChunk('time');
 
-		// Priority 1.5: Enabled files (user-uploaded content)
-		supabase
-			.from('content')
-			.select('title, artisan_cut, raw_content, created_at')
-			.eq('user_id', userId)
-			.eq('mode', mode)
-			.eq('is_enabled', true)
-			.order('created_at', { ascending: false }),
-
-		// Priority 2: Starred from journal (chat mode stars only - mode separation)
-		supabase
-			.from('journal')
-			.select('boss_essence, persona_essence, persona_name, created_at')
-			.eq('is_starred', true)
-			.eq('user_id', userId)
-			.eq('mode', mode)
-			.order('created_at', { ascending: false }),
-
-		// Priority 3: Last N Journal turns (recent memory)
-		supabase
-			.from('journal')
-			.select('boss_essence, persona_essence, decision_arc_summary, persona_name, created_at')
-			.eq('user_id', userId)
-			.eq('mode', mode)
-			.order('created_at', { ascending: false })
-			.limit(MEMORY.lastNJournalEntries)
-	]);
-
-	// Priority 0.5: Work data for todo mode (all todos, all diary, all tags)
-	if (mode === 'todo') {
+	if (wantsTodos || wantsDiary || wantsTags) {
 		const [todosResult, tagsResult, diaryResult] = await Promise.all([
-			// All todos (open + completed) for pattern recognition
-			supabase
-				.from('todos')
-				.select('id, description, tags, status, created_at, completed_at, scheduled_for, times_pushed')
-				.eq('user_id', userId)
-				.order('created_at', { ascending: true }),
-			// All tags
-			supabase
-				.from('tags')
-				.select('name')
-				.eq('user_id', userId)
-				.order('name', { ascending: true }),
-			// All diary entries for emotional arc
-			supabase
-				.from('founder_diary')
-				.select('id, description, tags, logged_at')
-				.eq('user_id', userId)
-				.order('logged_at', { ascending: true })
+			wantsTodos
+				? supabase
+						.from('todos')
+						.select('id, description, tags, status, created_at, completed_at, scheduled_for, times_pushed')
+						.eq('user_id', userId)
+						.order('created_at', { ascending: true })
+				: Promise.resolve({ data: [] }),
+			wantsTags
+				? supabase
+						.from('tags')
+						.select('name')
+						.eq('user_id', userId)
+						.order('name', { ascending: true })
+				: Promise.resolve({ data: [] }),
+			wantsDiary
+				? supabase
+						.from('founder_diary')
+						.select('id, description, tags, logged_at')
+						.eq('user_id', userId)
+						.order('logged_at', { ascending: true })
+				: Promise.resolve({ data: [] })
 		]);
 
-		const workDataText = formatWorkData(
-			todosResult.data || [],
-			(tagsResult.data || []).map(t => t.name),
-			diaryResult.data || []
-		);
+		// Use Gunnar-style formatting (pre-computed analytics) for personas with tools
+		// Use Alicja-style formatting (with IDs) for personas that need to operate on data
+		const personaHasTools = hasChunk('todos') && personaHasContextChunk(personaName, 'calendar');
+		const workDataText = personaHasTools
+			? formatWorkData(
+					todosResult.data || [],
+					(tagsResult.data || []).map((t: { name: string }) => t.name),
+					diaryResult.data || []
+			  )
+			: formatWorkDataForGunnar(
+					todosResult.data || [],
+					(tagsResult.data || []).map((t: { name: string }) => t.name),
+					diaryResult.data || []
+			  );
 		components.workData = workDataText;
 		totalTokens += estimateTokens(workDataText);
 	}
 
+	// Build parallel queries based on persona chunks
+	type QueryResult = { data: unknown[] | null };
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	const queries: PromiseLike<any>[] = [];
+	const queryKeys: string[] = [];
+
+	// Priority 1: Working memory (superjournal) - persona-filtered
+	if (hasChunk('working')) {
+		queries.push(
+			supabase
+				.from('superjournal')
+				.select('user_message, ai_response, persona_name, created_at')
+				.eq('user_id', userId)
+				.eq('persona_name', personaName) // Only this persona's turns
+				.order('created_at', { ascending: false })
+				.limit(MEMORY.superjournalLimit)
+		);
+		queryKeys.push('superjournal');
+	}
+
+	// Priority 2: Starred messages (user's standing instructions)
+	if (hasChunk('starred')) {
+		queries.push(
+			supabase
+				.from('journal')
+				.select('boss_essence, persona_essence, persona_name, created_at')
+				.eq('is_starred', true)
+				.eq('user_id', userId)
+				.order('created_at', { ascending: false })
+		);
+		queryKeys.push('starred');
+	}
+
+	// Priority 3: Recent memory (journal)
+	if (hasChunk('recent')) {
+		queries.push(
+			supabase
+				.from('journal')
+				.select('boss_essence, persona_essence, decision_arc_summary, persona_name, created_at')
+				.eq('user_id', userId)
+				.order('created_at', { ascending: false })
+				.limit(MEMORY.lastNJournalEntries)
+		);
+		queryKeys.push('journal');
+	}
+
+	// Execute all queries in parallel
+	const results = await Promise.all(queries);
+
+	// Map results back to their types
+	const resultMap: Record<string, QueryResult> = {};
+	queryKeys.forEach((key, i) => {
+		resultMap[key] = results[i];
+	});
+
+	const superjournalResult = resultMap['superjournal'];
+	const starredJournalResult = resultMap['starred'];
+	const journalResult = resultMap['journal'];
+
 	// Assemble context with budget checks (in priority order)
 
-	// Priority 1: Superjournal (always included - highest priority)
-	if (superjournalResult.data && superjournalResult.data.length > 0) {
-		const superjournalText = formatSuperjournalHistory(superjournalResult.data.reverse());
+	// Priority 1: Superjournal (working memory)
+	if (superjournalResult?.data && superjournalResult.data.length > 0) {
+		const superjournalData = superjournalResult.data as Array<{
+			user_message: string;
+			ai_response: string;
+			persona_name: string;
+			created_at: string;
+		}>;
+		const superjournalText = formatSuperjournalHistory(superjournalData.reverse());
 		components.superjournal = superjournalText;
 		totalTokens += estimateTokens(superjournalText);
 	}
 
-	// Priority 1.5: Files
-	if (filesResult.data && filesResult.data.length > 0) {
-		const filesText = formatEnabledFiles(filesResult.data);
-		const filesTokens = estimateTokens(filesText);
-		if (totalTokens + filesTokens <= contextBudget) {
-			components.files = filesText;
-			totalTokens += filesTokens;
-		}
-	}
-
-	// Priority 2: Starred (chat mode: journal stars only - mode separation)
-	if (starredJournalResult.data && starredJournalResult.data.length > 0) {
-		const starredText = formatStarredMessages(starredJournalResult.data);
+	// Priority 2: Starred messages from journal
+	if (starredJournalResult?.data && starredJournalResult.data.length > 0) {
+		const starredData = starredJournalResult.data as Array<{
+			boss_essence: string;
+			persona_essence: string;
+			persona_name: string;
+			created_at: string;
+		}>;
+		const starredText = formatStarredMessages(starredData);
 		const starredTokens = estimateTokens(starredText);
 		if (totalTokens + starredTokens <= contextBudget) {
 			components.starred = starredText;
@@ -304,9 +290,17 @@ export async function buildContext(
 		}
 	}
 
-	// Priority 3: Journal (with truncation if needed)
-	if (journalResult.data && journalResult.data.length > 0) {
-		const journalData = journalResult.data.reverse();
+	// Priority 3: Journal (recent memory, with truncation if needed)
+	if (journalResult?.data && journalResult.data.length > 0) {
+		const journalData = (
+			journalResult.data as Array<{
+				boss_essence: string;
+				persona_essence: string;
+				decision_arc_summary: string;
+				persona_name: string;
+				created_at: string;
+			}>
+		).reverse();
 		const journalText = formatJournalHistory(journalData);
 		const journalTokens = estimateTokens(journalText);
 		if (totalTokens + journalTokens <= contextBudget) {
@@ -324,13 +318,13 @@ export async function buildContext(
 		}
 	}
 
-	// Priority 4: Vector search (only if userQuery provided and journal count > threshold)
-	if (userQuery) {
+	// Priority 4: Vector search (semantic memory)
+	// Only if persona has 'semantic' chunk, userQuery provided, and enough journal entries
+	if (hasChunk('semantic') && userQuery) {
 		const { count: journalCount } = await supabase
 			.from('journal')
 			.select('id', { count: 'exact', head: true })
-			.eq('user_id', userId)
-			.eq('mode', mode);
+			.eq('user_id', userId);
 
 		if (journalCount && journalCount > MEMORY.vectorSearchThreshold) {
 			try {
@@ -349,14 +343,12 @@ export async function buildContext(
 							.from('superjournal')
 							.select('id')
 							.eq('user_id', userId)
-							.eq('mode', mode)
 							.order('created_at', { ascending: false })
 							.limit(MEMORY.superjournalLimit),
 						supabase
 							.from('journal')
 							.select('id')
 							.eq('user_id', userId)
-							.eq('mode', mode)
 							.order('created_at', { ascending: false })
 							.limit(MEMORY.lastNJournalEntries)
 					]);
@@ -364,28 +356,27 @@ export async function buildContext(
 					const excludeIds: string[] = [];
 
 					if (journalIdsResult.data) {
-						excludeIds.push(...journalIdsResult.data.map(j => j.id));
+						excludeIds.push(...journalIdsResult.data.map((j) => j.id));
 					}
 
 					if (superjournalIdsResult.data && superjournalIdsResult.data.length > 0) {
-						const sjIds = superjournalIdsResult.data.map(s => s.id);
+						const sjIds = superjournalIdsResult.data.map((s) => s.id);
 						const { data: journalFromSj } = await supabase
 							.from('journal')
 							.select('id')
 							.in('superjournal_id', sjIds);
 
 						if (journalFromSj) {
-							excludeIds.push(...journalFromSj.map(j => j.id));
+							excludeIds.push(...journalFromSj.map((j) => j.id));
 						}
 					}
 
-					// Perform vector search
+					// Perform vector search (no mode filter - unified search)
 					const { data: vectorResults } = await supabase.rpc('search_journal_by_embedding', {
 						query_embedding: JSON.stringify(queryVector),
 						match_count: 50,
 						exclude_ids: excludeIds,
-						user_id_filter: userId,
-						mode_filter: mode
+						user_id_filter: userId
 					});
 
 					if (vectorResults && vectorResults.length > 0) {
@@ -487,27 +478,6 @@ ${entry.persona_name}: ${entry.persona_essence}`
 	return `--- RECENT MEMORY (Last ${MEMORY.lastNJournalEntries} Compressed Turns) ---\n${formatted}\n\n`;
 }
 
-// Format enabled files (artisan cuts, or raw content for ephemeral)
-function formatEnabledFiles(
-	entries: Array<{
-		title: string;
-		artisan_cut: string | null;
-		raw_content: string | null;
-		created_at: string;
-	}>
-): string {
-	if (entries.length === 0) return '';
-
-	const formatted = entries
-		.map((entry) => {
-			const content = entry.artisan_cut || entry.raw_content || '';
-			return `[File: ${entry.title}]\n${content}`;
-		})
-		.join('\n\n');
-
-	return `--- ENABLED FILES (User-Uploaded Content) ---\n${formatted}\n\n`;
-}
-
 // Format canon content (shared across all modes)
 function formatCanonContent(
 	entries: Array<{
@@ -551,28 +521,6 @@ User: ${entry.boss_essence}`
 	return `--- STARRED MESSAGES (User-Pinned Memory) ---\n${formatted}\n\n`;
 }
 
-// Format reader starred messages (reader mode: from superjournal)
-function formatReaderStarred(
-	entries: Array<{
-		user_message: string;
-		ai_response: string;
-		persona_name: string;
-		created_at: string;
-	}>
-): string {
-	if (entries.length === 0) return '';
-
-	const formatted = entries
-		.map(
-			(entry) =>
-				`[Starred - ${formatTimestamp(entry.created_at)}]
-User: ${entry.user_message}`
-		)
-		.join('\n\n');
-
-	return `--- STARRED MESSAGES (User-Pinned Memory) ---\n${formatted}\n\n`;
-}
-
 // Format vector search results
 function formatVectorSearchResults(
 	entries: Array<{
@@ -599,20 +547,6 @@ AI: ${entry.persona_essence}`
 }
 
 
-// Format decision arcs
-function formatDecisionArcs(
-	entries: Array<{ decision_arc_summary: string; salience_score: number; created_at: string }>,
-	label: string
-): string {
-	if (entries.length === 0) return '';
-
-	const formatted = entries
-		.map((entry) => `[${entry.salience_score}] ${entry.decision_arc_summary}`)
-		.join('\n');
-
-	return `--- ${label.toUpperCase()} DECISION ARCS ---\n${formatted}\n\n`;
-}
-
 // Truncate journal entries to fit within token budget
 function truncateToFit<T>(
 	entries: T[],
@@ -631,28 +565,103 @@ function truncateToFit<T>(
 	return formatter(entries.slice(0, included));
 }
 
-// Truncate decision arcs to fit within token budget
-function truncateArcsToFit(
-	entries: Array<{ decision_arc_summary: string; salience_score: number; created_at: string }>,
-	tokenBudget: number
-): string {
-	let accumulatedText = '';
-	const includedArcs = [];
+// Format duration between two dates as human-readable string
+function formatDuration(from: Date, to: Date): string {
+	const diffMs = to.getTime() - from.getTime();
+	const diffMins = Math.floor(diffMs / 60000);
+	const diffHours = Math.floor(diffMins / 60);
+	const diffDays = Math.floor(diffHours / 24);
 
-	for (const entry of entries) {
-		const arcLine = `[${entry.salience_score}] ${entry.decision_arc_summary}\n`;
-		if (estimateTokens(accumulatedText + arcLine) > tokenBudget) {
-			break;
-		}
-		includedArcs.push(entry);
-		accumulatedText += arcLine;
+	if (diffDays > 0) {
+		const remainingHours = diffHours % 24;
+		return remainingHours > 0 ? `${diffDays}d ${remainingHours}h` : `${diffDays}d`;
 	}
-
-	return includedArcs.length > 0
-		? `--- OTHER DECISION ARCS (Salience 1-7) ---\n${accumulatedText}\n`
-		: '';
+	if (diffHours > 0) {
+		const remainingMins = diffMins % 60;
+		return remainingMins > 0 ? `${diffHours}h ${remainingMins}m` : `${diffHours}h`;
+	}
+	return `${diffMins}m`;
 }
 
+// Format work data for Gunnar (chat mode) - pre-computed time analytics
+function formatWorkDataForGunnar(
+	todos: Array<{
+		id: string;
+		description: string;
+		tags: string[];
+		status: string;
+		created_at: string;
+		completed_at: string | null;
+		scheduled_for: string | null;
+		times_pushed: number;
+	}>,
+	tags: string[],
+	diary: Array<{
+		id: string;
+		description: string;
+		tags: string[];
+		logged_at: string;
+	}>
+): string {
+	const now = new Date();
+
+	// Format todos with computed durations
+	const formattedTodos = todos.map((t) => {
+		const createdAt = new Date(t.created_at);
+		const age = formatDuration(createdAt, now);
+
+		if (t.status === 'completed' && t.completed_at) {
+			const completedAt = new Date(t.completed_at);
+			const timeToComplete = formatDuration(createdAt, completedAt);
+			const completedAgo = formatDuration(completedAt, now);
+			return {
+				description: t.description,
+				tags: t.tags,
+				status: 'completed',
+				completed_ago: completedAgo,
+				time_to_complete: timeToComplete,
+				times_pushed: t.times_pushed
+			};
+		} else {
+			return {
+				description: t.description,
+				tags: t.tags,
+				status: 'open',
+				age: age,
+				scheduled_for: t.scheduled_for,
+				times_pushed: t.times_pushed
+			};
+		}
+	});
+
+	// Format diary entries with time since logged
+	const formattedDiary = diary.map((d) => {
+		const loggedAt = new Date(d.logged_at);
+		const loggedAgo = formatDuration(loggedAt, now);
+		return {
+			description: d.description,
+			tags: d.tags,
+			logged_ago: loggedAgo
+		};
+	});
+
+	const todosJson = JSON.stringify(formattedTodos, null, 2);
+	const diaryJson = JSON.stringify(formattedDiary, null, 2);
+	const tagsJson = JSON.stringify(tags);
+
+	return `--- PRODUCTIVITY DATA (From Alicja - Pre-computed Analytics) ---
+<productivity_data>
+<tags>${tagsJson}</tags>
+<todos>
+${todosJson}
+</todos>
+<founder_diary>
+${diaryJson}
+</founder_diary>
+</productivity_data>
+
+`;
+}
 
 // Format work data (todos, tags, and diary) for todo mode context
 function formatWorkData(

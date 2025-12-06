@@ -13,16 +13,17 @@
 
 // Context chunk types available for injection
 export type ContextChunk =
-	| 'working' // Last N turns (superjournal)
+	| 'working' // Last N turns for THIS persona (superjournal, persona-filtered)
 	| 'recent' // Compressed summaries (journal)
+	| 'starred' // User's standing instructions (all personas should get this)
 	| 'semantic' // Vector search results
 	| 'canon' // is_canon = true files
 	| 'active' // Currently selected file
 	| 'todos' // Open + completed todos
 	| 'diary' // Founder diary entries
 	| 'tags' // Canonical tag list
-	| 'calendar' // Google Calendar events
-	| 'time'; // Current timestamp
+	| 'calendar' // Google Calendar events (future)
+	| 'time'; // Current timestamp (always injected, not toggleable)
 
 // Canvas types
 export type CanvasType = 'gallery' | 'calendar' | 'notes';
@@ -63,30 +64,41 @@ export interface Persona {
 }
 
 /**
- * All context chunks - full access
+ * Gunnar: Full memory pyramid + productivity (no tags)
  */
-const ALL_CHUNKS: ContextChunk[] = [
+const GUNNAR_CHUNKS: ContextChunk[] = [
 	'working',
 	'recent',
+	'starred',
 	'semantic',
 	'canon',
 	'active',
 	'todos',
-	'diary',
-	'tags',
-	'calendar',
-	'time'
+	'diary'
 ];
 
 /**
- * All chunks except calendar
+ * Kirby: Full memory pyramid + diary for emotional context (no todos/tags)
  */
-const ALL_EXCEPT_CALENDAR: ContextChunk[] = ALL_CHUNKS.filter((c) => c !== 'calendar');
+const KIRBY_CHUNKS: ContextChunk[] = [
+	'working',
+	'recent',
+	'starred',
+	'semantic',
+	'canon',
+	'active',
+	'diary'
+];
 
 /**
- * Minimal chunks for stateless-ish personas
+ * Samara: Article-focused, session memory only
  */
-const MINIMAL_CHUNKS: ContextChunk[] = ['working', 'canon', 'active'];
+const SAMARA_CHUNKS: ContextChunk[] = ['working', 'starred', 'canon', 'active'];
+
+/**
+ * Alicja: Scribe - productivity data, no content discussion
+ */
+const ALICJA_CHUNKS: ContextChunk[] = ['working', 'starred', 'canon', 'todos', 'diary', 'tags'];
 
 /**
  * All Alicja tools
@@ -118,7 +130,7 @@ export const PERSONAS: Record<string, Persona> = {
 		accentColor: 'rgb(217, 133, 107)', // warm orange
 		model: null, // uses default, can be overridden in model_overrides
 		systemPrompt: 'gunnar', // resolved via getSystemPrompt()
-		contextChunks: ALL_CHUNKS,
+		contextChunks: GUNNAR_CHUNKS,
 		compression: true,
 		tools: [],
 		defaultCanvas: 'gallery'
@@ -129,7 +141,7 @@ export const PERSONAS: Record<string, Persona> = {
 		accentColor: 'rgb(236, 72, 153)', // hot magenta
 		model: null,
 		systemPrompt: 'kirby',
-		contextChunks: ALL_EXCEPT_CALENDAR,
+		contextChunks: KIRBY_CHUNKS,
 		compression: true,
 		tools: [],
 		defaultCanvas: 'gallery'
@@ -140,8 +152,8 @@ export const PERSONAS: Record<string, Persona> = {
 		accentColor: 'rgb(16, 185, 129)', // emerald green
 		model: null,
 		systemPrompt: 'samara',
-		contextChunks: MINIMAL_CHUNKS,
-		compression: false, // Full article retention
+		contextChunks: SAMARA_CHUNKS,
+		compression: true, // Chat turns get artisan cut (article content is separate)
 		tools: [],
 		defaultCanvas: 'gallery'
 	},
@@ -151,7 +163,7 @@ export const PERSONAS: Record<string, Persona> = {
 		accentColor: 'rgb(59, 130, 246)', // electric blue
 		model: null,
 		systemPrompt: 'alicja',
-		contextChunks: ALL_CHUNKS,
+		contextChunks: ALICJA_CHUNKS,
 		compression: true,
 		tools: ALICJA_TOOLS,
 		defaultCanvas: 'calendar'
