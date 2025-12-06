@@ -11,6 +11,7 @@ import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { DEFAULT_CHAT_MODEL, EMBEDDING_MODEL } from '$lib/config/models';
 import { getModelParams } from '$lib/config/model-params';
+import { personaUsesCompression } from '$lib/config/personas';
 import { createLogger } from '$lib/api/logger';
 import { compress } from './compress';
 import { getProviderType, assertProviderSupported } from './provider';
@@ -54,28 +55,19 @@ export async function runCompressJob(params: CompressJobParams): Promise<void> {
 	const supabase = getSupabaseServiceRole();
 
 	const doCompression = async () => {
-		// Fetch mode from superjournal first - reader mode skips compression entirely
-		const { data: sjData } = await supabase
-			.from('superjournal')
-			.select('mode')
-			.eq('id', superjournalId)
-			.single();
-		const mode = sjData?.mode || 'chat';
-
-		// Reader mode: no compression/journal - conversations stay in superjournal only
-		if (mode === 'reader') {
-			log.debug('Skipping compression for reader mode', { superjournalId });
+		// Check if persona uses compression
+		if (!personaUsesCompression(personaName)) {
+			log.debug('Skipping compression for persona', { superjournalId, personaName });
 			return;
 		}
 
-		// Read selected chat model from user_settings table (used for compression)
-		const { data: settings } = await supabase
-			.from('user_settings')
-			.select('selected_chat_model')
-			.eq('user_id', userId)
-			.single();
+		// Get model: check override first, then default
+		const [settingsResult, overrideResult] = await Promise.all([
+			supabase.from('user_settings').select('default_model').eq('user_id', userId).single(),
+			supabase.from('model_overrides').select('model').eq('user_id', userId).eq('persona', personaName).single()
+		]);
 
-		const compressionModel = settings?.selected_chat_model || DEFAULT_CHAT_MODEL;
+		const compressionModel = overrideResult.data?.model || settingsResult.data?.default_model || DEFAULT_CHAT_MODEL;
 
 		// Fetch compression parameters from database
 		const compressionParams = await getModelParams(compressionModel, 'compression');
