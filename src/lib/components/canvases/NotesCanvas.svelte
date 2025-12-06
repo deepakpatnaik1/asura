@@ -5,17 +5,10 @@
 
 	import { Icon } from 'svelte-icons-pack';
 	import { LuStickyNote } from 'svelte-icons-pack/lu';
-	import type { Mode } from '$lib/config/modes';
 	import CanvasFrame from '$lib/components/CanvasFrame.svelte';
-
-	interface Props {
-		mode: Mode;
-	}
-
-	let { mode }: Props = $props();
 </script>
 
-<CanvasFrame {mode}>
+<CanvasFrame>
 	{#snippet content()}
 		<div class="notes-canvas">
 			<div class="placeholder">

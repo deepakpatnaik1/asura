@@ -58,32 +58,40 @@ export const compressSchema = z.object({
 // Settings Schemas
 // ============================================================================
 
-/** Chat persona enum */
-export const chatPersonaSchema = z.enum(['gunnar', 'kirby']);
-
-/** Reader persona enum */
-export const readerPersonaSchema = z.enum(['samara']);
-
-/** Todo persona enum */
-export const todoPersonaSchema = z.enum(['alicja']);
-
 /** PUT /api/settings - Update user settings */
 export const settingsUpdateSchema = z.object({
+	// New unified model (default for all personas)
+	default_model: z.string().optional(),
+	selected_embedding_model: z.string().optional(),
+	active_content_id: z.string().uuid().nullable().optional(),
+	// Unified persona selection
+	selected_persona: personaSchema.optional(),
+	// DEPRECATED: Per-mode settings (kept for backward compatibility)
 	selected_chat_model: z.string().optional(),
 	selected_reader_model: z.string().optional(),
 	selected_work_model: z.string().optional(),
-	selected_embedding_model: z.string().optional(),
-	active_content_id: z.string().uuid().nullable().optional(),
-	// Unified persona selection (new)
-	selected_persona: personaSchema.optional(),
-	// DEPRECATED: Per-mode persona selection (kept for backward compatibility)
-	selected_persona_chat: chatPersonaSchema.optional(),
-	selected_persona_reader: readerPersonaSchema.optional(),
-	selected_persona_todo: todoPersonaSchema.optional()
+	selected_persona_chat: z.enum(['gunnar', 'kirby']).optional(),
+	selected_persona_reader: z.enum(['samara']).optional(),
+	selected_persona_todo: z.enum(['alicja']).optional()
 }).refine(
 	(data) => Object.keys(data).length > 0,
 	{ message: 'At least one field must be provided' }
 );
+
+// ============================================================================
+// Model Overrides Schemas
+// ============================================================================
+
+/** POST /api/model-overrides - Create model override */
+export const createModelOverrideSchema = z.object({
+	persona: personaSchema,
+	model: z.string().min(1, 'Model identifier is required')
+});
+
+/** DELETE /api/model-overrides - Delete model override */
+export const deleteModelOverrideSchema = z.object({
+	persona: personaSchema
+});
 
 // ============================================================================
 // Reader Schemas

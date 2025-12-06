@@ -67,7 +67,6 @@
 	<div class="canvas-content">
 		{#if activeCanvas === 'carousel'}
 			<ChartCarousel
-				{mode}
 				{charts}
 				bind:selectedChartIndex
 				bind:showLightbox
@@ -75,9 +74,9 @@
 				{onDelete}
 			/>
 		{:else if activeCanvas === 'calendar'}
-			<CalendarCanvas {mode} refreshTrigger={calendarRefreshTrigger} />
+			<CalendarCanvas refreshTrigger={calendarRefreshTrigger} />
 		{:else if activeCanvas === 'notes'}
-			<NotesCanvas {mode} />
+			<NotesCanvas />
 		{/if}
 	</div>
 

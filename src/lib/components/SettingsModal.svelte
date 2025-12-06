@@ -1,13 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { Icon } from 'svelte-icons-pack';
-	import { LuX } from 'svelte-icons-pack/lu';
-	import {
-		DEFAULT_CHAT_MODEL,
-		DEFAULT_READER_MODEL,
-		DEFAULT_WORK_MODEL,
-		EMBEDDING_MODEL
-	} from '$lib/config/models';
+	import { LuX, LuPlus, LuTrash2 } from 'svelte-icons-pack/lu';
+	import { DEFAULT_MODEL, EMBEDDING_MODEL } from '$lib/config/models';
+	import { PERSONAS, PERSONA_NAMES, type PersonaName } from '$lib/config/personas';
 
 	// Props
 	let { open = $bindable(false), onClose }: { open?: boolean; onClose: () => void } = $props();
@@ -23,35 +19,49 @@
 		output_price_per_million: number;
 	}
 
+	interface ModelOverride {
+		persona: PersonaName;
+		model: string;
+	}
+
 	let models = $state<Model[]>([]);
-	let selectedChatModel = $state<string>('');
-	let selectedReaderModel = $state<string>('');
-	let selectedWorkModel = $state<string>('');
+	let defaultModel = $state<string>('');
 	let selectedEmbeddingModel = $state<string>('');
+	let modelOverrides = $state<ModelOverride[]>([]);
 	let isLoading = $state(true);
 	let isSaving = $state(false);
 	let isExporting = $state(false);
 	let errorMessage = $state<string | null>(null);
 
+	// Add override form state
+	let showAddOverride = $state(false);
+	let newOverridePersona = $state<PersonaName | ''>('');
+	let newOverrideModel = $state<string>('');
+
+	// Derived: personas that don't have overrides yet
+	const availablePersonas = $derived(
+		PERSONA_NAMES.filter((p) => !modelOverrides.some((o) => o.persona === p))
+	);
+
 	// Fetch data on mount
 	onMount(async () => {
 		try {
-			// Fetch models
-			const modelsRes = await fetch('/api/models');
-			if (!modelsRes.ok) {
-				throw new Error('Failed to fetch models');
-			}
-			models = await modelsRes.json();
+			// Fetch models and settings in parallel
+			const [modelsRes, settingsRes, overridesRes] = await Promise.all([
+				fetch('/api/models'),
+				fetch('/api/settings'),
+				fetch('/api/model-overrides')
+			]);
 
-			// Fetch current settings
-			const settingsRes = await fetch('/api/settings');
-			if (!settingsRes.ok) {
-				throw new Error('Failed to fetch settings');
-			}
+			if (!modelsRes.ok) throw new Error('Failed to fetch models');
+			if (!settingsRes.ok) throw new Error('Failed to fetch settings');
+			if (!overridesRes.ok) throw new Error('Failed to fetch model overrides');
+
+			models = await modelsRes.json();
 			const settings = await settingsRes.json();
-			selectedChatModel = settings.selected_chat_model || DEFAULT_CHAT_MODEL;
-			selectedReaderModel = settings.selected_reader_model || DEFAULT_READER_MODEL;
-			selectedWorkModel = settings.selected_work_model || DEFAULT_WORK_MODEL;
+			modelOverrides = await overridesRes.json();
+
+			defaultModel = settings.default_model || DEFAULT_MODEL;
 			selectedEmbeddingModel = settings.selected_embedding_model || EMBEDDING_MODEL;
 
 			isLoading = false;
@@ -62,7 +72,7 @@
 		}
 	});
 
-	// Handle save
+	// Handle save (default model + embedding model)
 	async function handleSave() {
 		isSaving = true;
 		errorMessage = null;
@@ -72,9 +82,7 @@
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
-					selected_chat_model: selectedChatModel,
-					selected_reader_model: selectedReaderModel,
-					selected_work_model: selectedWorkModel,
+					default_model: defaultModel,
 					selected_embedding_model: selectedEmbeddingModel
 				})
 			});
@@ -90,6 +98,62 @@
 			errorMessage = 'Failed to save settings. Please try again.';
 		} finally {
 			isSaving = false;
+		}
+	}
+
+	// Handle adding a model override
+	async function handleAddOverride() {
+		if (!newOverridePersona || !newOverrideModel) return;
+
+		errorMessage = null;
+
+		try {
+			const response = await fetch('/api/model-overrides', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					persona: newOverridePersona,
+					model: newOverrideModel
+				})
+			});
+
+			if (!response.ok) {
+				throw new Error('Failed to add override');
+			}
+
+			// Update local state
+			modelOverrides = [...modelOverrides, { persona: newOverridePersona, model: newOverrideModel }];
+
+			// Reset form
+			showAddOverride = false;
+			newOverridePersona = '';
+			newOverrideModel = '';
+		} catch (error) {
+			console.error('[SettingsModal] Failed to add override:', error);
+			errorMessage = 'Failed to add override. Please try again.';
+		}
+	}
+
+	// Handle removing a model override
+	async function handleRemoveOverride(persona: PersonaName) {
+		errorMessage = null;
+
+		try {
+			const response = await fetch('/api/model-overrides', {
+				method: 'DELETE',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ persona })
+			});
+
+			if (!response.ok) {
+				throw new Error('Failed to remove override');
+			}
+
+			// Update local state
+			modelOverrides = modelOverrides.filter((o) => o.persona !== persona);
+		} catch (error) {
+			console.error('[SettingsModal] Failed to remove override:', error);
+			errorMessage = 'Failed to remove override. Please try again.';
 		}
 	}
 
@@ -122,7 +186,9 @@
 			// Get filename from Content-Disposition header or use default
 			const contentDisposition = response.headers.get('Content-Disposition');
 			const filenameMatch = contentDisposition?.match(/filename="(.+)"/);
-			const filename = filenameMatch ? filenameMatch[1] : `asura-export-${new Date().toISOString().split('T')[0]}.json`;
+			const filename = filenameMatch
+				? filenameMatch[1]
+				: `asura-export-${new Date().toISOString().split('T')[0]}.json`;
 
 			// Download the file
 			const blob = await response.blob();
@@ -141,6 +207,17 @@
 			isExporting = false;
 		}
 	}
+
+	// Get model display name
+	function getModelName(modelId: string): string {
+		const model = models.find((m) => m.model_identifier === modelId);
+		return model ? `${model.model_name}` : modelId;
+	}
+
+	// Get persona display name
+	function getPersonaName(persona: string): string {
+		return PERSONAS[persona]?.displayName ?? persona;
+	}
 </script>
 
 {#if open}
@@ -157,47 +234,93 @@
 			{#if isLoading}
 				<div class="loading-state">Loading settings...</div>
 			{:else}
-				<!-- Model Selection -->
+				<!-- Default Model Selection -->
 				<div class="settings-section">
-					<label for="chat-model">Chat Mode Model</label>
-					<select id="chat-model" bind:value={selectedChatModel}>
-						{#each models.filter(m => m.model_type === 'text_generation') as model}
+					<label for="default-model">Default Model</label>
+					<select id="default-model" bind:value={defaultModel}>
+						{#each models.filter((m) => m.model_type === 'text_generation') as model}
 							<option value={model.model_identifier}>
 								{model.model_name} ({model.provider})
 							</option>
 						{/each}
 					</select>
-					<p class="help-text">Used for chat conversations and memory compression</p>
+					<p class="help-text">Used for all personas unless overridden below</p>
 				</div>
 
-				<div class="settings-section">
-					<label for="reader-model">Reader Mode Model</label>
-					<select id="reader-model" bind:value={selectedReaderModel}>
-						{#each models.filter(m => m.model_type === 'text_generation') as model}
-							<option value={model.model_identifier}>
-								{model.model_name} ({model.provider})
-							</option>
-						{/each}
-					</select>
-					<p class="help-text">Used for article processing and discussion</p>
+				<!-- Model Overrides Section -->
+				<div class="settings-section overrides-section">
+					<label>Model Overrides</label>
+
+					{#if modelOverrides.length > 0}
+						<div class="overrides-list">
+							{#each modelOverrides as override}
+								<div class="override-item">
+									<span class="override-persona">{getPersonaName(override.persona)}</span>
+									<span class="override-arrow">&rarr;</span>
+									<span class="override-model">{getModelName(override.model)}</span>
+									<button
+										class="remove-btn"
+										onclick={() => handleRemoveOverride(override.persona)}
+										aria-label="Remove override"
+									>
+										<Icon src={LuTrash2} size="12" />
+									</button>
+								</div>
+							{/each}
+						</div>
+					{/if}
+
+					{#if showAddOverride}
+						<div class="add-override-form">
+							<select bind:value={newOverridePersona} class="persona-select">
+								<option value="">Select persona...</option>
+								{#each availablePersonas as persona}
+									<option value={persona}>{getPersonaName(persona)}</option>
+								{/each}
+							</select>
+							<select bind:value={newOverrideModel} class="model-select">
+								<option value="">Select model...</option>
+								{#each models.filter((m) => m.model_type === 'text_generation') as model}
+									<option value={model.model_identifier}>
+										{model.model_name}
+									</option>
+								{/each}
+							</select>
+							<div class="add-override-actions">
+								<button
+									class="add-btn"
+									onclick={handleAddOverride}
+									disabled={!newOverridePersona || !newOverrideModel}
+								>
+									Add
+								</button>
+								<button
+									class="cancel-btn"
+									onclick={() => {
+										showAddOverride = false;
+										newOverridePersona = '';
+										newOverrideModel = '';
+									}}
+								>
+									Cancel
+								</button>
+							</div>
+						</div>
+					{:else if availablePersonas.length > 0}
+						<button class="add-override-btn" onclick={() => (showAddOverride = true)}>
+							<Icon src={LuPlus} size="12" />
+							Add override
+						</button>
+					{/if}
+
+					<p class="help-text">Override the default model for specific personas</p>
 				</div>
 
-				<div class="settings-section">
-					<label for="work-model">Work Mode Model</label>
-					<select id="work-model" bind:value={selectedWorkModel}>
-						{#each models.filter(m => m.model_type === 'text_generation') as model}
-							<option value={model.model_identifier}>
-								{model.model_name} ({model.provider})
-							</option>
-						{/each}
-					</select>
-					<p class="help-text">Used for work mode conversations with Alicja</p>
-				</div>
-
+				<!-- Embedding Model Selection -->
 				<div class="settings-section">
 					<label for="embedding-model">Embedding Model</label>
 					<select id="embedding-model" bind:value={selectedEmbeddingModel}>
-						{#each models.filter(m => m.model_type === 'embedding') as model}
+						{#each models.filter((m) => m.model_type === 'embedding') as model}
 							<option value={model.model_identifier}>
 								{model.model_name}
 							</option>
@@ -325,6 +448,130 @@
 		color: hsl(var(--muted-foreground));
 		margin-top: 4px;
 		opacity: 0.5;
+	}
+
+	/* Overrides Section */
+	.overrides-section {
+		margin-bottom: 16px;
+	}
+
+	.overrides-list {
+		margin-bottom: 8px;
+	}
+
+	.override-item {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 6px 8px;
+		background: hsl(var(--muted) / 0.3);
+		border: 1px solid hsl(var(--border));
+		margin-bottom: 4px;
+		font-size: 10px;
+		font-family: Menlo, Monaco, 'Courier New', monospace;
+	}
+
+	.override-persona {
+		color: hsl(var(--foreground));
+		min-width: 60px;
+	}
+
+	.override-arrow {
+		color: hsl(var(--muted-foreground));
+		opacity: 0.5;
+	}
+
+	.override-model {
+		color: hsl(var(--foreground));
+		flex: 1;
+	}
+
+	.remove-btn {
+		background: none;
+		border: none;
+		color: hsl(var(--muted-foreground));
+		cursor: pointer;
+		padding: 2px;
+		opacity: 0.5;
+		display: flex;
+		align-items: center;
+	}
+
+	.remove-btn:hover {
+		opacity: 1;
+		color: hsl(0, 70%, 60%);
+	}
+
+	.add-override-btn {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		background: none;
+		border: 1px dashed hsl(var(--border));
+		color: hsl(var(--muted-foreground));
+		padding: 6px 8px;
+		font-size: 10px;
+		cursor: pointer;
+		width: 100%;
+		justify-content: center;
+	}
+
+	.add-override-btn:hover {
+		border-color: hsl(var(--foreground));
+		color: hsl(var(--foreground));
+	}
+
+	.add-override-form {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		margin-bottom: 8px;
+	}
+
+	.add-override-form select {
+		width: 100%;
+		padding: 6px 24px 6px 8px;
+		background: transparent;
+		background-image: url("data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 12 12' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M3 5L6 8L9 5' stroke='%23666' stroke-width='1' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+		background-repeat: no-repeat;
+		background-position: right 8px center;
+		border: 1px solid hsl(var(--border));
+		border-radius: 0;
+		color: hsl(var(--foreground));
+		font-family: Menlo, Monaco, 'Courier New', monospace;
+		font-size: 10px;
+		cursor: pointer;
+		appearance: none;
+	}
+
+	.add-override-actions {
+		display: flex;
+		gap: 4px;
+		margin-top: 4px;
+	}
+
+	.add-btn,
+	.cancel-btn {
+		flex: 1;
+		padding: 6px;
+		border: 1px solid hsl(var(--border));
+		background: transparent;
+		color: hsl(var(--foreground));
+		font-size: 10px;
+		cursor: pointer;
+	}
+
+	.add-btn:hover:not(:disabled) {
+		border-color: hsl(var(--foreground));
+	}
+
+	.add-btn:disabled {
+		opacity: 0.3;
+		cursor: not-allowed;
+	}
+
+	.cancel-btn:hover {
+		border-color: hsl(var(--foreground));
 	}
 
 	.save-btn {

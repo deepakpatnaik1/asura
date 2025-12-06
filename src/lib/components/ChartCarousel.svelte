@@ -9,7 +9,6 @@
 
 	import { Icon } from 'svelte-icons-pack';
 	import { LuTrash2 } from 'svelte-icons-pack/lu';
-	import type { Mode } from '$lib/config/modes';
 	import CanvasFrame from '$lib/components/CanvasFrame.svelte';
 
 	interface Chart {
@@ -20,7 +19,6 @@
 	}
 
 	interface Props {
-		mode: Mode;
 		charts: Chart[];
 		selectedChartIndex?: number | null;
 		showLightbox?: boolean;
@@ -31,7 +29,6 @@
 	}
 
 	let {
-		mode,
 		charts,
 		selectedChartIndex = $bindable(null),
 		showLightbox = $bindable(false),
@@ -82,7 +79,7 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<CanvasFrame {mode}>
+<CanvasFrame>
 	{#snippet content()}
 		{#if charts.length > 0 && showLightbox && selectedChartIndex !== null}
 			<!-- Full-size chart view -->
