@@ -143,6 +143,13 @@ export function validationError(message: string, field?: string, details?: unkno
 }
 
 /**
+ * Create a 400 Bad Request response.
+ */
+export function badRequest(message?: string): Response {
+	return errorResponse('BAD_REQUEST', { message });
+}
+
+/**
  * Create a 429 Rate Limited response.
  */
 export function rateLimitedError(retryAfterMs: number, message?: string): Response {

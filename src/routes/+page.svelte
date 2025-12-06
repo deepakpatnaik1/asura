@@ -14,6 +14,7 @@
 	import CanvasContainer from '$lib/components/CanvasContainer.svelte';
 	import PasteArea from '$lib/components/PasteArea.svelte';
 	import ContentLibrary from '$lib/components/ContentLibrary.svelte';
+	import NukeMenu from '$lib/components/NukeMenu.svelte';
 
 	// Receive loaded data from server
 	let { data } = $props();
@@ -61,6 +62,8 @@
 	// File paste and library state
 	let showFilePaste = $state(false);
 	let showFileLibrary = $state(false);
+	let showNukeMenu = $state(false);
+	let nukeButtonRef = $state<HTMLElement | null>(null);
 	interface FileItem {
 		id: string;
 		title: string;
@@ -71,7 +74,6 @@
 	let isDeletingFile = $state(false);
 
 	// Confirmation composables
-	const nukeConfirm = createConfirmation();
 	const deleteConfirm = createConfirmation();
 	const fileDeleteConfirm = createConfirmation();
 	const chartDeleteConfirm = createConfirmation();
@@ -134,7 +136,6 @@
 		return () => {
 			pendingTimeouts.forEach(clearTimeout);
 			pendingTimeouts = [];
-			nukeConfirm.cleanup();
 			deleteConfirm.cleanup();
 			fileDeleteConfirm.cleanup();
 			chartDeleteConfirm.cleanup();
@@ -355,26 +356,39 @@
 			});
 	}
 
-	function handleNukeClick() {
-		nukeConfirm.start('nuke', async () => {
-			try {
-				// Nuke ALL data (no mode)
-				const response = await fetch('/api/nuke', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({})
-				});
+	function toggleNukeMenu() {
+		showNukeMenu = !showNukeMenu;
+	}
 
-				if (!response.ok) throw new Error('Failed to nuke database');
+	function handleNukeComplete(bucket: string) {
+		showNukeMenu = false;
 
+		// Parse bucket to determine what to clear from UI
+		const [bucketType, target] = bucket.split(':');
+
+		switch (bucketType) {
+			case 'persona':
+				// Remove messages from this persona
+				allMessages = allMessages.filter(m => m.persona_name !== target);
+				// Reload charts (some may have been deleted)
+				loadSuperjournalCharts();
+				break;
+			case 'content':
+				// Reload files and file charts
+				loadFiles();
+				loadFileCharts();
+				break;
+			case 'productivity':
+				// Nothing in main UI to clear - CalendarCanvas will refetch on its own
+				break;
+			default:
+				// ALL - clear everything
 				allMessages = [];
 				superjournalCharts = [];
 				fileCharts = [];
+				files = [];
 				currentMessage.set(null);
-			} catch (error) {
-				console.error('Nuke error:', error);
-			}
-		});
+		}
 	}
 
 	// File paste handlers
@@ -698,9 +712,17 @@
 						<ScrollControls config={CHAT_CONFIG} />
 					</div>
 
-					<button class="control-btn hit-target settings-btn" title="Nuke all history" onclick={handleNukeClick}>
-						<Icon src={LuFlame} size="11" />
-					</button>
+					<div class="nuke-wrapper">
+						<button class="control-btn hit-target settings-btn" title="Nuke data" onclick={toggleNukeMenu} bind:this={nukeButtonRef}>
+							<Icon src={LuFlame} size="11" />
+						</button>
+						<NukeMenu
+							isOpen={showNukeMenu}
+							onClose={() => showNukeMenu = false}
+							onNukeComplete={handleNukeComplete}
+							triggerRef={nukeButtonRef}
+						/>
+					</div>
 				</div>
 				<textarea
 					placeholder="Type your message..."
@@ -730,13 +752,7 @@
 		mode="chat"
 	/>
 
-	<ConfirmationModal
-		isOpen={nukeConfirm.isActive}
-		progress={nukeConfirm.progress}
-		onCancel={() => nukeConfirm.cancel()}
-		mode="chat"
-	/>
-
+	
 	<ConfirmationModal
 		isOpen={fileDeleteConfirm.isActive}
 		progress={fileDeleteConfirm.progress}
@@ -868,8 +884,12 @@
 		color: rgb(220, 38, 38);
 	}
 
+	.nuke-wrapper {
+		position: relative;
+	}
+
 	@media (min-width: 901px) {
-		.settings-btn {
+		.nuke-wrapper {
 			margin-left: auto;
 		}
 	}

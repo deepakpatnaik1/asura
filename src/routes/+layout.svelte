@@ -3,7 +3,7 @@
 	import { onMount, tick } from 'svelte';
 	import { page } from '$app/stores';
 	import { Icon } from 'svelte-icons-pack';
-	import { LuMessageSquare, LuLogOut, LuSettings, LuWifiOff } from 'svelte-icons-pack/lu';
+	import { LuLogOut, LuSettings, LuWifiOff } from 'svelte-icons-pack/lu';
 	import SettingsModal from '$lib/components/SettingsModal.svelte';
 	import ErrorBoundary from '$lib/components/ErrorBoundary.svelte';
 	import { isConnected, initConnectivityListeners, cleanupConnectivityListeners } from '$lib/stores/connectivity';
@@ -11,9 +11,6 @@
 
 	let { children } = $props();
 	let showSettings = $state(false);
-
-	// Article pane state
-	let isArticlePaneCollapsed = $state(false);
 
 	// FOUC prevention
 	let mounted = $state(false);
@@ -58,12 +55,6 @@
 	<!-- Sidebar (hidden on login) -->
 	{#if !isLoginPage}
 	<aside class="sidebar">
-		<div class="sidebar-top">
-			<!-- Unified conversation - all link to root -->
-			<a href="/" class="sidebar-icon hit-target" class:active={$page.url.pathname === '/'} title="Conversation">
-				<Icon src={LuMessageSquare} size="18" />
-			</a>
-		</div>
 		<div class="sidebar-bottom">
 			<button class="sidebar-icon hit-target" onclick={() => showSettings = true} title="Settings">
 				<Icon src={LuSettings} size="18" />
@@ -74,36 +65,6 @@
 		</div>
 	</aside>
 	{/if}
-
-	<!-- Article Pane (Library) - Temporarily removed, will reposition later -->
-	<!-- {#if $page.url.pathname === '/reader'}
-		<aside class="article-pane" class:collapsed={isArticlePaneCollapsed}>
-			<div class="article-pane-header">
-				<button
-					class="collapse-toggle"
-					onclick={() => isArticlePaneCollapsed = !isArticlePaneCollapsed}
-					title={isArticlePaneCollapsed ? 'Expand' : 'Collapse'}
-				>
-					<Icon src={LuChevronDown} size="20" class={isArticlePaneCollapsed ? 'rotate-left' : ''} />
-				</button>
-				{#if !isArticlePaneCollapsed}
-					<span class="pane-title">Library</span>
-				{/if}
-			</div>
-
-			{#if !isArticlePaneCollapsed}
-				<div class="article-list">
-				</div>
-			{/if}
-
-			{#if !isArticlePaneCollapsed}
-				<button class="new-article-btn">
-					<Icon src={LuPlus} size="16" />
-					<span>New Article</span>
-				</button>
-			{/if}
-		</aside>
-	{/if} -->
 
 	<!-- Offline indicator -->
 	{#if !$isConnected && !isLoginPage}
@@ -151,12 +112,11 @@
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		justify-content: space-between;
+		justify-content: flex-end;
 		padding: var(--layout-padding) 0;
 		z-index: 5;
 	}
 
-	.sidebar-top,
 	.sidebar-bottom {
 		display: flex;
 		flex-direction: column;
@@ -177,158 +137,14 @@
 		text-decoration: none;
 	}
 
-	.sidebar-icon:hover,
-	.sidebar-icon.active {
+	.sidebar-icon:hover {
 		opacity: 1;
 		color: var(--boss-accent);
-	}
-
-	.sidebar-icon.disabled {
-		opacity: 0.3;
-		cursor: not-allowed;
-	}
-
-	.sidebar-icon.disabled:hover {
-		opacity: 0.3;
-		color: hsl(var(--foreground));
 	}
 
 	.main-content {
 		width: 100vw;
 		height: 100vh;
-	}
-
-	/* Article Pane (Library) */
-	.article-pane {
-		position: fixed;
-		left: var(--sidebar-width);
-		top: 0;
-		bottom: 0;
-		width: 240px;
-		background: hsl(var(--card));
-		border-right: 1px solid hsl(var(--border));
-		display: flex;
-		flex-direction: column;
-		transition: width 0.3s ease;
-		z-index: 5;
-		overflow: hidden;
-	}
-
-	.article-pane.collapsed {
-		width: var(--sidebar-width);
-	}
-
-	.article-pane-header {
-		display: flex;
-		align-items: center;
-		gap: 12px;
-		padding: 16px;
-		border-bottom: 1px solid hsl(var(--border));
-	}
-
-	.collapse-toggle {
-		background: none;
-		border: none;
-		cursor: pointer;
-		color: hsl(var(--foreground));
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		padding: 4px;
-		border-radius: 4px;
-		transition: background 0.15s ease;
-	}
-
-	.collapse-toggle:hover {
-		background: hsl(var(--accent));
-	}
-
-	.collapse-toggle :global(.rotate-left) {
-		transform: rotate(-90deg);
-	}
-
-	.pane-title {
-		font-size: 14px;
-		font-weight: 600;
-		color: hsl(var(--foreground));
-		white-space: nowrap;
-	}
-
-	.article-list {
-		flex: 1;
-		overflow-y: auto;
-		padding: 8px;
-		display: flex;
-		flex-direction: column;
-		gap: 8px;
-	}
-
-	.article-card {
-		padding: 12px;
-		border-radius: 6px;
-		border: 1px solid hsl(var(--border));
-		cursor: pointer;
-		transition: all 0.15s ease;
-		background: hsl(var(--card));
-	}
-
-	.article-card:hover {
-		background: hsl(var(--accent));
-		border-color: hsl(var(--accent-foreground));
-	}
-
-	.article-card.selected {
-		border-color: var(--reader-accent);
-		background: var(--reader-bg);
-	}
-
-	.article-title {
-		font-size: 13px;
-		font-weight: 600;
-		color: hsl(var(--foreground));
-		margin-bottom: 4px;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
-	.article-preview {
-		font-size: 12px;
-		color: hsl(var(--muted-foreground));
-		overflow: hidden;
-		text-overflow: ellipsis;
-		display: -webkit-box;
-		-webkit-line-clamp: 2;
-		-webkit-box-orient: vertical;
-	}
-
-	.new-article-btn {
-		margin: 8px;
-		padding: 10px 16px;
-		border-radius: 6px;
-		border: 1px solid var(--reader-accent);
-		background: var(--reader-bg);
-		color: var(--reader-accent);
-		font-size: 13px;
-		font-weight: 600;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		gap: 8px;
-		cursor: pointer;
-		transition: all 0.15s ease;
-	}
-
-	.new-article-btn:hover {
-		background: var(--reader-accent);
-		color: white;
-	}
-
-	/* Responsive: hide article pane on narrow screens */
-	@media (max-width: 900px) {
-		.article-pane {
-			display: none;
-		}
 	}
 
 	/* Offline banner */
