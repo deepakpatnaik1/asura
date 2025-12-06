@@ -74,6 +74,9 @@ export const settingsUpdateSchema = z.object({
 	selected_work_model: z.string().optional(),
 	selected_embedding_model: z.string().optional(),
 	active_content_id: z.string().uuid().nullable().optional(),
+	// Unified persona selection (new)
+	selected_persona: personaSchema.optional(),
+	// DEPRECATED: Per-mode persona selection (kept for backward compatibility)
 	selected_persona_chat: chatPersonaSchema.optional(),
 	selected_persona_reader: readerPersonaSchema.optional(),
 	selected_persona_todo: todoPersonaSchema.optional()

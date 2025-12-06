@@ -1,21 +1,12 @@
 <script lang="ts">
 	import { Icon } from 'svelte-icons-pack';
 	import { LuChevronDown } from 'svelte-icons-pack/lu';
-	import type { Mode } from '$lib/config/modes';
-
-	interface Persona {
-		name: string;
-		display_name: string;
-		mode: string;
-	}
+	import { getPersonaAccentColor } from '$lib/config/colors';
+	import { PERSONA_NAMES, PERSONAS } from '$lib/config/personas';
 
 	interface Props {
 		/** Currently selected persona name */
 		selectedPersona: string;
-		/** List of available personas from DB */
-		personas: Persona[];
-		/** Current mode */
-		mode?: Mode;
 		/** Whether the dropdown is interactive (clickable) */
 		interactive?: boolean;
 		/** Callback when persona is selected */
@@ -24,24 +15,19 @@
 
 	let {
 		selectedPersona,
-		personas,
-		mode = 'chat',
 		interactive = true,
 		onSelect
 	}: Props = $props();
 
 	let isOpen = $state(false);
 
-	// Get display name from personas data
+	// Get display name from persona config
 	const displayName = $derived(
-		personas.find(p => p.name === selectedPersona)?.display_name || selectedPersona
+		PERSONAS[selectedPersona]?.displayName || selectedPersona
 	);
 
-	// Check if persona is available in current mode
-	function isAvailable(personaName: string): boolean {
-		const persona = personas.find(p => p.name === personaName);
-		return persona?.mode === mode;
-	}
+	// Get accent color for selected persona
+	const accentColor = $derived(getPersonaAccentColor(selectedPersona));
 
 	function handleToggle(event: Event) {
 		if (interactive) {
@@ -51,7 +37,6 @@
 	}
 
 	function handleSelect(persona: string) {
-		if (!isAvailable(persona)) return;
 		isOpen = false;
 		onSelect?.(persona);
 	}
@@ -75,6 +60,7 @@
 		onkeydown={(e) => e.key === 'Enter' && handleToggle(e)}
 		role={interactive ? 'button' : undefined}
 		tabindex={interactive ? 0 : undefined}
+		style="--selected-accent: {accentColor}"
 	>
 		<span class="persona-name">{displayName}</span>
 		{#if interactive}
@@ -84,15 +70,17 @@
 
 	{#if isOpen && interactive}
 		<div class="dropdown-menu">
-			{#each personas as persona}
+			{#each PERSONA_NAMES as personaName}
+				{@const persona = PERSONAS[personaName]}
+				{@const isSelected = personaName === selectedPersona}
 				<button
 					class="dropdown-item"
-					class:selected={persona.name === selectedPersona}
-					class:disabled={!isAvailable(persona.name)}
-					onclick={() => handleSelect(persona.name)}
-					disabled={!isAvailable(persona.name)}
+					class:selected={isSelected}
+					onclick={() => handleSelect(personaName)}
+					style="--item-accent: {persona.accentColor}"
 				>
-					{persona.display_name}
+					<span class="color-dot" style="background: {persona.accentColor}"></span>
+					{persona.displayName}
 				</button>
 			{/each}
 		</div>
@@ -142,13 +130,15 @@
 		border: 1px solid hsl(var(--border));
 		border-radius: 6px;
 		box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.3);
-		min-width: 120px;
+		min-width: 140px;
 		z-index: 100;
 		overflow: hidden;
 	}
 
 	.dropdown-item {
-		display: block;
+		display: flex;
+		align-items: center;
+		gap: 8px;
 		width: 100%;
 		padding: 8px 12px;
 		text-align: left;
@@ -165,15 +155,13 @@
 	}
 
 	.dropdown-item.selected {
-		color: var(--chat-accent);
+		color: var(--item-accent);
 	}
 
-	.dropdown-item.disabled {
-		opacity: 0.4;
-		cursor: not-allowed;
-	}
-
-	.dropdown-item.disabled:hover {
-		background: none;
+	.color-dot {
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		flex-shrink: 0;
 	}
 </style>

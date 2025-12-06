@@ -3,7 +3,7 @@
 	import { onMount, tick } from 'svelte';
 	import { page } from '$app/stores';
 	import { Icon } from 'svelte-icons-pack';
-	import { LuMessageSquare, LuBook, LuListChecks, LuLogOut, LuSettings, LuChevronDown, LuPlus, LuWifiOff } from 'svelte-icons-pack/lu';
+	import { LuMessageSquare, LuLogOut, LuSettings, LuWifiOff } from 'svelte-icons-pack/lu';
 	import SettingsModal from '$lib/components/SettingsModal.svelte';
 	import ErrorBoundary from '$lib/components/ErrorBoundary.svelte';
 	import { isConnected, initConnectivityListeners, cleanupConnectivityListeners } from '$lib/stores/connectivity';
@@ -59,14 +59,9 @@
 	{#if !isLoginPage}
 	<aside class="sidebar">
 		<div class="sidebar-top">
-			<a href="/chat" class="sidebar-icon hit-target" class:active={$page.url.pathname === '/chat'} title="Chat">
+			<!-- Unified conversation - all link to root -->
+			<a href="/" class="sidebar-icon hit-target" class:active={$page.url.pathname === '/'} title="Conversation">
 				<Icon src={LuMessageSquare} size="18" />
-			</a>
-			<a href="/reader" class="sidebar-icon hit-target" class:active={$page.url.pathname === '/reader'} title="Reader">
-				<Icon src={LuBook} size="18" />
-			</a>
-			<a href="/todo" class="sidebar-icon hit-target" class:active={$page.url.pathname === '/todo'} title="Work">
-				<Icon src={LuListChecks} size="18" />
 			</a>
 		</div>
 		<div class="sidebar-bottom">
@@ -182,28 +177,10 @@
 		text-decoration: none;
 	}
 
-	.sidebar-icon:hover {
+	.sidebar-icon:hover,
+	.sidebar-icon.active {
 		opacity: 1;
 		color: var(--boss-accent);
-	}
-
-	/* Active state - mode-specific colors */
-	.sidebar-icon.active:nth-child(1) {
-		/* Chat mode (first icon) */
-		opacity: 1;
-		color: var(--boss-accent);
-	}
-
-	.sidebar-icon.active:nth-child(2) {
-		/* Reader mode (second icon) */
-		opacity: 1;
-		color: var(--reader-accent);
-	}
-
-	.sidebar-icon.active:nth-child(3) {
-		/* Work mode (third icon) */
-		opacity: 1;
-		color: var(--todo-accent);
 	}
 
 	.sidebar-icon.disabled {

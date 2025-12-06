@@ -23,31 +23,20 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supab
 	const offset = parseInt(url.searchParams.get('offset') || '0', 10);
 	const limit = Math.min(parseInt(url.searchParams.get('limit') || String(PAGE_SIZE), 10), 100);
 	const contentId = url.searchParams.get('content_id');
-	const mode = url.searchParams.get('mode');
 
-	// Build query with optional filters
+	// Build query - unified conversation (no mode filter)
 	let query = supabase
 		.from('superjournal')
 		.select('*', { count: 'exact' });
 
-	// Filter by content_id (for reader mode article filtering)
+	// Filter by content_id (for article-specific conversation)
 	if (contentId) {
 		query = query.eq('content_id', contentId);
 	}
 
-	// Filter by mode (chat vs reader)
-	if (mode) {
-		query = query.eq('mode', mode);
-	}
-
-	// For reader mode, order ascending (oldest first for conversation flow)
-	// For chat mode, order descending (newest first for pagination)
-	const ascending = mode === 'reader';
-	query = query.order('created_at', { ascending });
-
-	if (!ascending) {
-		query = query.range(offset, offset + limit - 1);
-	}
+	// Order descending (newest first for pagination)
+	query = query.order('created_at', { ascending: false });
+	query = query.range(offset, offset + limit - 1);
 
 	const { data: messages, error, count } = await query;
 
@@ -93,14 +82,6 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supab
 			formatted_timestamp: formatTimestamp(msg.created_at)
 		};
 	});
-
-	// For reader mode, return as 'entries' key for consistency
-	if (mode === 'reader') {
-		return json({
-			entries: messagesWithTimestamps,
-			totalCount
-		});
-	}
 
 	return json({
 		messages: messagesWithTimestamps,
