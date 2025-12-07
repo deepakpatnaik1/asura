@@ -4,6 +4,7 @@ import { EMBEDDING_MODEL } from '$lib/config/models';
 import { MEMORY } from '$lib/config/memory';
 import { DEFAULT_PERSONA, personaHasContextChunk } from '$lib/config/personas';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { fetchCalendarEvents, refreshAccessToken } from '$lib/api/google-calendar';
 
 const voyage = new VoyageAIClient({ apiKey: VOYAGE_API_KEY });
 
@@ -36,6 +37,7 @@ interface ContextComponents {
 	highSalienceArcs: string;
 	otherArcs: string;
 	workData: string; // Todo mode: current todos and tags
+	calendar: string; // Google Calendar events (for Alicja)
 }
 
 interface ContextStats {
@@ -49,6 +51,7 @@ interface ContextStats {
 		highSalienceArcs: number;
 		otherArcs: number;
 		workData: number;
+		calendar: number;
 	};
 }
 
@@ -106,7 +109,8 @@ export async function buildContext(
 		journal: '',
 		highSalienceArcs: '',
 		otherArcs: '',
-		workData: ''
+		workData: '',
+		calendar: ''
 	};
 
 	let totalTokens = 0;
@@ -182,9 +186,10 @@ export async function buildContext(
 				: Promise.resolve({ data: [] })
 		]);
 
-		// Use Gunnar-style formatting (pre-computed analytics) for personas with tools
-		// Use Alicja-style formatting (with IDs) for personas that need to operate on data
-		const personaHasTools = hasChunk('todos') && personaHasContextChunk(personaName, 'calendar');
+		// Use Alicja-style formatting (with IDs) for personas with tools
+		// Use Gunnar-style formatting (pre-computed analytics) for personas without tools
+		const { PERSONAS } = await import('$lib/config/personas');
+		const personaHasTools = (PERSONAS[personaName]?.tools?.length ?? 0) > 0;
 		const workDataText = personaHasTools
 			? formatWorkData(
 					todosResult.data || [],
@@ -198,6 +203,54 @@ export async function buildContext(
 			  );
 		components.workData = workDataText;
 		totalTokens += estimateTokens(workDataText);
+	}
+
+	// Priority 0.6: Google Calendar events (for Alicja)
+	if (hasChunk('calendar')) {
+		try {
+			// Get Google OAuth tokens
+			const { data: tokens } = await supabase
+				.from('google_tokens')
+				.select('access_token, refresh_token, expires_at')
+				.eq('user_id', userId)
+				.single();
+
+			if (tokens) {
+				let accessToken = tokens.access_token;
+				const expiresAt = new Date(tokens.expires_at);
+				const now = new Date();
+
+				// Refresh if expires in less than 5 minutes
+				if (expiresAt.getTime() - now.getTime() < 5 * 60 * 1000) {
+					try {
+						const refreshed = await refreshAccessToken(tokens.refresh_token);
+						accessToken = refreshed.access_token;
+
+						// Update stored token
+						await supabase
+							.from('google_tokens')
+							.update({
+								access_token: refreshed.access_token,
+								expires_at: refreshed.expires_at.toISOString(),
+								updated_at: new Date().toISOString()
+							})
+							.eq('user_id', userId);
+					} catch {
+						// Token refresh failed, skip calendar context
+					}
+				}
+
+				// Fetch next 14 days of events
+				const events = await fetchCalendarEvents(accessToken, 14);
+				if (events.length > 0) {
+					const calendarText = formatCalendarEvents(events);
+					components.calendar = calendarText;
+					totalTokens += estimateTokens(calendarText);
+				}
+			}
+		} catch {
+			// Calendar fetch failed, continue without it
+		}
 	}
 
 	// Build parallel queries based on persona chunks
@@ -233,16 +286,29 @@ export async function buildContext(
 		queryKeys.push('starred');
 	}
 
-	// Priority 3: Recent memory (journal)
+	// Priority 3: Recent memory (journal) - filtered by persona affinity
+	// Strategic personas (Gunnar, Kirby) share memory; tactical personas get only their own
 	if (hasChunk('recent')) {
-		queries.push(
-			supabase
-				.from('journal')
-				.select('boss_essence, persona_essence, decision_arc_summary, persona_name, created_at')
-				.eq('user_id', userId)
-				.order('created_at', { ascending: false })
-				.limit(MEMORY.lastNJournalEntries)
-		);
+		const strategicPersonas = ['gunnar', 'kirby'];
+		const isStrategic = strategicPersonas.includes(personaName);
+
+		const journalQuery = supabase
+			.from('journal')
+			.select('boss_essence, persona_essence, decision_arc_summary, persona_name, created_at')
+			.eq('user_id', userId)
+			.order('created_at', { ascending: false })
+			.limit(MEMORY.lastNJournalEntries);
+
+		// Filter by persona affinity
+		if (isStrategic) {
+			// Gunnar and Kirby share strategic memory
+			journalQuery.in('persona_name', strategicPersonas);
+		} else {
+			// Tactical personas (Samara, Alicja) only see their own turns
+			journalQuery.eq('persona_name', personaName);
+		}
+
+		queries.push(journalQuery);
 		queryKeys.push('journal');
 	}
 
@@ -419,7 +485,8 @@ export async function buildContext(
 			journal: estimateTokens(components.journal),
 			highSalienceArcs: estimateTokens(components.highSalienceArcs),
 			otherArcs: estimateTokens(components.otherArcs),
-			workData: estimateTokens(components.workData)
+			workData: estimateTokens(components.workData),
+			calendar: estimateTokens(components.calendar)
 		}
 	};
 
@@ -663,7 +730,7 @@ ${diaryJson}
 `;
 }
 
-// Format work data (todos, tags, and diary) for todo mode context
+// Format work data (todos, tags, and diary) for Alicja (with IDs and hierarchy)
 function formatWorkData(
 	todos: Array<{
 		id: string;
@@ -686,20 +753,38 @@ function formatWorkData(
 ): string {
 	const currentTime = new Date().toISOString();
 
-	const todosJson = JSON.stringify(
-		todos.map((t) => ({
-			id: t.id,
-			description: t.description,
-			tags: t.tags,
-			status: t.status,
-			created_at: t.created_at,
-			completed_at: t.completed_at,
-			deadline_period: t.deadline_period,
-			parent_id: t.parent_id
-		})),
-		null,
-		2
-	);
+	// Build hierarchical todo structure
+	const parentTodos = todos.filter((t) => !t.parent_id);
+	const childTodosMap = new Map<string, typeof todos>();
+
+	todos.filter((t) => t.parent_id).forEach((child) => {
+		const existing = childTodosMap.get(child.parent_id!) || [];
+		existing.push(child);
+		childTodosMap.set(child.parent_id!, existing);
+	});
+
+	// Format todos with clear hierarchy
+	const formattedTodos = parentTodos.map((parent) => {
+		const children = childTodosMap.get(parent.id) || [];
+		const completedChildren = children.filter((c) => c.status === 'completed').length;
+
+		return {
+			id: parent.id,
+			description: parent.description,
+			tags: parent.tags,
+			status: parent.status,
+			deadline_period: parent.deadline_period,
+			progress: children.length > 0 ? `${completedChildren}/${children.length}` : null,
+			children: children.map((c) => ({
+				id: c.id,
+				description: c.description,
+				status: c.status,
+				tags: c.tags
+			}))
+		};
+	});
+
+	const todosJson = JSON.stringify(formattedTodos, null, 2);
 
 	const diaryJson = JSON.stringify(
 		diary.map((d) => ({
@@ -730,11 +815,51 @@ ${diaryJson}
 `;
 }
 
+// Format Google Calendar events for Alicja's context
+interface CalendarEvent {
+	id: string;
+	summary: string;
+	start: { dateTime?: string; date?: string };
+	end: { dateTime?: string; date?: string };
+	description?: string;
+	location?: string;
+}
+
+function formatCalendarEvents(events: CalendarEvent[]): string {
+	if (events.length === 0) return '';
+
+	const formattedEvents = events.map((event) => {
+		const start = event.start.dateTime || event.start.date || '';
+		const end = event.end.dateTime || event.end.date || '';
+		const isAllDay = !event.start.dateTime;
+
+		return {
+			event_id: event.id,
+			title: event.summary,
+			start: start,
+			end: end,
+			all_day: isAllDay,
+			location: event.location || null,
+			description: event.description || null
+		};
+	});
+
+	const eventsJson = JSON.stringify(formattedEvents, null, 2);
+
+	return `--- GOOGLE CALENDAR (Next 14 Days) ---
+<calendar_events>
+${eventsJson}
+</calendar_events>
+
+`;
+}
+
 // Assemble all context components into final string
 function assembleContext(components: ContextComponents): string {
 	const parts = [
 		components.canon, // Canon first (shared knowledge across all modes)
 		components.workData, // Work data for todo mode (before superjournal so Alicja sees todos first)
+		components.calendar, // Calendar events (for Alicja)
 		components.superjournal,
 		components.files,
 		components.starred,

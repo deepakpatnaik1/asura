@@ -94,7 +94,7 @@ const SAMARA_CHUNKS: ContextChunk[] = ['working', 'starred', 'canon', 'active'];
 /**
  * Alicja: Scribe - productivity data, no content discussion
  */
-const ALICJA_CHUNKS: ContextChunk[] = ['working', 'starred', 'canon', 'todos', 'diary', 'tags'];
+const ALICJA_CHUNKS: ContextChunk[] = ['working', 'starred', 'canon', 'todos', 'diary', 'tags', 'calendar'];
 
 /**
  * All Alicja tools
@@ -147,7 +147,7 @@ export const PERSONAS: Record<string, Persona> = {
 		model: null,
 		systemPrompt: 'samara',
 		contextChunks: SAMARA_CHUNKS,
-		compression: true, // Chat turns get artisan cut (article content is separate)
+		compression: false, // Tactical persona - no long-term memory needed
 		tools: []
 	},
 	alicja: {
@@ -157,7 +157,7 @@ export const PERSONAS: Record<string, Persona> = {
 		model: null,
 		systemPrompt: 'alicja',
 		contextChunks: ALICJA_CHUNKS,
-		compression: true,
+		compression: false, // Tactical persona - no long-term memory needed
 		tools: ALICJA_TOOLS
 	}
 };
