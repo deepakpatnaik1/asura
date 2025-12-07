@@ -62,7 +62,7 @@ export async function compress(params: CompressParams): Promise<CompressResult> 
 			{
 				type: 'text' as const,
 				text: COMPRESS_PROMPT,
-				cache_control: { type: 'ephemeral' as const }
+				cache_control: { type: 'ephemeral' as const, ttl: '1h' as const }
 			}
 		],
 		messages: [

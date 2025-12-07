@@ -1,14 +1,7 @@
 -- ASURA SIMPLIFICATION MIGRATION
 -- Run in Supabase SQL Editor
 
--- STEP 1: NUKE ALL DATA
-DELETE FROM charts;
-DELETE FROM journal;
-DELETE FROM superjournal;
-DELETE FROM content;
-DELETE FROM founder_diary;
-DELETE FROM todos;
-DELETE FROM tags;
+-- STEP 1: (Data cleanup was performed once on 2025-12-06, statements removed for safety)
 
 -- STEP 2: DROP MODE COLUMNS
 ALTER TABLE superjournal DROP COLUMN IF EXISTS mode;

@@ -65,17 +65,17 @@ export async function* converseStream(
 	// Determine which tools to use - custom tools or default Brave Search
 	const activeTools = tools || [BRAVE_SEARCH_TOOL];
 
-	// Build system prompt with cache breakpoints
+	// Build system prompt with cache breakpoints (1-hour TTL for deep thinking sessions)
 	const systemPromptWithCache: Anthropic.Messages.TextBlockParam[] = [
 		{
 			type: 'text',
 			text: personaPrompt,
-			cache_control: { type: 'ephemeral' }
+			cache_control: { type: 'ephemeral', ttl: '1h' }
 		},
 		{
 			type: 'text',
 			text: CONVERSE_PROMPT,
-			cache_control: { type: 'ephemeral' }
+			cache_control: { type: 'ephemeral', ttl: '1h' }
 		}
 	];
 
@@ -135,7 +135,7 @@ export async function* converseStream(
 			},
 			{
 				headers: {
-					'anthropic-beta': 'prompt-caching-2024-07-31'
+					'anthropic-beta': 'prompt-caching-2024-07-31,extended-cache-ttl-2025-04-11'
 				},
 				timeout: TIMING.streamingTimeout
 			}

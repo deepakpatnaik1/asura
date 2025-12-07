@@ -8,6 +8,7 @@
 	 * Flat chronological accomplishments list.
 	 */
 
+	import { onMount } from 'svelte';
 	import CanvasFrame from '$lib/components/CanvasFrame.svelte';
 	import { Icon } from 'svelte-icons-pack';
 	import { LuRefreshCw } from 'svelte-icons-pack/lu';
@@ -19,6 +20,21 @@
 	}
 
 	let { persona, refreshTrigger = 0 }: Props = $props();
+
+	// Listen for nuke events to clear UI instantly
+	onMount(() => {
+		const handleNuke = (e: CustomEvent<{ bucket: string }>) => {
+			const bucket = e.detail.bucket;
+			if (bucket === 'productivity:diary') {
+				diaryEntries = [];
+				diaryDays = [];
+			} else if (bucket === 'productivity:todos') {
+				todos = [];
+			}
+		};
+		window.addEventListener('nuke-complete', handleNuke as EventListener);
+		return () => window.removeEventListener('nuke-complete', handleNuke as EventListener);
+	});
 
 	// Get accent color for static UI elements
 	const accentColor = $derived(getPersonaAccentColor(persona));

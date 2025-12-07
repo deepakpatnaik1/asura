@@ -100,7 +100,6 @@
 				return;
 			}
 
-			onNukeComplete(bucket);
 			// Dispatch window event for cross-component communication
 			window.dispatchEvent(new CustomEvent('nuke-complete', { detail: { bucket } }));
 		} catch (err) {

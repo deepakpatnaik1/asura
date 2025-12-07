@@ -51,7 +51,7 @@ export async function createMessage(params: CreateMessageParams): Promise<Anthro
 		messages: params.messages
 	}, {
 		headers: {
-			'anthropic-beta': 'prompt-caching-2024-07-31,files-api-2025-04-14'
+			'anthropic-beta': 'prompt-caching-2024-07-31,extended-cache-ttl-2025-04-11,files-api-2025-04-14'
 		}
 	});
 }
@@ -85,7 +85,7 @@ export async function createMessageStream(params: CreateMessageParams) {
 		messages: params.messages
 	}, {
 		headers: {
-			'anthropic-beta': 'prompt-caching-2024-07-31'
+			'anthropic-beta': 'prompt-caching-2024-07-31,extended-cache-ttl-2025-04-11'
 		},
 		timeout: TIMING.streamingTimeout
 	});
