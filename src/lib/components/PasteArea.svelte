@@ -22,6 +22,7 @@
 	let processingStatus = $state('');
 	let processingError = $state<string | null>(null);
 	let pastedContent = $state('');
+	let pasteAreaRef: HTMLElement | null = $state(null);
 
 	const placeholder = 'Paste content here...';
 	const accentVar = 'var(--boss-accent)';
@@ -136,6 +137,7 @@
 			contenteditable={!isProcessing}
 			onpaste={handlePaste}
 			data-placeholder={placeholder}
+			bind:this={pasteAreaRef}
 		></div>
 
 		<!-- Toggle - hidden during processing -->
@@ -159,7 +161,7 @@
 					<button
 						class="checkbox-btn"
 						class:checked={isCanon}
-						onclick={() => { if (isPersistent) isCanon = !isCanon; }}
+						onclick={() => { if (isPersistent) { isCanon = !isCanon; pasteAreaRef?.focus(); } }}
 						aria-label="Toggle canon"
 						disabled={!isPersistent}
 					>

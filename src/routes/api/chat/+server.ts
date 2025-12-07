@@ -99,8 +99,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		let chartImage: ChartImageData | null = null;
 		if (chart_id && chart_source) {
 			try {
-				// All charts now in unified charts table; bucket depends on source
-				const bucket = chart_source === 'file' ? 'files' : 'articles';
+				// All charts stored in 'content' bucket
+				const bucket = 'content';
 
 				const { data: chartData, error: chartError } = await supabase
 					.from('charts')

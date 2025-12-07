@@ -8,7 +8,6 @@
  * - Context chunks to inject
  * - Compression behavior
  * - Available tools
- * - Default canvas
  */
 
 // Context chunk types available for injection
@@ -25,8 +24,6 @@ export type ContextChunk =
 	| 'calendar' // Google Calendar events (future)
 	| 'time'; // Current timestamp (always injected, not toggleable)
 
-// Canvas types - import from canvases.ts to avoid duplication
-import { type CanvasType, DEFAULT_CANVAS } from './canvases';
 
 // Tool names available to personas
 export type ToolName =
@@ -60,7 +57,6 @@ export interface Persona {
 	contextChunks: ContextChunk[];
 	compression: boolean;
 	tools: ToolName[];
-	defaultCanvas: CanvasType;
 }
 
 /**
@@ -132,8 +128,7 @@ export const PERSONAS: Record<string, Persona> = {
 		systemPrompt: 'gunnar', // resolved via getSystemPrompt()
 		contextChunks: GUNNAR_CHUNKS,
 		compression: true,
-		tools: [],
-		defaultCanvas: 'carousel'
+		tools: []
 	},
 	kirby: {
 		name: 'kirby',
@@ -143,8 +138,7 @@ export const PERSONAS: Record<string, Persona> = {
 		systemPrompt: 'kirby',
 		contextChunks: KIRBY_CHUNKS,
 		compression: true,
-		tools: [],
-		defaultCanvas: 'carousel'
+		tools: []
 	},
 	samara: {
 		name: 'samara',
@@ -154,8 +148,7 @@ export const PERSONAS: Record<string, Persona> = {
 		systemPrompt: 'samara',
 		contextChunks: SAMARA_CHUNKS,
 		compression: true, // Chat turns get artisan cut (article content is separate)
-		tools: [],
-		defaultCanvas: 'carousel'
+		tools: []
 	},
 	alicja: {
 		name: 'alicja',
@@ -165,8 +158,7 @@ export const PERSONAS: Record<string, Persona> = {
 		systemPrompt: 'alicja',
 		contextChunks: ALICJA_CHUNKS,
 		compression: true,
-		tools: ALICJA_TOOLS,
-		defaultCanvas: 'calendar'
+		tools: ALICJA_TOOLS
 	}
 };
 
@@ -229,13 +221,6 @@ export function getPersonaContextChunks(name: string): ContextChunk[] {
  */
 export function personaUsesCompression(name: string): boolean {
 	return PERSONAS[name]?.compression ?? true;
-}
-
-/**
- * Get default canvas for persona
- */
-export function getPersonaDefaultCanvas(name: string): CanvasType {
-	return PERSONAS[name]?.defaultCanvas ?? DEFAULT_CANVAS;
 }
 
 /**

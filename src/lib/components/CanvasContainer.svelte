@@ -9,7 +9,6 @@
 	 */
 
 	import { type CanvasType, DEFAULT_CANVAS } from '$lib/config/canvases';
-	import { getPersonaDefaultCanvas } from '$lib/config/personas';
 	import CanvasSwitcher from './CanvasSwitcher.svelte';
 	import ChartCarousel from './ChartCarousel.svelte';
 	import CalendarCanvas from './canvases/CalendarCanvas.svelte';
@@ -48,20 +47,7 @@
 		forceCanvas = $bindable(null)
 	}: Props = $props();
 
-	// Get persona's default canvas
-	const personaDefaultCanvas = $derived(getPersonaDefaultCanvas(persona));
-
 	let activeCanvas = $state<CanvasType>(DEFAULT_CANVAS);
-
-	// Load active canvas from localStorage when persona changes, fallback to persona default
-	$effect(() => {
-		const stored = localStorage.getItem(`asura_canvas_${persona}`);
-		if (stored && ['carousel', 'calendar', 'notes'].includes(stored)) {
-			activeCanvas = stored as CanvasType;
-		} else {
-			activeCanvas = personaDefaultCanvas;
-		}
-	});
 
 	// Force switch to specific canvas when parent requests it
 	$effect(() => {

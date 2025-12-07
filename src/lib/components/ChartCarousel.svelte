@@ -208,7 +208,7 @@
 	}
 
 	.chart-thumbnail.active {
-		outline: 2px solid var(--reader-accent);
+		outline: 2px solid hsl(var(--foreground) / 0.5);
 		outline-offset: 2px;
 	}
 
@@ -232,7 +232,7 @@
 		width: 28px;
 		height: 28px;
 		border-radius: 50%;
-		background: var(--reader-accent);
+		background: hsl(var(--foreground) / 0.7);
 		opacity: 0;
 		transition: opacity 0.2s ease;
 	}

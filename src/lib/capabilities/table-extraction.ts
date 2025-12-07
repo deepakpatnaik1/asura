@@ -10,10 +10,10 @@ import { Resvg } from '@resvg/resvg-js';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
-// Table styling colors (reader accent - green)
+// Table styling colors (neutral - works with any persona)
 export const TABLE_COLORS = {
-	accent: 'rgb(16, 185, 129)',
-	accentBg: 'rgba(16, 185, 129, 0.08)',
+	accent: 'rgb(163, 163, 163)',
+	accentBg: 'rgba(163, 163, 163, 0.08)',
 	background: '#141414',
 	foreground: '#e5e5e5',
 	border: 'rgba(255, 255, 255, 0.1)'
