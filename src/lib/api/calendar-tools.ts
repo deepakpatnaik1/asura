@@ -15,6 +15,7 @@ import {
 	type CreateEventInput,
 	type UpdateEventInput
 } from './google-calendar';
+import type { TodoMutations } from './todo-tools';
 
 /**
  * Tool Definitions
@@ -215,7 +216,8 @@ export interface ToolExecutionResult {
 export async function executeCalendarTool(
 	toolName: string,
 	input: Record<string, unknown>,
-	context: CalendarToolContext
+	context: CalendarToolContext,
+	mutations?: TodoMutations
 ): Promise<ToolExecutionResult> {
 	const { accessToken } = context;
 
@@ -225,13 +227,13 @@ export async function executeCalendarTool(
 
 	switch (toolName) {
 		case 'create_calendar_event':
-			return executeCreateEvent(accessToken, calendarId, input);
+			return executeCreateEvent(accessToken, calendarId, input, mutations);
 
 		case 'update_calendar_event':
-			return executeUpdateEvent(accessToken, calendarId, input);
+			return executeUpdateEvent(accessToken, calendarId, input, mutations);
 
 		case 'delete_calendar_event':
-			return executeDeleteEvent(accessToken, calendarId, input);
+			return executeDeleteEvent(accessToken, calendarId, input, mutations);
 
 		case 'list_calendar_events':
 			return executeListEvents(accessToken, input);
@@ -253,7 +255,8 @@ export async function executeCalendarTool(
 async function executeCreateEvent(
 	accessToken: string,
 	calendarId: string,
-	input: Record<string, unknown>
+	input: Record<string, unknown>,
+	mutations?: TodoMutations
 ): Promise<ToolExecutionResult> {
 	try {
 		const isAllDay = input.all_day === true;
@@ -289,6 +292,11 @@ async function executeCreateEvent(
 
 		const event = await createCalendarEvent(accessToken, calendarId, eventInput);
 
+		// Track mutation for UI refresh
+		if (mutations && event.id) {
+			mutations.created_events.push(event.id);
+		}
+
 		return {
 			success: true,
 			message: `Created event "${event.summary}" for ${formatEventTime(event)}`,
@@ -314,7 +322,8 @@ async function executeCreateEvent(
 async function executeUpdateEvent(
 	accessToken: string,
 	calendarId: string,
-	input: Record<string, unknown>
+	input: Record<string, unknown>,
+	mutations?: TodoMutations
 ): Promise<ToolExecutionResult> {
 	try {
 		const eventId = input.event_id as string;
@@ -341,6 +350,11 @@ async function executeUpdateEvent(
 
 		const event = await updateCalendarEvent(accessToken, calendarId, eventId, updates);
 
+		// Track mutation for UI refresh
+		if (mutations && event.id) {
+			mutations.updated_events.push(event.id);
+		}
+
 		return {
 			success: true,
 			message: `Updated event "${event.summary}"`,
@@ -365,12 +379,18 @@ async function executeUpdateEvent(
 async function executeDeleteEvent(
 	accessToken: string,
 	calendarId: string,
-	input: Record<string, unknown>
+	input: Record<string, unknown>,
+	mutations?: TodoMutations
 ): Promise<ToolExecutionResult> {
 	try {
 		const eventId = input.event_id as string;
 
 		await deleteCalendarEvent(accessToken, calendarId, eventId);
+
+		// Track mutation for UI refresh
+		if (mutations) {
+			mutations.deleted_events.push(eventId);
+		}
 
 		return {
 			success: true,

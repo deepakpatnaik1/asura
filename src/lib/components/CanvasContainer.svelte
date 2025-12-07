@@ -33,6 +33,8 @@
 		onDelete?: (chartId: string) => void;
 		// Calendar-specific props
 		calendarRefreshTrigger?: number;
+		// Force switch to specific canvas (e.g., when content is loaded)
+		forceCanvas?: CanvasType | null;
 	}
 
 	let {
@@ -42,7 +44,8 @@
 		showLightbox = $bindable(false),
 		enableDelete = false,
 		onDelete,
-		calendarRefreshTrigger = 0
+		calendarRefreshTrigger = 0,
+		forceCanvas = $bindable(null)
 	}: Props = $props();
 
 	// Get persona's default canvas
@@ -57,6 +60,15 @@
 			activeCanvas = stored as CanvasType;
 		} else {
 			activeCanvas = personaDefaultCanvas;
+		}
+	});
+
+	// Force switch to specific canvas when parent requests it
+	$effect(() => {
+		if (forceCanvas) {
+			activeCanvas = forceCanvas;
+			localStorage.setItem(`asura_canvas_${persona}`, forceCanvas);
+			forceCanvas = null; // Reset after handling
 		}
 	});
 

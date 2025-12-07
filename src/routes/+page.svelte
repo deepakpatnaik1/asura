@@ -1,9 +1,10 @@
 <script lang="ts">
 	import { Icon } from 'svelte-icons-pack';
 	import { LuPaperclip, LuFolder, LuCloudDownload } from 'svelte-icons-pack/lu';
-	import { currentMessage, isLoading, sendMessage, abortCurrentMessage } from '$lib/stores/chat';
+	import { currentMessage, isLoading, sendMessage, abortCurrentMessage, lastMutations } from '$lib/stores/chat';
 	import { tick, onMount } from 'svelte';
 	import { DEFAULT_PERSONA, PERSONAS } from '$lib/config/personas';
+	import type { CanvasType } from '$lib/config/canvases';
 	import { getPersonaAccentColor, getPersonaAccentBg } from '$lib/config/colors';
 	import { CHAT_CONFIG, scrollToTurn, scrollToLastTurn, getTurns } from '$lib/ui/scroll';
 	import { createConfirmation } from '$lib/composables';
@@ -47,6 +48,39 @@
 	let allCharts = $derived([...fileCharts, ...superjournalCharts]);
 	let selectedChartIndex = $state<number | null>(null);
 	let showLightbox = $state(false);
+	let forceCanvas = $state<CanvasType | null>(null);
+	let calendarRefreshTrigger = $state(0);
+
+	// Refresh calendar when todos, diary, or calendar events are mutated
+	$effect(() => {
+		const mutations = $lastMutations;
+		if (mutations) {
+			// Check for any todo changes
+			const hasTodoChanges =
+				(mutations.created_todos && mutations.created_todos.length > 0) ||
+				(mutations.completed_todos && mutations.completed_todos.length > 0) ||
+				(mutations.updated_todos && mutations.updated_todos.length > 0) ||
+				(mutations.deleted_todos && mutations.deleted_todos.length > 0);
+
+			// Check for any diary changes
+			const hasDiaryChanges =
+				(mutations.diary_entries && mutations.diary_entries.length > 0) ||
+				(mutations.updated_diary && mutations.updated_diary.length > 0) ||
+				(mutations.deleted_diary && mutations.deleted_diary.length > 0);
+
+			// Check for any calendar event changes
+			const hasCalendarChanges =
+				(mutations.created_events && mutations.created_events.length > 0) ||
+				(mutations.updated_events && mutations.updated_events.length > 0) ||
+				(mutations.deleted_events && mutations.deleted_events.length > 0);
+
+			if (hasTodoChanges || hasDiaryChanges || hasCalendarChanges) {
+				calendarRefreshTrigger++;
+			}
+			// Clear mutations after processing
+			lastMutations.set(null);
+		}
+	});
 
 	let inputMessage = $state('');
 	let messagesEndRef: HTMLDivElement;
@@ -432,6 +466,7 @@
 					const data = await response.json();
 					allMessages = [...allMessages, data.message];
 					await loadFileCharts();
+					forceCanvas = 'carousel'; // Switch to carousel when content is selected
 					await tick();
 					scrollToLastTurn(CHAT_CONFIG);
 				}
@@ -538,6 +573,7 @@
 
 		if (showFileLibrary) loadFiles();
 		await loadFileCharts();
+		forceCanvas = 'carousel'; // Switch to carousel when content is pasted
 	}
 
 	function handleChartDeleteClick(chartId: string) {
@@ -753,6 +789,8 @@
 		charts={allCharts}
 		bind:selectedChartIndex
 		bind:showLightbox
+		bind:forceCanvas
+		{calendarRefreshTrigger}
 		enableDelete={true}
 		onDelete={handleChartDeleteClick}
 	/>

@@ -10,8 +10,27 @@ interface Message {
 	superjournal_id?: string;
 }
 
+// Mutations from tool calls (todos, diary entries, calendar events)
+interface Mutations {
+	// Todo mutations
+	created_todos?: unknown[];
+	completed_todos?: string[];
+	updated_todos?: unknown[];
+	deleted_todos?: string[];
+	created_tags?: string[];
+	// Diary mutations
+	diary_entries?: unknown[];
+	updated_diary?: unknown[];
+	deleted_diary?: string[];
+	// Calendar mutations
+	created_events?: string[];
+	updated_events?: string[];
+	deleted_events?: string[];
+}
+
 export const currentMessage = writable<Message | null>(null);
 export const isLoading = writable(false);
+export const lastMutations = writable<Mutations | null>(null);
 
 // AbortController for canceling streaming requests
 let currentAbortController: AbortController | null = null;
@@ -113,7 +132,7 @@ export async function sendMessage(
 										return msg;
 									});
 								} else if (data.type === 'done') {
-									// Stream complete - capture model and superjournal ID
+									// Stream complete - capture model, superjournal ID, and mutations
 									currentMessage.update(msg => {
 										if (msg) {
 											return {
@@ -124,6 +143,10 @@ export async function sendMessage(
 										}
 										return msg;
 									});
+									// Capture mutations (diary entries, todos, etc.)
+									if (data.mutations) {
+										lastMutations.set(data.mutations);
+									}
 								} else if (data.type === 'error') {
 									throw new Error(data.message);
 								}

@@ -56,7 +56,10 @@ export const GET: RequestHandler = async ({ request }) => {
 				chartsResult,
 				journalResult,
 				contentResult,
-				settingsResult
+				settingsResult,
+				todosResult,
+				diaryResult,
+				tagsResult
 			] = await Promise.all([
 				supabase
 					.from('superjournal')
@@ -82,7 +85,22 @@ export const GET: RequestHandler = async ({ request }) => {
 					.from('user_settings')
 					.select('*')
 					.eq('user_id', userId)
-					.single()
+					.single(),
+				supabase
+					.from('todos')
+					.select('*')
+					.eq('user_id', userId)
+					.order('created_at', { ascending: false }),
+				supabase
+					.from('founder_diary')
+					.select('*')
+					.eq('user_id', userId)
+					.order('logged_at', { ascending: false }),
+				supabase
+					.from('tags')
+					.select('*')
+					.eq('user_id', userId)
+					.order('name', { ascending: true })
 			]);
 
 			exports[userId] = {
@@ -90,12 +108,18 @@ export const GET: RequestHandler = async ({ request }) => {
 				charts: chartsResult.data || [],
 				journal: journalResult.data || [],
 				content: contentResult.data || [],
+				todos: todosResult.data || [],
+				founder_diary: diaryResult.data || [],
+				tags: tagsResult.data || [],
 				settings: settingsResult.data || null,
 				counts: {
 					superjournal: superjournalResult.data?.length || 0,
 					charts: chartsResult.data?.length || 0,
 					journal: journalResult.data?.length || 0,
-					content: contentResult.data?.length || 0
+					content: contentResult.data?.length || 0,
+					todos: todosResult.data?.length || 0,
+					founder_diary: diaryResult.data?.length || 0,
+					tags: tagsResult.data?.length || 0
 				}
 			};
 		}

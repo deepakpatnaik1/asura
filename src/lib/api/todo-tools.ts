@@ -15,7 +15,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 export const CREATE_TODO_TOOL: Anthropic.Tool = {
 	name: 'create_todo',
 	description:
-		'Create a new todo item. Use this when the user wants to add something to their todo list.',
+		'Create a new todo item. Use this when the user wants to add something to their todo list. For complex tasks, create a parent todo first, then create child todos with parent_id to break it into steps.',
 	input_schema: {
 		type: 'object',
 		properties: {
@@ -28,9 +28,15 @@ export const CREATE_TODO_TOOL: Anthropic.Tool = {
 				items: { type: 'string' },
 				description: 'Optional tags for categorization. Must use existing canonical tags.'
 			},
-			scheduled_for: {
+			deadline_period: {
 				type: 'string',
-				description: 'Optional date to schedule the todo (YYYY-MM-DD format)'
+				description:
+					'Optional fuzzy deadline for the todo. Use when user mentions a timeframe like "this month", "next week", "by end of year", "Q1 2026", "before summer". NOT for specific dates/times (those go on the calendar).'
+			},
+			parent_id: {
+				type: 'string',
+				description:
+					'Optional UUID of parent todo. Use to create sub-tasks under a main todo. The parent must be created first.'
 			}
 		},
 		required: ['description']
@@ -53,25 +59,6 @@ export const COMPLETE_TODO_TOOL: Anthropic.Tool = {
 	}
 };
 
-export const PUSH_TODO_TOOL: Anthropic.Tool = {
-	name: 'push_todo',
-	description:
-		'Reschedule a todo to a new date. Use this when the user wants to push/defer a task to another day. This increments the times_pushed counter.',
-	input_schema: {
-		type: 'object',
-		properties: {
-			todo_id: {
-				type: 'string',
-				description: 'The UUID of the todo to reschedule'
-			},
-			new_date: {
-				type: 'string',
-				description: 'The new date to schedule the todo (YYYY-MM-DD format)'
-			}
-		},
-		required: ['todo_id', 'new_date']
-	}
-};
 
 export const UPDATE_TODO_TOOL: Anthropic.Tool = {
 	name: 'update_todo',
@@ -150,6 +137,11 @@ export const LOG_DIARY_TOOL: Anthropic.Tool = {
 				type: 'string',
 				description:
 					'Optional date for the entry (ISO 8601 format). Use when user specifies a past or future date like "log this from last Tuesday" or "this happened in March". Defaults to now if not specified.'
+			},
+			event_period: {
+				type: 'string',
+				description:
+					'Optional fuzzy date for when the event occurred. Use when the user doesn\'t know the exact date, e.g. "Summer 2023", "Early 2022", "Q3 2021", "Sometime in 2020". This is displayed instead of the precise date when present.'
 			}
 		},
 		required: ['description']
@@ -202,7 +194,6 @@ export const TODO_TOOLS: Anthropic.Tool[] = [
 	CREATE_TODO_TOOL,
 	COMPLETE_TODO_TOOL,
 	UPDATE_TODO_TOOL,
-	PUSH_TODO_TOOL,
 	DELETE_TODO_TOOL,
 	CREATE_TAG_TOOL,
 	LOG_DIARY_TOOL,
@@ -238,8 +229,8 @@ export interface Todo {
 	status: 'open' | 'completed';
 	created_at: string;
 	completed_at: string | null;
-	scheduled_for: string | null;
-	times_pushed: number;
+	deadline_period: string | null;
+	parent_id: string | null;
 }
 
 /**
@@ -250,21 +241,28 @@ export interface DiaryEntry {
 	description: string;
 	tags: string[];
 	logged_at: string;
+	event_period?: string | null;
 }
 
 /**
  * Mutations payload returned with chat response
+ * Covers todos, diary, and calendar operations
  */
 export interface TodoMutations {
+	// Todo mutations
 	created_todos: Todo[];
 	completed_todos: string[]; // IDs
 	updated_todos: { id: string; description?: string; tags?: string[] }[];
-	pushed_todos: { id: string; new_date: string; times_pushed: number }[];
 	deleted_todos: string[]; // IDs
 	created_tags: string[]; // Names
+	// Diary mutations
 	diary_entries: DiaryEntry[];
 	updated_diary: { id: string; description?: string; tags?: string[] }[];
 	deleted_diary: string[]; // IDs
+	// Calendar mutations
+	created_events: string[]; // Event IDs
+	updated_events: string[]; // Event IDs
+	deleted_events: string[]; // Event IDs
 }
 
 /**
@@ -275,12 +273,14 @@ export function createEmptyMutations(): TodoMutations {
 		created_todos: [],
 		completed_todos: [],
 		updated_todos: [],
-		pushed_todos: [],
 		deleted_todos: [],
 		created_tags: [],
 		diary_entries: [],
 		updated_diary: [],
-		deleted_diary: []
+		deleted_diary: [],
+		created_events: [],
+		updated_events: [],
+		deleted_events: []
 	};
 }
 
@@ -302,9 +302,6 @@ export async function executeTodoTool(
 
 		case 'update_todo':
 			return executeUpdateTodo(input, context, mutations);
-
-		case 'push_todo':
-			return executePushTodo(input, context, mutations);
 
 		case 'delete_todo':
 			return executeDeleteTodo(input, context, mutations);
@@ -341,7 +338,8 @@ async function executeCreateTodo(
 		const { supabase, userId, sourceMessageId } = context;
 		const description = input.description as string;
 		const tags = (input.tags as string[]) || [];
-		const scheduledFor = input.scheduled_for as string | undefined;
+		const deadlinePeriod = input.deadline_period as string | undefined;
+		const parentId = input.parent_id as string | undefined;
 
 		const { data, error } = await supabase
 			.from('todos')
@@ -349,7 +347,8 @@ async function executeCreateTodo(
 				user_id: userId,
 				description,
 				tags,
-				scheduled_for: scheduledFor || null,
+				deadline_period: deadlinePeriod || null,
+				parent_id: parentId || null,
 				source_message_id: sourceMessageId || null
 			})
 			.select()
@@ -364,18 +363,19 @@ async function executeCreateTodo(
 			status: data.status,
 			created_at: data.created_at,
 			completed_at: data.completed_at,
-			scheduled_for: data.scheduled_for,
-			times_pushed: data.times_pushed
+			deadline_period: data.deadline_period,
+			parent_id: data.parent_id
 		};
 
 		mutations.created_todos.push(todo);
 
-		const scheduleInfo = scheduledFor ? ` scheduled for ${scheduledFor}` : '';
+		const deadlineInfo = deadlinePeriod ? ` (deadline: ${deadlinePeriod})` : '';
 		const tagInfo = tags.length > 0 ? ` [${tags.join(', ')}]` : '';
+		const parentInfo = parentId ? ' (sub-task)' : '';
 
 		return {
 			success: true,
-			message: `Created todo: "${description}"${scheduleInfo}${tagInfo}`,
+			message: `Created todo: "${description}"${deadlineInfo}${tagInfo}${parentInfo}`,
 			data: todo
 		};
 	} catch (error) {
@@ -492,66 +492,6 @@ async function executeUpdateTodo(
 }
 
 /**
- * Push Todo Executor
- */
-async function executePushTodo(
-	input: Record<string, unknown>,
-	context: TodoToolContext,
-	mutations: TodoMutations
-): Promise<ToolExecutionResult> {
-	try {
-		const { supabase } = context;
-		const todoId = input.todo_id as string;
-		const newDate = input.new_date as string;
-
-		// First get current times_pushed
-		const { data: current, error: fetchError } = await supabase
-			.from('todos')
-			.select('times_pushed, description')
-			.eq('id', todoId)
-			.single();
-
-		if (fetchError) throw fetchError;
-
-		const newTimesPushed = (current.times_pushed || 0) + 1;
-
-		const { data, error } = await supabase
-			.from('todos')
-			.update({
-				scheduled_for: newDate,
-				times_pushed: newTimesPushed
-			})
-			.eq('id', todoId)
-			.select()
-			.single();
-
-		if (error) throw error;
-
-		mutations.pushed_todos.push({
-			id: todoId,
-			new_date: newDate,
-			times_pushed: newTimesPushed
-		});
-
-		return {
-			success: true,
-			message: `Pushed todo "${data.description}" to ${newDate} (pushed ${newTimesPushed} time${newTimesPushed > 1 ? 's' : ''})`,
-			data: {
-				id: data.id,
-				description: data.description,
-				scheduled_for: data.scheduled_for,
-				times_pushed: data.times_pushed
-			}
-		};
-	} catch (error) {
-		return {
-			success: false,
-			message: `Failed to push todo: ${error instanceof Error ? error.message : 'Unknown error'}`
-		};
-	}
-}
-
-/**
  * Delete Todo Executor
  */
 async function executeDeleteTodo(
@@ -651,6 +591,7 @@ async function executeLogDiary(
 		const description = input.description as string;
 		const tags = (input.tags as string[]) || [];
 		const loggedAt = input.logged_at as string | undefined;
+		const eventPeriod = input.event_period as string | undefined;
 
 		const { data, error } = await supabase
 			.from('founder_diary')
@@ -659,6 +600,7 @@ async function executeLogDiary(
 				description,
 				tags,
 				logged_at: loggedAt || new Date().toISOString(),
+				event_period: eventPeriod || null,
 				source_message_id: sourceMessageId || null
 			})
 			.select()
@@ -670,13 +612,19 @@ async function executeLogDiary(
 			id: data.id,
 			description: data.description,
 			tags: data.tags,
-			logged_at: data.logged_at
+			logged_at: data.logged_at,
+			event_period: data.event_period
 		};
 
 		mutations.diary_entries.push(entry);
 
 		const tagInfo = tags.length > 0 ? ` [${tags.join(', ')}]` : '';
-		const dateInfo = loggedAt ? ` (dated ${new Date(loggedAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })})` : '';
+		// Show event_period if provided, otherwise show precise date if provided
+		const dateInfo = eventPeriod
+			? ` (${eventPeriod})`
+			: loggedAt
+				? ` (dated ${new Date(loggedAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })})`
+				: '';
 
 		return {
 			success: true,
@@ -801,7 +749,6 @@ export function isTodoTool(toolName: string): boolean {
 		'create_todo',
 		'complete_todo',
 		'update_todo',
-		'push_todo',
 		'delete_todo',
 		'create_tag',
 		'log_diary',

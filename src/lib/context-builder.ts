@@ -162,7 +162,7 @@ export async function buildContext(
 			wantsTodos
 				? supabase
 						.from('todos')
-						.select('id, description, tags, status, created_at, completed_at, scheduled_for, times_pushed')
+						.select('id, description, tags, status, created_at, completed_at, deadline_period, parent_id')
 						.eq('user_id', userId)
 						.order('created_at', { ascending: true })
 				: Promise.resolve({ data: [] }),
@@ -176,7 +176,7 @@ export async function buildContext(
 			wantsDiary
 				? supabase
 						.from('founder_diary')
-						.select('id, description, tags, logged_at')
+						.select('id, description, tags, logged_at, event_period')
 						.eq('user_id', userId)
 						.order('logged_at', { ascending: true })
 				: Promise.resolve({ data: [] })
@@ -592,8 +592,8 @@ function formatWorkDataForGunnar(
 		status: string;
 		created_at: string;
 		completed_at: string | null;
-		scheduled_for: string | null;
-		times_pushed: number;
+		deadline_period: string | null;
+		parent_id: string | null;
 	}>,
 	tags: string[],
 	diary: Array<{
@@ -601,6 +601,7 @@ function formatWorkDataForGunnar(
 		description: string;
 		tags: string[];
 		logged_at: string;
+		event_period?: string | null;
 	}>
 ): string {
 	const now = new Date();
@@ -619,8 +620,7 @@ function formatWorkDataForGunnar(
 				tags: t.tags,
 				status: 'completed',
 				completed_ago: completedAgo,
-				time_to_complete: timeToComplete,
-				times_pushed: t.times_pushed
+				time_to_complete: timeToComplete
 			};
 		} else {
 			return {
@@ -628,20 +628,20 @@ function formatWorkDataForGunnar(
 				tags: t.tags,
 				status: 'open',
 				age: age,
-				scheduled_for: t.scheduled_for,
-				times_pushed: t.times_pushed
+				deadline_period: t.deadline_period,
+				parent_id: t.parent_id
 			};
 		}
 	});
 
-	// Format diary entries with time since logged
+	// Format diary entries with time since logged or fuzzy event_period
 	const formattedDiary = diary.map((d) => {
-		const loggedAt = new Date(d.logged_at);
-		const loggedAgo = formatDuration(loggedAt, now);
+		// Use event_period if available, otherwise compute time ago
+		const when = d.event_period || formatDuration(new Date(d.logged_at), now) + ' ago';
 		return {
 			description: d.description,
 			tags: d.tags,
-			logged_ago: loggedAgo
+			when: when
 		};
 	});
 
@@ -672,8 +672,8 @@ function formatWorkData(
 		status: string;
 		created_at: string;
 		completed_at: string | null;
-		scheduled_for: string | null;
-		times_pushed: number;
+		deadline_period: string | null;
+		parent_id: string | null;
 	}>,
 	tags: string[],
 	diary: Array<{
@@ -681,6 +681,7 @@ function formatWorkData(
 		description: string;
 		tags: string[];
 		logged_at: string;
+		event_period?: string | null;
 	}>
 ): string {
 	const currentTime = new Date().toISOString();
@@ -693,8 +694,8 @@ function formatWorkData(
 			status: t.status,
 			created_at: t.created_at,
 			completed_at: t.completed_at,
-			scheduled_for: t.scheduled_for,
-			times_pushed: t.times_pushed
+			deadline_period: t.deadline_period,
+			parent_id: t.parent_id
 		})),
 		null,
 		2
@@ -705,7 +706,8 @@ function formatWorkData(
 			id: d.id,
 			description: d.description,
 			tags: d.tags,
-			logged_at: d.logged_at
+			logged_at: d.logged_at,
+			event_period: d.event_period || null
 		})),
 		null,
 		2

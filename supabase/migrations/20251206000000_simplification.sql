@@ -42,14 +42,18 @@ CREATE TABLE IF NOT EXISTS model_overrides (
 
 ALTER TABLE model_overrides ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can view their own model overrides"
-  ON model_overrides FOR SELECT USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can insert their own model overrides"
-  ON model_overrides FOR INSERT WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Users can update their own model overrides"
-  ON model_overrides FOR UPDATE USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can delete their own model overrides"
-  ON model_overrides FOR DELETE USING (auth.uid() = user_id);
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'model_overrides' AND policyname = 'Users can view their own model overrides') THEN
+    CREATE POLICY "Users can view their own model overrides" ON model_overrides FOR SELECT USING (auth.uid() = user_id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'model_overrides' AND policyname = 'Users can insert their own model overrides') THEN
+    CREATE POLICY "Users can insert their own model overrides" ON model_overrides FOR INSERT WITH CHECK (auth.uid() = user_id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'model_overrides' AND policyname = 'Users can update their own model overrides') THEN
+    CREATE POLICY "Users can update their own model overrides" ON model_overrides FOR UPDATE USING (auth.uid() = user_id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'model_overrides' AND policyname = 'Users can delete their own model overrides') THEN
+    CREATE POLICY "Users can delete their own model overrides" ON model_overrides FOR DELETE USING (auth.uid() = user_id);
+  END IF;
+END $$;

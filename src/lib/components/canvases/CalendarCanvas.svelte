@@ -27,8 +27,7 @@
 	$effect(() => {
 		if (refreshTrigger > 0) {
 			fetchCalendarEvents();
-			fetchScheduledTodos();
-			fetchUnscheduledTodos();
+			fetchTodos();
 			fetchDiaryEntries();
 		}
 	});
@@ -55,6 +54,8 @@
 		date: number;
 		title: string;
 		time: string | null;
+		type: 'calendar' | 'todo';
+		tags?: string[];
 	}
 
 	interface FutureMonth {
@@ -85,18 +86,10 @@
 				const result = transformEventsToCards(data.events);
 				nearTermDays = result.nearTerm;
 				futureMonths = result.future;
-				// Merge scheduled todos if already loaded
-				if (scheduledTodos.length > 0) {
-					mergeScheduledTodosIntoDays();
-				}
 			} else {
 				// Show next 7 days with no events
 				nearTermDays = generateEmptyDays(7);
 				futureMonths = [];
-				// Merge scheduled todos if already loaded
-				if (scheduledTodos.length > 0) {
-					mergeScheduledTodosIntoDays();
-				}
 			}
 		} catch (err) {
 			console.error('Failed to fetch calendar events:', err);
@@ -220,7 +213,8 @@
 				futureByMonth.get(monthKey)!.events.push({
 					date: date.getDate(),
 					title: event.summary || '(No title)',
-					time: formatEventTime(event)
+					time: formatEventTime(event),
+					type: 'calendar'
 				});
 			}
 		}
@@ -279,13 +273,44 @@
 		status: 'open' | 'completed';
 		created_at: string;
 		completed_at: string | null;
-		scheduled_for: string | null;
-		times_pushed: number;
+		deadline_period: string | null;
+		parent_id: string | null;
 	}
 
-	let unscheduledTodos = $state<Todo[]>([]);
-	let scheduledTodos = $state<Todo[]>([]);
+	interface TodoWithChildren extends Todo {
+		children: Todo[];
+		completedCount: number;
+	}
+
+	let todos = $state<Todo[]>([]);
 	let todosLoading = $state(false);
+
+	// Group todos into parent-child hierarchy
+	const groupedTodos = $derived(() => {
+		const parentTodos: TodoWithChildren[] = [];
+		const childrenByParent = new Map<string, Todo[]>();
+
+		// First pass: separate parents and children
+		for (const todo of todos) {
+			if (todo.parent_id) {
+				if (!childrenByParent.has(todo.parent_id)) {
+					childrenByParent.set(todo.parent_id, []);
+				}
+				childrenByParent.get(todo.parent_id)!.push(todo);
+			}
+		}
+
+		// Second pass: build parent todos with children attached
+		for (const todo of todos) {
+			if (!todo.parent_id) {
+				const children = childrenByParent.get(todo.id) || [];
+				const completedCount = children.filter(c => c.status === 'completed').length;
+				parentTodos.push({ ...todo, children, completedCount });
+			}
+		}
+
+		return parentTodos;
+	});
 
 	function formatRelativeTime(isoString: string): string {
 		const date = new Date(isoString);
@@ -310,62 +335,22 @@
 
 	// Fetch todos on mount
 	$effect(() => {
-		fetchUnscheduledTodos();
-		fetchScheduledTodos();
+		fetchTodos();
 	});
 
-	async function fetchUnscheduledTodos() {
+	async function fetchTodos() {
 		todosLoading = true;
 		try {
-			const response = await fetch('/api/todos?status=open&scheduled=false');
+			const response = await fetch('/api/todos?status=open');
 			const data = await response.json();
 			if (data.todos) {
-				unscheduledTodos = data.todos;
+				todos = data.todos;
 			}
 		} catch (err) {
-			console.error('Failed to fetch unscheduled todos:', err);
+			console.error('Failed to fetch todos:', err);
 		} finally {
 			todosLoading = false;
 		}
-	}
-
-	async function fetchScheduledTodos() {
-		try {
-			const response = await fetch('/api/todos?status=open&scheduled=true');
-			const data = await response.json();
-			if (data.todos) {
-				scheduledTodos = data.todos;
-				// Re-merge with calendar events
-				if (nearTermDays.length > 0) {
-					mergeScheduledTodosIntoDays();
-				}
-			}
-		} catch (err) {
-			console.error('Failed to fetch scheduled todos:', err);
-		}
-	}
-
-	function mergeScheduledTodosIntoDays() {
-		// Add scheduled todos to their respective day cards
-		nearTermDays = nearTermDays.map(day => {
-			// Filter out old todo events, keep only calendar events
-			const calendarEvents = day.events.filter(e => e.type === 'calendar');
-
-			// Find todos scheduled for this day
-			const dayTodos = scheduledTodos
-				.filter(todo => todo.scheduled_for === day.dateKey)
-				.map(todo => ({
-					time: null,
-					title: todo.description,
-					type: 'todo' as const,
-					tags: todo.tags
-				}));
-
-			return {
-				...day,
-				events: [...calendarEvents, ...dayTodos]
-			};
-		});
 	}
 
 	// Founder Diary state
@@ -374,6 +359,7 @@
 		description: string;
 		tags: string[];
 		logged_at: string;
+		event_period?: string | null; // Fuzzy date like "Early 2022", "Summer 2023"
 	}
 
 	interface DiaryDay {
@@ -383,6 +369,8 @@
 		year: number;
 		dateKey: string;
 		isToday: boolean;
+		isFuzzy: boolean; // True if this group is for entries with event_period
+		fuzzyPeriod?: string; // The event_period string for fuzzy entries
 		entries: DiaryEntry[];
 	}
 
@@ -415,9 +403,25 @@
 		const today = new Date();
 		const todayKey = today.toISOString().split('T')[0];
 
-		// Group entries by date
-		const byDate = new Map<string, DiaryEntry[]>();
+		// Separate fuzzy and precise entries
+		const preciseEntries: DiaryEntry[] = [];
+		const fuzzyByPeriod = new Map<string, DiaryEntry[]>();
+
 		for (const entry of entries) {
+			if (entry.event_period) {
+				// Group by event_period
+				if (!fuzzyByPeriod.has(entry.event_period)) {
+					fuzzyByPeriod.set(entry.event_period, []);
+				}
+				fuzzyByPeriod.get(entry.event_period)!.push(entry);
+			} else {
+				preciseEntries.push(entry);
+			}
+		}
+
+		// Group precise entries by date
+		const byDate = new Map<string, DiaryEntry[]>();
+		for (const entry of preciseEntries) {
 			const dateKey = entry.logged_at.split('T')[0];
 			if (!byDate.has(dateKey)) {
 				byDate.set(dateKey, []);
@@ -425,10 +429,27 @@
 			byDate.get(dateKey)!.push(entry);
 		}
 
-		// Convert to DiaryDay array, sorted by date ascending (oldest first)
 		const days: DiaryDay[] = [];
-		const sortedDates = Array.from(byDate.keys()).sort((a, b) => a.localeCompare(b));
 
+		// Add fuzzy period groups first (they represent historical entries)
+		// Sort by the period string for rough chronological order
+		const sortedPeriods = Array.from(fuzzyByPeriod.keys()).sort();
+		for (const period of sortedPeriods) {
+			days.push({
+				date: 0,
+				day: '',
+				month: '',
+				year: 0,
+				dateKey: `fuzzy:${period}`,
+				isToday: false,
+				isFuzzy: true,
+				fuzzyPeriod: period,
+				entries: fuzzyByPeriod.get(period)!
+			});
+		}
+
+		// Add precise date groups, sorted by date ascending (oldest first)
+		const sortedDates = Array.from(byDate.keys()).sort((a, b) => a.localeCompare(b));
 		for (const dateKey of sortedDates) {
 			const date = new Date(dateKey + 'T12:00:00');
 			days.push({
@@ -438,6 +459,7 @@
 				year: date.getFullYear(),
 				dateKey,
 				isToday: dateKey === todayKey,
+				isFuzzy: false,
 				entries: byDate.get(dateKey)!
 			});
 		}
@@ -513,7 +535,13 @@
 										{#each month.events as event}
 											<div class="future-event">
 												<span class="future-date">{event.date}</span>
-												<span class="future-title">{normalizeText(event.title)}</span>
+												<span class="future-time">{event.time ?? (event.type === 'todo' ? 'todo' : '')}</span>
+												<div class="future-content">
+													<span class="future-title">{normalizeText(event.title)}</span>
+													{#if event.tags && event.tags.length > 0}
+														<span class="future-tag">#{event.tags.join(' #')}</span>
+													{/if}
+												</div>
 											</div>
 										{/each}
 									{/if}
@@ -524,7 +552,7 @@
 				</div>
 			</div>
 
-			<!-- Todos Pane (unscheduled only) -->
+			<!-- Todos Pane -->
 			<div class="pane todos-pane">
 				<div class="pane-header">
 					To-Dos
@@ -534,21 +562,32 @@
 				</div>
 				<div class="pane-content">
 					<div class="todo-list">
-						{#each unscheduledTodos as todo (todo.id)}
-								<div class="todo-item">
-									<div class="todo-content">
-										<span class="todo-text">{normalizeText(todo.description)}</span>
-										<div class="todo-meta">
-											{#if todo.tags.length > 0}
-												<span class="todo-tag">#{todo.tags.join(' #')}</span>
-											{/if}
-											<span class="todo-time">{formatRelativeTime(todo.created_at)}</span>
-											{#if todo.times_pushed > 0}
-												<span class="todo-pushed">· pushed {todo.times_pushed}x</span>
-											{/if}
-										</div>
+						{#each groupedTodos() as todo (todo.id)}
+							<div class="todo-item">
+								<div class="todo-content">
+									<span class="todo-text">{normalizeText(todo.description)}</span>
+									<div class="todo-meta">
+										{#if todo.children.length > 0}
+											<span class="todo-progress">{todo.completedCount}/{todo.children.length}</span>
+										{/if}
+										{#if todo.deadline_period}
+											<span class="todo-deadline">{todo.deadline_period}</span>
+										{/if}
+										{#if todo.tags.length > 0}
+											<span class="todo-tag">#{todo.tags.join(' #')}</span>
+										{/if}
+										<span class="todo-time">{formatRelativeTime(todo.created_at)}</span>
 									</div>
 								</div>
+							</div>
+							<!-- Child todos (indented) -->
+							{#each todo.children as child (child.id)}
+								<div class="todo-item todo-child" class:completed={child.status === 'completed'}>
+									<div class="todo-content">
+										<span class="todo-text">{normalizeText(child.description)}</span>
+									</div>
+								</div>
+							{/each}
 						{/each}
 					</div>
 				</div>
@@ -568,28 +607,48 @@
 					{:else}
 						{@const seenMonths = new Set<string>()}
 						{#each diaryDays as day (day.dateKey)}
-							{@const monthYearKey = `${day.month}-${day.year}`}
-							{@const isFirstInMonth = !seenMonths.has(monthYearKey)}
-							{@const _ = seenMonths.add(monthYearKey)}
-							<div class="diary-day">
-								<div class="day-header">
-									<span class="day-date">{day.date}</span>
-									<span class="day-name">{day.day}</span>
-									{#if isFirstInMonth}
-										<span class="day-month-year">{day.month} {day.year}</span>
-									{/if}
+							{#if day.isFuzzy}
+								<!-- Fuzzy period entry (e.g., "Early 2022") -->
+								<div class="diary-day fuzzy-day">
+									<div class="day-header">
+										<span class="fuzzy-period">{day.fuzzyPeriod}</span>
+									</div>
+									<div class="diary-entries">
+										{#each day.entries as entry (entry.id)}
+											<div class="diary-entry">
+												<span class="diary-text">{normalizeText(entry.description)}</span>
+												{#if entry.tags.length > 0}
+													<span class="diary-tag">#{entry.tags.join(' #')}</span>
+												{/if}
+											</div>
+										{/each}
+									</div>
 								</div>
-								<div class="diary-entries">
-									{#each day.entries as entry (entry.id)}
-										<div class="diary-entry">
-											<span class="diary-text">{normalizeText(entry.description)}</span>
-											{#if entry.tags.length > 0}
-												<span class="diary-tag">#{entry.tags.join(' #')}</span>
-											{/if}
-										</div>
-									{/each}
+							{:else}
+								<!-- Precise date entry -->
+								{@const monthYearKey = `${day.month}-${day.year}`}
+								{@const isFirstInMonth = !seenMonths.has(monthYearKey)}
+								{@const _ = seenMonths.add(monthYearKey)}
+								<div class="diary-day">
+									<div class="day-header">
+										<span class="day-date">{day.date}</span>
+										<span class="day-name">{day.day}</span>
+										{#if isFirstInMonth}
+											<span class="day-month-year">{day.month} {day.year}</span>
+										{/if}
+									</div>
+									<div class="diary-entries">
+										{#each day.entries as entry (entry.id)}
+											<div class="diary-entry">
+												<span class="diary-text">{normalizeText(entry.description)}</span>
+												{#if entry.tags.length > 0}
+													<span class="diary-tag">#{entry.tags.join(' #')}</span>
+												{/if}
+											</div>
+										{/each}
+									</div>
 								</div>
-							</div>
+							{/if}
 						{/each}
 					{/if}
 				</div>
@@ -614,6 +673,11 @@
 		flex-direction: column;
 		min-height: 0;
 		overflow: hidden;
+		padding-right: 6px;
+	}
+
+	.pane:last-child {
+		padding-right: 0;
 	}
 
 	.pane-header {
@@ -817,6 +881,24 @@
 		color: hsl(var(--foreground));
 	}
 
+	.future-time {
+		color: hsl(var(--muted-foreground) / 0.7);
+		min-width: 52px;
+		font-size: var(--font-body);
+	}
+
+	.future-content {
+		display: flex;
+		flex-direction: column;
+		gap: 1px;
+	}
+
+	.future-tag {
+		font-size: var(--font-caption);
+		color: hsl(var(--foreground));
+		opacity: 0.8;
+	}
+
 	/* Todos Pane */
 	.todos-pane {
 		display: flex;
@@ -863,9 +945,30 @@
 		color: hsl(var(--muted-foreground) / 0.5);
 	}
 
-	.todo-pushed {
+	.todo-deadline {
 		font-size: var(--font-caption);
-		color: hsl(var(--muted-foreground) / 0.5);
+		color: var(--accent-color);
+		font-style: italic;
+	}
+
+	.todo-progress {
+		font-size: var(--font-caption);
+		color: var(--accent-color);
+		font-weight: var(--font-weight-medium);
+	}
+
+	.todo-child {
+		padding-left: 16px;
+		padding-right: 16px;
+	}
+
+	.todo-child .todo-text {
+		font-size: var(--font-caption);
+	}
+
+	.todo-child.completed .todo-text {
+		text-decoration: line-through;
+		opacity: 0.5;
 	}
 
 	.empty-state {
@@ -889,6 +992,12 @@
 	/* Founder Diary Pane */
 	.diary-day {
 		margin-bottom: var(--spacing-2xl);
+	}
+
+	.fuzzy-period {
+		font-size: var(--font-body);
+		color: var(--accent-color);
+		font-style: italic;
 	}
 
 	.diary-entries {

@@ -12,6 +12,7 @@ import { createLogger } from '$lib/api/logger';
 import { runCompressJob } from './compress-job';
 import { runExtractTablesJob } from './extract-tables';
 import { scheduleRetries } from './retry';
+import { triggerDailyBackupIfNeeded } from '$lib/api/backup';
 
 // Lazy-initialized client
 let supabaseServiceRole: SupabaseClient | null = null;
@@ -97,6 +98,8 @@ export function triggerBackgroundJobs(params: {
 			userId,
 			aiResponse
 		});
+		// Trigger daily backup on first message of the day
+		triggerDailyBackupIfNeeded(userId);
 	}, 0);
 }
 

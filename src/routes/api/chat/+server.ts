@@ -233,7 +233,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				} else if (isTodoTool(toolName)) {
 					return executeTodoTool(toolName, input, todoContext, todoMutations!);
 				} else if (calendarContext) {
-					return executeCalendarTool(toolName, input, calendarContext);
+					return executeCalendarTool(toolName, input, calendarContext, todoMutations);
 				} else {
 					return {
 						success: false,

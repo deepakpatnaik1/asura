@@ -23,9 +23,35 @@ const PERSONA_PROMPTS: Record<string, string> = {
 	alicja: PERSONA_ALICJA
 };
 
+/**
+ * Format current time for Alicja's prompt
+ * Human-readable with ISO for precision: "Sunday, December 7, 2025 at 3:45 PM (2025-12-07T15:45:00+01:00)"
+ */
+function formatCurrentTime(): string {
+	const now = new Date();
+	const human = now.toLocaleString('en-US', {
+		weekday: 'long',
+		year: 'numeric',
+		month: 'long',
+		day: 'numeric',
+		hour: 'numeric',
+		minute: '2-digit',
+		timeZone: 'Europe/Berlin'
+	});
+	const iso = now.toISOString();
+	return `${human} (${iso})`;
+}
+
 /** Get persona prompt by name, falls back to Gunnar if not found */
 export function getPersonaPrompt(personaName: string): string {
-	return PERSONA_PROMPTS[personaName] || PERSONA_GUNNAR;
+	let prompt = PERSONA_PROMPTS[personaName] || PERSONA_GUNNAR;
+
+	// Inject current time for Alicja
+	if (personaName === 'alicja') {
+		prompt = prompt.replace('{{CURRENT_TIME}}', formatCurrentTime());
+	}
+
+	return prompt;
 }
 
 // Chat prompts
