@@ -88,7 +88,8 @@
 							<button
 								class="action-btn hit-target"
 								class:active={isStarred}
-								style={isStarred ? `color: ${accentColor};` : ''}
+								class:filled={isStarred}
+								style={isStarred ? `color: ${accentColor}; --fill-color: ${accentColor};` : ''}
 								title={isStarred ? 'Unstar' : 'Star'}
 								onclick={onStar}
 							>
@@ -99,7 +100,8 @@
 							<button
 								class="action-btn hit-target"
 								class:active={isCopied}
-								style={isCopied ? `color: ${accentColor};` : ''}
+								class:filled={isCopied}
+								style={isCopied ? `color: ${accentColor}; --fill-color: ${accentColor};` : ''}
 								title="Copy"
 								onclick={onCopy}
 							>
@@ -236,6 +238,10 @@
 
 	.action-btn.active {
 		opacity: 1;
+	}
+
+	.action-btn.filled :global(svg) {
+		fill: var(--fill-color);
 	}
 
 	.timestamp {
