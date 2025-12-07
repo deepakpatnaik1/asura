@@ -52,19 +52,11 @@
 			style:background={debug.enabled ? debug.frameColor : 'transparent'}
 		></div>
 		<div class="footer-center">
-			<div
-				class="footer-padding-top"
-				style:background={debug.enabled ? debug.footerColor : 'transparent'}
-			></div>
 			<div class="footer-content">
 				{#if footer}
 					{@render footer()}
 				{/if}
 			</div>
-			<div
-				class="footer-padding-bottom"
-				style:background={debug.enabled ? debug.footerColor : 'transparent'}
-			></div>
 		</div>
 		<div
 			class="footer-padding-right"
@@ -119,8 +111,7 @@
 	}
 
 	.footer-content {
-		height: var(--footer-content-height);
-		flex-shrink: 0;
+		flex: 1;
 		display: flex;
 		align-items: center;
 	}

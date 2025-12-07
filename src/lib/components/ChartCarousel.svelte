@@ -188,7 +188,7 @@
 	.chart-thumbnail {
 		position: relative;
 		flex-shrink: 0;
-		height: 80px;
+		height: 68px;
 		width: auto;
 		background: hsl(var(--background));
 		border: none;

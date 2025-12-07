@@ -180,12 +180,13 @@ export async function downloadImage(imageSrc: string): Promise<Buffer> {
 }
 
 /**
- * Generate 150x150px thumbnail from image buffer
+ * Generate thumbnail from image buffer
+ * Height is 2x the display height (68px) for sharp rendering on retina displays
  */
 export async function generateThumbnail(imageBuffer: Buffer): Promise<Buffer> {
 	return await sharp(imageBuffer)
-		.resize({ height: 150 })
-		.jpeg({ quality: 80 })
+		.resize({ height: 136 })
+		.jpeg({ quality: 85 })
 		.toBuffer();
 }
 
