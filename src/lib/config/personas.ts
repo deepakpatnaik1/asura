@@ -25,8 +25,8 @@ export type ContextChunk =
 	| 'calendar' // Google Calendar events (future)
 	| 'time'; // Current timestamp (always injected, not toggleable)
 
-// Canvas types
-export type CanvasType = 'gallery' | 'calendar' | 'notes';
+// Canvas types - import from canvases.ts to avoid duplication
+import { type CanvasType, DEFAULT_CANVAS } from './canvases';
 
 // Tool names available to personas
 export type ToolName =
@@ -133,7 +133,7 @@ export const PERSONAS: Record<string, Persona> = {
 		contextChunks: GUNNAR_CHUNKS,
 		compression: true,
 		tools: [],
-		defaultCanvas: 'gallery'
+		defaultCanvas: 'carousel'
 	},
 	kirby: {
 		name: 'kirby',
@@ -144,7 +144,7 @@ export const PERSONAS: Record<string, Persona> = {
 		contextChunks: KIRBY_CHUNKS,
 		compression: true,
 		tools: [],
-		defaultCanvas: 'gallery'
+		defaultCanvas: 'carousel'
 	},
 	samara: {
 		name: 'samara',
@@ -155,7 +155,7 @@ export const PERSONAS: Record<string, Persona> = {
 		contextChunks: SAMARA_CHUNKS,
 		compression: true, // Chat turns get artisan cut (article content is separate)
 		tools: [],
-		defaultCanvas: 'gallery'
+		defaultCanvas: 'carousel'
 	},
 	alicja: {
 		name: 'alicja',
@@ -235,7 +235,7 @@ export function personaUsesCompression(name: string): boolean {
  * Get default canvas for persona
  */
 export function getPersonaDefaultCanvas(name: string): CanvasType {
-	return PERSONAS[name]?.defaultCanvas ?? 'gallery';
+	return PERSONAS[name]?.defaultCanvas ?? DEFAULT_CANVAS;
 }
 
 /**

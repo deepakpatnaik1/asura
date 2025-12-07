@@ -8,8 +8,8 @@
 	 * Available canvases: Gallery, Planner, Scratch
 	 */
 
-	import { DEFAULT_CANVAS, type CanvasType } from '$lib/config/canvases';
-	import type { Mode } from '$lib/config/modes';
+	import { type CanvasType, DEFAULT_CANVAS } from '$lib/config/canvases';
+	import { getPersonaDefaultCanvas } from '$lib/config/personas';
 	import CanvasSwitcher from './CanvasSwitcher.svelte';
 	import ChartCarousel from './ChartCarousel.svelte';
 	import CalendarCanvas from './canvases/CalendarCanvas.svelte';
@@ -24,7 +24,7 @@
 	}
 
 	interface Props {
-		mode: Mode;
+		persona: string;
 		// Gallery-specific props (passed through when Gallery canvas is active)
 		charts?: Chart[];
 		selectedChartIndex?: number | null;
@@ -36,7 +36,7 @@
 	}
 
 	let {
-		mode,
+		persona,
 		charts = [],
 		selectedChartIndex = $bindable(null),
 		showLightbox = $bindable(false),
@@ -45,21 +45,24 @@
 		calendarRefreshTrigger = 0
 	}: Props = $props();
 
+	// Get persona's default canvas
+	const personaDefaultCanvas = $derived(getPersonaDefaultCanvas(persona));
+
 	let activeCanvas = $state<CanvasType>(DEFAULT_CANVAS);
 
-	// Load active canvas from localStorage when mode changes
+	// Load active canvas from localStorage when persona changes, fallback to persona default
 	$effect(() => {
-		const stored = localStorage.getItem(`asura_canvas_${mode}`);
+		const stored = localStorage.getItem(`asura_canvas_${persona}`);
 		if (stored && ['carousel', 'calendar', 'notes'].includes(stored)) {
 			activeCanvas = stored as CanvasType;
 		} else {
-			activeCanvas = DEFAULT_CANVAS;
+			activeCanvas = personaDefaultCanvas;
 		}
 	});
 
 	function handleCanvasSelect(canvas: CanvasType) {
 		activeCanvas = canvas;
-		localStorage.setItem(`asura_canvas_${mode}`, canvas);
+		localStorage.setItem(`asura_canvas_${persona}`, canvas);
 	}
 </script>
 
@@ -81,7 +84,7 @@
 	</div>
 
 	<div class="canvas-switcher-area">
-		<CanvasSwitcher {mode} {activeCanvas} onSelect={handleCanvasSelect} />
+		<CanvasSwitcher {persona} {activeCanvas} onSelect={handleCanvasSelect} />
 	</div>
 </div>
 

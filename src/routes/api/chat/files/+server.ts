@@ -160,7 +160,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				title: title.slice(0, 255),
 				raw_content: readableContent,
 				artisan_cut: artisanCut,
-				is_enabled: false,
+				is_enabled: true, // Auto-select on paste
 				is_canon
 			})
 			.select('id, title')

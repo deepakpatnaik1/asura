@@ -768,7 +768,7 @@
 	/>
 
 	<CanvasContainer
-		mode="chat"
+		persona={selectedPersona}
 		charts={allCharts}
 		bind:selectedChartIndex
 		bind:showLightbox

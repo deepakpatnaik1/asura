@@ -9,15 +9,15 @@
 	import { Icon } from 'svelte-icons-pack';
 	import { LuLayoutGrid, LuCalendar, LuStickyNote } from 'svelte-icons-pack/lu';
 	import { CANVAS_TYPES, CANVAS_META, type CanvasType } from '$lib/config/canvases';
-	import type { Mode } from '$lib/config/modes';
+	import { getPersonaColor } from '$lib/config/personas';
 
 	interface Props {
-		mode: Mode;
+		persona: string;
 		activeCanvas: CanvasType;
 		onSelect: (canvas: CanvasType) => void;
 	}
 
-	let { mode, activeCanvas, onSelect }: Props = $props();
+	let { persona, activeCanvas, onSelect }: Props = $props();
 
 	// Map icon names to components
 	const ICON_MAP = {
@@ -30,18 +30,8 @@
 		return ICON_MAP[iconName as keyof typeof ICON_MAP] || LuLayoutGrid;
 	}
 
-	function getModeAccentVar(mode: Mode): string {
-		switch (mode) {
-			case 'chat':
-				return 'var(--boss-accent)';
-			case 'reader':
-				return 'var(--reader-accent)';
-			case 'todo':
-				return 'var(--todo-accent)';
-			default:
-				return 'var(--boss-accent)';
-		}
-	}
+	// Get accent color from persona
+	const accentColor = $derived(getPersonaColor(persona));
 </script>
 
 <div class="canvas-switcher">
@@ -51,7 +41,7 @@
 			class:active={activeCanvas === canvasType}
 			title={CANVAS_META[canvasType].label}
 			onclick={() => onSelect(canvasType)}
-			style:--active-color={getModeAccentVar(mode)}
+			style:--active-color={accentColor}
 		>
 			<Icon src={getIcon(CANVAS_META[canvasType].icon)} size="14" />
 		</button>
