@@ -376,6 +376,7 @@
 		tags: string[];
 		logged_at: string;
 		event_period?: string | null; // Fuzzy date like "Early 2022", "Summer 2023"
+		sort_date?: string | null; // YYYY-MM-DD for chronological sorting
 	}
 
 	interface DiaryDay {
@@ -416,68 +417,52 @@
 	}
 
 	function groupDiaryByDate(entries: DiaryEntry[]): DiaryDay[] {
+		// Entries arrive pre-sorted by sort_date from the API
+		// Group by display key (event_period for fuzzy, logged_at date for precise)
+		// while preserving the chronological order
 		const today = new Date();
 		const todayKey = today.toISOString().split('T')[0];
 
-		// Separate fuzzy and precise entries
-		const preciseEntries: DiaryEntry[] = [];
-		const fuzzyByPeriod = new Map<string, DiaryEntry[]>();
+		const days: DiaryDay[] = [];
+		const groupMap = new Map<string, DiaryDay>();
 
 		for (const entry of entries) {
-			if (entry.event_period) {
-				// Group by event_period
-				if (!fuzzyByPeriod.has(entry.event_period)) {
-					fuzzyByPeriod.set(entry.event_period, []);
+			const isFuzzy = !!entry.event_period;
+			const groupKey = isFuzzy ? `fuzzy:${entry.event_period}` : entry.logged_at.split('T')[0];
+
+			if (!groupMap.has(groupKey)) {
+				let day: DiaryDay;
+				if (isFuzzy) {
+					day = {
+						date: 0,
+						day: '',
+						month: '',
+						year: 0,
+						dateKey: groupKey,
+						isToday: false,
+						isFuzzy: true,
+						fuzzyPeriod: entry.event_period!,
+						entries: []
+					};
+				} else {
+					const dateKey = entry.logged_at.split('T')[0];
+					const date = new Date(dateKey + 'T12:00:00');
+					day = {
+						date: date.getDate(),
+						day: date.toLocaleDateString('en-US', { weekday: 'long' }),
+						month: date.toLocaleDateString('en-US', { month: 'long' }),
+						year: date.getFullYear(),
+						dateKey,
+						isToday: dateKey === todayKey,
+						isFuzzy: false,
+						entries: []
+					};
 				}
-				fuzzyByPeriod.get(entry.event_period)!.push(entry);
-			} else {
-				preciseEntries.push(entry);
+				groupMap.set(groupKey, day);
+				days.push(day);
 			}
-		}
 
-		// Group precise entries by date
-		const byDate = new Map<string, DiaryEntry[]>();
-		for (const entry of preciseEntries) {
-			const dateKey = entry.logged_at.split('T')[0];
-			if (!byDate.has(dateKey)) {
-				byDate.set(dateKey, []);
-			}
-			byDate.get(dateKey)!.push(entry);
-		}
-
-		const days: DiaryDay[] = [];
-
-		// Add fuzzy period groups first (they represent historical entries)
-		// Sort by the period string for rough chronological order
-		const sortedPeriods = Array.from(fuzzyByPeriod.keys()).sort();
-		for (const period of sortedPeriods) {
-			days.push({
-				date: 0,
-				day: '',
-				month: '',
-				year: 0,
-				dateKey: `fuzzy:${period}`,
-				isToday: false,
-				isFuzzy: true,
-				fuzzyPeriod: period,
-				entries: fuzzyByPeriod.get(period)!
-			});
-		}
-
-		// Add precise date groups, sorted by date ascending (oldest first)
-		const sortedDates = Array.from(byDate.keys()).sort((a, b) => a.localeCompare(b));
-		for (const dateKey of sortedDates) {
-			const date = new Date(dateKey + 'T12:00:00');
-			days.push({
-				date: date.getDate(),
-				day: date.toLocaleDateString('en-US', { weekday: 'long' }),
-				month: date.toLocaleDateString('en-US', { month: 'long' }),
-				year: date.getFullYear(),
-				dateKey,
-				isToday: dateKey === todayKey,
-				isFuzzy: false,
-				entries: byDate.get(dateKey)!
-			});
+			groupMap.get(groupKey)!.entries.push(entry);
 		}
 
 		return days;

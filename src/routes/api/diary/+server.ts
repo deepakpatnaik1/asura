@@ -19,7 +19,7 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supab
 		.from('founder_diary')
 		.select('*')
 		.eq('user_id', userId)
-		.order('logged_at', { ascending: true });
+		.order('sort_date', { ascending: true });
 
 	if (error) {
 		return json({ error: error.message }, { status: 500 });

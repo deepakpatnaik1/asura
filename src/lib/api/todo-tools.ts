@@ -142,6 +142,11 @@ export const LOG_DIARY_TOOL: Anthropic.Tool = {
 				type: 'string',
 				description:
 					'Optional fuzzy date for when the event occurred. Use when the user doesn\'t know the exact date, e.g. "Summer 2023", "Early 2022", "Q3 2021", "Sometime in 2020". This is displayed instead of the precise date when present.'
+			},
+			sort_date: {
+				type: 'string',
+				description:
+					'REQUIRED when event_period is provided. A sortable date (YYYY-MM-DD) derived from the fuzzy event_period. Use middle of period: "2019" → "2019-07-01", "Summer 2023" → "2023-07-15", "Early 2022" → "2022-02-15", "Q3 2021" → "2021-08-15", "Late 2020" → "2020-11-15".'
 			}
 		},
 		required: ['description']
@@ -242,6 +247,7 @@ export interface DiaryEntry {
 	tags: string[];
 	logged_at: string;
 	event_period?: string | null;
+	sort_date?: string | null;
 }
 
 /**
@@ -592,6 +598,10 @@ async function executeLogDiary(
 		const tags = (input.tags as string[]) || [];
 		const loggedAt = input.logged_at as string | undefined;
 		const eventPeriod = input.event_period as string | undefined;
+		const sortDate = input.sort_date as string | undefined;
+
+		// Compute sort_date: use provided value, or derive from loggedAt, or default to today
+		const computedSortDate = sortDate || (loggedAt ? loggedAt.split('T')[0] : new Date().toISOString().split('T')[0]);
 
 		const { data, error } = await supabase
 			.from('founder_diary')
@@ -601,6 +611,7 @@ async function executeLogDiary(
 				tags,
 				logged_at: loggedAt || new Date().toISOString(),
 				event_period: eventPeriod || null,
+				sort_date: computedSortDate,
 				source_message_id: sourceMessageId || null
 			})
 			.select()
@@ -613,7 +624,8 @@ async function executeLogDiary(
 			description: data.description,
 			tags: data.tags,
 			logged_at: data.logged_at,
-			event_period: data.event_period
+			event_period: data.event_period,
+			sort_date: data.sort_date
 		};
 
 		mutations.diary_entries.push(entry);
