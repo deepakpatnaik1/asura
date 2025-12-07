@@ -228,6 +228,11 @@
 		if (!PERSONAS[persona]) return;
 		selectedPersona = persona;
 
+		// Switch to planner canvas for Alicja (productivity persona)
+		if (persona === 'alicja') {
+			forceCanvas = 'calendar';
+		}
+
 		// Replace persona prefix in input
 		const displayName = PERSONAS[persona].displayName;
 		const personaPattern = new RegExp(`^(${Object.values(PERSONAS).map(p => p.displayName).join('|')}),?\\s*`, 'i');
