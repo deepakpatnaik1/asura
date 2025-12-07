@@ -25,7 +25,7 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supab
 	const enabledOnly = url.searchParams.get('enabled_only') === 'true';
 	const fileIdsParam = url.searchParams.get('file_ids');
 
-	// Build query - join to content table for chat mode files
+	// Build query - join to content table for file charts
 	let query = supabase
 		.from('charts')
 		.select(`
@@ -37,11 +37,10 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supab
 			alt_text,
 			is_pinned,
 			created_at,
-			content!inner(id, title, is_enabled, mode)
+			content!inner(id, title, is_enabled)
 		`)
 		.eq('user_id', userId)
 		.not('content_id', 'is', null)
-		.eq('content.mode', 'chat')
 		.order('is_pinned', { ascending: false })
 		.order('created_at', { ascending: false });
 

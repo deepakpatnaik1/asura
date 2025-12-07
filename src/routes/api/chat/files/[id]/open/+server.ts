@@ -39,7 +39,7 @@ export const POST: RequestHandler = async ({ params, locals: { safeGetSession, s
 	// Fetch content record
 	const { data: content, error: contentError } = await supabase
 		.from('content')
-		.select('id, title, raw_content, mode')
+		.select('id, title, raw_content')
 		.eq('id', id)
 		.eq('user_id', userId)
 		.single();
@@ -48,23 +48,20 @@ export const POST: RequestHandler = async ({ params, locals: { safeGetSession, s
 		return notFoundError('Content not found');
 	}
 
-	// Fetch user's selected persona for this mode
+	// Fetch user's selected persona
 	const { data: settings } = await supabase
 		.from('user_settings')
-		.select('selected_persona_chat, selected_persona_reader')
+		.select('selected_persona')
 		.eq('user_id', userId)
 		.single();
 
-	const persona = content.mode === 'reader'
-		? (settings?.selected_persona_reader || 'Samara')
-		: (settings?.selected_persona_chat || DEFAULT_PERSONA);
+	const persona = settings?.selected_persona || DEFAULT_PERSONA;
 
 	// Create superjournal entry
 	const { data: sjEntry, error: sjError } = await supabase
 		.from('superjournal')
 		.insert({
 			user_id: userId,
-			mode: content.mode,
 			persona_name: persona,
 			user_message: `Boss reopened ${content.title}`,
 			ai_response: `<!--content:${content.id}-->`,

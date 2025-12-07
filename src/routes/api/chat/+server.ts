@@ -285,7 +285,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 						aiResponse,
 						conversationModel,
 						persona,
-						mode,
 						contentId: content_id
 					});
 

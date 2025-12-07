@@ -1,7 +1,7 @@
 /**
  * Content Files API - List and Upload
  *
- * GET: List user's files filtered by mode (chat or reader)
+ * GET: List user's content files
  * POST: Upload and process pasted content, extract images and tables
  */
 
@@ -11,7 +11,7 @@ import { requireAuth } from '$lib/api/require-auth';
 import { parseRequestJson } from '$lib/api/parse-json';
 import { createMessage } from '$lib/api/anthropic-client';
 import { DEFAULT_CHAT_MODEL } from '$lib/config/models';
-import { DEFAULT_PERSONA, DEFAULT_READER_PERSONA } from '$lib/config/personas';
+import { DEFAULT_PERSONA } from '$lib/config/personas';
 import { FILE_ARTISAN_CUT_PROMPT } from '$lib/prompts/file-artisan-cut';
 import { databaseError, validationError, internalError } from '$lib/api/errors';
 import { createLogger } from '$lib/api/logger';
@@ -23,25 +23,18 @@ import { extractAndSaveCharts } from '$lib/capabilities/content-extraction';
 const MAX_CONTENT_SIZE = 100 * 1024;
 
 /**
- * GET /api/chat/files?mode=chat|reader
- * List user's files filtered by mode, sorted by creation date (newest first)
+ * GET /api/chat/files
+ * List user's content files, sorted by creation date (newest first)
  */
-export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supabase } }) => {
+export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase } }) => {
 	const auth = await requireAuth(safeGetSession);
 	if (!auth.success) return auth.error;
 	const { userId } = auth;
-
-	// Get mode from query param, default to 'chat' for backwards compatibility
-	const mode = url.searchParams.get('mode') || 'chat';
-	if (mode !== 'chat' && mode !== 'reader') {
-		return validationError('Mode must be "chat" or "reader"', 'mode');
-	}
 
 	const { data, error } = await supabase
 		.from('content')
 		.select('id, title, is_enabled, is_canon, created_at')
 		.eq('user_id', userId)
-		.eq('mode', mode)
 		.order('created_at', { ascending: false });
 
 	if (error) {
@@ -63,15 +56,10 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 	const log = createLogger('FilesAPI', userId);
 
 	// Parse request body
-	const parseResult = await parseRequestJson<{ content: string; persistent?: boolean; mode?: 'chat' | 'reader'; is_canon?: boolean }>(request);
+	const parseResult = await parseRequestJson<{ content: string; persistent?: boolean; persona?: string; is_canon?: boolean }>(request);
 	if (!parseResult.success) return parseResult.error;
 
-	const { content, persistent = true, mode = 'chat', is_canon = false } = parseResult.data;
-
-	// Validate mode
-	if (mode !== 'chat' && mode !== 'reader') {
-		return validationError('Mode must be "chat" or "reader"', 'mode');
-	}
+	const { content, persistent = true, persona: requestPersona, is_canon = false } = parseResult.data;
 
 	// Validate content
 	if (!content || typeof content !== 'string') {
@@ -87,19 +75,17 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 	}
 
 	try {
-		log.info('Processing file upload', { contentLength: content.length, persistent, mode });
+		log.info('Processing file upload', { contentLength: content.length, persistent });
 
-		// Fetch user settings (chat model for artisan cut + persona based on mode)
+		// Fetch user settings (default model + persona)
 		const { data: settings } = await supabase
 			.from('user_settings')
-			.select('selected_chat_model, selected_persona_chat, selected_persona_reader')
+			.select('default_model, selected_persona')
 			.eq('user_id', userId)
 			.single();
 
-		const model = settings?.selected_chat_model || DEFAULT_CHAT_MODEL;
-		const persona = mode === 'reader'
-			? (settings?.selected_persona_reader || DEFAULT_READER_PERSONA)
-			: (settings?.selected_persona_chat || DEFAULT_PERSONA);
+		const model = settings?.default_model || DEFAULT_CHAT_MODEL;
+		const persona = requestPersona || settings?.selected_persona || DEFAULT_PERSONA;
 
 		// Generate readable content (strip images/tables) - always needed for display
 		const readableContent = await htmlToPlainText(content);
@@ -156,7 +142,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			.from('content')
 			.insert({
 				user_id: userId,
-				mode,
 				title: title.slice(0, 255),
 				raw_content: readableContent,
 				artisan_cut: artisanCut,
@@ -177,12 +162,11 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			.from('superjournal')
 			.insert({
 				user_id: userId,
-				mode,
 				persona_name: persona,
 				user_message: `Boss uploaded ${file.title}`,
 				ai_response: `<!--content:${file.id}-->`,
 				model_identifier: 'file-upload',
-				content_id: file.id // Link superjournal entry to content for reader mode filtering
+				content_id: file.id // Link superjournal entry to content
 			})
 			.select('id')
 			.single();

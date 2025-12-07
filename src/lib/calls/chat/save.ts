@@ -9,7 +9,6 @@ import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
 import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { createLogger } from '$lib/api/logger';
-import type { Mode } from '$lib/config/modes';
 import { runCompressJob } from './compress-job';
 import { runExtractTablesJob } from './extract-tables';
 import { scheduleRetries } from './retry';
@@ -30,8 +29,7 @@ export interface SaveConversationParams {
 	aiResponse: string;
 	conversationModel: string;
 	persona: string;
-	mode?: Mode;
-	contentId?: string; // article ID for reader mode
+	contentId?: string; // article ID for content-based conversations
 }
 
 /**
@@ -39,7 +37,7 @@ export interface SaveConversationParams {
  * Does NOT trigger background jobs - caller must do that separately.
  */
 export async function saveToSuperjournal(params: SaveConversationParams): Promise<string | null> {
-	const { userId, message, aiResponse, conversationModel, persona, mode = 'chat', contentId } = params;
+	const { userId, message, aiResponse, conversationModel, persona, contentId } = params;
 	const log = createLogger('ChatSave', userId);
 	const supabase = getSupabaseServiceRole();
 
@@ -48,12 +46,11 @@ export async function saveToSuperjournal(params: SaveConversationParams): Promis
 		persona_name: persona,
 		user_message: message,
 		ai_response: aiResponse,
-		model_identifier: conversationModel,
-		mode
+		model_identifier: conversationModel
 	};
 
-	// Only include content_id for reader mode
-	if (mode === 'reader' && contentId) {
+	// Include content_id when conversation is about specific content
+	if (contentId) {
 		insertData.content_id = contentId;
 	}
 
@@ -70,7 +67,7 @@ export async function saveToSuperjournal(params: SaveConversationParams): Promis
 
 	const superjournalId = superjournalData?.id || null;
 	if (superjournalId) {
-		log.info('Saved to superjournal', { superjournalId, mode });
+		log.info('Saved to superjournal', { superjournalId });
 	}
 	return superjournalId;
 }

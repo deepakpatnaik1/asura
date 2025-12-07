@@ -2,6 +2,41 @@ import { getPersonaAccentColor, getPersonaAccentBg } from '$lib/config/colors';
 import { DEFAULT_PERSONA } from '$lib/config/personas';
 
 /**
+ * Render a markdown pipe table as HTML
+ */
+function renderTable(tableMatch: string, accent: string): string {
+	const lines = tableMatch.trim().split('\n');
+	if (lines.length < 2) return tableMatch;
+
+	// Parse header row
+	const headerLine = lines[0];
+	const headers = headerLine.split('|').slice(1, -1).map(h => h.trim());
+
+	// Skip separator row (line 1), parse data rows
+	const dataRows = lines.slice(2).map(line =>
+		line.split('|').slice(1, -1).map(cell => cell.trim())
+	);
+
+	// Build HTML table with horizontal scroll wrapper
+	const headerCells = headers.map(h =>
+		`<th style="padding: 6px 10px; text-align: left; white-space: nowrap; color: ${accent}; border-bottom: 1px solid ${accent};">${h}</th>`
+	).join('');
+
+	const bodyRows = dataRows.map(row =>
+		`<tr>${row.map(cell =>
+			`<td style="padding: 6px 10px; white-space: nowrap; border-bottom: 1px solid rgba(255,255,255,0.1);">${cell}</td>`
+		).join('')}</tr>`
+	).join('');
+
+	return `<div style="overflow-x: auto; margin: 0.5em 0;">
+		<table style="border-collapse: collapse; font-size: 0.9em; min-width: 100%;">
+			<thead><tr>${headerCells}</tr></thead>
+			<tbody>${bodyRows}</tbody>
+		</table>
+	</div>`;
+}
+
+/**
  * EXPERIMENT: Raw output with selective formatting
  */
 export async function renderMarkdown(markdown: string, persona: string = DEFAULT_PERSONA): Promise<string> {
@@ -10,6 +45,16 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 
 	// Strip content markers (<!--content:uuid-->) used for lazy loading
 	let processed = markdown.replace(/<!--content:[a-f0-9-]+-->\n?/gi, '');
+
+	// Render markdown tables with placeholders (protect from escaping)
+	const tables: string[] = [];
+	const tableRegex = /^(\|[^\n]+\|)\s*\n(\|[-:\s|]+\|)\s*\n((?:\|[^\n]+\|[ \t]*\n?)+)/gm;
+	processed = processed.replace(tableRegex, (match) => {
+		const placeholder = `__TABLE_${tables.length}__`;
+		tables.push(renderTable(match, ACCENT));
+		// Ensure newline after placeholder so next line starts fresh
+		return placeholder + '\n';
+	});
 
 	// Em dash (—) → en dash (–) with single space each side
 	processed = processed.replace(/\s*—\s*/g, ' – ');
@@ -108,7 +153,8 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 		// Markdown headers (# ## ###) → accent colored, sized by level
 		// H4-H6 are ignored (not rendered as headers)
 		// With margin annotation (h1, h2, h3) that's visible but not selectable
-		const headerMatch = line.match(/^(#{1,3})\s+(.+)$/);
+		// Allow leading whitespace (common after tables in markdown)
+		const headerMatch = line.match(/^\s*(#{1,3})\s+(.+)$/);
 		if (headerMatch) {
 			const level = headerMatch[1].length;
 			const content = headerMatch[2]
@@ -242,8 +288,39 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 		results.push(escaped);
 	}
 
+	// Collapse consecutive empty lines and remove empty lines before tables
+	const collapsed: string[] = [];
+	let lastWasEmpty = false;
+	for (let i = 0; i < results.length; i++) {
+		const r = results[i];
+		const isTable = r.startsWith('__TABLE_');
+		const isEmpty = r.trim() === '';
+
+		if (isTable) {
+			// Remove preceding empty line before table (tighten spacing)
+			if (collapsed.length > 0 && collapsed[collapsed.length - 1].trim() === '') {
+				collapsed.pop();
+			}
+			collapsed.push(r);
+			lastWasEmpty = false;
+		} else if (isEmpty) {
+			if (!lastWasEmpty) {
+				collapsed.push(r);
+			}
+			lastWasEmpty = true;
+		} else {
+			collapsed.push(r);
+			lastWasEmpty = false;
+		}
+	}
+
 	// Wrap each line in a div for consistent line spacing
-	processed = results.map(r => `<div style="min-height: 1.6em;">${r}</div>`).join('');
+	processed = collapsed.map(r => `<div style="min-height: 1.6em;">${r}</div>`).join('');
+
+	// Restore table HTML from placeholders
+	for (let i = 0; i < tables.length; i++) {
+		processed = processed.replace(`__TABLE_${i}__`, tables[i]);
+	}
 
 	return `<div style="white-space: pre-wrap; font-family: inherit; margin: 0;">${processed}</div>`;
 }
