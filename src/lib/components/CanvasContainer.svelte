@@ -77,7 +77,7 @@
 				{onDelete}
 			/>
 		{:else if activeCanvas === 'calendar'}
-			<CalendarCanvas refreshTrigger={calendarRefreshTrigger} />
+			<CalendarCanvas {persona} refreshTrigger={calendarRefreshTrigger} />
 		{:else if activeCanvas === 'notes'}
 			<NotesCanvas />
 		{/if}

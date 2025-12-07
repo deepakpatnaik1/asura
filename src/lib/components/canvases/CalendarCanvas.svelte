@@ -11,12 +11,17 @@
 	import CanvasFrame from '$lib/components/CanvasFrame.svelte';
 	import { Icon } from 'svelte-icons-pack';
 	import { LuRefreshCw } from 'svelte-icons-pack/lu';
+	import { getPersonaAccentColor } from '$lib/config/colors';
 
 	interface Props {
+		persona: string;
 		refreshTrigger?: number; // Increment to trigger refresh
 	}
 
-	let { refreshTrigger = 0 }: Props = $props();
+	let { persona, refreshTrigger = 0 }: Props = $props();
+
+	// Get accent color for static UI elements
+	const accentColor = $derived(getPersonaAccentColor(persona));
 
 	// Refresh when trigger changes
 	$effect(() => {
@@ -443,7 +448,7 @@
 
 <CanvasFrame>
 	{#snippet content()}
-		<div class="productivity-canvas">
+		<div class="productivity-canvas" style="--accent-color: {accentColor}">
 			<!-- Calendar Pane -->
 			<div class="pane calendar-pane">
 				<div class="pane-header">
@@ -624,7 +629,7 @@
 	.calendar-pane .pane-header,
 	.todos-pane .pane-header,
 	.done-pane .pane-header {
-		color: hsl(var(--foreground));
+		color: var(--accent-color);
 	}
 
 	.pane-header .count {
@@ -663,8 +668,8 @@
 	}
 
 	.connect-button {
-		color: hsl(var(--foreground));
-		border: 1px solid hsl(var(--foreground));
+		color: var(--accent-color);
+		border: 1px solid var(--accent-color);
 	}
 
 	.disconnect-button {
@@ -713,23 +718,23 @@
 	.day-date {
 		font-size: var(--font-display);
 		font-weight: var(--font-weight-semibold);
-		color: hsl(var(--foreground));
+		color: var(--accent-color);
 		line-height: 1;
 	}
 
 	.calendar-pane .day-name {
 		font-size: var(--font-body);
-		color: hsl(var(--foreground));
+		color: var(--accent-color);
 	}
 
 	.done-pane .day-name {
 		font-size: var(--font-body);
-		color: hsl(var(--foreground));
+		color: var(--accent-color);
 	}
 
 	.done-pane .day-month-year {
 		font-size: var(--font-body);
-		color: hsl(var(--foreground));
+		color: var(--accent-color);
 	}
 
 	.event {
@@ -781,12 +786,12 @@
 
 	.month-name {
 		font-size: var(--font-body);
-		color: hsl(var(--foreground));
+		color: var(--accent-color);
 	}
 
 	.month-range {
 		font-size: var(--font-body);
-		color: hsl(var(--foreground));
+		color: var(--accent-color);
 	}
 
 	.month-events {
@@ -803,7 +808,7 @@
 	}
 
 	.future-date {
-		color: hsl(var(--foreground));
+		color: var(--accent-color);
 		font-weight: var(--font-weight-medium);
 		min-width: 18px;
 	}
