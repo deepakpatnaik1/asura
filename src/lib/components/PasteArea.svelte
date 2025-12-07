@@ -15,8 +15,8 @@
 
 	let { onClose, onSuccess, mode = 'chat' }: Props = $props();
 
-	// Reader mode defaults to ephemeral, chat mode defaults to persistent
-	let isPersistent = $state(mode === 'chat');
+	// Default to ephemeral (user can toggle to persistent)
+	let isPersistent = $state(false);
 	let isCanon = $state(false); // Canon = shared knowledge across all modes
 	let isProcessing = $state(false);
 	let processingStatus = $state('');

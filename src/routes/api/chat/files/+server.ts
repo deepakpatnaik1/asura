@@ -59,7 +59,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 	const parseResult = await parseRequestJson<{ content: string; persistent?: boolean; persona?: string; is_canon?: boolean }>(request);
 	if (!parseResult.success) return parseResult.error;
 
-	const { content, persistent = true, persona: requestPersona, is_canon = false } = parseResult.data;
+	const { content, persistent = false, persona: requestPersona, is_canon = false } = parseResult.data;
 
 	// Validate content
 	if (!content || typeof content !== 'string') {

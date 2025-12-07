@@ -1,4 +1,4 @@
-import { getPersonaAccentColor, getPersonaAccentBg } from '$lib/config/colors';
+import { getPersonaAccentColor, getPersonaAccentBg, CODE_BLOCK_BG, TABLE_BORDER } from '$lib/config/colors';
 import { DEFAULT_PERSONA } from '$lib/config/personas';
 
 /**
@@ -24,11 +24,11 @@ function renderTable(tableMatch: string, accent: string): string {
 
 	const bodyRows = dataRows.map(row =>
 		`<tr>${row.map(cell =>
-			`<td style="padding: 6px 10px; white-space: nowrap; border-bottom: 1px solid rgba(255,255,255,0.1);">${cell}</td>`
+			`<td style="padding: 6px 10px; white-space: nowrap; border-bottom: 1px solid ${TABLE_BORDER};">${cell}</td>`
 		).join('')}</tr>`
 	).join('');
 
-	return `<div style="overflow-x: auto; margin: 0.5em 0;">
+	return `<div style="overflow-x: auto;">
 		<table style="border-collapse: collapse; font-size: 0.9em; min-width: 100%;">
 			<thead><tr>${headerCells}</tr></thead>
 			<tbody>${bodyRows}</tbody>
@@ -46,6 +46,20 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 	// Strip content markers (<!--content:uuid-->) used for lazy loading
 	let processed = markdown.replace(/<!--content:[a-f0-9-]+-->\n?/gi, '');
 
+	// Render fenced code blocks with placeholders (protect from escaping)
+	const codeBlocks: string[] = [];
+	const codeBlockRegex = /^```(\w*)\n([\s\S]*?)^```$/gm;
+	processed = processed.replace(codeBlockRegex, (match, lang, code) => {
+		const placeholder = `__CODE_${codeBlocks.length}__`;
+		const escapedCode = code
+			.replace(/&/g, '&amp;')
+			.replace(/</g, '&lt;')
+			.replace(/>/g, '&gt;');
+		const langLabel = lang ? `<span style="position: absolute; top: 4px; right: 8px; font-size: 0.7em; opacity: 0.4; text-transform: uppercase;">${lang}</span>` : '';
+		codeBlocks.push(`<div style="position: relative; background: ${CODE_BLOCK_BG}; border-radius: 6px; padding: 12px; margin: 0.5em 0; overflow-x: auto;">${langLabel}<pre style="margin: 0; font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace; font-size: 0.85em; line-height: 1.5; white-space: pre-wrap; word-break: break-word;"><code>${escapedCode}</code></pre></div>`);
+		return placeholder + '\n';
+	});
+
 	// Render markdown tables with placeholders (protect from escaping)
 	const tables: string[] = [];
 	const tableRegex = /^(\|[^\n]+\|)\s*\n(\|[-:\s|]+\|)\s*\n((?:\|[^\n]+\|[ \t]*\n?)+)/gm;
@@ -53,6 +67,45 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 		const placeholder = `__TABLE_${tables.length}__`;
 		tables.push(renderTable(match, ACCENT));
 		// Ensure newline after placeholder so next line starts fresh
+		return placeholder + '\n';
+	});
+
+	// Render block quotes with placeholders (consecutive > lines grouped together)
+	const blockQuotes: string[] = [];
+	const blockQuoteRegex = /^((?:>[ >]*[^\n]*\n?)+)/gm;
+	processed = processed.replace(blockQuoteRegex, (match) => {
+		// Parse the block quote, handling nesting
+		const lines = match.trim().split('\n');
+		const processedLines: string[] = [];
+
+		for (const line of lines) {
+			// Count nesting level (number of > at start, with optional spaces between)
+			// e.g., "> > text" has nest level 2, "> text" has nest level 1
+			const prefixMatch = line.match(/^((?:>\s*)+)/);
+			const nestLevel = prefixMatch ? (prefixMatch[1].match(/>/g) || []).length : 0;
+			const content = line.replace(/^(?:>\s*)+/, '').trim();
+
+			if (content) {
+				// Escape HTML
+				const escaped = content
+					.replace(/&/g, '&amp;')
+					.replace(/</g, '&lt;')
+					.replace(/>/g, '&gt;');
+				// Apply inline formatting
+				let formatted = escaped.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+				formatted = formatted.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
+				formatted = formatted.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;">$1</code>`);
+				formatted = formatted.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${ACCENT}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
+				formatted = formatted.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">$1</a>`);
+
+				// Indent nested quotes
+				const indent = nestLevel > 1 ? `margin-left: ${(nestLevel - 1) * 1.5}em;` : '';
+				processedLines.push(`<div style="${indent}">${formatted}</div>`);
+			}
+		}
+
+		const placeholder = `__QUOTE_${blockQuotes.length}__`;
+		blockQuotes.push(`<div style="border-left: 3px solid ${ACCENT}; padding-left: 1em; margin: 0.5em 0; opacity: 0.9; font-style: italic;">${processedLines.join('')}</div>`);
 		return placeholder + '\n';
 	});
 
@@ -113,8 +166,11 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 				.replace(/&/g, '&amp;')
 				.replace(/</g, '&lt;')
 				.replace(/>/g, '&gt;');
-			rest = rest.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-			rest = rest.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+			rest = rest.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
+			rest = rest.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;">$1</code>`);
+			rest = rest.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${ACCENT}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
+			rest = rest.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">$1</a>`);
 			listIndent = num.length + 2; // "1. " = number + ". "
 			results.push(`<span style="display: flex; margin-left: 1.5em;"><span style="color: ${ACCENT}; font-weight: bold; flex-shrink: 0; margin-right: 0.5em;">${num}.</span><span><strong style="color: ${ACCENT};">${boldText}</strong>${rest}</span></span>`);
 			continue;
@@ -131,8 +187,11 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 				.replace(/&/g, '&amp;')
 				.replace(/</g, '&lt;')
 				.replace(/>/g, '&gt;');
-			rest = rest.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-			rest = rest.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+			rest = rest.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
+			rest = rest.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;">$1</code>`);
+			rest = rest.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${ACCENT}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
+			rest = rest.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">$1</a>`);
 			listIndent = 2; // "- " = 2 chars
 			results.push(`<span style="display: flex; margin-left: 1.5em;"><span style="color: ${ACCENT}; flex-shrink: 0; margin-right: 0.5em;">◦</span><span><strong style="color: ${ACCENT};">${boldText}</strong>${rest}</span></span>`);
 			continue;
@@ -167,7 +226,8 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 			const label = `h${level}`;
 			listIndent = 0;
 			// Position relative container with absolute-positioned label outside text flow
-			results.push(`<span style="position: relative; display: flex; align-items: center;"><span style="position: absolute; left: -2.5em; font-size: 0.7em; opacity: 0.3; user-select: none; pointer-events: none;">${label}</span><strong style="color: ${ACCENT}; font-size: ${fontSize};">${content}</strong></span>`);
+			// Add top margin for visual separation from preceding content
+			results.push(`<span style="position: relative; display: flex; align-items: center; margin-top: 0.5em;"><span style="position: absolute; left: -2.5em; font-size: 0.7em; opacity: 0.3; user-select: none; pointer-events: none;">${label}</span><strong style="color: ${ACCENT}; font-size: ${fontSize};">${content}</strong></span>`);
 			continue;
 		}
 
@@ -187,8 +247,11 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 				.replace(/&/g, '&amp;')
 				.replace(/</g, '&lt;')
 				.replace(/>/g, '&gt;');
-			rest = rest.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-			rest = rest.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+			rest = rest.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
+			rest = rest.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;">$1</code>`);
+			rest = rest.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${ACCENT}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
+			rest = rest.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">$1</a>`);
 			listIndent = indent.length + 2; // existing indent + "- "
 			results.push(`<span style="display: flex; margin-left: 3em;"><span style="color: ${ACCENT}; flex-shrink: 0; margin-right: 0.5em;">◦</span><span>${rest}</span></span>`);
 			continue;
@@ -203,8 +266,11 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 				.replace(/&/g, '&amp;')
 				.replace(/</g, '&lt;')
 				.replace(/>/g, '&gt;');
-			rest = rest.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-			rest = rest.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+			rest = rest.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
+			rest = rest.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;">$1</code>`);
+			rest = rest.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${ACCENT}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
+			rest = rest.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">$1</a>`);
 			listIndent = indent.length + num.length + 2; // existing indent + number + ". "
 			results.push(`<span style="display: flex; margin-left: 3em;"><span style="color: ${ACCENT}; flex-shrink: 0; margin-right: 0.5em;">${num}.</span><span>${rest}</span></span>`);
 			continue;
@@ -217,8 +283,11 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 				.replace(/&/g, '&amp;')
 				.replace(/</g, '&lt;')
 				.replace(/>/g, '&gt;');
-			rest = rest.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-			rest = rest.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+			rest = rest.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
+			rest = rest.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;">$1</code>`);
+			rest = rest.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${ACCENT}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
+			rest = rest.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">$1</a>`);
 			listIndent = 2; // "- " = 2 chars
 			results.push(`<span style="display: flex; margin-left: 1.5em;"><span style="color: ${ACCENT}; font-weight: bold; flex-shrink: 0; margin-right: 0.5em;">◦</span><span>${rest}</span></span>`);
 			continue;
@@ -232,8 +301,11 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 				.replace(/&/g, '&amp;')
 				.replace(/</g, '&lt;')
 				.replace(/>/g, '&gt;');
-			rest = rest.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-			rest = rest.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+			rest = rest.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
+			rest = rest.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;">$1</code>`);
+			rest = rest.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${ACCENT}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
+			rest = rest.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">$1</a>`);
 			listIndent = num.length + 2; // number + ". "
 			results.push(`<span style="display: flex; margin-left: 1.5em;"><span style="color: ${ACCENT}; font-weight: bold; flex-shrink: 0; margin-right: 0.5em;">${num}.</span><span>${rest}</span></span>`);
 			continue;
@@ -250,9 +322,12 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 				.replace(/&/g, '&amp;')
 				.replace(/</g, '&lt;')
 				.replace(/>/g, '&gt;');
-			// Handle inline bold/italic in the rest
-			rest = rest.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-			rest = rest.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+			// Handle inline formatting in the rest (bold first, then italic with lookbehind)
+			rest = rest.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
+			rest = rest.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;">$1</code>`);
+			rest = rest.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${ACCENT}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
+			rest = rest.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">$1</a>`);
 			listIndent = 0;
 			results.push(`<strong style="color: ${ACCENT};">${boldText}</strong>${rest}`);
 			continue;
@@ -272,10 +347,17 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 			.replace(/&/g, '&amp;')
 			.replace(/</g, '&lt;')
 			.replace(/>/g, '&gt;');
-		// Inline bold → just bold (must come before italic)
-		escaped = escaped.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-		// Inline italic → just italic
-		escaped = escaped.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+		// Bold first (non-greedy to handle nested italic), then italic
+		// Bold uses (.+?) to allow asterisks inside (for nested *italic*)
+		escaped = escaped.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+		// Italic uses (?<!\*) negative lookbehind to avoid matching ** as *
+		escaped = escaped.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
+		// Inline code with backticks
+		escaped = escaped.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;">$1</code>`);
+		// Images ![alt](url) → inline image
+		escaped = escaped.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${ACCENT}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
+		// Links [text](url) → pill badge style like tool calls
+		escaped = escaped.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">$1</a>`);
 
 		// If this is a continuation line (non-empty, after a list item), indent it
 		if (listIndent > 0 && escaped.trim() !== '') {
@@ -302,7 +384,7 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 				collapsed.pop();
 			}
 			collapsed.push(r);
-			lastWasEmpty = false;
+			lastWasEmpty = true; // Treat table as "empty" so following empty line is skipped
 		} else if (isEmpty) {
 			if (!lastWasEmpty) {
 				collapsed.push(r);
@@ -314,12 +396,27 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 		}
 	}
 
-	// Wrap each line in a div for consistent line spacing
-	processed = collapsed.map(r => `<div style="min-height: 1.6em;">${r}</div>`).join('');
+	// Wrap each line in a div for consistent line spacing (skip block elements - they handle their own spacing)
+	processed = collapsed.map(r => {
+		if (r.startsWith('__TABLE_') || r.startsWith('__CODE_') || r.startsWith('__QUOTE_')) {
+			return r; // Block elements handle their own spacing
+		}
+		return `<div style="min-height: 1.6em;">${r}</div>`;
+	}).join('');
+
+	// Restore code block HTML from placeholders
+	for (let i = 0; i < codeBlocks.length; i++) {
+		processed = processed.replace(`__CODE_${i}__`, codeBlocks[i]);
+	}
 
 	// Restore table HTML from placeholders
 	for (let i = 0; i < tables.length; i++) {
 		processed = processed.replace(`__TABLE_${i}__`, tables[i]);
+	}
+
+	// Restore block quote HTML from placeholders
+	for (let i = 0; i < blockQuotes.length; i++) {
+		processed = processed.replace(`__QUOTE_${i}__`, blockQuotes[i]);
 	}
 
 	return `<div style="white-space: pre-wrap; font-family: inherit; margin: 0;">${processed}</div>`;

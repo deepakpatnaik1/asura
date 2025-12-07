@@ -8,6 +8,8 @@ import { getPersonaColor as getPersonaColorFromConfig } from '$lib/config/person
 
 // Shared colors
 export const DIVIDER_COLOR = 'rgb(156, 163, 175)';
+export const CODE_BLOCK_BG = 'rgba(0, 0, 0, 0.3)';
+export const TABLE_BORDER = 'rgba(255, 255, 255, 0.1)';
 
 /**
  * Get accent color for a persona
