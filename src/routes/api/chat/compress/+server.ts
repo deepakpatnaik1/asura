@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { VoyageAIClient } from 'voyageai';
 import { VOYAGE_API_KEY } from '$env/static/private';
-import { DEFAULT_CHAT_MODEL, EMBEDDING_MODEL } from '$lib/config/models';
+import { DEFAULT_MODEL, EMBEDDING_MODEL } from '$lib/config/models';
 import { getModelParams } from '$lib/config/model-params';
 import { compress } from '$lib/calls';
 import { requireAuth } from '$lib/api/require-auth';
@@ -59,11 +59,11 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 	try {
 		const { data: settings } = await supabase
 			.from('user_settings')
-			.select('selected_chat_model')
+			.select('default_model')
 			.eq('user_id', auth.userId)
 			.single();
 
-		const compressionModel = settings?.selected_chat_model || DEFAULT_CHAT_MODEL;
+		const compressionModel = settings?.default_model || DEFAULT_MODEL;
 		const compressionParams = await getModelParams(compressionModel, 'compression');
 
 		const compressionJson = await compress({

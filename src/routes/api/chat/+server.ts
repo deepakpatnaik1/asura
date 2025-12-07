@@ -8,9 +8,9 @@
 import type { RequestHandler } from './$types';
 import type Anthropic from '@anthropic-ai/sdk';
 import { buildContext } from '$lib/context-builder';
-import { DEFAULT_CHAT_MODEL, DEFAULT_READER_MODEL, DEFAULT_WORK_MODEL } from '$lib/config/models';
+import { DEFAULT_MODEL } from '$lib/config/models';
 import { getModelParams } from '$lib/config/model-params';
-import { DEFAULT_PERSONA, DEFAULT_READER_PERSONA, DEFAULT_TODO_PERSONA, getPersonaTools } from '$lib/config/personas';
+import { DEFAULT_PERSONA, getPersonaTools } from '$lib/config/personas';
 import { getPersonaPrompt } from '$lib/prompts';
 import {
 	converseStream,
@@ -74,29 +74,26 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		const validation = validateSchema(chatMessageSchema, parseResult.data);
 		if (!validation.success) return validation.error;
 
-		const { message, persona: requestPersona, chart_id, chart_source, mode = 'chat', content_id } = validation.data;
+		const { message, persona: requestPersona, chart_id, chart_source, content_id } = validation.data;
 
-		// 4. Load user settings
+		// 4. Load user settings (persona and model)
 		const { data: settings } = await supabase
 			.from('user_settings')
-			.select('selected_chat_model, selected_reader_model, selected_work_model, selected_persona_chat, selected_persona_reader, selected_persona_todo')
+			.select('selected_persona, default_model')
 			.eq('user_id', userId)
 			.single();
 
-		// Select model and persona based on mode
-		let conversationModel: string;
-		let selectedPersona: string;
-		if (mode === 'reader') {
-			conversationModel = settings?.selected_reader_model || DEFAULT_READER_MODEL;
-			selectedPersona = settings?.selected_persona_reader || DEFAULT_READER_PERSONA;
-		} else if (mode === 'todo') {
-			conversationModel = settings?.selected_work_model || DEFAULT_WORK_MODEL;
-			selectedPersona = settings?.selected_persona_todo || DEFAULT_TODO_PERSONA;
-		} else {
-			conversationModel = settings?.selected_chat_model || DEFAULT_CHAT_MODEL;
-			selectedPersona = settings?.selected_persona_chat || DEFAULT_PERSONA;
-		}
-		const persona = requestPersona || selectedPersona;
+		const persona = requestPersona || settings?.selected_persona || DEFAULT_PERSONA;
+
+		// Check for per-persona model override
+		const { data: modelOverride } = await supabase
+			.from('model_overrides')
+			.select('model')
+			.eq('user_id', userId)
+			.eq('persona', persona)
+			.single();
+
+		const conversationModel = modelOverride?.model || settings?.default_model || DEFAULT_MODEL;
 
 		// 5. Fetch chart image if referenced
 		let chartImage: ChartImageData | null = null;

@@ -1,6 +1,5 @@
 import { writable } from 'svelte/store';
 import { fetchWithTimeout } from '$lib/utils/fetch-with-retry';
-import type { Mode } from '$lib/config/modes';
 
 interface Message {
 	id: string;
@@ -25,8 +24,7 @@ export async function sendMessage(
 	persona?: string,
 	chartId?: string,
 	chartSource?: 'file' | 'superjournal',
-	mode: Mode = 'chat',
-	contentId?: string // active content for reader mode
+	contentId?: string // active content for context injection
 ): Promise<void> {
 	// Create new abort controller for this request
 	currentAbortController = new AbortController();
@@ -50,8 +48,8 @@ export async function sendMessage(
 	isLoading.set(true);
 
 	try {
-		// Build request body with optional chart reference and mode
-		const body: Record<string, unknown> = { message: userMessage, persona, mode };
+		// Build request body with optional chart reference
+		const body: Record<string, unknown> = { message: userMessage, persona };
 		if (chartId && chartSource) {
 			body.chart_id = chartId;
 			body.chart_source = chartSource;

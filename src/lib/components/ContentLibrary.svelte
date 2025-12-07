@@ -1,20 +1,15 @@
 <script lang="ts">
 	/**
-	 * ContentLibrary - Unified dropdown for files (chat) and articles (reader)
+	 * ContentLibrary - Dropdown for managing pasted files/articles
 	 *
-	 * Chat mode:
+	 * Unified content library:
 	 * - Checkbox toggle for context injection (multi-select)
 	 * - Files can be enabled/disabled independently
-	 *
-	 * Reader mode:
-	 * - Radio button behavior (single select)
-	 * - Clicking row selects that article as active content
-	 * - Only one article can be active at a time
+	 * - Canon files are always injected (no toggle)
 	 */
 	import { tick } from 'svelte';
 	import { Icon } from 'svelte-icons-pack';
-	import { LuTrash2, LuCheck, LuCircle } from 'svelte-icons-pack/lu';
-	import type { Mode } from '$lib/config/modes';
+	import { LuTrash2, LuCheck } from 'svelte-icons-pack/lu';
 
 	interface ContentItem {
 		id: string;
@@ -25,36 +20,18 @@
 	}
 
 	interface Props {
-		mode: Mode;
 		items: ContentItem[];
-		currentItemId: string | null;
 		isDeleting: boolean;
 		onToggle?: (itemId: string, currentState: boolean) => void;
-		onSelect?: (itemId: string) => void;
 		onRename?: (itemId: string, newTitle: string) => void;
 		onDelete: (itemId: string, event: MouseEvent) => void;
 		onClear?: () => void;
 	}
 
-	let { mode, items, currentItemId, isDeleting, onToggle, onSelect, onRename, onDelete, onClear }: Props = $props();
+	let { items, isDeleting, onToggle, onRename, onDelete, onClear }: Props = $props();
 
-	// Check if there's anything to clear (reactive)
-	const hasSelection = $derived(
-		mode === 'reader'
-			? currentItemId !== null
-			: items.some(item => item.is_enabled)
-	);
-
-	const accentVar = mode === 'chat' ? 'var(--boss-accent)' : 'var(--reader-accent)';
-	const emptyText = mode === 'chat' ? 'No files yet' : 'No articles yet';
-
-	// Check if item is selected (different logic per mode)
-	function isItemActive(item: ContentItem): boolean {
-		if (mode === 'reader') {
-			return item.id === currentItemId;
-		}
-		return item.is_enabled ?? false;
-	}
+	// Check if there's anything to clear (any enabled items)
+	const hasSelection = $derived(items.some(item => item.is_enabled));
 
 	// Editing state
 	let editingId = $state<string | null>(null);
@@ -71,16 +48,8 @@
 
 	function handleToggleClick(item: ContentItem, event: MouseEvent) {
 		event.stopPropagation();
-		if (mode === 'reader') {
-			// Reader mode: radio behavior - select this item
-			if (onSelect) {
-				onSelect(item.id);
-			}
-		} else {
-			// Chat mode: checkbox behavior - toggle enabled state
-			if (onToggle) {
-				onToggle(item.id, item.is_enabled ?? false);
-			}
+		if (onToggle) {
+			onToggle(item.id, item.is_enabled ?? false);
 		}
 	}
 
@@ -114,18 +83,11 @@
 		editingId = null;
 		editingTitle = '';
 	}
-
-	function handleRowClick(item: ContentItem) {
-		// In reader mode, clicking the row (outside title) selects the article
-		if (mode === 'reader' && onSelect) {
-			onSelect(item.id);
-		}
-	}
 </script>
 
-<div class="content-library-dropdown" style="--accent: {accentVar}">
+<div class="content-library-dropdown">
 	{#if items.length === 0}
-		<div class="dropdown-empty">{emptyText}</div>
+		<div class="dropdown-empty">No files yet</div>
 	{:else}
 		{#if onClear && hasSelection}
 			<button class="clear-btn" onclick={onClear}>
@@ -135,24 +97,13 @@
 		{#each items as item}
 			<div
 				class="content-item"
-				class:active={isItemActive(item)}
-				onclick={() => handleRowClick(item)}
+				class:active={item.is_enabled}
 			>
 				{#if item.is_canon}
 					<!-- Canon: no toggle, always injected -->
 					<span class="canon-spacer"></span>
-				{:else if mode === 'reader'}
-					<!-- Reader mode: Radio button (single select) -->
-					<button
-						class="radio-btn"
-						class:active={item.id === currentItemId}
-						onclick={(e) => handleToggleClick(item, e)}
-						title="Select this article"
-					>
-						<span class="radio-dot"></span>
-					</button>
 				{:else}
-					<!-- Chat mode: Checkbox (multi-select toggle) -->
+					<!-- Checkbox for context injection toggle -->
 					<button
 						class="toggle-btn"
 						class:active={item.is_enabled}
@@ -251,16 +202,12 @@
 
 	.content-item:hover {
 		background: hsl(var(--accent) / 0.5);
-		border-left-color: var(--accent);
+		border-left-color: var(--boss-accent);
 	}
 
 	.content-item.active {
 		background: hsl(var(--accent) / 0.7);
-		border-left-color: var(--accent);
-	}
-
-	.content-item.clickable {
-		cursor: pointer;
+		border-left-color: var(--boss-accent);
 	}
 
 	.toggle-btn {
@@ -285,50 +232,10 @@
 	}
 
 	.toggle-btn.active {
-		background: var(--accent);
-		border-color: var(--accent);
+		background: var(--boss-accent);
+		border-color: var(--boss-accent);
 		color: black;
 		opacity: 1;
-	}
-
-	/* Radio button for reader mode (single select) */
-	.radio-btn {
-		width: 13px;
-		height: 13px;
-		margin-left: 12px;
-		border-radius: 50%;
-		border: 1px solid hsl(var(--border));
-		background: transparent;
-		cursor: pointer;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		opacity: 0.4;
-		transition: all 0.15s;
-		flex-shrink: 0;
-		padding: 0;
-	}
-
-	.radio-btn:hover {
-		opacity: 0.8;
-		border-color: var(--accent);
-	}
-
-	.radio-btn .radio-dot {
-		width: 7px;
-		height: 7px;
-		border-radius: 50%;
-		background: transparent;
-		transition: background 0.15s;
-	}
-
-	.radio-btn.active {
-		border-color: var(--accent);
-		opacity: 1;
-	}
-
-	.radio-btn.active .radio-dot {
-		background: var(--accent);
 	}
 
 	/* Spacer for canon items (no toggle) */
@@ -373,7 +280,7 @@
 		font-size: 1em;
 		color: hsl(var(--foreground));
 		background: hsl(var(--input));
-		border: 1px solid var(--accent);
+		border: 1px solid var(--boss-accent);
 		border-radius: 3px;
 		padding: 2px 6px;
 		outline: none;

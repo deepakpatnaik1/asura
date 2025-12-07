@@ -6,7 +6,6 @@
  */
 
 import { z } from 'zod';
-import { MODES, type Mode } from '$lib/config/modes';
 
 // ============================================================================
 // Common Validators
@@ -20,12 +19,6 @@ export const nonEmptyString = z.string().min(1, 'Required');
 
 /** Persona enum (allowed values) */
 export const personaSchema = z.enum(['gunnar', 'kirby', 'samara', 'alicja']);
-
-/** Mode enum (chat, reader, or todo) - derived from MODES constant */
-export const modeSchema = z.enum(MODES);
-
-/** Re-export Mode type for convenience */
-export type { Mode };
 
 // ============================================================================
 // Chat Schemas
@@ -42,8 +35,7 @@ export const chatMessageSchema = z.object({
 	persona: personaSchema.optional(),
 	chart_id: z.string().uuid().optional(),
 	chart_source: chartSourceSchema.optional(),
-	mode: modeSchema.optional(),
-	content_id: z.string().uuid().optional() // active content for reader mode
+	content_id: z.string().uuid().optional() // active content for context injection
 });
 
 /** POST /api/chat/compress - Orphan recovery compression */
@@ -60,19 +52,12 @@ export const compressSchema = z.object({
 
 /** PUT /api/settings - Update user settings */
 export const settingsUpdateSchema = z.object({
-	// New unified model (default for all personas)
+	// Default model for all personas (overridden via model_overrides table)
 	default_model: z.string().optional(),
 	selected_embedding_model: z.string().optional(),
 	active_content_id: z.string().uuid().nullable().optional(),
-	// Unified persona selection
-	selected_persona: personaSchema.optional(),
-	// DEPRECATED: Per-mode settings (kept for backward compatibility)
-	selected_chat_model: z.string().optional(),
-	selected_reader_model: z.string().optional(),
-	selected_work_model: z.string().optional(),
-	selected_persona_chat: z.enum(['gunnar', 'kirby']).optional(),
-	selected_persona_reader: z.enum(['samara']).optional(),
-	selected_persona_todo: z.enum(['alicja']).optional()
+	// Currently selected persona
+	selected_persona: personaSchema.optional()
 }).refine(
 	(data) => Object.keys(data).length > 0,
 	{ message: 'At least one field must be provided' }

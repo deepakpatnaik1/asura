@@ -685,9 +685,7 @@
 						</button>
 						{#if showFileLibrary}
 							<ContentLibrary
-								mode="chat"
 								items={files}
-								currentItemId={null}
 								isDeleting={isDeletingFile}
 								onToggle={toggleFile}
 								onRename={renameFile}
@@ -735,22 +733,19 @@
 		isOpen={deleteConfirm.isActive}
 		progress={deleteConfirm.progress}
 		onCancel={() => deleteConfirm.cancel()}
-		mode="chat"
 	/>
 
-	
+
 	<ConfirmationModal
 		isOpen={fileDeleteConfirm.isActive}
 		progress={fileDeleteConfirm.progress}
 		onCancel={() => fileDeleteConfirm.cancel()}
-		mode="chat"
 	/>
 
 	<ConfirmationModal
 		isOpen={chartDeleteConfirm.isActive}
 		progress={chartDeleteConfirm.progress}
 		onCancel={() => chartDeleteConfirm.cancel()}
-		mode="chat"
 	/>
 
 	<CanvasContainer

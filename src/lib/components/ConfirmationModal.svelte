@@ -1,6 +1,4 @@
 <script lang="ts">
-	import type { Mode } from '$lib/config/modes';
-
 	interface Props {
 		/** Whether the modal is visible */
 		isOpen: boolean;
@@ -10,16 +8,13 @@
 		message?: string;
 		/** Cancel button click handler */
 		onCancel: () => void;
-		/** Mode for accent color */
-		mode?: Mode;
 	}
 
 	let {
 		isOpen,
 		progress,
 		message = "Hush... it'll all be over soon.",
-		onCancel,
-		mode = 'chat'
+		onCancel
 	}: Props = $props();
 </script>
 
@@ -28,10 +23,10 @@
 		<div class="modal-content" onclick={(e) => e.stopPropagation()}>
 			<p class="modal-text">{message}</p>
 			<div class="progress-container">
-				<div class="progress-bar" class:chat={mode === 'chat'} class:reader={mode === 'reader'} class:todo={mode === 'todo'} style="width: {progress}%"></div>
+				<div class="progress-bar" style="width: {progress}%"></div>
 			</div>
 			<div class="modal-actions">
-				<button class="cancel-btn" class:chat={mode === 'chat'} class:reader={mode === 'reader'} class:todo={mode === 'todo'} onclick={onCancel}>Cancel</button>
+				<button class="cancel-btn" onclick={onCancel}>Cancel</button>
 			</div>
 		</div>
 	</div>
@@ -77,18 +72,7 @@
 	.progress-bar {
 		height: 100%;
 		transition: width 50ms linear;
-	}
-
-	.progress-bar.chat {
-		background: #991b1b;
-	}
-
-	.progress-bar.reader {
-		background: #991b1b;
-	}
-
-	.progress-bar.todo {
-		background: #991b1b;
+		background: #991b1b; /* Danger/destructive color */
 	}
 
 	.modal-actions {
@@ -98,41 +82,17 @@
 
 	.cancel-btn {
 		background: transparent;
-		border: 1px solid;
+		border: 1px solid #991b1b;
 		border-radius: 6px;
 		padding: 12px 24px;
 		font-weight: 500;
 		cursor: pointer;
 		transition: all 0.2s;
+		color: #991b1b;
 	}
 
-	.cancel-btn.chat {
-		color: var(--boss-accent);
-		border-color: var(--boss-accent);
-	}
-
-	.cancel-btn.chat:hover {
-		background: var(--boss-accent);
-		color: hsl(var(--background));
-	}
-
-	.cancel-btn.reader {
-		color: var(--reader-accent);
-		border-color: var(--reader-accent);
-	}
-
-	.cancel-btn.reader:hover {
-		background: var(--reader-accent);
-		color: hsl(var(--background));
-	}
-
-	.cancel-btn.todo {
-		color: var(--todo-accent);
-		border-color: var(--todo-accent);
-	}
-
-	.cancel-btn.todo:hover {
-		background: var(--todo-accent);
+	.cancel-btn:hover {
+		background: #991b1b;
 		color: hsl(var(--background));
 	}
 </style>
