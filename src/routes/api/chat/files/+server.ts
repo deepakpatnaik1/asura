@@ -15,7 +15,7 @@ import { DEFAULT_PERSONA } from '$lib/config/personas';
 import { FILE_ARTISAN_CUT_PROMPT } from '$lib/prompts/file-artisan-cut';
 import { databaseError, validationError, internalError } from '$lib/api/errors';
 import { createLogger } from '$lib/api/logger';
-import { htmlToPlainText } from '$lib/capabilities/image-extraction';
+import { htmlToMarkdown } from '$lib/capabilities/image-extraction';
 import { extractTitleFromHtml } from '$lib/capabilities';
 import { extractAndSaveCharts } from '$lib/capabilities/content-extraction';
 
@@ -87,8 +87,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		const model = settings?.default_model || DEFAULT_CHAT_MODEL;
 		const persona = requestPersona || settings?.selected_persona || DEFAULT_PERSONA;
 
-		// Generate readable content (strip images/tables) - always needed for display
-		const readableContent = await htmlToPlainText(content);
+		// Convert HTML to Markdown for display (preserves formatting, strips images)
+		const readableContent = await htmlToMarkdown(content);
 
 		let title: string;
 		let artisanCut: string | null = null;

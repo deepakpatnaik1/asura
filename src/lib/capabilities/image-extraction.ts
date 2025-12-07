@@ -154,6 +154,67 @@ export async function htmlToPlainText(html: string): Promise<string> {
 }
 
 /**
+ * Convert HTML to Markdown
+ * Used for storing article content in a format the markdown renderer can display
+ */
+export async function htmlToMarkdown(html: string): Promise<string> {
+	const TurndownService = (await import('turndown')).default;
+	const turndown = new TurndownService({
+		headingStyle: 'atx',
+		codeBlockStyle: 'fenced',
+		bulletListMarker: '-',
+		emDelimiter: '*' // Use asterisks for italic, not underscores
+	});
+
+	// Remove images (they're extracted separately as charts)
+	turndown.remove('img');
+
+	// Remove links that wrap images (empty after img removal)
+	// These become orphaned [\n\n](url) patterns
+	turndown.addRule('imageLinks', {
+		filter: (node) => {
+			if (node.nodeName !== 'A') return false;
+			// Check if link only contains whitespace/images (no text content)
+			const text = node.textContent?.trim() || '';
+			return text === '' || text.startsWith('![');
+		},
+		replacement: () => ''
+	});
+
+	// Convert figure captions to emphasized text
+	turndown.addRule('figcaption', {
+		filter: 'figcaption',
+		replacement: (content) => content ? `\n*${content.trim()}*\n` : ''
+	});
+
+	// Remove figure wrapper but keep content
+	turndown.addRule('figure', {
+		filter: 'figure',
+		replacement: (content) => content
+	});
+
+	let markdown = turndown.turndown(html).trim();
+
+	// Clean up any remaining orphaned link patterns from image wrappers
+	// Pattern: [\n![...](...)\n](...) or just [\n\n](...)
+	markdown = markdown.replace(/\[\s*\n*\s*\]\([^)]+\)/g, '');
+	// Also clean up empty image markdown
+	markdown = markdown.replace(/!\[\]\([^)]+\)/g, '');
+	// Normalize bullet spacing: "- " followed by extra spaces → single space
+	markdown = markdown.replace(/^-\s{2,}/gm, '- ');
+	// Normalize sub-bullet spacing: indented "- " followed by extra spaces → single space
+	markdown = markdown.replace(/^(\s+)-\s{2,}/gm, '$1- ');
+	// Normalize numbered list spacing: "1. " followed by extra spaces → single space
+	markdown = markdown.replace(/^(\d+\.)\s{2,}/gm, '$1 ');
+	// Normalize sub-numbered list spacing: indented "1. " followed by extra spaces → single space
+	markdown = markdown.replace(/^(\s+)(\d+\.)\s{2,}/gm, '$1$2 ');
+	// Collapse multiple blank lines to single
+	markdown = markdown.replace(/\n{3,}/g, '\n\n');
+
+	return markdown;
+}
+
+/**
  * Download image from URL or decode data URL
  */
 export async function downloadImage(imageSrc: string): Promise<Buffer> {
