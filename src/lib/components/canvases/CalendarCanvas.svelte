@@ -620,9 +620,7 @@
 					{/if}
 				</div>
 				<div class="pane-content">
-					{#if diaryDays.length === 0 && !diaryLoading}
-						<div class="empty-state">No diary entries yet</div>
-					{:else}
+					{#if diaryDays.length > 0}
 						{@const seenMonths = new Set<string>()}
 						{#each diaryDays as day (day.dateKey)}
 							{#if day.isFuzzy}
