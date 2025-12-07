@@ -82,17 +82,16 @@
 
 	.cancel-btn {
 		background: transparent;
-		border: 1px solid #991b1b;
+		border: 1px solid hsl(var(--border));
 		border-radius: 6px;
 		padding: 12px 24px;
 		font-weight: 500;
 		cursor: pointer;
 		transition: all 0.2s;
-		color: #991b1b;
+		color: hsl(var(--foreground));
 	}
 
 	.cancel-btn:hover {
-		background: #991b1b;
-		color: hsl(var(--background));
+		border-color: hsl(var(--foreground));
 	}
 </style>
