@@ -569,10 +569,7 @@
 									<div class="todo-content">
 										<span class="todo-text">{normalizeText(todo.description)}</span>
 										<div class="todo-meta">
-											{#if todo.children.length > 0}
-												<span class="todo-progress">{todo.completedCount}/{todo.children.length}</span>
-											{/if}
-											{#if todo.deadline_period}
+												{#if todo.deadline_period}
 												<span class="todo-deadline">{todo.deadline_period}</span>
 											{/if}
 											{#if todo.tags.length > 0}
@@ -674,7 +671,7 @@
 		flex-direction: column;
 		min-height: 0;
 		overflow: hidden;
-		padding-right: 6px;
+		padding-right: 12px;
 	}
 
 	.pane:last-child {
@@ -913,11 +910,11 @@
 	}
 
 	.todo-group {
-		border-left: 0.5px solid var(--accent-color);
-		padding-left: var(--spacing-md);
-		margin-left: 2px;
-		padding-top: 0;
-		padding-bottom: 0;
+		border: 1px solid transparent;
+		border-left: 2px solid color-mix(in srgb, var(--accent-color) 80%, transparent);
+		border-radius: 6px;
+		padding: 0 var(--spacing-md);
+		background: hsl(var(--background));
 	}
 
 	.todo-item {
@@ -1018,9 +1015,11 @@
 		display: flex;
 		flex-direction: column;
 		gap: 1px;
-		padding: 0 0 0 var(--spacing-md);
-		border-left: 0.5px solid var(--accent-color);
-		margin-left: 2px;
+		padding: 0 var(--spacing-md);
+		border: 1px solid transparent;
+		border-left: 2px solid color-mix(in srgb, var(--accent-color) 80%, transparent);
+		border-radius: 6px;
+		background: hsl(var(--background));
 	}
 
 	.diary-text {
