@@ -563,31 +563,33 @@
 				<div class="pane-content">
 					<div class="todo-list">
 						{#each groupedTodos() as todo (todo.id)}
-							<div class="todo-item">
-								<div class="todo-content">
-									<span class="todo-text">{normalizeText(todo.description)}</span>
-									<div class="todo-meta">
-										{#if todo.children.length > 0}
-											<span class="todo-progress">{todo.completedCount}/{todo.children.length}</span>
-										{/if}
-										{#if todo.deadline_period}
-											<span class="todo-deadline">{todo.deadline_period}</span>
-										{/if}
-										{#if todo.tags.length > 0}
-											<span class="todo-tag">#{todo.tags.join(' #')}</span>
-										{/if}
-										<span class="todo-time">{formatRelativeTime(todo.created_at)}</span>
-									</div>
-								</div>
-							</div>
-							<!-- Child todos (indented) -->
-							{#each todo.children as child (child.id)}
-								<div class="todo-item todo-child" class:completed={child.status === 'completed'}>
+							<div class="todo-group">
+								<div class="todo-item">
 									<div class="todo-content">
-										<span class="todo-text">{normalizeText(child.description)}</span>
+										<span class="todo-text">{normalizeText(todo.description)}</span>
+										<div class="todo-meta">
+											{#if todo.children.length > 0}
+												<span class="todo-progress">{todo.completedCount}/{todo.children.length}</span>
+											{/if}
+											{#if todo.deadline_period}
+												<span class="todo-deadline">{todo.deadline_period}</span>
+											{/if}
+											{#if todo.tags.length > 0}
+												<span class="todo-tag">#{todo.tags.join(' #')}</span>
+											{/if}
+											<span class="todo-time">{formatRelativeTime(todo.created_at)}</span>
+										</div>
 									</div>
 								</div>
-							{/each}
+								<!-- Child todos (indented) -->
+								{#each todo.children as child (child.id)}
+									<div class="todo-item todo-child" class:completed={child.status === 'completed'}>
+										<div class="todo-content">
+											<span class="todo-text">{normalizeText(child.description)}</span>
+										</div>
+									</div>
+								{/each}
+							</div>
 						{/each}
 					</div>
 				</div>
@@ -811,7 +813,7 @@
 
 	.event-time {
 		color: hsl(var(--muted-foreground) / 0.7);
-		min-width: 52px;
+		min-width: 56px;
 	}
 
 	.event-content {
@@ -867,14 +869,14 @@
 	.future-event {
 		display: flex;
 		align-items: baseline;
-		gap: var(--spacing-md);
+		gap: var(--spacing-sm);
 		font-size: var(--font-body);
 	}
 
 	.future-date {
 		color: var(--accent-color);
 		font-weight: var(--font-weight-medium);
-		min-width: 18px;
+		min-width: 24px;
 	}
 
 	.future-title {
@@ -883,7 +885,7 @@
 
 	.future-time {
 		color: hsl(var(--muted-foreground) / 0.7);
-		min-width: 52px;
+		min-width: 28px;
 		font-size: var(--font-body);
 	}
 
@@ -909,6 +911,14 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--spacing-lg);
+	}
+
+	.todo-group {
+		border-left: 0.5px solid var(--accent-color);
+		padding-left: var(--spacing-md);
+		margin-left: 2px;
+		padding-top: 0;
+		padding-bottom: 0;
 	}
 
 	.todo-item {
@@ -958,8 +968,7 @@
 	}
 
 	.todo-child {
-		padding-left: 16px;
-		padding-right: 16px;
+		padding-left: var(--spacing-md);
 	}
 
 	.todo-child .todo-text {
@@ -1010,7 +1019,9 @@
 		display: flex;
 		flex-direction: column;
 		gap: 1px;
-		padding: var(--spacing-xs) 0;
+		padding: 0 0 0 var(--spacing-md);
+		border-left: 0.5px solid var(--accent-color);
+		margin-left: 2px;
 	}
 
 	.diary-text {
