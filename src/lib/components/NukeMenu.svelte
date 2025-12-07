@@ -101,6 +101,8 @@
 			}
 
 			onNukeComplete(bucket);
+			// Dispatch window event for cross-component communication
+			window.dispatchEvent(new CustomEvent('nuke-complete', { detail: { bucket } }));
 		} catch (err) {
 			console.error('Nuke error:', err);
 		}
@@ -129,7 +131,7 @@
 	});
 </script>
 
-<svelte:document onclick={(e) => isOpen && handleClickOutside(e)} />
+<svelte:document onclick={(e) => isOpen && handleClickOutside(e)} onkeydown={(e) => e.key === 'Escape' && isOpen && handleClose()} />
 
 {#if isOpen}
 	<div class="nuke-menu-container" style={menuStyle}>

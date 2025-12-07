@@ -203,7 +203,7 @@
 		width: 320px;
 		max-height: 450px;
 		overflow-y: auto;
-		background: hsl(var(--card));
+		background: hsl(var(--background));
 		border: 1px solid hsl(var(--border));
 		border-radius: 6px;
 		z-index: 99999;

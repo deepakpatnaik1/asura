@@ -1,12 +1,17 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { Icon } from 'svelte-icons-pack';
-	import { LuX, LuPlus, LuTrash2 } from 'svelte-icons-pack/lu';
+	import { LuX, LuPlus, LuTrash2, LuFlame } from 'svelte-icons-pack/lu';
 	import { DEFAULT_MODEL, EMBEDDING_MODEL } from '$lib/config/models';
 	import { PERSONAS, PERSONA_NAMES, type PersonaName } from '$lib/config/personas';
+	import NukeMenu from './NukeMenu.svelte';
 
 	// Props
-	let { open = $bindable(false), onClose }: { open?: boolean; onClose: () => void } = $props();
+	let { open = $bindable(false), onClose, onNukeComplete }: { open?: boolean; onClose: () => void; onNukeComplete?: () => void } = $props();
+
+	// Nuke state
+	let showNukeMenu = $state(false);
+	let nukeButtonRef = $state<HTMLElement | null>(null);
 
 	// State
 	interface Model {
@@ -220,6 +225,8 @@
 	}
 </script>
 
+<svelte:document onkeydown={(e) => e.key === 'Escape' && open && onClose()} />
+
 {#if open}
 	<div class="modal-overlay" onclick={handleOverlayClick} role="dialog" aria-modal="true">
 		<div class="modal-content" onclick={(e) => e.stopPropagation()}>
@@ -348,6 +355,32 @@
 					</button>
 					<p class="help-text">Download all your data as JSON (1 export per hour)</p>
 				</div>
+
+				<!-- Nuke Section -->
+				<div class="nuke-section">
+					<div class="section-divider"></div>
+					<p class="nuke-label">Danger Zone</p>
+					<div class="nuke-wrapper">
+						<button
+							class="nuke-btn"
+							onclick={() => showNukeMenu = !showNukeMenu}
+							bind:this={nukeButtonRef}
+						>
+							<Icon src={LuFlame} size="14" />
+							Nuke Data
+						</button>
+						<NukeMenu
+							isOpen={showNukeMenu}
+							onClose={() => showNukeMenu = false}
+							onNukeComplete={() => {
+								showNukeMenu = false;
+								onNukeComplete?.();
+							}}
+							triggerRef={nukeButtonRef}
+						/>
+					</div>
+					<p class="help-text">Permanently delete specific data buckets</p>
+				</div>
 			{/if}
 		</div>
 	</div>
@@ -368,7 +401,7 @@
 	}
 
 	.modal-content {
-		background: hsl(var(--card));
+		background: hsl(var(--background));
 		border: 1px solid hsl(var(--border));
 		border-radius: 4px;
 		padding: 20px;
@@ -645,5 +678,41 @@
 	.export-btn:disabled {
 		opacity: 0.3;
 		cursor: not-allowed;
+	}
+
+	/* Nuke Section */
+	.nuke-section {
+		margin-top: 8px;
+	}
+
+	.nuke-label {
+		font-size: 11px;
+		color: hsl(0, 70%, 60%);
+		margin-bottom: 8px;
+	}
+
+	.nuke-wrapper {
+		position: relative;
+	}
+
+	.nuke-btn {
+		width: 100%;
+		padding: 6px;
+		background: transparent;
+		color: hsl(0, 70%, 60%);
+		border: 1px solid hsl(0, 70%, 60%, 0.5);
+		border-radius: 0;
+		font-weight: 400;
+		font-size: 11px;
+		cursor: pointer;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 6px;
+	}
+
+	.nuke-btn:hover {
+		border-color: hsl(0, 70%, 60%);
+		background: hsl(0, 70%, 60%, 0.1);
 	}
 </style>

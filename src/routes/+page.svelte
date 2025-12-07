@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Icon } from 'svelte-icons-pack';
-	import { LuPaperclip, LuFolder, LuCloudDownload, LuFlame } from 'svelte-icons-pack/lu';
+	import { LuPaperclip, LuFolder, LuCloudDownload } from 'svelte-icons-pack/lu';
 	import { currentMessage, isLoading, sendMessage, abortCurrentMessage } from '$lib/stores/chat';
 	import { tick, onMount } from 'svelte';
 	import { DEFAULT_PERSONA, PERSONAS } from '$lib/config/personas';
@@ -14,8 +14,7 @@
 	import CanvasContainer from '$lib/components/CanvasContainer.svelte';
 	import PasteArea from '$lib/components/PasteArea.svelte';
 	import ContentLibrary from '$lib/components/ContentLibrary.svelte';
-	import NukeMenu from '$lib/components/NukeMenu.svelte';
-
+	
 	// Receive loaded data from server
 	let { data } = $props();
 
@@ -62,9 +61,7 @@
 	// File paste and library state
 	let showFilePaste = $state(false);
 	let showFileLibrary = $state(false);
-	let showNukeMenu = $state(false);
-	let nukeButtonRef = $state<HTMLElement | null>(null);
-	interface FileItem {
+		interface FileItem {
 		id: string;
 		title: string;
 		is_enabled: boolean;
@@ -133,12 +130,19 @@
 			await loadCharts();
 		})();
 
+		// Listen for nuke events from SettingsModal
+		const handleNukeEvent = (e: CustomEvent<{ bucket: string }>) => {
+			handleNukeComplete(e.detail.bucket);
+		};
+		window.addEventListener('nuke-complete', handleNukeEvent as EventListener);
+
 		return () => {
 			pendingTimeouts.forEach(clearTimeout);
 			pendingTimeouts = [];
 			deleteConfirm.cleanup();
 			fileDeleteConfirm.cleanup();
 			chartDeleteConfirm.cleanup();
+			window.removeEventListener('nuke-complete', handleNukeEvent as EventListener);
 		};
 	});
 
@@ -356,13 +360,7 @@
 			});
 	}
 
-	function toggleNukeMenu() {
-		showNukeMenu = !showNukeMenu;
-	}
-
 	function handleNukeComplete(bucket: string) {
-		showNukeMenu = false;
-
 		// Parse bucket to determine what to clear from UI
 		const [bucketType, target] = bucket.split(':');
 
@@ -711,18 +709,6 @@
 					<div class="icon-group">
 						<ScrollControls config={CHAT_CONFIG} />
 					</div>
-
-					<div class="nuke-wrapper">
-						<button class="control-btn hit-target settings-btn" title="Nuke data" onclick={toggleNukeMenu} bind:this={nukeButtonRef}>
-							<Icon src={LuFlame} size="11" />
-						</button>
-						<NukeMenu
-							isOpen={showNukeMenu}
-							onClose={() => showNukeMenu = false}
-							onNukeComplete={handleNukeComplete}
-							triggerRef={nukeButtonRef}
-						/>
-					</div>
 				</div>
 				<textarea
 					placeholder="Type your message..."
@@ -882,16 +868,6 @@
 
 	.settings-btn:hover {
 		color: rgb(220, 38, 38);
-	}
-
-	.nuke-wrapper {
-		position: relative;
-	}
-
-	@media (min-width: 901px) {
-		.nuke-wrapper {
-			margin-left: auto;
-		}
 	}
 
 	.input-container {

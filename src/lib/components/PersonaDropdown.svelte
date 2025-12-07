@@ -49,7 +49,7 @@
 	}
 </script>
 
-<svelte:document onclick={handleClickOutside} />
+<svelte:document onclick={handleClickOutside} onkeydown={(e) => e.key === 'Escape' && isOpen && (isOpen = false)} />
 
 <div class="persona-dropdown-container">
 	<div
@@ -105,6 +105,7 @@
 
 	.persona-dropdown.interactive {
 		cursor: pointer;
+		outline: none;
 	}
 
 	.persona-dropdown.interactive:hover,
