@@ -75,8 +75,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 	}
 
 	try {
-		log.info('Processing file upload', { contentLength: content.length, persistent });
-
 		// Fetch user settings (default model + persona)
 		const { data: settings } = await supabase
 			.from('user_settings')
@@ -87,8 +85,19 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		const model = settings?.default_model || DEFAULT_CHAT_MODEL;
 		const persona = requestPersona || settings?.selected_persona || DEFAULT_PERSONA;
 
-		// Convert HTML to Markdown for display (preserves formatting, strips images)
-		const readableContent = await htmlToMarkdown(content);
+		// Detect if content is HTML or already markdown
+		// HTML has tags like <p>, <div>, <html>, etc. Plain markdown doesn't
+		const isHtml = /<[a-z][\s\S]*>/i.test(content);
+
+		log.info('Processing file upload', {
+			contentLength: content.length,
+			persistent,
+			isHtml,
+			contentStart: content.slice(0, 100)
+		});
+
+		// Convert HTML to Markdown, or pass through markdown as-is
+		const readableContent = isHtml ? await htmlToMarkdown(content) : content.trim();
 
 		let title: string;
 		let artisanCut: string | null = null;

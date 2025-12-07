@@ -31,7 +31,13 @@
 
 		const html = event.clipboardData?.getData('text/html');
 		const text = event.clipboardData?.getData('text/plain');
-		const content = html || text;
+
+		// Determine content type:
+		// - If plain text looks like markdown, prefer it over HTML
+		// - Otherwise use HTML if available (for web content)
+		// Patterns: # headers, ** bold, - bullets, numbered lists, --- frontmatter/hr, ``` code blocks
+		const looksLikeMarkdown = text && /^(#{1,6}\s|---|```|\*\*|-\s|\d+\.\s)/m.test(text);
+		const content = looksLikeMarkdown ? text : (html || text);
 
 		if (!content) return;
 
