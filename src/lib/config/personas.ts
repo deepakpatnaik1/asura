@@ -74,7 +74,7 @@ const GUNNAR_CHUNKS: ContextChunk[] = [
 ];
 
 /**
- * Kirby: Full memory pyramid + diary for emotional context (no todos/tags)
+ * Kirby: Full memory pyramid + productivity (same as Gunnar)
  */
 const KIRBY_CHUNKS: ContextChunk[] = [
 	'working',
@@ -83,6 +83,7 @@ const KIRBY_CHUNKS: ContextChunk[] = [
 	'semantic',
 	'canon',
 	'active',
+	'todos',
 	'diary'
 ];
 
