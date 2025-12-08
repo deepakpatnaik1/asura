@@ -651,9 +651,9 @@ function formatDuration(from: Date, to: Date): string {
 	}
 	if (diffHours > 0) {
 		const remainingMins = diffMins % 60;
-		return remainingMins > 0 ? `${diffHours}h ${remainingMins}m` : `${diffHours}h`;
+		return remainingMins > 0 ? `${diffHours}h ${remainingMins}min` : `${diffHours}h`;
 	}
-	return `${diffMins}m`;
+	return `${diffMins}min`;
 }
 
 // Format work data for Gunnar (chat mode) - pre-computed time analytics
