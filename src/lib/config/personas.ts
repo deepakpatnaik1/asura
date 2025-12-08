@@ -2,13 +2,15 @@
  * Persona Configuration
  *
  * Centralized config for all personas. Each persona defines:
- * - Visual identity (color)
+ * - Visual identity (color from active palette)
  * - Model preference (null = use default)
  * - System prompt reference
  * - Context chunks to inject
  * - Compression behavior
  * - Available tools
  */
+
+import { getPaletteColor } from './palettes';
 
 // Context chunk types available for injection
 export type ContextChunk =
@@ -124,7 +126,7 @@ export const PERSONAS: Record<string, Persona> = {
 	gunnar: {
 		name: 'gunnar',
 		displayName: 'Gunnar',
-		accentColor: 'rgb(217, 133, 107)', // warm orange
+		accentColor: getPaletteColor('gunnar'),
 		model: null, // uses default, can be overridden in model_overrides
 		systemPrompt: 'gunnar', // resolved via getSystemPrompt()
 		contextChunks: GUNNAR_CHUNKS,
@@ -134,7 +136,7 @@ export const PERSONAS: Record<string, Persona> = {
 	kirby: {
 		name: 'kirby',
 		displayName: 'Kirby',
-		accentColor: 'rgb(236, 72, 153)', // hot magenta
+		accentColor: getPaletteColor('kirby'),
 		model: null,
 		systemPrompt: 'kirby',
 		contextChunks: KIRBY_CHUNKS,
@@ -144,7 +146,7 @@ export const PERSONAS: Record<string, Persona> = {
 	samara: {
 		name: 'samara',
 		displayName: 'Samara',
-		accentColor: 'rgb(16, 185, 129)', // emerald green
+		accentColor: getPaletteColor('samara'),
 		model: null,
 		systemPrompt: 'samara',
 		contextChunks: SAMARA_CHUNKS,
@@ -154,7 +156,7 @@ export const PERSONAS: Record<string, Persona> = {
 	alicja: {
 		name: 'alicja',
 		displayName: 'Alicja',
-		accentColor: 'rgb(59, 130, 246)', // electric blue
+		accentColor: getPaletteColor('alicja'),
 		model: null,
 		systemPrompt: 'alicja',
 		contextChunks: ALICJA_CHUNKS,
