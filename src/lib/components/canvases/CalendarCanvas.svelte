@@ -320,6 +320,8 @@
 		for (const todo of todos) {
 			if (!todo.parent_id) {
 				const children = childrenByParent.get(todo.id) || [];
+				// Sort children by created_at ascending (oldest first = original creation order)
+				children.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 				const completedCount = children.filter(c => c.status === 'completed').length;
 				parentTodos.push({ ...todo, children, completedCount });
 			}
