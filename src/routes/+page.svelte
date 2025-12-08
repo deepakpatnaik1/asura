@@ -331,7 +331,7 @@
 	function autoResize() {
 		if (!textareaRef) return;
 		textareaRef.style.height = 'auto';
-		textareaRef.style.height = Math.min(textareaRef.scrollHeight, 200) + 'px';
+		textareaRef.style.height = Math.min(textareaRef.scrollHeight, 500) + 'px';
 	}
 
 	function resetTextareaHeight() {
@@ -852,14 +852,10 @@
 		border-top: 1px solid hsl(var(--chat-border));
 		border-right: 1px solid hsl(var(--chat-border));
 		padding: 0 var(--layout-padding);
-		min-height: var(--input-bar-height);
+		height: var(--input-bar-height);
 		box-sizing: border-box;
-		position: sticky;
-		bottom: 0;
+		position: relative;
 		z-index: 10;
-		display: flex;
-		flex-direction: column;
-		justify-content: center;
 	}
 
 	.input-controls {
@@ -909,12 +905,17 @@
 	}
 
 	.input-container {
+		position: absolute;
+		bottom: 0;
+		left: var(--layout-padding);
+		right: var(--layout-padding);
 		display: flex;
 		gap: 12px;
 		align-items: flex-end;
 		max-width: var(--middle-section-width);
 		margin: 0 auto;
-		width: 100%;
+		width: calc(100% - 2 * var(--layout-padding));
+		padding-bottom: 16px;
 	}
 
 	.input-field-wrapper {
@@ -935,7 +936,7 @@
 		transition: border-color 0.2s;
 		resize: none;
 		min-height: 44px;
-		max-height: 200px;
+		max-height: 500px;
 		overflow-y: auto;
 		font-family: inherit;
 		font-size: inherit;
