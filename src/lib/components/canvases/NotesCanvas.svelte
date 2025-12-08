@@ -16,6 +16,8 @@
 		fill: string;
 		width: number;
 		height: number;
+		stroke?: string;
+		strokeWidth?: number;
 	};
 
 	type WhiteboardState = {
@@ -259,11 +261,11 @@
 										fill={note.fill}
 										cornerRadius={4}
 										shadowColor="black"
-										shadowBlur={8}
-										shadowOpacity={0.2}
-										shadowOffsetY={4}
-										stroke={selectedId === note.id ? '#000' : 'transparent'}
-										strokeWidth={2}
+										shadowBlur={note.stroke ? 0 : 8}
+										shadowOpacity={note.stroke ? 0 : 0.2}
+										shadowOffsetY={note.stroke ? 0 : 4}
+										stroke={selectedId === note.id ? '#fff' : (note.stroke || 'transparent')}
+										strokeWidth={note.strokeWidth || 2}
 									/>
 									<!-- Sticky note text -->
 									<svelte:component
@@ -273,9 +275,9 @@
 										y={10}
 										width={note.width - 20}
 										height={note.height - 20}
-										fontSize={14}
-										fontFamily="system-ui, -apple-system, sans-serif"
-										fill="#1f2937"
+										fontSize={11}
+										fontFamily="iA Writer Quattro V, system-ui, -apple-system, sans-serif"
+										fill="#d9d9d9"
 										wrap="word"
 									/>
 								</svelte:component>
