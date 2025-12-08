@@ -1,17 +1,11 @@
 <script lang="ts">
 	/**
 	 * NotesCanvas - Interactive brainstorming canvas with Konva
-	 * Mockup: sticky notes, drag/drop, pan/zoom
+	 * Renders whiteboards with sticky notes, drag/drop, pan/zoom
 	 */
 
 	import { onMount } from 'svelte';
 	import CanvasFrame from '$lib/components/CanvasFrame.svelte';
-
-	// Track mounted state for client-only rendering
-	let mounted = $state(false);
-	let containerEl: HTMLDivElement;
-	let stageWidth = $state(800);
-	let stageHeight = $state(600);
 
 	// Sticky note data model
 	type StickyNote = {
@@ -24,9 +18,43 @@
 		height: number;
 	};
 
-	let notes = $state<StickyNote[]>([]);
+	type WhiteboardState = {
+		notes: StickyNote[];
+		viewport: { x: number; y: number; scale: number };
+	};
 
-	// Stage pan/zoom state
+	interface Whiteboard {
+		id: string;
+		title: string;
+		state?: WhiteboardState;
+		created_at: string;
+		updated_at: string;
+	}
+
+	interface Props {
+		whiteboards?: Whiteboard[];
+		whiteboard?: Whiteboard | null;
+		selectedWhiteboardIds?: string[]; // Which whiteboards are selected for context injection
+		onSelect?: (id: string) => void;
+		onStateChange?: (id: string, state: WhiteboardState) => void;
+	}
+
+	let {
+		whiteboards = [],
+		whiteboard = null,
+		selectedWhiteboardIds = [],
+		onSelect,
+		onStateChange
+	}: Props = $props();
+
+	// Track mounted state for client-only rendering
+	let mounted = $state(false);
+	let containerEl: HTMLDivElement;
+	let stageWidth = $state(800);
+	let stageHeight = $state(600);
+
+	// Canvas state - initialized from whiteboard prop
+	let notes = $state<StickyNote[]>([]);
 	let stageX = $state(0);
 	let stageY = $state(0);
 	let stageScale = $state(1);
@@ -41,6 +69,23 @@
 	let Text: any;
 	let Group: any;
 	let Transformer: any;
+
+	// Load state when whiteboard changes
+	$effect(() => {
+		if (whiteboard?.state) {
+			notes = whiteboard.state.notes || [];
+			stageX = whiteboard.state.viewport?.x || 0;
+			stageY = whiteboard.state.viewport?.y || 0;
+			stageScale = whiteboard.state.viewport?.scale || 1;
+		} else {
+			// Reset to empty state
+			notes = [];
+			stageX = 0;
+			stageY = 0;
+			stageScale = 1;
+		}
+		selectedId = null;
+	});
 
 	onMount(async () => {
 		// Dynamic import for SSR compatibility
@@ -75,6 +120,16 @@
 		};
 	});
 
+	// Notify parent of state changes (for persistence)
+	function notifyStateChange() {
+		if (whiteboard && onStateChange) {
+			onStateChange(whiteboard.id, {
+				notes,
+				viewport: { x: stageX, y: stageY, scale: stageScale }
+			});
+		}
+	}
+
 	// Handle drag end - update note position
 	function handleDragEnd(noteId: string, e: any) {
 		const target = e.target;
@@ -83,6 +138,7 @@
 				? { ...n, x: target.x(), y: target.y() }
 				: n
 		);
+		notifyStateChange();
 	}
 
 	// Handle wheel - Figma-style controls
@@ -140,6 +196,8 @@
 
 	// Double-click to add new note
 	function handleDblClick(e: any) {
+		if (!whiteboard) return; // Need active whiteboard to add notes
+
 		const stage = e.target.getStage();
 		const pointer = stage.getPointerPosition();
 		const newNote: StickyNote = {
@@ -153,25 +211,14 @@
 		};
 		notes = [...notes, newNote];
 		selectedId = newNote.id;
+		notifyStateChange();
 	}
 
-	// Serialize canvas for Gunnar
-	function getCanvasState() {
-		return {
-			canvas_type: 'brainstorm',
-			notes: notes.map(n => ({
-				id: n.id,
-				text: n.text,
-				position: { x: Math.round(n.x), y: Math.round(n.y) },
-				color: n.fill
-			})),
-			viewport: { x: stageX, y: stageY, scale: stageScale }
-		};
-	}
-
-	// Expose for debugging
-	if (typeof window !== 'undefined') {
-		(window as any).getCanvasState = getCanvasState;
+	// Handle whiteboard selection from footer
+	function handleWhiteboardClick(id: string) {
+		if (onSelect) {
+			onSelect(id);
+		}
 	}
 </script>
 
@@ -179,68 +226,90 @@
 	{#snippet content()}
 		<div class="canvas-container" bind:this={containerEl}>
 			{#if mounted && Stage}
-				<svelte:component
-					this={Stage}
-					width={stageWidth}
-					height={stageHeight}
-					x={stageX}
-					y={stageY}
-					scaleX={stageScale}
-					scaleY={stageScale}
-					draggable={true}
-					onwheel={handleWheel}
-					ondragend={handleStageDragEnd}
-					onclick={handleStageClick}
-					ondblclick={handleDblClick}
-				>
-					<svelte:component this={Layer}>
-						{#each notes as note (note.id)}
-							<svelte:component
-								this={Group}
-								x={note.x}
-								y={note.y}
-								draggable={true}
-								ondragend={(e: any) => handleDragEnd(note.id, e)}
-								onclick={() => handleSelect(note.id)}
-							>
-								<!-- Sticky note background -->
+				{#if whiteboard}
+					<svelte:component
+						this={Stage}
+						width={stageWidth}
+						height={stageHeight}
+						x={stageX}
+						y={stageY}
+						scaleX={stageScale}
+						scaleY={stageScale}
+						draggable={true}
+						onwheel={handleWheel}
+						ondragend={handleStageDragEnd}
+						onclick={handleStageClick}
+						ondblclick={handleDblClick}
+					>
+						<svelte:component this={Layer}>
+							{#each notes as note (note.id)}
 								<svelte:component
-									this={Rect}
-									width={note.width}
-									height={note.height}
-									fill={note.fill}
-									cornerRadius={4}
-									shadowColor="black"
-									shadowBlur={8}
-									shadowOpacity={0.2}
-									shadowOffsetY={4}
-									stroke={selectedId === note.id ? '#000' : 'transparent'}
-									strokeWidth={2}
-								/>
-								<!-- Sticky note text -->
-								<svelte:component
-									this={Text}
-									text={note.text}
-									x={10}
-									y={10}
-									width={note.width - 20}
-									height={note.height - 20}
-									fontSize={14}
-									fontFamily="system-ui, -apple-system, sans-serif"
-									fill="#1f2937"
-									wrap="word"
-								/>
-							</svelte:component>
-						{/each}
+									this={Group}
+									x={note.x}
+									y={note.y}
+									draggable={true}
+									ondragend={(e: any) => handleDragEnd(note.id, e)}
+									onclick={() => handleSelect(note.id)}
+								>
+									<!-- Sticky note background -->
+									<svelte:component
+										this={Rect}
+										width={note.width}
+										height={note.height}
+										fill={note.fill}
+										cornerRadius={4}
+										shadowColor="black"
+										shadowBlur={8}
+										shadowOpacity={0.2}
+										shadowOffsetY={4}
+										stroke={selectedId === note.id ? '#000' : 'transparent'}
+										strokeWidth={2}
+									/>
+									<!-- Sticky note text -->
+									<svelte:component
+										this={Text}
+										text={note.text}
+										x={10}
+										y={10}
+										width={note.width - 20}
+										height={note.height - 20}
+										fontSize={14}
+										fontFamily="system-ui, -apple-system, sans-serif"
+										fill="#1f2937"
+										wrap="word"
+									/>
+								</svelte:component>
+							{/each}
+						</svelte:component>
 					</svelte:component>
-				</svelte:component>
+				{:else}
+					<div class="empty-state"></div>
+				{/if}
 			{:else}
 				<div class="loading">Loading canvas...</div>
 			{/if}
 		</div>
 	{/snippet}
 	{#snippet footer()}
-		<!-- Empty footer for layout alignment -->
+		{#if whiteboards.length > 0}
+			<div class="whiteboard-picker">
+				{#each whiteboards as wb (wb.id)}
+					<button
+						class="whiteboard-chip"
+						class:active={whiteboard?.id === wb.id}
+						class:selected={selectedWhiteboardIds.includes(wb.id)}
+						onclick={() => handleWhiteboardClick(wb.id)}
+						title={wb.title}
+					>
+						{#if selectedWhiteboardIds.includes(wb.id)}
+							<span class="chip-check">✓</span>
+						{/if}
+						<span class="chip-title">{wb.title}</span>
+						<span class="chip-count">{wb.state?.notes?.length || 0}</span>
+					</button>
+				{/each}
+			</div>
+		{/if}
 	{/snippet}
 </CanvasFrame>
 
@@ -271,12 +340,90 @@
 			10px 10px;
 	}
 
-	.loading {
+	.loading,
+	.empty-state {
 		display: flex;
+		flex-direction: column;
 		align-items: center;
 		justify-content: center;
 		height: 100%;
 		color: rgba(100, 140, 120, 0.8);
 		font-size: 0.875rem;
+		gap: 4px;
+	}
+
+	.empty-state .hint {
+		font-size: 0.75rem;
+		opacity: 0.6;
+	}
+
+	/* Whiteboard picker footer */
+	.whiteboard-picker {
+		display: flex;
+		flex-direction: row;
+		gap: 8px;
+		width: 100%;
+		padding: 0 10px 0 44px; /* Extra left padding for canvas switcher */
+		justify-content: center;
+		flex-wrap: nowrap;
+		overflow-x: auto;
+		height: 100%;
+		align-items: center;
+	}
+
+	.whiteboard-chip {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		padding: 6px 12px;
+		background: hsl(var(--card));
+		border: 1px solid hsl(var(--border) / 0.5);
+		border-radius: 16px;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		flex-shrink: 0;
+	}
+
+	.whiteboard-chip:hover {
+		background: hsl(var(--accent));
+		border-color: hsl(var(--accent));
+	}
+
+	.whiteboard-chip.active {
+		background: hsl(var(--foreground) / 0.1);
+		border-color: hsl(var(--foreground) / 0.3);
+	}
+
+	.whiteboard-chip.selected {
+		background: hsl(var(--accent));
+		border-color: hsl(var(--accent));
+	}
+
+	.whiteboard-chip.selected.active {
+		background: hsl(var(--accent));
+		border-color: hsl(var(--foreground) / 0.5);
+	}
+
+	.chip-check {
+		font-size: 0.7rem;
+		color: hsl(var(--foreground));
+		font-weight: 600;
+	}
+
+	.chip-title {
+		font-size: 0.75rem;
+		color: hsl(var(--foreground));
+		max-width: 120px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.chip-count {
+		font-size: 0.65rem;
+		color: hsl(var(--muted-foreground));
+		background: hsl(var(--background));
+		padding: 2px 6px;
+		border-radius: 10px;
 	}
 </style>

@@ -35,7 +35,8 @@ export const chatMessageSchema = z.object({
 	persona: personaSchema.optional(),
 	chart_id: z.string().uuid().optional(),
 	chart_source: chartSourceSchema.optional(),
-	content_ids: z.array(z.string().uuid()).optional() // active content(s) for context injection
+	content_ids: z.array(z.string().uuid()).optional(), // active content(s) for context injection
+	whiteboard_ids: z.array(z.string().uuid()).optional() // selected whiteboards for Gunnar context
 });
 
 /** POST /api/chat/compress - Orphan recovery compression */

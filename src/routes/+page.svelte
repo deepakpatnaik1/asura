@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Icon } from 'svelte-icons-pack';
-	import { LuPaperclip, LuFolder, LuCloudDownload } from 'svelte-icons-pack/lu';
-	import { currentMessage, isLoading, sendMessage, abortCurrentMessage, lastMutations } from '$lib/stores/chat';
+	import { LuPaperclip, LuFolder, LuCloudDownload, LuStickyNote } from 'svelte-icons-pack/lu';
+	import { currentMessage, isLoading, sendMessage, abortCurrentMessage, lastMutations, lastWhiteboardMutations } from '$lib/stores/chat';
 	import { tick, onMount } from 'svelte';
 	import { DEFAULT_PERSONA, PERSONAS } from '$lib/config/personas';
 	import type { CanvasType } from '$lib/config/canvases';
@@ -15,6 +15,7 @@
 	import CanvasContainer from '$lib/components/CanvasContainer.svelte';
 	import PasteArea from '$lib/components/PasteArea.svelte';
 	import ContentLibrary from '$lib/components/ContentLibrary.svelte';
+	import BoardLibrary from '$lib/components/BoardLibrary.svelte';
 	
 	// Receive loaded data from server
 	let { data } = $props();
@@ -51,6 +52,21 @@
 	let forceCanvas = $state<CanvasType | null>(null);
 	let calendarRefreshTrigger = $state(0);
 
+	// Whiteboard state for notes canvas
+	interface Whiteboard {
+		id: string;
+		title: string;
+		state?: {
+			notes: Array<{ id: string; x: number; y: number; text: string; fill: string; width: number; height: number }>;
+			viewport: { x: number; y: number; scale: number };
+		};
+		created_at: string;
+		updated_at: string;
+	}
+	let whiteboards = $state<Whiteboard[]>([]);
+	let selectedWhiteboardIds = $state<string[]>([]); // Whiteboards selected for context injection
+	let viewingWhiteboardId = $state<string | null>(null); // Currently displayed in canvas
+
 	// Refresh calendar when todos, diary, or calendar events are mutated
 	$effect(() => {
 		const mutations = $lastMutations;
@@ -82,6 +98,52 @@
 		}
 	});
 
+	// Handle whiteboard mutations from Gunnar's tools
+	$effect(() => {
+		const mutations = $lastWhiteboardMutations;
+		if (mutations) {
+			// Handle created whiteboards - add to list
+			if (mutations.created_whiteboards && mutations.created_whiteboards.length > 0) {
+				whiteboards = [...whiteboards, ...mutations.created_whiteboards];
+			}
+
+			// Handle renamed whiteboards - update titles
+			if (mutations.renamed_whiteboards && mutations.renamed_whiteboards.length > 0) {
+				for (const renamed of mutations.renamed_whiteboards) {
+					whiteboards = whiteboards.map(wb =>
+						wb.id === renamed.id ? { ...wb, title: renamed.title } : wb
+					);
+				}
+			}
+
+			// Handle deleted whiteboards - remove from list and selection
+			if (mutations.deleted_whiteboards && mutations.deleted_whiteboards.length > 0) {
+				const deletedIds = new Set(mutations.deleted_whiteboards);
+				whiteboards = whiteboards.filter(wb => !deletedIds.has(wb.id));
+				// Remove deleted from selection
+				selectedWhiteboardIds = selectedWhiteboardIds.filter(id => !deletedIds.has(id));
+				// Clear viewing if it was deleted
+				if (viewingWhiteboardId && deletedIds.has(viewingWhiteboardId)) {
+					viewingWhiteboardId = whiteboards.length > 0 ? whiteboards[0].id : null;
+				}
+			}
+
+			// Handle opened whiteboard - select it, view it, and switch canvas
+			if (mutations.opened_whiteboard) {
+				const openedId = mutations.opened_whiteboard;
+				// Add to selection if not already selected
+				if (!selectedWhiteboardIds.includes(openedId)) {
+					selectedWhiteboardIds = [...selectedWhiteboardIds, openedId];
+				}
+				viewingWhiteboardId = openedId;
+				forceCanvas = 'notes'; // Switch to notes canvas when whiteboard is opened
+			}
+
+			// Clear mutations after processing
+			lastWhiteboardMutations.set(null);
+		}
+	});
+
 	let inputMessage = $state('');
 	let messagesEndRef: HTMLDivElement;
 	let textareaRef: HTMLTextAreaElement;
@@ -95,6 +157,7 @@
 	// File paste and library state
 	let showFilePaste = $state(false);
 	let showFileLibrary = $state(false);
+	let showBoardLibrary = $state(false);
 		interface FileItem {
 		id: string;
 		title: string;
@@ -156,12 +219,84 @@
 		await Promise.all([loadSuperjournalCharts(), loadFileCharts()]);
 	}
 
+	// Fetch whiteboards for notes canvas
+	async function loadWhiteboards() {
+		try {
+			const response = await fetch('/api/whiteboards');
+			if (response.ok) {
+				const data = await response.json();
+				whiteboards = data.whiteboards || [];
+				// Auto-view first whiteboard if none viewing
+				if (whiteboards.length > 0 && !viewingWhiteboardId) {
+					viewingWhiteboardId = whiteboards[0].id;
+				}
+			}
+		} catch (error) {
+			console.error('Failed to load whiteboards:', error);
+		}
+	}
+
+	// Toggle whiteboard selection for context injection
+	function toggleWhiteboardSelection(id: string) {
+		if (selectedWhiteboardIds.includes(id)) {
+			selectedWhiteboardIds = selectedWhiteboardIds.filter(wid => wid !== id);
+		} else {
+			selectedWhiteboardIds = [...selectedWhiteboardIds, id];
+		}
+	}
+
+	// Handle whiteboard click from carousel - toggle selection AND view it
+	async function handleWhiteboardSelect(id: string) {
+		// Toggle selection
+		toggleWhiteboardSelection(id);
+		// Also set as viewing
+		viewingWhiteboardId = id;
+		// Fetch full whiteboard state
+		try {
+			const response = await fetch(`/api/whiteboards/${id}`);
+			if (response.ok) {
+				const data = await response.json();
+				// Update the whiteboard in the list with full state
+				whiteboards = whiteboards.map(wb =>
+					wb.id === id ? data.whiteboard : wb
+				);
+			}
+		} catch (error) {
+			console.error('Failed to fetch whiteboard:', error);
+		}
+	}
+
+	// Debounced save for whiteboard state changes
+	let whiteboardSaveTimeout: ReturnType<typeof setTimeout> | null = null;
+	function handleWhiteboardStateChange(id: string, state: Whiteboard['state']) {
+		// Update local state immediately
+		whiteboards = whiteboards.map(wb =>
+			wb.id === id ? { ...wb, state } : wb
+		);
+
+		// Debounce save to API
+		if (whiteboardSaveTimeout) {
+			clearTimeout(whiteboardSaveTimeout);
+		}
+		whiteboardSaveTimeout = setTimeout(async () => {
+			try {
+				await fetch(`/api/whiteboards/${id}`, {
+					method: 'PUT',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ state })
+				});
+			} catch (error) {
+				console.error('Failed to save whiteboard:', error);
+			}
+		}, 1000); // Save after 1 second of no changes
+	}
+
 	onMount(() => {
 		textareaRef?.focus();
 
 		(async () => {
 			inputMessage = getPersonaPrefix();
-			await loadCharts();
+			await Promise.all([loadCharts(), loadWhiteboards()]);
 		})();
 
 		// Listen for nuke events from SettingsModal
@@ -173,6 +308,7 @@
 		return () => {
 			pendingTimeouts.forEach(clearTimeout);
 			pendingTimeouts = [];
+			if (whiteboardSaveTimeout) clearTimeout(whiteboardSaveTimeout);
 			deleteConfirm.cleanup();
 			fileDeleteConfirm.cleanup();
 			chartDeleteConfirm.cleanup();
@@ -297,7 +433,7 @@
 			chartSource = selectedChart.source;
 		}
 
-		await sendMessage(message, selectedPersona, chartId, chartSource);
+		await sendMessage(message, selectedPersona, chartId, chartSource, undefined, selectedWhiteboardIds.length > 0 ? selectedWhiteboardIds : undefined);
 
 		if ($currentMessage) {
 			const now = new Date().toISOString();
@@ -431,6 +567,7 @@
 	// File paste handlers
 	async function handlePaperclipClick() {
 		showFileLibrary = false;
+		showBoardLibrary = false;
 		showFilePaste = !showFilePaste;
 		if (showFilePaste) {
 			await tick();
@@ -441,10 +578,28 @@
 
 	async function handleFolderClick() {
 		showFilePaste = false;
+		showBoardLibrary = false;
 		showFileLibrary = !showFileLibrary;
 		if (showFileLibrary) {
 			await loadFiles();
 		}
+	}
+
+	async function handleBoardLibraryClick() {
+		showFilePaste = false;
+		showFileLibrary = false;
+		showBoardLibrary = !showBoardLibrary;
+	}
+
+	function clearWhiteboardSelection() {
+		selectedWhiteboardIds = [];
+		showBoardLibrary = false;
+	}
+
+	function handleOpenWhiteboard(id: string) {
+		viewingWhiteboardId = id;
+		forceCanvas = 'notes';
+		showBoardLibrary = false;
 	}
 
 	async function loadFiles() {
@@ -618,6 +773,11 @@
 			textareaRef?.focus();
 			return;
 		}
+		if (event.key === 'Escape' && showBoardLibrary) {
+			showBoardLibrary = false;
+			textareaRef?.focus();
+			return;
+		}
 		if (event.key === 'Escape') {
 			const selection = window.getSelection();
 			if (selection && selection.toString().length > 0) {
@@ -638,7 +798,7 @@
 	}
 
 	function refocusInput() {
-		if (!showFilePaste && !showFileLibrary) {
+		if (!showFilePaste && !showFileLibrary && !showBoardLibrary) {
 			textareaRef?.focus();
 		}
 	}
@@ -736,6 +896,29 @@
 						{/if}
 					</div>
 
+					<div class="board-wrapper">
+						<button
+							class="control-btn hit-target"
+							class:active={showBoardLibrary || selectedWhiteboardIds.length > 0}
+							title="Board library"
+							onclick={handleBoardLibraryClick}
+						>
+							<Icon src={LuStickyNote} size="11" />
+							{#if selectedWhiteboardIds.length > 0}
+								<span class="selection-badge">{selectedWhiteboardIds.length}</span>
+							{/if}
+						</button>
+						{#if showBoardLibrary}
+							<BoardLibrary
+								{whiteboards}
+								selectedIds={selectedWhiteboardIds}
+								onToggle={toggleWhiteboardSelection}
+								onOpen={handleOpenWhiteboard}
+								onClear={clearWhiteboardSelection}
+							/>
+						{/if}
+					</div>
+
 					<button class="control-btn hit-target" title="Download from cloud">
 						<Icon src={LuCloudDownload} size="11" />
 					</button>
@@ -798,6 +981,11 @@
 		{calendarRefreshTrigger}
 		enableDelete={true}
 		onDelete={handleChartDeleteClick}
+		{whiteboards}
+		activeWhiteboardId={viewingWhiteboardId}
+		{selectedWhiteboardIds}
+		onWhiteboardSelect={handleWhiteboardSelect}
+		onWhiteboardStateChange={handleWhiteboardStateChange}
 	/>
 </div>
 
@@ -881,8 +1069,25 @@
 		border-radius: 6px;
 	}
 
-	.folder-wrapper {
+	.folder-wrapper,
+	.board-wrapper {
 		position: relative;
+	}
+
+	.selection-badge {
+		position: absolute;
+		top: -4px;
+		right: -4px;
+		background: var(--current-accent);
+		color: hsl(var(--background));
+		font-size: 0.6rem;
+		font-weight: 600;
+		width: 14px;
+		height: 14px;
+		border-radius: 50%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
 	}
 
 	.control-btn {

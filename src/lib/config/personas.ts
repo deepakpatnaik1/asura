@@ -24,6 +24,7 @@ export type ContextChunk =
 	| 'diary' // Founder diary entries
 	| 'tags' // Canonical tag list
 	| 'calendar' // Google Calendar events (future)
+	| 'whiteboard' // Active whiteboard (for Gunnar)
 	| 'time'; // Current timestamp (always injected, not toggleable)
 
 
@@ -45,7 +46,13 @@ export type ToolName =
 	| 'create_calendar_event'
 	| 'update_calendar_event'
 	| 'delete_calendar_event'
-	| 'check_calendar_availability';
+	| 'check_calendar_availability'
+	// Whiteboard tools
+	| 'create_whiteboard'
+	| 'rename_whiteboard'
+	| 'delete_whiteboard'
+	| 'open_whiteboard'
+	| 'list_whiteboards';
 
 /**
  * Persona configuration interface
@@ -62,7 +69,7 @@ export interface Persona {
 }
 
 /**
- * Gunnar: Full memory pyramid + productivity (no tags)
+ * Gunnar: Full memory pyramid + productivity (no tags) + whiteboard
  */
 const GUNNAR_CHUNKS: ContextChunk[] = [
 	'working',
@@ -72,7 +79,8 @@ const GUNNAR_CHUNKS: ContextChunk[] = [
 	'canon',
 	'active',
 	'todos',
-	'diary'
+	'diary',
+	'whiteboard'
 ];
 
 /**
@@ -98,6 +106,17 @@ const SAMARA_CHUNKS: ContextChunk[] = ['starred', 'canon', 'active'];
  * Alicja: Scribe - productivity data + her own conversation memory
  */
 const ALICJA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'canon', 'todos', 'diary', 'tags', 'calendar'];
+
+/**
+ * Gunnar whiteboard tools
+ */
+const GUNNAR_TOOLS: ToolName[] = [
+	'create_whiteboard',
+	'rename_whiteboard',
+	'delete_whiteboard',
+	'open_whiteboard',
+	'list_whiteboards'
+];
 
 /**
  * All Alicja tools
@@ -131,7 +150,7 @@ export const PERSONAS: Record<string, Persona> = {
 		systemPrompt: 'gunnar', // resolved via getSystemPrompt()
 		contextChunks: GUNNAR_CHUNKS,
 		compression: true,
-		tools: []
+		tools: GUNNAR_TOOLS
 	},
 	kirby: {
 		name: 'kirby',

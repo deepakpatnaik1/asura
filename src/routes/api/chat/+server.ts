@@ -30,6 +30,14 @@ import {
 	type TodoToolContext,
 	type TodoMutations
 } from '$lib/api/todo-tools';
+import {
+	WHITEBOARD_TOOLS,
+	executeWhiteboardTool,
+	isWhiteboardTool,
+	createEmptyWhiteboardMutations,
+	type WhiteboardToolContext,
+	type WhiteboardMutations
+} from '$lib/api/whiteboard-tools';
 import { refreshAccessToken } from '$lib/api/google-calendar';
 import { BRAVE_SEARCH_TOOL, executeBraveSearch } from '$lib/api/brave-search';
 import { createClient } from '@supabase/supabase-js';
@@ -74,7 +82,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		const validation = validateSchema(chatMessageSchema, parseResult.data);
 		if (!validation.success) return validation.error;
 
-		const { message, persona: requestPersona, chart_id, chart_source, content_ids } = validation.data;
+		const { message, persona: requestPersona, chart_id, chart_source, content_ids, whiteboard_ids } = validation.data;
 
 		// 4. Load user settings (persona and model)
 		const { data: settings } = await supabase
@@ -155,7 +163,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			persona,
 			conversationModel,
 			message,
-			content_ids
+			content_ids,
+			whiteboard_ids
 		);
 
 		log.info('Context built', { ...stats, model: conversationModel, persona });
@@ -167,60 +176,75 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		let tools: Anthropic.Tool[] | undefined;
 		let toolExecutor: ToolExecutor | undefined;
 		let todoMutations: TodoMutations | undefined;
+		let whiteboardMutations: WhiteboardMutations | undefined;
 
 		const personaTools = getPersonaTools(persona);
 
 		if (personaTools.length > 0) {
-			// Persona has tools configured (e.g., Alicja)
-			todoMutations = createEmptyMutations();
+			// Persona has tools configured
+			const allTools: Anthropic.Tool[] = [BRAVE_SEARCH_TOOL]; // Everyone gets web search
 
-			const todoContext: TodoToolContext = {
-				supabase,
-				userId
-			};
+			// Check which tool categories this persona has
+			const hasTodoTools = personaTools.some(t => isTodoTool(t));
+			const hasWhiteboardTools = personaTools.some(t => isWhiteboardTool(t));
 
-			// Start with TODO_TOOLS + BRAVE_SEARCH_TOOL (everyone gets web search)
-			const allTools: Anthropic.Tool[] = [...TODO_TOOLS, BRAVE_SEARCH_TOOL];
+			// Set up todo tools context (Alicja)
+			let todoContext: TodoToolContext | null = null;
 			let calendarContext: CalendarToolContext | null = null;
 
-			// Add calendar tools if user has Google Calendar tokens
-			const { data: tokens } = await supabase
-				.from('google_tokens')
-				.select('access_token, refresh_token, expires_at')
-				.eq('user_id', userId)
-				.single();
+			if (hasTodoTools) {
+				todoMutations = createEmptyMutations();
+				todoContext = { supabase, userId };
+				allTools.push(...TODO_TOOLS);
 
-			if (tokens) {
-				let accessToken = tokens.access_token;
-				const expiresAt = new Date(tokens.expires_at);
-				const now = new Date();
+				// Add calendar tools if user has Google Calendar tokens
+				const { data: tokens } = await supabase
+					.from('google_tokens')
+					.select('access_token, refresh_token, expires_at')
+					.eq('user_id', userId)
+					.single();
 
-				// Refresh if expires in less than 5 minutes
-				if (expiresAt.getTime() - now.getTime() < 5 * 60 * 1000) {
-					try {
-						const refreshed = await refreshAccessToken(tokens.refresh_token);
-						accessToken = refreshed.access_token;
+				if (tokens) {
+					let accessToken = tokens.access_token;
+					const expiresAt = new Date(tokens.expires_at);
+					const now = new Date();
 
-						await supabase
-							.from('google_tokens')
-							.update({
-								access_token: refreshed.access_token,
-								expires_at: refreshed.expires_at.toISOString(),
-								updated_at: new Date().toISOString()
-							})
-							.eq('user_id', userId);
-					} catch (err) {
-						log.warn('Calendar token refresh failed', { error: err instanceof Error ? err.message : 'Unknown' });
+					// Refresh if expires in less than 5 minutes
+					if (expiresAt.getTime() - now.getTime() < 5 * 60 * 1000) {
+						try {
+							const refreshed = await refreshAccessToken(tokens.refresh_token);
+							accessToken = refreshed.access_token;
+
+							await supabase
+								.from('google_tokens')
+								.update({
+									access_token: refreshed.access_token,
+									expires_at: refreshed.expires_at.toISOString(),
+									updated_at: new Date().toISOString()
+								})
+								.eq('user_id', userId);
+						} catch (err) {
+							log.warn('Calendar token refresh failed', { error: err instanceof Error ? err.message : 'Unknown' });
+						}
 					}
-				}
 
-				calendarContext = { accessToken };
-				allTools.push(...CALENDAR_TOOLS);
+					calendarContext = { accessToken };
+					allTools.push(...CALENDAR_TOOLS);
+				}
+			}
+
+			// Set up whiteboard tools context (Gunnar)
+			let whiteboardContext: WhiteboardToolContext | null = null;
+
+			if (hasWhiteboardTools) {
+				whiteboardMutations = createEmptyWhiteboardMutations();
+				whiteboardContext = { supabase, userId };
+				allTools.push(...WHITEBOARD_TOOLS);
 			}
 
 			tools = allTools;
 
-			// Tool executor handles todo, calendar, and web search
+			// Tool executor handles all tool types
 			toolExecutor = async (toolName, input) => {
 				if (toolName === 'brave_search') {
 					// Web search (available to all personas)
@@ -230,14 +254,16 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 						success: !!searchResults,
 						message: searchResults || 'Search failed'
 					};
-				} else if (isTodoTool(toolName)) {
+				} else if (isWhiteboardTool(toolName) && whiteboardContext) {
+					return executeWhiteboardTool(toolName, input, whiteboardContext, whiteboardMutations!);
+				} else if (isTodoTool(toolName) && todoContext) {
 					return executeTodoTool(toolName, input, todoContext, todoMutations!);
 				} else if (calendarContext) {
 					return executeCalendarTool(toolName, input, calendarContext, todoMutations);
 				} else {
 					return {
 						success: false,
-						message: `Calendar not connected. Connect Google Calendar to use ${toolName}.`
+						message: `Tool ${toolName} not available for this persona.`
 					};
 				}
 			};
@@ -294,6 +320,9 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 						superjournal_id: superjournalId,
 						...(todoMutations && {
 							mutations: todoMutations
+						}),
+						...(whiteboardMutations && {
+							whiteboard_mutations: whiteboardMutations
 						})
 					});
 					controller.enqueue(encoder.encode(`data: ${doneData}\n\n`));

@@ -38,6 +38,7 @@ interface ContextComponents {
 	otherArcs: string;
 	workData: string; // Todo mode: current todos and tags
 	calendar: string; // Google Calendar events (for Alicja)
+	whiteboard: string; // Active whiteboard (for Gunnar)
 }
 
 interface ContextStats {
@@ -52,6 +53,7 @@ interface ContextStats {
 		otherArcs: number;
 		workData: number;
 		calendar: number;
+		whiteboard: number;
 	};
 }
 
@@ -94,7 +96,8 @@ export async function buildContext(
 	personaName: string = DEFAULT_PERSONA,
 	modelIdentifier: string,
 	userQuery?: string, // Optional: enables vector search
-	contentIds?: string[] // Currently selected content(s) from library
+	contentIds?: string[], // Currently selected content(s) from library
+	whiteboardIds?: string[] // Selected whiteboard IDs (for Gunnar)
 ): Promise<StructuredContext> {
 	// Get model's context window and calculate budget
 	const contextWindow = await getModelContextWindow(supabase, modelIdentifier);
@@ -110,7 +113,8 @@ export async function buildContext(
 		highSalienceArcs: '',
 		otherArcs: '',
 		workData: '',
-		calendar: ''
+		calendar: '',
+		whiteboard: ''
 	};
 
 	let totalTokens = 0;
@@ -256,6 +260,21 @@ export async function buildContext(
 			}
 		} catch {
 			// Calendar fetch failed, continue without it
+		}
+	}
+
+	// Priority 0.7: Selected whiteboards (for Gunnar)
+	if (hasChunk('whiteboard') && whiteboardIds && whiteboardIds.length > 0) {
+		const { data: whiteboardsData } = await supabase
+			.from('whiteboards')
+			.select('id, title, state')
+			.in('id', whiteboardIds)
+			.eq('user_id', userId);
+
+		if (whiteboardsData && whiteboardsData.length > 0) {
+			const whiteboardText = formatWhiteboardsContext(whiteboardsData);
+			components.whiteboard = whiteboardText;
+			totalTokens += estimateTokens(whiteboardText);
 		}
 	}
 
@@ -492,7 +511,8 @@ export async function buildContext(
 			highSalienceArcs: estimateTokens(components.highSalienceArcs),
 			otherArcs: estimateTokens(components.otherArcs),
 			workData: estimateTokens(components.workData),
-			calendar: estimateTokens(components.calendar)
+			calendar: estimateTokens(components.calendar),
+			whiteboard: estimateTokens(components.whiteboard)
 		}
 	};
 
@@ -848,12 +868,75 @@ ${eventsJson}
 `;
 }
 
+// Format whiteboard context for Gunnar
+interface WhiteboardState {
+	notes: Array<{
+		id: string;
+		x: number;
+		y: number;
+		text: string;
+		fill?: string;
+		width?: number;
+		height?: number;
+	}>;
+	viewport: { x: number; y: number; scale: number };
+}
+
+function formatSingleWhiteboard(whiteboard: {
+	id: string;
+	title: string;
+	state: WhiteboardState;
+}): string {
+	const { title, state } = whiteboard;
+	const notes = state?.notes || [];
+
+	if (notes.length === 0) {
+		return `<whiteboard>
+<title>${title}</title>
+<notes>No notes yet - empty canvas</notes>
+</whiteboard>`;
+	}
+
+	// Format notes as simple list (positions are for visual reference)
+	const formattedNotes = notes.map((note) => ({
+		text: note.text,
+		position: { x: Math.round(note.x), y: Math.round(note.y) }
+	}));
+
+	const notesJson = JSON.stringify(formattedNotes, null, 2);
+
+	return `<whiteboard>
+<title>${title}</title>
+<notes>
+${notesJson}
+</notes>
+</whiteboard>`;
+}
+
+function formatWhiteboardsContext(whiteboards: Array<{
+	id: string;
+	title: string;
+	state: WhiteboardState;
+}>): string {
+	if (whiteboards.length === 0) return '';
+
+	const formatted = whiteboards.map(formatSingleWhiteboard).join('\n\n');
+	const count = whiteboards.length;
+	const label = count === 1 ? 'SELECTED WHITEBOARD' : `SELECTED WHITEBOARDS (${count})`;
+
+	return `--- ${label} ---
+${formatted}
+
+`;
+}
+
 // Assemble all context components into final string
 function assembleContext(components: ContextComponents): string {
 	const parts = [
 		components.canon, // Canon first (shared knowledge across all modes)
 		components.workData, // Work data for todo mode (before superjournal so Alicja sees todos first)
 		components.calendar, // Calendar events (for Alicja)
+		components.whiteboard, // Active whiteboard (for Gunnar)
 		components.superjournal,
 		components.files,
 		components.starred,

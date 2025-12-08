@@ -22,6 +22,18 @@
 		alt: string;
 	}
 
+	// Whiteboard type for Notes canvas
+	interface Whiteboard {
+		id: string;
+		title: string;
+		state?: {
+			notes: Array<{ id: string; x: number; y: number; text: string; fill: string; width: number; height: number }>;
+			viewport: { x: number; y: number; scale: number };
+		};
+		created_at: string;
+		updated_at: string;
+	}
+
 	interface Props {
 		persona: string;
 		// Gallery-specific props (passed through when Gallery canvas is active)
@@ -32,6 +44,12 @@
 		onDelete?: (chartId: string) => void;
 		// Calendar-specific props
 		calendarRefreshTrigger?: number;
+		// Notes/Whiteboard-specific props
+		whiteboards?: Whiteboard[];
+		activeWhiteboardId?: string | null;
+		selectedWhiteboardIds?: string[]; // For showing selection state in carousel
+		onWhiteboardSelect?: (id: string) => void;
+		onWhiteboardStateChange?: (id: string, state: Whiteboard['state']) => void;
 		// Force switch to specific canvas (e.g., when content is loaded)
 		forceCanvas?: CanvasType | null;
 	}
@@ -44,8 +62,18 @@
 		enableDelete = false,
 		onDelete,
 		calendarRefreshTrigger = 0,
+		whiteboards = [],
+		activeWhiteboardId = null,
+		selectedWhiteboardIds = [],
+		onWhiteboardSelect,
+		onWhiteboardStateChange,
 		forceCanvas = $bindable(null)
 	}: Props = $props();
+
+	// Get active whiteboard data
+	const activeWhiteboard = $derived(
+		whiteboards.find(wb => wb.id === activeWhiteboardId) ?? null
+	);
 
 	let activeCanvas = $state<CanvasType>(DEFAULT_CANVAS);
 
@@ -77,7 +105,13 @@
 		{:else if activeCanvas === 'calendar'}
 			<CalendarCanvas {persona} refreshTrigger={calendarRefreshTrigger} />
 		{:else if activeCanvas === 'notes'}
-			<NotesCanvas />
+			<NotesCanvas
+				{whiteboards}
+				whiteboard={activeWhiteboard}
+				{selectedWhiteboardIds}
+				onSelect={onWhiteboardSelect}
+				onStateChange={onWhiteboardStateChange}
+			/>
 		{/if}
 	</div>
 

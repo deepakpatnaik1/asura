@@ -28,9 +28,18 @@ interface Mutations {
 	deleted_events?: string[];
 }
 
+// Whiteboard mutations from Gunnar's whiteboard tools
+interface WhiteboardMutations {
+	created_whiteboards?: { id: string; title: string; created_at: string; updated_at: string }[];
+	renamed_whiteboards?: { id: string; title: string }[];
+	deleted_whiteboards?: string[];
+	opened_whiteboard?: string | null; // ID of whiteboard to open in UI
+}
+
 export const currentMessage = writable<Message | null>(null);
 export const isLoading = writable(false);
 export const lastMutations = writable<Mutations | null>(null);
+export const lastWhiteboardMutations = writable<WhiteboardMutations | null>(null);
 
 // AbortController for canceling streaming requests
 let currentAbortController: AbortController | null = null;
@@ -43,7 +52,8 @@ export async function sendMessage(
 	persona?: string,
 	chartId?: string,
 	chartSource?: 'file' | 'superjournal',
-	contentId?: string // active content for context injection
+	contentId?: string, // active content for context injection
+	whiteboardIds?: string[] // selected whiteboards for Gunnar context
 ): Promise<void> {
 	// Create new abort controller for this request
 	currentAbortController = new AbortController();
@@ -75,6 +85,9 @@ export async function sendMessage(
 		}
 		if (contentId) {
 			body.content_id = contentId;
+		}
+		if (whiteboardIds && whiteboardIds.length > 0) {
+			body.whiteboard_ids = whiteboardIds;
 		}
 
 		const response = await fetchWithTimeout('/api/chat', {
@@ -146,6 +159,10 @@ export async function sendMessage(
 									// Capture mutations (diary entries, todos, etc.)
 									if (data.mutations) {
 										lastMutations.set(data.mutations);
+									}
+									// Capture whiteboard mutations
+									if (data.whiteboard_mutations) {
+										lastWhiteboardMutations.set(data.whiteboard_mutations);
 									}
 								} else if (data.type === 'error') {
 									throw new Error(data.message);
