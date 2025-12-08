@@ -2,6 +2,26 @@ import { getPersonaAccentColor, getPersonaAccentBg, CODE_BLOCK_BG, TABLE_BORDER 
 import { DEFAULT_PERSONA } from '$lib/config/personas';
 
 /**
+ * Process inline markdown formatting (bold, italic, code) in a string
+ */
+function processInlineFormatting(text: string, accent: string, accentBg: string): string {
+	let result = text
+		.replace(/&/g, '&amp;')
+		.replace(/</g, '&lt;')
+		.replace(/>/g, '&gt;');
+	// Bold
+	result = result.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+	// Italic (asterisk and underscore)
+	result = result.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
+	result = result.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
+	// Inline code
+	result = result.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;">$1</code>`);
+	// Links
+	result = result.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="color: ${accent}; text-decoration: none;">$1</a>`);
+	return result;
+}
+
+/**
  * Render a markdown pipe table as HTML
  */
 function renderTable(tableMatch: string, accent: string): string {
@@ -18,13 +38,14 @@ function renderTable(tableMatch: string, accent: string): string {
 	);
 
 	// Build HTML table with horizontal scroll wrapper
+	// Process inline formatting in cells
 	const headerCells = headers.map(h =>
-		`<th style="padding: 6px 10px; text-align: left; white-space: nowrap; color: ${accent}; border-bottom: 1px solid ${accent};">${h}</th>`
+		`<th style="padding: 6px 10px; text-align: left; white-space: nowrap; color: ${accent}; border-bottom: 1px solid ${accent};">${processInlineFormatting(h, accent, '')}</th>`
 	).join('');
 
 	const bodyRows = dataRows.map(row =>
 		`<tr>${row.map(cell =>
-			`<td style="padding: 6px 10px; white-space: nowrap; border-bottom: 1px solid ${TABLE_BORDER};">${cell}</td>`
+			`<td style="padding: 6px 10px; white-space: nowrap; border-bottom: 1px solid ${TABLE_BORDER};">${processInlineFormatting(cell, accent, '')}</td>`
 		).join('')}</tr>`
 	).join('');
 
