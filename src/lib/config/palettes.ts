@@ -16,7 +16,7 @@ export interface Palette {
 export const PALETTES: Record<string, Palette> = {
 	vibrant: {
 		name: 'Vibrant',
-		gunnar: 'rgb(220, 50, 50)', // vibrant red
+		gunnar: 'rgb(200, 100, 60)', // burnt sienna
 		kirby: 'rgb(236, 72, 153)', // hot pink
 		samara: 'rgb(16, 185, 129)', // emerald
 		alicja: 'rgb(56, 140, 220)' // vibrant blue
