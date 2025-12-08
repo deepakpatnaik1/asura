@@ -868,56 +868,79 @@ ${eventsJson}
 `;
 }
 
-// Format whiteboard context for Gunnar
-interface WhiteboardState {
-	notes: Array<{
+// Format whiteboard context for Gunnar (dual-layer: render + semantic)
+interface WhiteboardStateForContext {
+	render?: Array<{
+		id: string;
+		type: string;
+		x?: number;
+		y?: number;
+		text?: string;
+		fill?: string;
+		width?: number;
+		height?: number;
+		from?: [number, number];
+		to?: [number, number];
+		label?: string;
+	}>;
+	semantic?: Record<string, unknown>;
+	viewport?: { x: number; y: number; scale: number };
+	// Legacy format support
+	notes?: Array<{
 		id: string;
 		x: number;
 		y: number;
 		text: string;
 		fill?: string;
-		width?: number;
-		height?: number;
 	}>;
-	viewport: { x: number; y: number; scale: number };
 }
 
 function formatSingleWhiteboard(whiteboard: {
 	id: string;
 	title: string;
-	state: WhiteboardState;
+	state: WhiteboardStateForContext;
 }): string {
-	const { title, state } = whiteboard;
-	const notes = state?.notes || [];
+	const { id, title, state } = whiteboard;
 
-	if (notes.length === 0) {
-		return `<whiteboard>
+	// Handle both new dual-layer format and legacy notes format
+	const render = state?.render || [];
+	const semantic = state?.semantic || {};
+
+	// Fallback: convert legacy notes to render format
+	const elements =
+		render.length > 0
+			? render
+			: (state?.notes || []).map((n) => ({ ...n, type: 'note' as const }));
+
+	if (elements.length === 0) {
+		return `<whiteboard id="${id}">
 <title>${title}</title>
-<notes>No notes yet - empty canvas</notes>
+<render>[]</render>
+<semantic>{}</semantic>
 </whiteboard>`;
 	}
 
-	// Format notes as simple list (positions are for visual reference)
-	const formattedNotes = notes.map((note) => ({
-		text: note.text,
-		position: { x: Math.round(note.x), y: Math.round(note.y) }
-	}));
+	const renderJson = JSON.stringify(elements, null, 2);
+	const semanticJson = JSON.stringify(semantic, null, 2);
 
-	const notesJson = JSON.stringify(formattedNotes, null, 2);
-
-	return `<whiteboard>
+	return `<whiteboard id="${id}">
 <title>${title}</title>
-<notes>
-${notesJson}
-</notes>
+<render>
+${renderJson}
+</render>
+<semantic>
+${semanticJson}
+</semantic>
 </whiteboard>`;
 }
 
-function formatWhiteboardsContext(whiteboards: Array<{
-	id: string;
-	title: string;
-	state: WhiteboardState;
-}>): string {
+function formatWhiteboardsContext(
+	whiteboards: Array<{
+		id: string;
+		title: string;
+		state: WhiteboardStateForContext;
+	}>
+): string {
 	if (whiteboards.length === 0) return '';
 
 	const formatted = whiteboards.map(formatSingleWhiteboard).join('\n\n');

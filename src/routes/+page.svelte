@@ -226,6 +226,8 @@
 			if (response.ok) {
 				const data = await response.json();
 				whiteboards = data.whiteboards || [];
+				// Auto-select all whiteboards for context injection (Gunnar should see what he created)
+				selectedWhiteboardIds = whiteboards.map(wb => wb.id);
 				// Auto-view first whiteboard if none viewing
 				if (whiteboards.length > 0 && !viewingWhiteboardId) {
 					viewingWhiteboardId = whiteboards[0].id;

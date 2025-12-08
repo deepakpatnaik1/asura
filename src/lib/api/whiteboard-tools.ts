@@ -89,6 +89,52 @@ export const LIST_WHITEBOARDS_TOOL: Anthropic.Tool = {
 	}
 };
 
+export const UPDATE_WHITEBOARD_TOOL: Anthropic.Tool = {
+	name: 'update_whiteboard',
+	description:
+		'Update a whiteboard with new render elements and semantic structure. Use this to add, modify, or remove visual elements on the canvas.',
+	input_schema: {
+		type: 'object',
+		properties: {
+			whiteboard_id: {
+				type: 'string',
+				description: 'The UUID of the whiteboard to update'
+			},
+			render: {
+				type: 'array',
+				description:
+					'Array of visual elements to render. Each element must have: id (string), type (note|label|line|arrow|group), and type-specific properties.',
+				items: {
+					type: 'object',
+					properties: {
+						id: { type: 'string' },
+						type: { type: 'string', enum: ['note', 'label', 'line', 'arrow', 'group'] },
+						x: { type: 'number' },
+						y: { type: 'number' },
+						text: { type: 'string' },
+						fill: { type: 'string' },
+						width: { type: 'number' },
+						height: { type: 'number' },
+						fontSize: { type: 'number' },
+						stroke: { type: 'string' },
+						strokeWidth: { type: 'number' },
+						from: { type: 'array', items: { type: 'number' } },
+						to: { type: 'array', items: { type: 'number' } },
+						label: { type: 'string' }
+					},
+					required: ['id', 'type']
+				}
+			},
+			semantic: {
+				type: 'object',
+				description:
+					'Free-form semantic structure describing what the whiteboard represents. Define concepts, relationships, hierarchy as needed.'
+			}
+		},
+		required: ['whiteboard_id', 'render', 'semantic']
+	}
+};
+
 /**
  * All whiteboard tools
  */
@@ -97,7 +143,8 @@ export const WHITEBOARD_TOOLS: Anthropic.Tool[] = [
 	RENAME_WHITEBOARD_TOOL,
 	DELETE_WHITEBOARD_TOOL,
 	OPEN_WHITEBOARD_TOOL,
-	LIST_WHITEBOARDS_TOOL
+	LIST_WHITEBOARDS_TOOL,
+	UPDATE_WHITEBOARD_TOOL
 ];
 
 /**
@@ -128,6 +175,35 @@ export interface Whiteboard {
 }
 
 /**
+ * Render element types
+ */
+export type RenderElement = {
+	id: string;
+	type: 'note' | 'label' | 'line' | 'arrow' | 'group';
+	x?: number;
+	y?: number;
+	text?: string;
+	fill?: string;
+	width?: number;
+	height?: number;
+	fontSize?: number;
+	stroke?: string;
+	strokeWidth?: number;
+	from?: [number, number];
+	to?: [number, number];
+	label?: string;
+};
+
+/**
+ * Whiteboard state with dual-layer model
+ */
+export interface WhiteboardState {
+	render: RenderElement[];
+	semantic: Record<string, unknown>;
+	viewport: { x: number; y: number; scale: number };
+}
+
+/**
  * Mutations payload returned with chat response
  */
 export interface WhiteboardMutations {
@@ -135,6 +211,7 @@ export interface WhiteboardMutations {
 	renamed_whiteboards: { id: string; title: string }[];
 	deleted_whiteboards: string[]; // IDs
 	opened_whiteboard: string | null; // ID of whiteboard to open in UI
+	updated_whiteboards: { id: string; state: WhiteboardState }[];
 }
 
 /**
@@ -145,7 +222,8 @@ export function createEmptyWhiteboardMutations(): WhiteboardMutations {
 		created_whiteboards: [],
 		renamed_whiteboards: [],
 		deleted_whiteboards: [],
-		opened_whiteboard: null
+		opened_whiteboard: null,
+		updated_whiteboards: []
 	};
 }
 
@@ -173,6 +251,9 @@ export async function executeWhiteboardTool(
 
 		case 'list_whiteboards':
 			return executeListWhiteboards(context);
+
+		case 'update_whiteboard':
+			return executeUpdateWhiteboard(input, context, mutations);
 
 		default:
 			return {
@@ -445,6 +526,74 @@ async function executeListWhiteboards(context: WhiteboardToolContext): Promise<T
 }
 
 /**
+ * Update Whiteboard Executor
+ */
+async function executeUpdateWhiteboard(
+	input: Record<string, unknown>,
+	context: WhiteboardToolContext,
+	mutations: WhiteboardMutations
+): Promise<ToolExecutionResult> {
+	try {
+		const { supabase, userId } = context;
+		const whiteboardId = input.whiteboard_id as string;
+		const render = input.render as RenderElement[];
+		const semantic = input.semantic as Record<string, unknown>;
+
+		// Verify whiteboard exists and belongs to user
+		const { data: existing, error: fetchError } = await supabase
+			.from('whiteboards')
+			.select('title, state')
+			.eq('id', whiteboardId)
+			.eq('user_id', userId)
+			.single();
+
+		if (fetchError || !existing) {
+			return {
+				success: false,
+				message: 'Whiteboard not found'
+			};
+		}
+
+		// Preserve viewport from existing state
+		const existingState = existing.state as WhiteboardState | null;
+		const viewport = existingState?.viewport || { x: 0, y: 0, scale: 1 };
+
+		const newState: WhiteboardState = {
+			render,
+			semantic,
+			viewport
+		};
+
+		const { error } = await supabase
+			.from('whiteboards')
+			.update({
+				state: newState,
+				updated_at: new Date().toISOString()
+			})
+			.eq('id', whiteboardId)
+			.eq('user_id', userId);
+
+		if (error) throw error;
+
+		// Add to mutations for UI update
+		mutations.updated_whiteboards.push({ id: whiteboardId, state: newState });
+		// Also open this whiteboard so user sees the changes
+		mutations.opened_whiteboard = whiteboardId;
+
+		return {
+			success: true,
+			message: `Updated whiteboard "${existing.title}" with ${render.length} elements`,
+			data: { id: whiteboardId, elementCount: render.length }
+		};
+	} catch (error) {
+		return {
+			success: false,
+			message: `Failed to update whiteboard: ${error instanceof Error ? error.message : 'Unknown error'}`
+		};
+	}
+}
+
+/**
  * Check if a tool name is a whiteboard tool
  */
 export function isWhiteboardTool(toolName: string): boolean {
@@ -453,6 +602,7 @@ export function isWhiteboardTool(toolName: string): boolean {
 		'rename_whiteboard',
 		'delete_whiteboard',
 		'open_whiteboard',
-		'list_whiteboards'
+		'list_whiteboards',
+		'update_whiteboard'
 	].includes(toolName);
 }

@@ -1,29 +1,13 @@
 <script lang="ts">
 	/**
 	 * NotesCanvas - Interactive brainstorming canvas with Konva
-	 * Renders whiteboards with sticky notes, drag/drop, pan/zoom
+	 * Renders whiteboards with multiple element types: notes, labels, lines, arrows, groups
 	 */
 
 	import { onMount } from 'svelte';
 	import CanvasFrame from '$lib/components/CanvasFrame.svelte';
-
-	// Sticky note data model
-	type StickyNote = {
-		id: string;
-		x: number;
-		y: number;
-		text: string;
-		fill: string;
-		width: number;
-		height: number;
-		stroke?: string;
-		strokeWidth?: number;
-	};
-
-	type WhiteboardState = {
-		notes: StickyNote[];
-		viewport: { x: number; y: number; scale: number };
-	};
+	import type { RenderElement, WhiteboardState } from '$lib/api/whiteboard-tools';
+	import { CANVAS, LAYOUT } from '$lib/config/layout';
 
 	interface Whiteboard {
 		id: string;
@@ -56,7 +40,7 @@
 	let stageHeight = $state(600);
 
 	// Canvas state - initialized from whiteboard prop
-	let notes = $state<StickyNote[]>([]);
+	let elements = $state<RenderElement[]>([]);
 	let stageX = $state(0);
 	let stageY = $state(0);
 	let stageScale = $state(1);
@@ -70,18 +54,19 @@
 	let Rect: any;
 	let Text: any;
 	let Group: any;
-	let Transformer: any;
+	let Line: any;
+	let Arrow: any;
 
 	// Load state when whiteboard changes
 	$effect(() => {
 		if (whiteboard?.state) {
-			notes = whiteboard.state.notes || [];
+			elements = whiteboard.state.render || [];
 			stageX = whiteboard.state.viewport?.x || 0;
 			stageY = whiteboard.state.viewport?.y || 0;
 			stageScale = whiteboard.state.viewport?.scale || 1;
 		} else {
 			// Reset to empty state
-			notes = [];
+			elements = [];
 			stageX = 0;
 			stageY = 0;
 			stageScale = 1;
@@ -97,7 +82,8 @@
 		Rect = konva.Rect;
 		Text = konva.Text;
 		Group = konva.Group;
-		Transformer = konva.Transformer;
+		Line = konva.Line;
+		Arrow = konva.Arrow;
 
 		// Size canvas to container
 		if (containerEl) {
@@ -126,19 +112,18 @@
 	function notifyStateChange() {
 		if (whiteboard && onStateChange) {
 			onStateChange(whiteboard.id, {
-				notes,
+				render: elements,
+				semantic: whiteboard.state?.semantic || {},
 				viewport: { x: stageX, y: stageY, scale: stageScale }
 			});
 		}
 	}
 
-	// Handle drag end - update note position
-	function handleDragEnd(noteId: string, e: any) {
+	// Handle drag end - update element position
+	function handleDragEnd(elementId: string, e: any) {
 		const target = e.target;
-		notes = notes.map(n =>
-			n.id === noteId
-				? { ...n, x: target.x(), y: target.y() }
-				: n
+		elements = elements.map((el) =>
+			el.id === elementId ? { ...el, x: target.x(), y: target.y() } : el
 		);
 		notifyStateChange();
 	}
@@ -184,9 +169,9 @@
 		stageY = e.target.y();
 	}
 
-	// Select a note
-	function handleSelect(noteId: string) {
-		selectedId = noteId;
+	// Select an element
+	function handleSelect(elementId: string) {
+		selectedId = elementId;
 	}
 
 	// Deselect on stage click
@@ -198,21 +183,22 @@
 
 	// Double-click to add new note
 	function handleDblClick(e: any) {
-		if (!whiteboard) return; // Need active whiteboard to add notes
+		if (!whiteboard) return; // Need active whiteboard to add elements
 
 		const stage = e.target.getStage();
 		const pointer = stage.getPointerPosition();
-		const newNote: StickyNote = {
+		const newElement: RenderElement = {
 			id: `note-${Date.now()}`,
+			type: 'note',
 			x: (pointer.x - stageX) / stageScale,
 			y: (pointer.y - stageY) / stageScale,
 			text: 'New idea...',
-			fill: '#e9d5ff',
+			fill: '#3a3a3a', // Graphite from palette
 			width: 150,
 			height: 100
 		};
-		notes = [...notes, newNote];
-		selectedId = newNote.id;
+		elements = [...elements, newElement];
+		selectedId = newElement.id;
 		notifyStateChange();
 	}
 
@@ -221,6 +207,11 @@
 		if (onSelect) {
 			onSelect(id);
 		}
+	}
+
+	// Helper to get element count for chip display
+	function getElementCount(wb: Whiteboard): number {
+		return wb.state?.render?.length || 0;
 	}
 </script>
 
@@ -244,43 +235,124 @@
 						ondblclick={handleDblClick}
 					>
 						<svelte:component this={Layer}>
-							{#each notes as note (note.id)}
-								<svelte:component
-									this={Group}
-									x={note.x}
-									y={note.y}
-									draggable={true}
-									ondragend={(e: any) => handleDragEnd(note.id, e)}
-									onclick={() => handleSelect(note.id)}
-								>
-									<!-- Sticky note background -->
+							{#each elements as element (element.id)}
+								{#if element.type === 'note'}
+									<!-- Note: card with text -->
 									<svelte:component
-										this={Rect}
-										width={note.width}
-										height={note.height}
-										fill={note.fill}
-										cornerRadius={4}
-										shadowColor="black"
-										shadowBlur={note.stroke ? 0 : 8}
-										shadowOpacity={note.stroke ? 0 : 0.2}
-										shadowOffsetY={note.stroke ? 0 : 4}
-										stroke={selectedId === note.id ? '#fff' : (note.stroke || 'transparent')}
-										strokeWidth={note.strokeWidth || 2}
-									/>
-									<!-- Sticky note text -->
+										this={Group}
+										x={element.x}
+										y={element.y}
+										draggable={true}
+										ondragend={(e: any) => handleDragEnd(element.id, e)}
+										onclick={() => handleSelect(element.id)}
+									>
+										<svelte:component
+											this={Rect}
+											width={element.width || 150}
+											height={element.height || 100}
+											fill={element.fill || '#3a3a3a'}
+											cornerRadius={4}
+											shadowColor="black"
+											shadowBlur={element.stroke ? 0 : 8}
+											shadowOpacity={element.stroke ? 0 : 0.2}
+											shadowOffsetY={element.stroke ? 0 : 4}
+											stroke={selectedId === element.id
+												? '#fff'
+												: element.stroke || 'transparent'}
+											strokeWidth={element.strokeWidth || 2}
+										/>
+										<svelte:component
+											this={Text}
+											text={element.text || ''}
+											x={10}
+											y={10}
+											width={(element.width || 150) - 20}
+											height={(element.height || 100) - 20}
+											fontSize={11}
+											fontFamily="iA Writer Quattro V, system-ui, -apple-system, sans-serif"
+											fill="#d9d9d9"
+											wrap="word"
+										/>
+									</svelte:component>
+								{:else if element.type === 'label'}
+									<!-- Label: standalone text -->
 									<svelte:component
 										this={Text}
-										text={note.text}
-										x={10}
-										y={10}
-										width={note.width - 20}
-										height={note.height - 20}
-										fontSize={11}
+										x={element.x}
+										y={element.y}
+										text={element.text || ''}
+										fontSize={element.fontSize || 14}
 										fontFamily="iA Writer Quattro V, system-ui, -apple-system, sans-serif"
-										fill="#d9d9d9"
-										wrap="word"
+										fill={element.fill || '#d9d9d9'}
+										draggable={true}
+										ondragend={(e: any) => handleDragEnd(element.id, e)}
+										onclick={() => handleSelect(element.id)}
 									/>
-								</svelte:component>
+								{:else if element.type === 'line'}
+									<!-- Line: connects two points -->
+									<svelte:component
+										this={Line}
+										points={[
+											element.from?.[0] || 0,
+											element.from?.[1] || 0,
+											element.to?.[0] || 0,
+											element.to?.[1] || 0
+										]}
+										stroke={element.stroke || '#5a5a5a'}
+										strokeWidth={element.strokeWidth || 2}
+										onclick={() => handleSelect(element.id)}
+									/>
+								{:else if element.type === 'arrow'}
+									<!-- Arrow: line with pointer -->
+									<svelte:component
+										this={Arrow}
+										points={[
+											element.from?.[0] || 0,
+											element.from?.[1] || 0,
+											element.to?.[0] || 0,
+											element.to?.[1] || 0
+										]}
+										stroke={element.stroke || '#5a5a5a'}
+										strokeWidth={element.strokeWidth || 2}
+										fill={element.stroke || '#5a5a5a'}
+										pointerLength={10}
+										pointerWidth={8}
+										onclick={() => handleSelect(element.id)}
+									/>
+								{:else if element.type === 'group'}
+									<!-- Group: outline style with colored border + translucent fill -->
+									<svelte:component
+										this={Group}
+										x={element.x}
+										y={element.y}
+										draggable={true}
+										ondragend={(e: any) => handleDragEnd(element.id, e)}
+										onclick={() => handleSelect(element.id)}
+									>
+										<svelte:component
+											this={Rect}
+											width={element.width || 200}
+											height={element.height || 150}
+											fill={element.fill || 'rgba(20,20,20,0.8)'}
+											stroke={selectedId === element.id
+												? '#fff'
+												: element.stroke || '#5a5a5a'}
+											strokeWidth={element.strokeWidth || 1}
+											cornerRadius={4}
+										/>
+										{#if element.label}
+											<svelte:component
+												this={Text}
+												x={8}
+												y={-18}
+												text={element.label}
+												fontSize={11}
+												fontFamily="iA Writer Quattro V, system-ui, -apple-system, sans-serif"
+												fill={element.stroke || '#5a5a5a'}
+											/>
+										{/if}
+									</svelte:component>
+								{/if}
 							{/each}
 						</svelte:component>
 					</svelte:component>
@@ -294,7 +366,10 @@
 	{/snippet}
 	{#snippet footer()}
 		{#if whiteboards.length > 0}
-			<div class="whiteboard-picker">
+			<div
+				class="whiteboard-picker"
+				style="--thumbnail-height: {CANVAS.footer.contentHeight}px; --body-font: {LAYOUT.typography.body}px;"
+			>
 				{#each whiteboards as wb (wb.id)}
 					<button
 						class="whiteboard-chip"
@@ -307,7 +382,7 @@
 							<span class="chip-check">✓</span>
 						{/if}
 						<span class="chip-title">{wb.title}</span>
-						<span class="chip-count">{wb.state?.notes?.length || 0}</span>
+						<span class="chip-count">{getElementCount(wb)}</span>
 					</button>
 				{/each}
 			</div>
@@ -366,66 +441,67 @@
 		gap: 8px;
 		width: 100%;
 		padding: 0 10px 0 44px; /* Extra left padding for canvas switcher */
-		justify-content: center;
+		justify-content: flex-start;
 		flex-wrap: nowrap;
 		overflow-x: auto;
 		height: 100%;
 		align-items: center;
 	}
 
+	/* Mini canvas thumbnail style */
 	.whiteboard-chip {
 		display: flex;
-		align-items: center;
-		gap: 6px;
-		padding: 6px 12px;
-		background: hsl(var(--card));
-		border: 1px solid hsl(var(--border) / 0.5);
-		border-radius: 16px;
+		flex-direction: column;
+		align-items: flex-start;
+		justify-content: flex-start;
+		padding: 8px 10px;
+		height: var(--thumbnail-height);
+		min-width: 80px;
+		background: hsl(0, 0%, 5%); /* Same as canvas cutting mat */
+		border: 1px solid hsl(var(--border) / 0.3);
+		border-radius: 4px;
 		cursor: pointer;
 		transition: all 0.2s ease;
 		flex-shrink: 0;
+		position: relative;
 	}
 
 	.whiteboard-chip:hover {
-		background: hsl(var(--accent));
-		border-color: hsl(var(--accent));
+		border-color: hsl(var(--border) / 0.6);
 	}
 
 	.whiteboard-chip.active {
-		background: hsl(var(--foreground) / 0.1);
-		border-color: hsl(var(--foreground) / 0.3);
+		border-color: hsl(var(--foreground) / 0.5);
 	}
 
 	.whiteboard-chip.selected {
-		background: hsl(var(--accent));
 		border-color: hsl(var(--accent));
 	}
 
 	.whiteboard-chip.selected.active {
-		background: hsl(var(--accent));
-		border-color: hsl(var(--foreground) / 0.5);
+		border-color: hsl(var(--foreground) / 0.7);
+		box-shadow: 0 0 0 1px hsl(var(--accent) / 0.3);
 	}
 
 	.chip-check {
-		font-size: 0.7rem;
-		color: hsl(var(--foreground));
+		position: absolute;
+		top: 4px;
+		right: 4px;
+		font-size: 9px;
+		color: hsl(var(--accent));
 		font-weight: 600;
 	}
 
 	.chip-title {
-		font-size: 0.75rem;
-		color: hsl(var(--foreground));
-		max-width: 120px;
-		overflow: hidden;
-		text-overflow: ellipsis;
+		font-size: var(--body-font);
+		color: hsl(var(--foreground) / 0.9);
 		white-space: nowrap;
+		line-height: 1.3;
 	}
 
 	.chip-count {
-		font-size: 0.65rem;
+		font-size: 9px;
 		color: hsl(var(--muted-foreground));
-		background: hsl(var(--background));
-		padding: 2px 6px;
-		border-radius: 10px;
+		margin-top: auto;
 	}
 </style>
