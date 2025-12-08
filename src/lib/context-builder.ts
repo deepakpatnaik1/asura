@@ -638,25 +638,7 @@ function truncateToFit<T>(
 	return formatter(entries.slice(0, included));
 }
 
-// Format duration between two dates as human-readable string
-function formatDuration(from: Date, to: Date): string {
-	const diffMs = to.getTime() - from.getTime();
-	const diffMins = Math.floor(diffMs / 60000);
-	const diffHours = Math.floor(diffMins / 60);
-	const diffDays = Math.floor(diffHours / 24);
-
-	if (diffDays > 0) {
-		const remainingHours = diffHours % 24;
-		return remainingHours > 0 ? `${diffDays}d ${remainingHours}h` : `${diffDays}d`;
-	}
-	if (diffHours > 0) {
-		const remainingMins = diffMins % 60;
-		return remainingMins > 0 ? `${diffHours}h ${remainingMins}min` : `${diffHours}h`;
-	}
-	return `${diffMins}min`;
-}
-
-// Format work data for Gunnar (chat mode) - pre-computed time analytics with hierarchy
+// Format work data for Gunnar (chat mode) - simple hierarchy, no computed durations
 function formatWorkDataForGunnar(
 	todos: Array<{
 		id: string;
@@ -677,48 +659,15 @@ function formatWorkDataForGunnar(
 		event_period?: string | null;
 	}>
 ): string {
-	const now = new Date();
-
-	// Build lookup map for parent descriptions
-	const todoById = new Map(todos.map((t) => [t.id, t]));
-
 	// Helper to format a single todo
 	const formatTodo = (t: (typeof todos)[0]) => {
-		const createdAt = new Date(t.created_at);
-		const age = formatDuration(createdAt, now);
-
-		if (t.status === 'completed' && t.completed_at) {
-			const completedAt = new Date(t.completed_at);
-			const timeToComplete = formatDuration(createdAt, completedAt);
-			const completedAgo = formatDuration(completedAt, now);
-			const base: Record<string, unknown> = {
-				description: t.description,
-				tags: t.tags,
-				status: 'completed',
-				completed_ago: completedAgo,
-				time_to_complete: timeToComplete
-			};
-			// Add parent reference if this is a subtask
-			if (t.parent_id) {
-				const parent = todoById.get(t.parent_id);
-				if (parent) base.subtask_of = parent.description;
-			}
-			return base;
-		} else {
-			const base: Record<string, unknown> = {
-				description: t.description,
-				tags: t.tags,
-				status: 'open',
-				age: age
-			};
-			if (t.deadline_period) base.deadline_period = t.deadline_period;
-			// Add parent reference if this is a subtask
-			if (t.parent_id) {
-				const parent = todoById.get(t.parent_id);
-				if (parent) base.subtask_of = parent.description;
-			}
-			return base;
-		}
+		const base: Record<string, unknown> = {
+			description: t.description,
+			tags: t.tags,
+			status: t.status
+		};
+		if (t.deadline_period) base.deadline = t.deadline_period;
+		return base;
 	};
 
 	// Separate parents and children, format with hierarchy
@@ -741,33 +690,27 @@ function formatWorkDataForGunnar(
 			const completedCount = children.filter((c) => c.status === 'completed').length;
 			formatted.subtasks = {
 				progress: `${completedCount}/${children.length}`,
-				items: children.map((c) => {
-					const childFormatted = formatTodo(c);
-					delete childFormatted.subtask_of; // Don't need it nested
-					return childFormatted;
-				})
+				items: children.map((c) => formatTodo(c))
 			};
 		}
 
 		return formatted;
 	});
 
-	// Format diary entries with time since logged or fuzzy event_period
-	const formattedDiary = diary.map((d) => {
-		// Use event_period if available, otherwise compute time ago
-		const when = d.event_period || formatDuration(new Date(d.logged_at), now) + ' ago';
-		return {
+	// Format diary entries - just use event_period as-is
+	const formattedDiary = diary
+		.filter((d) => d.event_period) // Only include entries with a date/period
+		.map((d) => ({
 			description: d.description,
 			tags: d.tags,
-			when: when
-		};
-	});
+			when: d.event_period
+		}));
 
 	const todosJson = JSON.stringify(formattedTodos, null, 2);
 	const diaryJson = JSON.stringify(formattedDiary, null, 2);
 	const tagsJson = JSON.stringify(tags);
 
-	return `--- PRODUCTIVITY DATA (From Alicja - Pre-computed Analytics) ---
+	return `--- PRODUCTIVITY DATA (From Alicja) ---
 <productivity_data>
 <tags>${tagsJson}</tags>
 <todos>
