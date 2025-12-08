@@ -63,7 +63,7 @@ export const COMPLETE_TODO_TOOL: Anthropic.Tool = {
 export const UPDATE_TODO_TOOL: Anthropic.Tool = {
 	name: 'update_todo',
 	description:
-		'Update a todo item. Use this when the user wants to rename, re-tag, or modify a todo.',
+		'Update a todo item. Use this when the user wants to rename, re-tag, change deadline, or modify a todo.',
 	input_schema: {
 		type: 'object',
 		properties: {
@@ -79,6 +79,11 @@ export const UPDATE_TODO_TOOL: Anthropic.Tool = {
 				type: 'array',
 				items: { type: 'string' },
 				description: 'New tags for the todo - replaces existing tags (optional)'
+			},
+			deadline_period: {
+				type: 'string',
+				description:
+					'Optional fuzzy deadline for the todo. Use when user mentions a timeframe like "this month", "next week", "by end of year", "Q1 2026". Set to empty string to clear existing deadline.'
 			}
 		},
 		required: ['todo_id']
@@ -448,16 +453,21 @@ async function executeUpdateTodo(
 		const todoId = input.todo_id as string;
 		const newDescription = input.description as string | undefined;
 		const newTags = input.tags as string[] | undefined;
+		const newDeadlinePeriod = input.deadline_period as string | undefined;
 
 		// Build update object with only provided fields
 		const updateData: Record<string, unknown> = {};
 		if (newDescription !== undefined) updateData.description = newDescription;
 		if (newTags !== undefined) updateData.tags = newTags;
+		if (newDeadlinePeriod !== undefined) {
+			// Empty string clears the deadline, otherwise set it
+			updateData.deadline_period = newDeadlinePeriod || null;
+		}
 
 		if (Object.keys(updateData).length === 0) {
 			return {
 				success: false,
-				message: 'No fields to update. Provide description or tags.'
+				message: 'No fields to update. Provide description, tags, or deadline_period.'
 			};
 		}
 
@@ -479,6 +489,9 @@ async function executeUpdateTodo(
 		const changes: string[] = [];
 		if (newDescription) changes.push(`renamed to "${newDescription}"`);
 		if (newTags) changes.push(`tags set to [${newTags.join(', ')}]`);
+		if (newDeadlinePeriod !== undefined) {
+			changes.push(newDeadlinePeriod ? `deadline set to "${newDeadlinePeriod}"` : 'deadline cleared');
+		}
 
 		return {
 			success: true,
@@ -486,7 +499,8 @@ async function executeUpdateTodo(
 			data: {
 				id: data.id,
 				description: data.description,
-				tags: data.tags
+				tags: data.tags,
+				deadline_period: data.deadline_period
 			}
 		};
 	} catch (error) {
