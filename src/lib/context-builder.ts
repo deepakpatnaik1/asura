@@ -85,7 +85,7 @@ interface RankedVectorResult extends VectorSearchResult {
  * - recent: Compressed journal summaries
  * - semantic: Vector search results
  * - canon: is_canon=true content (always included)
- * - active: Currently selected content (via contentId)
+ * - active: Currently selected content(s) (via contentIds)
  * - todos, diary, tags, time: Productivity data
  */
 export async function buildContext(
@@ -94,7 +94,7 @@ export async function buildContext(
 	personaName: string = DEFAULT_PERSONA,
 	modelIdentifier: string,
 	userQuery?: string, // Optional: enables vector search
-	contentId?: string // Currently selected content from library
+	contentIds?: string[] // Currently selected content(s) from library
 ): Promise<StructuredContext> {
 	// Get model's context window and calculate budget
 	const contextWindow = await getModelContextWindow(supabase, modelIdentifier);
@@ -135,19 +135,25 @@ export async function buildContext(
 		}
 	}
 
-	// Priority 0.5: Active content (currently selected file from library)
-	if (hasChunk('active') && contentId) {
+	// Priority 0.5: Active content (currently selected file(s) from library)
+	if (hasChunk('active') && contentIds && contentIds.length > 0) {
 		const { data: contentData } = await supabase
 			.from('content')
 			.select('title, raw_content, artisan_cut')
-			.eq('id', contentId)
-			.eq('user_id', userId)
-			.single();
+			.in('id', contentIds)
+			.eq('user_id', userId);
 
-		if (contentData) {
-			const articleContent = contentData.artisan_cut || contentData.raw_content;
-			if (articleContent) {
-				const filesText = `--- ACTIVE CONTENT ---\n[${contentData.title}]\n${articleContent}\n\n`;
+		if (contentData && contentData.length > 0) {
+			const articlesText = contentData
+				.map((item) => {
+					const articleContent = item.artisan_cut || item.raw_content;
+					return articleContent ? `[${item.title}]\n${articleContent}` : null;
+				})
+				.filter(Boolean)
+				.join('\n\n---\n\n');
+
+			if (articlesText) {
+				const filesText = `--- ACTIVE CONTENT ---\n${articlesText}\n\n`;
 				components.files = filesText;
 				totalTokens += estimateTokens(filesText);
 			}

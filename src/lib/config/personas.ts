@@ -87,14 +87,14 @@ const KIRBY_CHUNKS: ContextChunk[] = [
 ];
 
 /**
- * Samara: Article-focused, session memory only
+ * Samara: Article-focused, no conversation memory (Wikipedia mode)
  */
-const SAMARA_CHUNKS: ContextChunk[] = ['working', 'starred', 'canon', 'active'];
+const SAMARA_CHUNKS: ContextChunk[] = ['starred', 'canon', 'active'];
 
 /**
- * Alicja: Scribe - productivity data, no content discussion
+ * Alicja: Scribe - productivity data + her own conversation memory
  */
-const ALICJA_CHUNKS: ContextChunk[] = ['working', 'starred', 'canon', 'todos', 'diary', 'tags', 'calendar'];
+const ALICJA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'canon', 'todos', 'diary', 'tags', 'calendar'];
 
 /**
  * All Alicja tools
@@ -157,7 +157,7 @@ export const PERSONAS: Record<string, Persona> = {
 		model: null,
 		systemPrompt: 'alicja',
 		contextChunks: ALICJA_CHUNKS,
-		compression: false, // Tactical persona - no long-term memory needed
+		compression: true, // Full memory of Alicja conversations
 		tools: ALICJA_TOOLS
 	}
 };

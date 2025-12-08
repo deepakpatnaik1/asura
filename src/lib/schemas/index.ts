@@ -35,7 +35,7 @@ export const chatMessageSchema = z.object({
 	persona: personaSchema.optional(),
 	chart_id: z.string().uuid().optional(),
 	chart_source: chartSourceSchema.optional(),
-	content_id: z.string().uuid().optional() // active content for context injection
+	content_ids: z.array(z.string().uuid()).optional() // active content(s) for context injection
 });
 
 /** POST /api/chat/compress - Orphan recovery compression */

@@ -74,7 +74,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		const validation = validateSchema(chatMessageSchema, parseResult.data);
 		if (!validation.success) return validation.error;
 
-		const { message, persona: requestPersona, chart_id, chart_source, content_id } = validation.data;
+		const { message, persona: requestPersona, chart_id, chart_source, content_ids } = validation.data;
 
 		// 4. Load user settings (persona and model)
 		const { data: settings } = await supabase
@@ -155,7 +155,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			persona,
 			conversationModel,
 			message,
-			content_id
+			content_ids
 		);
 
 		log.info('Context built', { ...stats, model: conversationModel, persona });
@@ -276,13 +276,14 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 					const aiResponse = extractMessage(result.fullResponse);
 
 					// Save to superjournal first to get the real ID
+					// Store first content_id as primary (DB only supports single content_id)
 					const superjournalId = await saveToSuperjournal({
 						userId,
 						message,
 						aiResponse,
 						conversationModel,
 						persona,
-						contentId: content_id
+						contentId: content_ids?.[0]
 					});
 
 					// Send completion event with real superjournal ID and mutations
