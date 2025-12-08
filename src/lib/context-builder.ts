@@ -656,7 +656,7 @@ function formatDuration(from: Date, to: Date): string {
 	return `${diffMins}min`;
 }
 
-// Format work data for Gunnar (chat mode) - pre-computed time analytics
+// Format work data for Gunnar (chat mode) - pre-computed time analytics with hierarchy
 function formatWorkDataForGunnar(
 	todos: Array<{
 		id: string;
@@ -679,8 +679,11 @@ function formatWorkDataForGunnar(
 ): string {
 	const now = new Date();
 
-	// Format todos with computed durations
-	const formattedTodos = todos.map((t) => {
+	// Build lookup map for parent descriptions
+	const todoById = new Map(todos.map((t) => [t.id, t]));
+
+	// Helper to format a single todo
+	const formatTodo = (t: (typeof todos)[0]) => {
 		const createdAt = new Date(t.created_at);
 		const age = formatDuration(createdAt, now);
 
@@ -688,23 +691,65 @@ function formatWorkDataForGunnar(
 			const completedAt = new Date(t.completed_at);
 			const timeToComplete = formatDuration(createdAt, completedAt);
 			const completedAgo = formatDuration(completedAt, now);
-			return {
+			const base: Record<string, unknown> = {
 				description: t.description,
 				tags: t.tags,
 				status: 'completed',
 				completed_ago: completedAgo,
 				time_to_complete: timeToComplete
 			};
+			// Add parent reference if this is a subtask
+			if (t.parent_id) {
+				const parent = todoById.get(t.parent_id);
+				if (parent) base.subtask_of = parent.description;
+			}
+			return base;
 		} else {
-			return {
+			const base: Record<string, unknown> = {
 				description: t.description,
 				tags: t.tags,
 				status: 'open',
-				age: age,
-				deadline_period: t.deadline_period,
-				parent_id: t.parent_id
+				age: age
+			};
+			if (t.deadline_period) base.deadline_period = t.deadline_period;
+			// Add parent reference if this is a subtask
+			if (t.parent_id) {
+				const parent = todoById.get(t.parent_id);
+				if (parent) base.subtask_of = parent.description;
+			}
+			return base;
+		}
+	};
+
+	// Separate parents and children, format with hierarchy
+	const parents = todos.filter((t) => !t.parent_id);
+	const childrenByParent = new Map<string, typeof todos>();
+	todos
+		.filter((t) => t.parent_id)
+		.forEach((t) => {
+			const existing = childrenByParent.get(t.parent_id!) || [];
+			existing.push(t);
+			childrenByParent.set(t.parent_id!, existing);
+		});
+
+	// Build hierarchical structure
+	const formattedTodos = parents.map((parent) => {
+		const children = childrenByParent.get(parent.id) || [];
+		const formatted = formatTodo(parent);
+
+		if (children.length > 0) {
+			const completedCount = children.filter((c) => c.status === 'completed').length;
+			formatted.subtasks = {
+				progress: `${completedCount}/${children.length}`,
+				items: children.map((c) => {
+					const childFormatted = formatTodo(c);
+					delete childFormatted.subtask_of; // Don't need it nested
+					return childFormatted;
+				})
 			};
 		}
+
+		return formatted;
 	});
 
 	// Format diary entries with time since logged or fuzzy event_period
