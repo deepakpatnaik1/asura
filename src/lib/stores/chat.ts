@@ -15,6 +15,7 @@ interface Mutations {
 	// Todo mutations
 	created_todos?: unknown[];
 	completed_todos?: string[];
+	reopened_todos?: string[];
 	updated_todos?: unknown[];
 	deleted_todos?: string[];
 	created_tags?: string[];

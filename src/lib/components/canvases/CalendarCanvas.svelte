@@ -327,6 +327,9 @@
 			}
 		}
 
+		// Sort parent todos by created_at descending (newest first)
+		parentTodos.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
 		return parentTodos;
 	});
 
@@ -359,7 +362,7 @@
 	async function fetchTodos() {
 		todosLoading = true;
 		try {
-			const response = await fetch('/api/todos?status=open');
+			const response = await fetch('/api/todos');
 			const data = await response.json();
 			if (data.todos) {
 				todos = data.todos;
@@ -567,7 +570,7 @@
 					<div class="todo-list">
 						{#each groupedTodos() as todo (todo.id)}
 							<div class="todo-group">
-								<div class="todo-item">
+								<div class="todo-item" class:completed={todo.status === 'completed'}>
 									<div class="todo-content">
 										<span class="todo-text">{normalizeText(todo.description)}</span>
 										<div class="todo-meta">
@@ -973,9 +976,8 @@
 		font-size: var(--font-caption);
 	}
 
-	.todo-child.completed .todo-text {
-		text-decoration: line-through;
-		opacity: 0.5;
+	.todo-item.completed .todo-text {
+		color: hsl(var(--foreground) / 0.2);
 	}
 
 	.empty-state {

@@ -75,6 +75,7 @@
 			const hasTodoChanges =
 				(mutations.created_todos && mutations.created_todos.length > 0) ||
 				(mutations.completed_todos && mutations.completed_todos.length > 0) ||
+				(mutations.reopened_todos && mutations.reopened_todos.length > 0) ||
 				(mutations.updated_todos && mutations.updated_todos.length > 0) ||
 				(mutations.deleted_todos && mutations.deleted_todos.length > 0);
 

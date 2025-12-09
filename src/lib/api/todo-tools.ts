@@ -59,6 +59,21 @@ export const COMPLETE_TODO_TOOL: Anthropic.Tool = {
 	}
 };
 
+export const REOPEN_TODO_TOOL: Anthropic.Tool = {
+	name: 'reopen_todo',
+	description:
+		'Reopen a completed todo. Use this when the user says they haven\'t actually finished a task, changed their mind, or wants to mark it as not done.',
+	input_schema: {
+		type: 'object',
+		properties: {
+			todo_id: {
+				type: 'string',
+				description: 'The UUID of the todo to reopen'
+			}
+		},
+		required: ['todo_id']
+	}
+};
 
 export const UPDATE_TODO_TOOL: Anthropic.Tool = {
 	name: 'update_todo',
@@ -203,6 +218,7 @@ export const DELETE_DIARY_TOOL: Anthropic.Tool = {
 export const TODO_TOOLS: Anthropic.Tool[] = [
 	CREATE_TODO_TOOL,
 	COMPLETE_TODO_TOOL,
+	REOPEN_TODO_TOOL,
 	UPDATE_TODO_TOOL,
 	DELETE_TODO_TOOL,
 	CREATE_TAG_TOOL,
@@ -263,6 +279,7 @@ export interface TodoMutations {
 	// Todo mutations
 	created_todos: Todo[];
 	completed_todos: string[]; // IDs
+	reopened_todos: string[]; // IDs
 	updated_todos: { id: string; description?: string; tags?: string[] }[];
 	deleted_todos: string[]; // IDs
 	created_tags: string[]; // Names
@@ -283,6 +300,7 @@ export function createEmptyMutations(): TodoMutations {
 	return {
 		created_todos: [],
 		completed_todos: [],
+		reopened_todos: [],
 		updated_todos: [],
 		deleted_todos: [],
 		created_tags: [],
@@ -310,6 +328,9 @@ export async function executeTodoTool(
 
 		case 'complete_todo':
 			return executeCompleteTodo(input, context, mutations);
+
+		case 'reopen_todo':
+			return executeReopenTodo(input, context, mutations);
 
 		case 'update_todo':
 			return executeUpdateTodo(input, context, mutations);
@@ -436,6 +457,48 @@ async function executeCompleteTodo(
 		return {
 			success: false,
 			message: `Failed to complete todo: ${error instanceof Error ? error.message : 'Unknown error'}`
+		};
+	}
+}
+
+/**
+ * Reopen Todo Executor
+ */
+async function executeReopenTodo(
+	input: Record<string, unknown>,
+	context: TodoToolContext,
+	mutations: TodoMutations
+): Promise<ToolExecutionResult> {
+	try {
+		const { supabase } = context;
+		const todoId = input.todo_id as string;
+
+		const { data, error } = await supabase
+			.from('todos')
+			.update({
+				status: 'open',
+				completed_at: null
+			})
+			.eq('id', todoId)
+			.select()
+			.single();
+
+		if (error) throw error;
+
+		mutations.reopened_todos.push(todoId);
+
+		return {
+			success: true,
+			message: `Reopened todo: "${data.description}"`,
+			data: {
+				id: data.id,
+				description: data.description
+			}
+		};
+	} catch (error) {
+		return {
+			success: false,
+			message: `Failed to reopen todo: ${error instanceof Error ? error.message : 'Unknown error'}`
 		};
 	}
 }
@@ -774,6 +837,7 @@ export function isTodoTool(toolName: string): boolean {
 	return [
 		'create_todo',
 		'complete_todo',
+		'reopen_todo',
 		'update_todo',
 		'delete_todo',
 		'create_tag',
