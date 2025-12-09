@@ -86,8 +86,10 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		const persona = requestPersona || settings?.selected_persona || DEFAULT_PERSONA;
 
 		// Detect if content is HTML or already markdown
-		// HTML has tags like <p>, <div>, <html>, etc. Plain markdown doesn't
-		const isHtml = /<[a-z][\s\S]*>/i.test(content);
+		// Check markdown patterns first - if it looks like markdown, don't run through Turndown
+		// (prevents HTML inside code blocks from triggering false positives)
+		const looksLikeMarkdown = /^(#{1,6}\s|---|```|\*\*|-\s|\d+\.\s)/m.test(content);
+		const isHtml = !looksLikeMarkdown && /<[a-z][\s\S]*>/i.test(content);
 
 		log.info('Processing file upload', {
 			contentLength: content.length,
