@@ -66,7 +66,6 @@
 		{/if}
 		{#each whiteboards as wb (wb.id)}
 			{@const isSelected = selectedIds.includes(wb.id)}
-			{@const noteCount = wb.state?.notes?.length || 0}
 			<div
 				class="board-item"
 				class:active={isSelected}
@@ -86,10 +85,7 @@
 					<button class="title-btn" onclick={(e) => handleOpenClick(wb.id, e)} title="Open whiteboard">
 						<span class="board-title">{wb.title}</span>
 					</button>
-					<span class="board-meta">
-						<span class="note-count">{noteCount} note{noteCount !== 1 ? 's' : ''}</span>
-						<span class="board-date">{formatDate(wb.updated_at)}</span>
-					</span>
+					<span class="board-date">{formatDate(wb.updated_at)}</span>
 				</div>
 				{#if onDelete}
 					<button
@@ -122,7 +118,7 @@
 	}
 
 	.dropdown-empty {
-		padding: 24px 16px;
+		padding: 12px 12px;
 		text-align: center;
 		color: hsl(var(--muted-foreground));
 		font-size: 1em;
@@ -130,12 +126,12 @@
 
 	.clear-btn {
 		width: 100%;
-		padding: 10px 16px;
+		padding: 6px 12px;
 		background: transparent;
 		border: none;
 		border-bottom: 1px solid hsl(var(--border));
 		color: hsl(var(--muted-foreground));
-		font-size: 0.9em;
+		font-size: 0.85em;
 		cursor: pointer;
 		text-align: left;
 		transition: all 0.15s;
@@ -150,7 +146,7 @@
 		width: 100%;
 		display: flex;
 		align-items: center;
-		gap: 10px;
+		gap: 6px;
 		border-left: 3px solid transparent;
 		transition: all 0.2s ease;
 		border-bottom: 1px solid hsl(var(--border) / 0.3);
@@ -173,7 +169,7 @@
 	.toggle-btn {
 		width: 13px;
 		height: 13px;
-		margin-left: 12px;
+		margin-left: 8px;
 		border-radius: 2px;
 		border: 1px solid hsl(var(--border));
 		background: transparent;
@@ -202,9 +198,9 @@
 		flex: 1;
 		min-width: 0;
 		display: flex;
-		flex-direction: column;
-		gap: 2px;
-		padding: 10px 0;
+		align-items: center;
+		gap: 6px;
+		padding: 6px 0;
 	}
 
 	.title-btn {
@@ -230,24 +226,15 @@
 		display: block;
 	}
 
-	.board-meta {
-		display: flex;
-		gap: 8px;
-		font-size: 0.85em;
-		color: hsl(var(--muted-foreground));
-	}
-
-	.note-count {
-		opacity: 0.8;
-	}
-
 	.board-date {
-		opacity: 0.6;
+		font-size: 1em;
+		color: hsl(var(--muted-foreground));
+		flex-shrink: 0;
 	}
 
 	.delete-btn {
 		flex-shrink: 0;
-		width: 40px;
+		width: 28px;
 		display: flex;
 		align-items: center;
 		justify-content: center;

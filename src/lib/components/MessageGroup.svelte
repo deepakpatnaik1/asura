@@ -3,6 +3,9 @@
 	import { LuStar, LuCopy, LuTrash2 } from 'svelte-icons-pack/lu';
 	import { renderMarkdown } from '$lib/markdown-renderer';
 
+	// Reference to AI message container for attaching code copy handlers
+	let aiMessageContainer: HTMLDivElement;
+
 	interface Props {
 		/** User message content */
 		userMessage: string;
@@ -70,6 +73,65 @@
 			renderedHtml = '';
 		}
 	});
+
+	// Attach click handlers to code copy buttons after HTML is rendered
+	$effect(() => {
+		if (!renderedHtml || !aiMessageContainer) return;
+
+		// Find all code copy buttons and attach click handlers
+		const copyBtns = aiMessageContainer.querySelectorAll('.code-copy-btn');
+		copyBtns.forEach((btn) => {
+			const button = btn as HTMLButtonElement;
+			// Skip if already has handler attached
+			if (button.dataset.handlerAttached) return;
+			button.dataset.handlerAttached = 'true';
+
+			button.addEventListener('click', async (e) => {
+				e.preventDefault();
+				e.stopPropagation();
+
+				const codeBase64 = button.dataset.code;
+				if (!codeBase64) return;
+
+				try {
+					// Decode base64 to get original code
+					const code = decodeURIComponent(escape(atob(codeBase64)));
+					await navigator.clipboard.writeText(code);
+
+					// Show feedback - fill the icon
+					const svg = button.querySelector('svg');
+					if (svg) {
+						svg.style.fill = accentColor;
+						svg.style.stroke = accentColor;
+						button.style.opacity = '1';
+					}
+
+					// Reset after 1.5s
+					setTimeout(() => {
+						if (svg) {
+							svg.style.fill = 'none';
+							svg.style.stroke = 'currentColor';
+							button.style.opacity = '0.4';
+						}
+					}, 1500);
+				} catch (err) {
+					console.error('Failed to copy code:', err);
+				}
+			});
+
+			// Hover effect
+			button.addEventListener('mouseenter', () => {
+				button.style.opacity = '0.8';
+			});
+			button.addEventListener('mouseleave', () => {
+				// Only reset if not in "copied" state
+				const svg = button.querySelector('svg');
+				if (svg && svg.style.fill !== accentColor) {
+					button.style.opacity = '0.4';
+				}
+			});
+		});
+	});
 </script>
 
 <!-- Boss Message -->
@@ -126,7 +188,7 @@
 
 <!-- AI Response -->
 <div class="message-group">
-	<div class="ai-message">
+	<div class="ai-message" bind:this={aiMessageContainer}>
 		<div class="message-header">
 			<span class="message-label ai-label">{displayName}</span>
 		</div>

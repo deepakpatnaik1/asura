@@ -162,7 +162,7 @@
 	}
 
 	.dropdown-empty {
-		padding: 24px 16px;
+		padding: 12px 12px;
 		text-align: center;
 		color: hsl(var(--muted-foreground));
 		font-size: 1em;
@@ -170,12 +170,12 @@
 
 	.clear-btn {
 		width: 100%;
-		padding: 10px 16px;
+		padding: 6px 12px;
 		background: transparent;
 		border: none;
 		border-bottom: 1px solid hsl(var(--border));
 		color: hsl(var(--muted-foreground));
-		font-size: 0.9em;
+		font-size: 0.85em;
 		cursor: pointer;
 		text-align: left;
 		transition: all 0.15s;
@@ -190,7 +190,7 @@
 		width: 100%;
 		display: flex;
 		align-items: center;
-		gap: 10px;
+		gap: 6px;
 		border-left: 3px solid transparent;
 		transition: all 0.2s ease;
 		border-bottom: 1px solid hsl(var(--border) / 0.3);
@@ -213,7 +213,7 @@
 	.toggle-btn {
 		width: 13px;
 		height: 13px;
-		margin-left: 12px;
+		margin-left: 8px;
 		border-radius: 2px;
 		border: 1px solid hsl(var(--border));
 		background: transparent;
@@ -242,7 +242,7 @@
 	.canon-spacer {
 		width: 13px;
 		height: 13px;
-		margin-left: 12px;
+		margin-left: 8px;
 		flex-shrink: 0;
 	}
 
@@ -251,8 +251,8 @@
 		min-width: 0;
 		display: flex;
 		align-items: center;
-		gap: 8px;
-		padding: 12px 0;
+		gap: 6px;
+		padding: 6px 0;
 	}
 
 	.title-btn {
@@ -294,7 +294,7 @@
 
 	.delete-btn {
 		flex-shrink: 0;
-		width: 40px;
+		width: 28px;
 		display: flex;
 		align-items: center;
 		justify-content: center;

@@ -76,8 +76,13 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 			.replace(/&/g, '&amp;')
 			.replace(/</g, '&lt;')
 			.replace(/>/g, '&gt;');
-		const langLabel = lang ? `<span style="position: absolute; top: 4px; right: 8px; font-size: 0.7em; opacity: 0.4; text-transform: uppercase;">${lang}</span>` : '';
-		codeBlocks.push(`<div style="position: relative; background: ${CODE_BLOCK_BG}; border-radius: 6px; padding: 12px; margin: 0.5em 0; overflow-x: auto;">${langLabel}<pre style="margin: 0; font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace; font-size: 0.85em; line-height: 1.5; white-space: pre-wrap; word-break: break-word;"><code>${escapedCode}</code></pre></div>`);
+		// Base64 encode the raw code for the copy button (avoids escaping issues)
+		const codeBase64 = btoa(unescape(encodeURIComponent(code.trim())));
+		const langLabel = lang ? `<span style="font-size: 0.7em; opacity: 0.4; text-transform: uppercase;">${lang}</span>` : '';
+		// Copy button with LuCopy-style icon
+		const copyBtn = `<button class="code-copy-btn" data-code="${codeBase64}" style="background: transparent; border: none; cursor: pointer; opacity: 0.4; padding: 2px; display: flex; align-items: center; transition: opacity 0.2s;" title="Copy code"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg></button>`;
+		const header = `<div style="position: absolute; top: 4px; right: 8px; display: flex; align-items: center; gap: 8px;">${langLabel}${copyBtn}</div>`;
+		codeBlocks.push(`<div class="code-block-container" style="position: relative; background: ${CODE_BLOCK_BG}; border-radius: 6px; padding: 12px; margin: 0.5em 0; overflow-x: auto;">${header}<pre style="margin: 0; font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace; font-size: 0.85em; line-height: 1.5; white-space: pre-wrap; word-break: break-word;"><code>${escapedCode}</code></pre></div>`);
 		return placeholder + '\n';
 	});
 

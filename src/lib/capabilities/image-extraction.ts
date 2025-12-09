@@ -252,6 +252,53 @@ export async function generateThumbnail(imageBuffer: Buffer): Promise<Buffer> {
 }
 
 /**
+ * Optimize image for AI analysis and storage
+ * - Resizes to max 1568px (Claude's recommended vision size)
+ * - Converts to JPEG at 80% quality (unless PNG with transparency)
+ * - Returns optimized buffer and whether it's still PNG
+ */
+export async function optimizeImage(
+	imageBuffer: Buffer
+): Promise<{ buffer: Buffer; isPng: boolean }> {
+	const image = sharp(imageBuffer);
+	const metadata = await image.metadata();
+
+	// Check if PNG has alpha channel (transparency)
+	const hasAlpha = metadata.format === 'png' && metadata.hasAlpha;
+
+	// Resize if larger than 1568px on any dimension
+	const maxDim = 1568;
+	const needsResize =
+		(metadata.width && metadata.width > maxDim) || (metadata.height && metadata.height > maxDim);
+
+	let processed = image;
+
+	if (needsResize) {
+		processed = processed.resize({
+			width: maxDim,
+			height: maxDim,
+			fit: 'inside',
+			withoutEnlargement: true
+		});
+	}
+
+	// Convert to JPEG unless PNG with transparency
+	if (hasAlpha) {
+		// Keep as PNG but compress
+		return {
+			buffer: await processed.png({ quality: 80, compressionLevel: 9 }).toBuffer(),
+			isPng: true
+		};
+	} else {
+		// Convert to JPEG
+		return {
+			buffer: await processed.jpeg({ quality: 80 }).toBuffer(),
+			isPng: false
+		};
+	}
+}
+
+/**
  * Detect file extension from image buffer magic numbers
  */
 export function getImageExtension(buffer: Buffer): string {

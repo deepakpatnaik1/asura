@@ -2,18 +2,20 @@
 	/**
 	 * PasteArea - Paste area for chat and reader modes
 	 *
-	 * Accepts HTML (Firefox Reader Mode) or plain text (markdown, Claude docs).
-	 * Toggle controls ephemeral vs persistent storage treatment.
+	 * Accepts HTML (Firefox Reader Mode), plain text (markdown, Claude docs),
+	 * or drag & dropped images. Toggle controls ephemeral vs persistent storage.
 	 * Mode parameter determines which content pool this belongs to.
 	 */
 
 	interface Props {
 		onClose: () => void;
 		onSuccess: (id: string, title: string, content: string, superjournalId?: string) => void;
+		/** Callback when an image is uploaded */
+		onImageUploaded?: () => void;
 		mode?: 'chat' | 'reader';
 	}
 
-	let { onClose, onSuccess, mode = 'chat' }: Props = $props();
+	let { onClose, onSuccess, onImageUploaded, mode = 'chat' }: Props = $props();
 
 	// Default to ephemeral (user can toggle to persistent)
 	let isPersistent = $state(false);
@@ -23,9 +25,13 @@
 	let processingError = $state<string | null>(null);
 	let pastedContent = $state('');
 	let pasteAreaRef: HTMLElement | null = $state(null);
+	let isDragging = $state(false);
 
-	const placeholder = 'Paste content here...';
+	const placeholder = 'Paste content or drop images here...';
 	const accentVar = 'var(--boss-accent)';
+
+	// Supported image types
+	const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'];
 
 	async function handlePaste(event: ClipboardEvent) {
 		event.preventDefault();
@@ -116,6 +122,78 @@
 		processingStatus = '';
 		onClose();
 	}
+
+	// Drag & drop handlers
+	function handleDragOver(event: DragEvent) {
+		event.preventDefault();
+		if (event.dataTransfer) {
+			event.dataTransfer.dropEffect = 'copy';
+		}
+	}
+
+	function handleDragEnter(event: DragEvent) {
+		event.preventDefault();
+		isDragging = true;
+	}
+
+	function handleDragLeave(event: DragEvent) {
+		event.preventDefault();
+		// Only set to false if leaving the paste area entirely
+		const relatedTarget = event.relatedTarget as Node | null;
+		if (!pasteAreaRef?.contains(relatedTarget)) {
+			isDragging = false;
+		}
+	}
+
+	async function handleDrop(event: DragEvent) {
+		event.preventDefault();
+		isDragging = false;
+
+		const files = event.dataTransfer?.files;
+		if (!files || files.length === 0) return;
+
+		// Get first image file
+		const imageFile = Array.from(files).find((f) => IMAGE_TYPES.includes(f.type));
+		if (!imageFile) {
+			processingError = 'Please drop an image file (JPEG, PNG, GIF, WebP, or SVG)';
+			return;
+		}
+
+		await uploadImage(imageFile);
+	}
+
+	async function uploadImage(file: File) {
+		isProcessing = true;
+		processingStatus = 'Uploading image...';
+		processingError = null;
+
+		try {
+			const formData = new FormData();
+			formData.append('image', file);
+
+			const response = await fetch('/api/chat/files/upload', {
+				method: 'POST',
+				body: formData
+			});
+
+			if (!response.ok) {
+				const data = await response.json();
+				throw new Error(data.error?.message || 'Upload failed');
+			}
+
+			processingStatus = 'Done!';
+			await new Promise((r) => setTimeout(r, 300));
+
+			// Notify parent that an image was uploaded (to refresh carousel)
+			if (onImageUploaded) {
+				onImageUploaded();
+			}
+			onClose();
+		} catch (error) {
+			processingError = error instanceof Error ? error.message : 'Upload failed';
+			isProcessing = false;
+		}
+	}
 </script>
 
 <div class="paste-box" class:has-error={processingError} style="--accent: {accentVar}">
@@ -134,8 +212,13 @@
 		<!-- Paste Area - always visible, content shows through overlay -->
 		<div
 			class="paste-area"
+			class:dragging={isDragging}
 			contenteditable={!isProcessing}
 			onpaste={handlePaste}
+			ondragover={handleDragOver}
+			ondragenter={handleDragEnter}
+			ondragleave={handleDragLeave}
+			ondrop={handleDrop}
 			data-placeholder={placeholder}
 			bind:this={pasteAreaRef}
 		></div>
@@ -223,6 +306,16 @@
 		color: hsl(var(--foreground));
 		opacity: 0.5;
 		font-size: 8pt;
+	}
+
+	.paste-area.dragging {
+		border: 2px dashed var(--accent);
+		background: rgba(255, 255, 255, 0.02);
+	}
+
+	.paste-area.dragging:before {
+		content: 'Drop image here...';
+		opacity: 0.8;
 	}
 
 	.paste-area :global(*) {

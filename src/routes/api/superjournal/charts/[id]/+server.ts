@@ -67,10 +67,10 @@ export const DELETE: RequestHandler = async ({ params, locals: { safeGetSession,
 
 	const chartId = params.id;
 
-	// 2. FETCH CHART TO GET STORAGE PATHS
+	// 2. FETCH CHART TO GET STORAGE PATHS AND CONTENT_ID
 	const { data: chart, error: fetchError } = await supabase
 		.from('charts')
-		.select('storage_path, thumbnail_path')
+		.select('storage_path, thumbnail_path, content_id')
 		.eq('id', chartId)
 		.eq('user_id', userId)
 		.single();
@@ -119,6 +119,29 @@ export const DELETE: RequestHandler = async ({ params, locals: { safeGetSession,
 			},
 			{ status: 500 }
 		);
+	}
+
+	// 5. CLEAN UP ORPHANED CONTENT ENTRY (for uploaded images only)
+	// Only delete if this was an uploaded image (raw_content starts with "[Uploaded image:")
+	// and no other charts reference this content
+	if (chart.content_id) {
+		const { data: content } = await supabase
+			.from('content')
+			.select('raw_content')
+			.eq('id', chart.content_id)
+			.single();
+
+		if (content?.raw_content?.startsWith('[Uploaded image:')) {
+			// Check if any other charts reference this content
+			const { count } = await supabase
+				.from('charts')
+				.select('id', { count: 'exact', head: true })
+				.eq('content_id', chart.content_id);
+
+			if (count === 0) {
+				await supabase.from('content').delete().eq('id', chart.content_id);
+			}
+		}
 	}
 
 	return json({ success: true });

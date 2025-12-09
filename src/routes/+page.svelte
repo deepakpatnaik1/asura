@@ -171,6 +171,8 @@
 	const deleteConfirm = createConfirmation();
 	const fileDeleteConfirm = createConfirmation();
 	const chartDeleteConfirm = createConfirmation();
+	const whiteboardDeleteConfirm = createConfirmation();
+	let isDeletingWhiteboard = $state(false);
 
 	let pendingTimeouts: number[] = [];
 
@@ -228,9 +230,18 @@
 				whiteboards = data.whiteboards || [];
 				// Auto-select all whiteboards for context injection (Gunnar should see what he created)
 				selectedWhiteboardIds = whiteboards.map(wb => wb.id);
-				// Auto-view first whiteboard if none viewing
+				// Auto-view first whiteboard (most recently updated) and fetch its full state
 				if (whiteboards.length > 0 && !viewingWhiteboardId) {
-					viewingWhiteboardId = whiteboards[0].id;
+					const firstId = whiteboards[0].id;
+					viewingWhiteboardId = firstId;
+					// Fetch full state for the viewing whiteboard
+					const stateResponse = await fetch(`/api/whiteboards/${firstId}`);
+					if (stateResponse.ok) {
+						const stateData = await stateResponse.json();
+						whiteboards = whiteboards.map(wb =>
+							wb.id === firstId ? stateData.whiteboard : wb
+						);
+					}
 				}
 			}
 		} catch (error) {
@@ -314,6 +325,7 @@
 			deleteConfirm.cleanup();
 			fileDeleteConfirm.cleanup();
 			chartDeleteConfirm.cleanup();
+			whiteboardDeleteConfirm.cleanup();
 			window.removeEventListener('nuke-complete', handleNukeEvent as EventListener);
 		};
 	});
@@ -602,6 +614,30 @@
 		viewingWhiteboardId = id;
 		forceCanvas = 'notes';
 		showBoardLibrary = false;
+	}
+
+	function handleWhiteboardDeleteClick(whiteboardId: string, event: MouseEvent) {
+		event.stopPropagation();
+		whiteboardDeleteConfirm.start(whiteboardId, async () => {
+			isDeletingWhiteboard = true;
+			const originalWhiteboards = whiteboards;
+			whiteboards = whiteboards.filter(wb => wb.id !== whiteboardId);
+			selectedWhiteboardIds = selectedWhiteboardIds.filter(id => id !== whiteboardId);
+			if (viewingWhiteboardId === whiteboardId) {
+				viewingWhiteboardId = whiteboards.length > 0 ? whiteboards[0].id : null;
+			}
+
+			try {
+				const response = await fetch(`/api/whiteboards/${whiteboardId}`, { method: 'DELETE' });
+				if (!response.ok) {
+					whiteboards = originalWhiteboards;
+				}
+			} catch (error) {
+				whiteboards = originalWhiteboards;
+			} finally {
+				isDeletingWhiteboard = false;
+			}
+		});
 	}
 
 	async function loadFiles() {
@@ -914,8 +950,10 @@
 							<BoardLibrary
 								{whiteboards}
 								selectedIds={selectedWhiteboardIds}
+								isDeleting={isDeletingWhiteboard}
 								onToggle={toggleWhiteboardSelection}
 								onOpen={handleOpenWhiteboard}
+								onDelete={handleWhiteboardDeleteClick}
 								onClear={clearWhiteboardSelection}
 							/>
 						{/if}
@@ -952,7 +990,14 @@
 	</div>
 
 	{#if showFilePaste}
-		<PasteArea onClose={() => showFilePaste = false} onSuccess={handleFilePasteSuccess} />
+		<PasteArea
+			onClose={() => showFilePaste = false}
+			onSuccess={handleFilePasteSuccess}
+			onImageUploaded={async () => {
+				await loadFileCharts();
+				forceCanvas = 'carousel';
+			}}
+		/>
 	{/if}
 
 	<ConfirmationModal
@@ -972,6 +1017,12 @@
 		isOpen={chartDeleteConfirm.isActive}
 		progress={chartDeleteConfirm.progress}
 		onCancel={() => chartDeleteConfirm.cancel()}
+	/>
+
+	<ConfirmationModal
+		isOpen={whiteboardDeleteConfirm.isActive}
+		progress={whiteboardDeleteConfirm.progress}
+		onCancel={() => whiteboardDeleteConfirm.cancel()}
 	/>
 
 	<CanvasContainer
