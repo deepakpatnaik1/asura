@@ -37,6 +37,11 @@ export const CREATE_TODO_TOOL: Anthropic.Tool = {
 				type: 'string',
 				description:
 					'Optional UUID of parent todo. Use to create sub-tasks under a main todo. The parent must be created first.'
+			},
+			mark_complete: {
+				type: 'boolean',
+				description:
+					'Set to true to create the todo as already completed. Use when the user tells you about something they already finished and want to log it as done.'
 			}
 		},
 		required: ['description']
@@ -372,7 +377,9 @@ async function executeCreateTodo(
 		const tags = (input.tags as string[]) || [];
 		const deadlinePeriod = input.deadline_period as string | undefined;
 		const parentId = input.parent_id as string | undefined;
+		const markComplete = input.mark_complete as boolean | undefined;
 
+		const now = new Date().toISOString();
 		const { data, error } = await supabase
 			.from('todos')
 			.insert({
@@ -381,7 +388,9 @@ async function executeCreateTodo(
 				tags,
 				deadline_period: deadlinePeriod || null,
 				parent_id: parentId || null,
-				source_message_id: sourceMessageId || null
+				source_message_id: sourceMessageId || null,
+				status: markComplete ? 'completed' : 'open',
+				completed_at: markComplete ? now : null
 			})
 			.select()
 			.single();
@@ -400,14 +409,18 @@ async function executeCreateTodo(
 		};
 
 		mutations.created_todos.push(todo);
+		if (markComplete) {
+			mutations.completed_todos.push(todo.id);
+		}
 
 		const deadlineInfo = deadlinePeriod ? ` (deadline: ${deadlinePeriod})` : '';
 		const tagInfo = tags.length > 0 ? ` [${tags.join(', ')}]` : '';
 		const parentInfo = parentId ? ' (sub-task)' : '';
+		const completeInfo = markComplete ? ' ✓' : '';
 
 		return {
 			success: true,
-			message: `Created todo: "${description}"${deadlineInfo}${tagInfo}${parentInfo}`,
+			message: `Created todo: "${description}"${deadlineInfo}${tagInfo}${parentInfo}${completeInfo}`,
 			data: todo
 		};
 	} catch (error) {

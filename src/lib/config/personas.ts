@@ -33,8 +33,8 @@ export type ToolName =
 	// Todo tools
 	| 'create_todo'
 	| 'complete_todo'
+	| 'reopen_todo'
 	| 'update_todo'
-	| 'push_todo'
 	| 'delete_todo'
 	| 'create_tag'
 	// Diary tools
@@ -52,7 +52,8 @@ export type ToolName =
 	| 'rename_whiteboard'
 	| 'delete_whiteboard'
 	| 'open_whiteboard'
-	| 'list_whiteboards';
+	| 'list_whiteboards'
+	| 'update_whiteboard';
 
 /**
  * Persona configuration interface
@@ -115,7 +116,8 @@ const GUNNAR_TOOLS: ToolName[] = [
 	'rename_whiteboard',
 	'delete_whiteboard',
 	'open_whiteboard',
-	'list_whiteboards'
+	'list_whiteboards',
+	'update_whiteboard'
 ];
 
 /**
@@ -124,8 +126,8 @@ const GUNNAR_TOOLS: ToolName[] = [
 const ALICJA_TOOLS: ToolName[] = [
 	'create_todo',
 	'complete_todo',
+	'reopen_todo',
 	'update_todo',
-	'push_todo',
 	'delete_todo',
 	'create_tag',
 	'log_diary',
