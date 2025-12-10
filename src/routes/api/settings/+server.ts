@@ -16,7 +16,7 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 	// 2. QUERY USER SETTINGS
 	const { data, error } = await supabase
 		.from('user_settings')
-		.select('default_model, selected_embedding_model, active_content_id, selected_persona')
+		.select('default_model, selected_embedding_model, active_content_id, selected_persona, file_artisan_model')
 		.eq('user_id', userId)
 		.single();
 
@@ -53,7 +53,7 @@ export const PUT: RequestHandler = async ({ request, locals: { safeGetSession, s
 	const validation = validateSchema(settingsUpdateSchema, parseResult.data);
 	if (!validation.success) return validation.error;
 
-	const { default_model, selected_embedding_model, active_content_id, selected_persona } =
+	const { default_model, selected_embedding_model, active_content_id, selected_persona, file_artisan_model } =
 		validation.data;
 
 	// 3. UPDATE USER SETTINGS
@@ -67,6 +67,7 @@ export const PUT: RequestHandler = async ({ request, locals: { safeGetSession, s
 		updateData.selected_embedding_model = selected_embedding_model;
 	if (active_content_id !== undefined) updateData.active_content_id = active_content_id;
 	if (selected_persona !== undefined) updateData.selected_persona = selected_persona;
+	if (file_artisan_model !== undefined) updateData.file_artisan_model = file_artisan_model;
 
 	const { error } = await supabase
 		.from('user_settings')

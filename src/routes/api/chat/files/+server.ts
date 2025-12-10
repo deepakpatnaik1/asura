@@ -7,9 +7,11 @@
 
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
+import { FIREWORKS_API_KEY } from '$env/static/private';
 import { requireAuth } from '$lib/api/require-auth';
 import { parseRequestJson } from '$lib/api/parse-json';
 import { createMessage } from '$lib/api/anthropic-client';
+import { getProviderType, assertProviderSupported } from '$lib/calls/chat/provider';
 import { DEFAULT_CHAT_MODEL } from '$lib/config/models';
 import { DEFAULT_PERSONA } from '$lib/config/personas';
 import { FILE_ARTISAN_CUT_PROMPT } from '$lib/prompts/file-artisan-cut';
@@ -19,12 +21,42 @@ import { htmlToMarkdown } from '$lib/capabilities/image-extraction';
 import { extractTitleFromHtml } from '$lib/capabilities';
 import { extractAndSaveCharts } from '$lib/capabilities/content-extraction';
 
+/**
+ * Call Fireworks API for file artisan cut (non-streaming).
+ */
+async function callFireworksArtisanCut(model: string, systemPrompt: string, content: string): Promise<string> {
+	const response = await fetch('https://api.fireworks.ai/inference/v1/chat/completions', {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${FIREWORKS_API_KEY}`
+		},
+		body: JSON.stringify({
+			model,
+			messages: [
+				{ role: 'system', content: systemPrompt },
+				{ role: 'user', content }
+			],
+			max_tokens: 2048,
+			temperature: 0.3
+		})
+	});
+
+	if (!response.ok) {
+		const error = await response.text();
+		throw new Error(`Fireworks API error: ${response.status} - ${error}`);
+	}
+
+	const data = await response.json();
+	return data.choices?.[0]?.message?.content || '';
+}
+
 /** Max content size: 100KB */
 const MAX_CONTENT_SIZE = 100 * 1024;
 
 /**
  * GET /api/chat/files
- * List user's content files, sorted by creation date (newest first)
+ * List user's content files: non-canon first (newest first), canon at bottom
  */
 export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase } }) => {
 	const auth = await requireAuth(safeGetSession);
@@ -35,7 +67,8 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 		.from('content')
 		.select('id, title, is_enabled, is_canon, created_at')
 		.eq('user_id', userId)
-		.order('created_at', { ascending: false });
+		.order('is_canon', { ascending: true }) // Non-canon first, canon at bottom
+		.order('created_at', { ascending: false }); // Newest first within each group
 
 	if (error) {
 		return databaseError('Failed to fetch files');
@@ -75,14 +108,15 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 	}
 
 	try {
-		// Fetch user settings (default model + persona)
+		// Fetch user settings (default model + persona + file artisan model)
 		const { data: settings } = await supabase
 			.from('user_settings')
-			.select('default_model, selected_persona')
+			.select('default_model, selected_persona, file_artisan_model')
 			.eq('user_id', userId)
 			.single();
 
-		const model = settings?.default_model || DEFAULT_CHAT_MODEL;
+		// Use file_artisan_model if set, otherwise fall back to default_model
+		const model = settings?.file_artisan_model || settings?.default_model || DEFAULT_CHAT_MODEL;
 		const persona = requestPersona || settings?.selected_persona || DEFAULT_PERSONA;
 
 		// Detect if content is HTML or already markdown
@@ -106,23 +140,35 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 
 		if (persistent) {
 			// Persistent: Call AI to generate title + artisan cut
-			const response = await createMessage({
-				model,
-				max_tokens: 2048,
-				temperature: 0.3,
-				system: FILE_ARTISAN_CUT_PROMPT,
-				messages: [{ role: 'user', content }]
-			});
+			// Route to correct provider based on model identifier
+			const provider = getProviderType(model);
+			assertProviderSupported(provider);
 
-			const textBlock = response.content.find((block) => block.type === 'text');
-			if (!textBlock || textBlock.type !== 'text') {
-				throw new Error('No text response from AI');
+			let responseText: string;
+
+			if (provider === 'fireworks') {
+				responseText = await callFireworksArtisanCut(model, FILE_ARTISAN_CUT_PROMPT, content);
+			} else {
+				// Anthropic
+				const response = await createMessage({
+					model,
+					max_tokens: 2048,
+					temperature: 0.3,
+					system: FILE_ARTISAN_CUT_PROMPT,
+					messages: [{ role: 'user', content }]
+				});
+
+				const textBlock = response.content.find((block) => block.type === 'text');
+				if (!textBlock || textBlock.type !== 'text') {
+					throw new Error('No text response from AI');
+				}
+				responseText = textBlock.text;
 			}
 
 			// Parse JSON response
 			let parsed: { title: string; description: string };
 			try {
-				let jsonText = textBlock.text.trim();
+				let jsonText = responseText.trim();
 				const jsonMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)```/);
 				if (jsonMatch) {
 					jsonText = jsonMatch[1].trim();
@@ -133,7 +179,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				}
 				parsed = JSON.parse(jsonText);
 			} catch (e) {
-				log.error('Failed to parse AI response', { raw: textBlock.text });
+				log.error('Failed to parse AI response', { raw: responseText });
 				throw new Error('Failed to parse AI response as JSON');
 			}
 

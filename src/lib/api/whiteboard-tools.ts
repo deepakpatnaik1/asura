@@ -103,12 +103,12 @@ export const UPDATE_WHITEBOARD_TOOL: Anthropic.Tool = {
 			render: {
 				type: 'array',
 				description:
-					'Array of visual elements to render. Each element must have: id (string), type (note|label|line|arrow|group), and type-specific properties.',
+					'Array of visual elements to render. Each element must have: id (string), type (note|label|line|arrow|group|image), and type-specific properties.',
 				items: {
 					type: 'object',
 					properties: {
 						id: { type: 'string' },
-						type: { type: 'string', enum: ['note', 'label', 'line', 'arrow', 'group'] },
+						type: { type: 'string', enum: ['note', 'label', 'line', 'arrow', 'group', 'image'] },
 						x: { type: 'number' },
 						y: { type: 'number' },
 						text: { type: 'string' },
@@ -120,7 +120,13 @@ export const UPDATE_WHITEBOARD_TOOL: Anthropic.Tool = {
 						strokeWidth: { type: 'number' },
 						from: { type: 'array', items: { type: 'number' } },
 						to: { type: 'array', items: { type: 'number' } },
-						label: { type: 'string' }
+						label: { type: 'string' },
+						// Image-specific properties
+						src: { type: 'string', description: 'URL to image' },
+						prompt: { type: 'string', description: 'Generation prompt for iteration' },
+						seed: { type: 'number', description: 'Seed for consistent generations' },
+						model: { type: 'string', description: 'Model that generated the image' },
+						role: { type: 'string', description: 'Image purpose: hero, gallery, expression' }
 					},
 					required: ['id', 'type']
 				}
@@ -179,7 +185,7 @@ export interface Whiteboard {
  */
 export type RenderElement = {
 	id: string;
-	type: 'note' | 'label' | 'line' | 'arrow' | 'group';
+	type: 'note' | 'label' | 'line' | 'arrow' | 'group' | 'image';
 	x?: number;
 	y?: number;
 	text?: string;
@@ -192,6 +198,12 @@ export type RenderElement = {
 	from?: [number, number];
 	to?: [number, number];
 	label?: string;
+	// Image-specific properties
+	src?: string; // URL to image
+	prompt?: string; // Generation prompt (for iteration)
+	seed?: number; // For consistent generations
+	model?: string; // Which model generated it
+	role?: string; // 'hero' | 'gallery' | 'expression' etc.
 };
 
 /**

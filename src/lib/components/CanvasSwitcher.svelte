@@ -7,7 +7,7 @@
 	 */
 
 	import { Icon } from 'svelte-icons-pack';
-	import { LuLayoutGrid, LuCalendar, LuStickyNote } from 'svelte-icons-pack/lu';
+	import { LuLayoutGrid, LuCalendar, LuStickyNote, LuPalette } from 'svelte-icons-pack/lu';
 	import { CANVAS_TYPES, CANVAS_META, type CanvasType } from '$lib/config/canvases';
 	import { getPersonaColor } from '$lib/config/personas';
 
@@ -23,7 +23,8 @@
 	const ICON_MAP = {
 		LuLayoutGrid,
 		LuCalendar,
-		LuStickyNote
+		LuStickyNote,
+		LuPalette
 	} as const;
 
 	function getIcon(iconName: string) {
@@ -52,15 +53,15 @@
 	.canvas-switcher {
 		display: flex;
 		flex-direction: column;
-		gap: 8px;
-		padding: 8px 4px;
+		gap: 1px;
+		padding: 2px 4px;
 	}
 
 	.switcher-btn {
 		background: transparent;
 		border: none;
 		cursor: pointer;
-		padding: 6px;
+		padding: 2px;
 		border-radius: 4px;
 		opacity: 0.5;
 		transition: all 0.2s;

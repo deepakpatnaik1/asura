@@ -5,7 +5,7 @@
 	 * Wraps canvas content with a vertical icon tab switcher.
 	 * Manages active canvas state per mode (localStorage).
 	 * Passes mode-specific props to child canvas components.
-	 * Available canvases: Gallery, Planner, Scratch
+	 * Available canvases: Gallery, Planner, Scratch, Design
 	 */
 
 	import { type CanvasType, DEFAULT_CANVAS } from '$lib/config/canvases';
@@ -13,6 +13,8 @@
 	import ChartCarousel from './ChartCarousel.svelte';
 	import CalendarCanvas from './canvases/CalendarCanvas.svelte';
 	import NotesCanvas from './canvases/NotesCanvas.svelte';
+	import DesignCanvas from './canvases/DesignCanvas.svelte';
+	import type { CanvasState } from '$lib/api/canvas-tools';
 
 	// Chart type for Gallery canvas
 	interface Chart {
@@ -34,6 +36,15 @@
 		updated_at: string;
 	}
 
+	// Canvas type for Design canvas (Eva)
+	interface Canvas {
+		id: string;
+		title: string;
+		state?: CanvasState;
+		created_at: string;
+		updated_at: string;
+	}
+
 	interface Props {
 		persona: string;
 		// Gallery-specific props (passed through when Gallery canvas is active)
@@ -50,6 +61,12 @@
 		selectedWhiteboardIds?: string[]; // For showing selection state in carousel
 		onWhiteboardSelect?: (id: string) => void;
 		onWhiteboardStateChange?: (id: string, state: Whiteboard['state']) => void;
+		// Design/Canvas-specific props (Eva)
+		canvases?: Canvas[];
+		activeCanvasId?: string | null;
+		selectedCanvasIds?: string[]; // For showing selection state in footer
+		onCanvasSelect?: (id: string) => void;
+		onCanvasStateChange?: (id: string, state: CanvasState) => void;
 		// Force switch to specific canvas (e.g., when content is loaded)
 		forceCanvas?: CanvasType | null;
 	}
@@ -67,12 +84,22 @@
 		selectedWhiteboardIds = [],
 		onWhiteboardSelect,
 		onWhiteboardStateChange,
+		canvases = [],
+		activeCanvasId = null,
+		selectedCanvasIds = [],
+		onCanvasSelect,
+		onCanvasStateChange,
 		forceCanvas = $bindable(null)
 	}: Props = $props();
 
 	// Get active whiteboard data
 	const activeWhiteboard = $derived(
 		whiteboards.find(wb => wb.id === activeWhiteboardId) ?? null
+	);
+
+	// Get active canvas data (for Eva's design canvas)
+	const activeDesignCanvas = $derived(
+		canvases.find(c => c.id === activeCanvasId) ?? null
 	);
 
 	let activeCanvas = $state<CanvasType>(DEFAULT_CANVAS);
@@ -111,6 +138,14 @@
 				{selectedWhiteboardIds}
 				onSelect={onWhiteboardSelect}
 				onStateChange={onWhiteboardStateChange}
+			/>
+		{:else if activeCanvas === 'design'}
+			<DesignCanvas
+				{canvases}
+				canvas={activeDesignCanvas}
+				{selectedCanvasIds}
+				onSelect={onCanvasSelect}
+				onStateChange={onCanvasStateChange}
 			/>
 		{/if}
 	</div>

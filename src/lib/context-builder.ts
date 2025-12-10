@@ -39,6 +39,7 @@ interface ContextComponents {
 	workData: string; // Todo mode: current todos and tags
 	calendar: string; // Google Calendar events (for Alicja)
 	whiteboard: string; // Active whiteboard (for Gunnar)
+	canvas: string; // Character design canvases (for Eva)
 }
 
 interface ContextStats {
@@ -54,6 +55,7 @@ interface ContextStats {
 		workData: number;
 		calendar: number;
 		whiteboard: number;
+		canvas: number;
 	};
 }
 
@@ -97,7 +99,8 @@ export async function buildContext(
 	modelIdentifier: string,
 	userQuery?: string, // Optional: enables vector search
 	contentIds?: string[], // Currently selected content(s) from library
-	whiteboardIds?: string[] // Selected whiteboard IDs (for Gunnar)
+	whiteboardIds?: string[], // Selected whiteboard IDs (for Gunnar)
+	canvasIds?: string[] // Selected canvas IDs (for Eva)
 ): Promise<StructuredContext> {
 	// Get model's context window and calculate budget
 	const contextWindow = await getModelContextWindow(supabase, modelIdentifier);
@@ -114,7 +117,8 @@ export async function buildContext(
 		otherArcs: '',
 		workData: '',
 		calendar: '',
-		whiteboard: ''
+		whiteboard: '',
+		canvas: ''
 	};
 
 	let totalTokens = 0;
@@ -275,6 +279,21 @@ export async function buildContext(
 			const whiteboardText = formatWhiteboardsContext(whiteboardsData);
 			components.whiteboard = whiteboardText;
 			totalTokens += estimateTokens(whiteboardText);
+		}
+	}
+
+	// Priority 0.7: Selected canvases (for Eva)
+	if (hasChunk('canvas') && canvasIds && canvasIds.length > 0) {
+		const { data: canvasesData } = await supabase
+			.from('canvases')
+			.select('id, title, state')
+			.in('id', canvasIds)
+			.eq('user_id', userId);
+
+		if (canvasesData && canvasesData.length > 0) {
+			const canvasText = formatCanvasesContext(canvasesData);
+			components.canvas = canvasText;
+			totalTokens += estimateTokens(canvasText);
 		}
 	}
 
@@ -512,7 +531,8 @@ export async function buildContext(
 			otherArcs: estimateTokens(components.otherArcs),
 			workData: estimateTokens(components.workData),
 			calendar: estimateTokens(components.calendar),
-			whiteboard: estimateTokens(components.whiteboard)
+			whiteboard: estimateTokens(components.whiteboard),
+			canvas: estimateTokens(components.canvas)
 		}
 	};
 
@@ -953,6 +973,75 @@ ${formatted}
 `;
 }
 
+// Canvas state interface (same structure as whiteboard for Eva's character designs)
+interface CanvasStateForContext {
+	render?: Array<{
+		id: string;
+		type: string;
+		x?: number;
+		y?: number;
+		text?: string;
+		fill?: string;
+		width?: number;
+		height?: number;
+		src?: string; // Image source URL
+		label?: string;
+	}>;
+	semantic?: Record<string, unknown>;
+	viewport?: { x: number; y: number; scale: number };
+}
+
+function formatSingleCanvas(canvas: {
+	id: string;
+	title: string;
+	state: CanvasStateForContext;
+}): string {
+	const { id, title, state } = canvas;
+
+	const render = state?.render || [];
+	const semantic = state?.semantic || {};
+
+	if (render.length === 0) {
+		return `<canvas id="${id}">
+<title>${title}</title>
+<render>[]</render>
+<semantic>{}</semantic>
+</canvas>`;
+	}
+
+	const renderJson = JSON.stringify(render, null, 2);
+	const semanticJson = JSON.stringify(semantic, null, 2);
+
+	return `<canvas id="${id}">
+<title>${title}</title>
+<render>
+${renderJson}
+</render>
+<semantic>
+${semanticJson}
+</semantic>
+</canvas>`;
+}
+
+function formatCanvasesContext(
+	canvases: Array<{
+		id: string;
+		title: string;
+		state: CanvasStateForContext;
+	}>
+): string {
+	if (canvases.length === 0) return '';
+
+	const formatted = canvases.map(formatSingleCanvas).join('\n\n');
+	const count = canvases.length;
+	const label = count === 1 ? 'SELECTED CANVAS' : `SELECTED CANVASES (${count})`;
+
+	return `--- ${label} ---
+${formatted}
+
+`;
+}
+
 // Assemble all context components into final string
 function assembleContext(components: ContextComponents): string {
 	const parts = [
@@ -960,6 +1049,7 @@ function assembleContext(components: ContextComponents): string {
 		components.workData, // Work data for todo mode (before superjournal so Alicja sees todos first)
 		components.calendar, // Calendar events (for Alicja)
 		components.whiteboard, // Active whiteboard (for Gunnar)
+		components.canvas, // Character design canvases (for Eva)
 		components.superjournal,
 		components.files,
 		components.starred,

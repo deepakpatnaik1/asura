@@ -32,6 +32,7 @@
 	let models = $state<Model[]>([]);
 	let defaultModel = $state<string>('');
 	let selectedEmbeddingModel = $state<string>('');
+	let fileArtisanModel = $state<string>(''); // Empty string = use default model
 	let modelOverrides = $state<ModelOverride[]>([]);
 	let isLoading = $state(true);
 	let isSaving = $state(false);
@@ -68,6 +69,7 @@
 
 			defaultModel = settings.default_model || DEFAULT_MODEL;
 			selectedEmbeddingModel = settings.selected_embedding_model || EMBEDDING_MODEL;
+			fileArtisanModel = settings.file_artisan_model || '';
 
 			isLoading = false;
 		} catch (error) {
@@ -88,7 +90,8 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					default_model: defaultModel,
-					selected_embedding_model: selectedEmbeddingModel
+					selected_embedding_model: selectedEmbeddingModel,
+					file_artisan_model: fileArtisanModel || null // null to clear, empty string means use default
 				})
 			});
 
@@ -321,6 +324,20 @@
 					{/if}
 
 					<p class="help-text">Override the default model for specific personas</p>
+				</div>
+
+				<!-- File Artisan Model Selection -->
+				<div class="settings-section">
+					<label for="file-artisan-model">File Processing Model</label>
+					<select id="file-artisan-model" bind:value={fileArtisanModel}>
+						<option value="">Use default model</option>
+						{#each models.filter((m) => m.model_type === 'text_generation') as model}
+							<option value={model.model_identifier}>
+								{model.model_name} ({model.provider})
+							</option>
+						{/each}
+					</select>
+					<p class="help-text">Model for persistent content artisan cut</p>
 				</div>
 
 				<!-- Embedding Model Selection -->

@@ -9,18 +9,21 @@ export { PERSONA_GUNNAR } from './personas/gunnar';
 export { PERSONA_KIRBY } from './personas/kirby';
 export { PERSONA_SAMARA } from './personas/samara';
 export { PERSONA_ALICJA } from './personas/alicja';
+export { PERSONA_EVA } from './personas/eva';
 
 import { PERSONA_GUNNAR } from './personas/gunnar';
 import { PERSONA_KIRBY } from './personas/kirby';
 import { PERSONA_SAMARA } from './personas/samara';
 import { PERSONA_ALICJA } from './personas/alicja';
+import { PERSONA_EVA } from './personas/eva';
 
 /** Lookup map for persona prompts by name */
 const PERSONA_PROMPTS: Record<string, string> = {
 	gunnar: PERSONA_GUNNAR,
 	kirby: PERSONA_KIRBY,
 	samara: PERSONA_SAMARA,
-	alicja: PERSONA_ALICJA
+	alicja: PERSONA_ALICJA,
+	eva: PERSONA_EVA
 };
 
 /**

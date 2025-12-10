@@ -1,34 +1,34 @@
 <script lang="ts">
 	/**
-	 * NotesCanvas - Interactive brainstorming canvas with Konva
-	 * Renders whiteboards with multiple element types: notes, labels, lines, arrows, groups
+	 * DesignCanvas - Character design canvas for Eva
+	 * Renders character canvases with images, notes, and backstory elements
 	 */
 
 	import { onMount } from 'svelte';
 	import CanvasFrame from '$lib/components/CanvasFrame.svelte';
-	import type { RenderElement, WhiteboardState } from '$lib/api/whiteboard-tools';
+	import type { RenderElement, CanvasState } from '$lib/api/canvas-tools';
 	import { CANVAS, LAYOUT } from '$lib/config/layout';
 
-	interface Whiteboard {
+	interface Canvas {
 		id: string;
 		title: string;
-		state?: WhiteboardState;
+		state?: CanvasState;
 		created_at: string;
 		updated_at: string;
 	}
 
 	interface Props {
-		whiteboards?: Whiteboard[];
-		whiteboard?: Whiteboard | null;
-		selectedWhiteboardIds?: string[]; // Which whiteboards are selected for context injection
+		canvases?: Canvas[];
+		canvas?: Canvas | null;
+		selectedCanvasIds?: string[]; // Which canvases are selected for context injection
 		onSelect?: (id: string) => void;
-		onStateChange?: (id: string, state: WhiteboardState) => void;
+		onStateChange?: (id: string, state: CanvasState) => void;
 	}
 
 	let {
-		whiteboards = [],
-		whiteboard = null,
-		selectedWhiteboardIds = [],
+		canvases = [],
+		canvas = null,
+		selectedCanvasIds = [],
 		onSelect,
 		onStateChange
 	}: Props = $props();
@@ -39,7 +39,7 @@
 	let stageWidth = $state(800);
 	let stageHeight = $state(600);
 
-	// Canvas state - initialized from whiteboard prop
+	// Canvas state - initialized from canvas prop
 	let elements = $state<RenderElement[]>([]);
 	let stageX = $state(0);
 	let stageY = $state(0);
@@ -61,13 +61,13 @@
 	// Image cache for Konva (requires HTMLImageElement)
 	let imageCache = $state<Map<string, HTMLImageElement>>(new Map());
 
-	// Load state when whiteboard changes
+	// Load state when canvas changes
 	$effect(() => {
-		if (whiteboard?.state) {
-			elements = whiteboard.state.render || [];
-			stageX = whiteboard.state.viewport?.x || 0;
-			stageY = whiteboard.state.viewport?.y || 0;
-			stageScale = whiteboard.state.viewport?.scale || 1;
+		if (canvas?.state) {
+			elements = canvas.state.render || [];
+			stageX = canvas.state.viewport?.x || 0;
+			stageY = canvas.state.viewport?.y || 0;
+			stageScale = canvas.state.viewport?.scale || 1;
 		} else {
 			// Reset to empty state
 			elements = [];
@@ -130,10 +130,10 @@
 
 	// Notify parent of state changes (for persistence)
 	function notifyStateChange() {
-		if (whiteboard && onStateChange) {
-			onStateChange(whiteboard.id, {
+		if (canvas && onStateChange) {
+			onStateChange(canvas.id, {
 				render: elements,
-				semantic: whiteboard.state?.semantic || {},
+				semantic: canvas.state?.semantic || {},
 				viewport: { x: stageX, y: stageY, scale: stageScale }
 			});
 		}
@@ -176,8 +176,6 @@
 			stageY = pointer.y - mousePointTo.y * stageScale;
 		} else {
 			// Pan - use both deltaX and deltaY
-			// Shift+Scroll: some browsers swap axes, others set deltaX
-			// This handles both cases naturally
 			stageX -= evt.deltaX || (evt.shiftKey ? evt.deltaY : 0);
 			stageY -= evt.shiftKey ? 0 : evt.deltaY;
 		}
@@ -203,7 +201,7 @@
 
 	// Double-click to add new note
 	function handleDblClick(e: any) {
-		if (!whiteboard) return; // Need active whiteboard to add elements
+		if (!canvas) return; // Need active canvas to add elements
 
 		const stage = e.target.getStage();
 		const pointer = stage.getPointerPosition();
@@ -212,8 +210,8 @@
 			type: 'note',
 			x: (pointer.x - stageX) / stageScale,
 			y: (pointer.y - stageY) / stageScale,
-			text: 'New idea...',
-			fill: '#3a3a3a', // Graphite from palette
+			text: 'Character note...',
+			fill: '#4a3a5a', // Purple-ish for Eva's aesthetic
 			width: 150,
 			height: 100
 		};
@@ -222,16 +220,16 @@
 		notifyStateChange();
 	}
 
-	// Handle whiteboard selection from footer
-	function handleWhiteboardClick(id: string) {
+	// Handle canvas selection from footer
+	function handleCanvasClick(id: string) {
 		if (onSelect) {
 			onSelect(id);
 		}
 	}
 
 	// Helper to get element count for chip display
-	function getElementCount(wb: Whiteboard): number {
-		return wb.state?.render?.length || 0;
+	function getElementCount(c: Canvas): number {
+		return c.state?.render?.length || 0;
 	}
 </script>
 
@@ -239,7 +237,7 @@
 	{#snippet content()}
 		<div class="canvas-container" bind:this={containerEl}>
 			{#if mounted && Stage}
-				{#if whiteboard}
+				{#if canvas}
 					<svelte:component
 						this={Stage}
 						width={stageWidth}
@@ -270,7 +268,7 @@
 											this={Rect}
 											width={element.width || 150}
 											height={element.height || 100}
-											fill={element.fill || '#3a3a3a'}
+											fill={element.fill || '#4a3a5a'}
 											cornerRadius={4}
 											shadowColor="black"
 											shadowBlur={element.stroke ? 0 : 8}
@@ -412,24 +410,24 @@
 		</div>
 	{/snippet}
 	{#snippet footer()}
-		{#if whiteboards.length > 0}
+		{#if canvases.length > 0}
 			<div
-				class="whiteboard-picker"
+				class="canvas-picker"
 				style="--thumbnail-height: {CANVAS.footer.contentHeight}px; --body-font: {LAYOUT.typography.body}px;"
 			>
-				{#each whiteboards as wb (wb.id)}
+				{#each canvases as c (c.id)}
 					<button
-						class="whiteboard-chip"
-						class:active={whiteboard?.id === wb.id}
-						class:selected={selectedWhiteboardIds.includes(wb.id)}
-						onclick={() => handleWhiteboardClick(wb.id)}
-						title={wb.title}
+						class="canvas-chip"
+						class:active={canvas?.id === c.id}
+						class:selected={selectedCanvasIds.includes(c.id)}
+						onclick={() => handleCanvasClick(c.id)}
+						title={c.title}
 					>
-						{#if selectedWhiteboardIds.includes(wb.id)}
+						{#if selectedCanvasIds.includes(c.id)}
 							<span class="chip-check">✓</span>
 						{/if}
-						<span class="chip-title">{wb.title}</span>
-						<span class="chip-count">{getElementCount(wb)}</span>
+						<span class="chip-title">{c.title}</span>
+						<span class="chip-count">{getElementCount(c)}</span>
 					</button>
 				{/each}
 			</div>
@@ -444,10 +442,10 @@
 		border-radius: 8px;
 		overflow: hidden;
 
-		/* Cutting mat aesthetic - neutral dark gray with grid */
-		--mat-bg: hsl(0, 0%, 5%);
-		--mat-grid-minor: hsla(0, 0%, 100%, 0.03);
-		--mat-grid-major: hsla(0, 0%, 100%, 0.04);
+		/* Eva's design canvas - warmer, slightly purple-tinted mat */
+		--mat-bg: hsl(270, 10%, 6%);
+		--mat-grid-minor: hsla(270, 30%, 50%, 0.03);
+		--mat-grid-major: hsla(270, 30%, 50%, 0.05);
 
 		background-color: var(--mat-bg);
 		background-image:
@@ -471,18 +469,13 @@
 		align-items: center;
 		justify-content: center;
 		height: 100%;
-		color: rgba(100, 140, 120, 0.8);
+		color: rgba(140, 100, 160, 0.8);
 		font-size: 0.875rem;
 		gap: 4px;
 	}
 
-	.empty-state .hint {
-		font-size: 0.75rem;
-		opacity: 0.6;
-	}
-
-	/* Whiteboard picker footer */
-	.whiteboard-picker {
+	/* Canvas picker footer */
+	.canvas-picker {
 		display: flex;
 		flex-direction: row;
 		gap: 8px;
@@ -496,7 +489,7 @@
 	}
 
 	/* Mini canvas thumbnail style */
-	.whiteboard-chip {
+	.canvas-chip {
 		display: flex;
 		flex-direction: column;
 		align-items: flex-start;
@@ -504,7 +497,7 @@
 		padding: 8px 10px;
 		height: var(--thumbnail-height);
 		min-width: 80px;
-		background: hsl(0, 0%, 5%); /* Same as canvas cutting mat */
+		background: hsl(270, 10%, 6%); /* Same as canvas mat */
 		border: 1px solid hsl(var(--border) / 0.3);
 		border-radius: 4px;
 		cursor: pointer;
@@ -513,19 +506,19 @@
 		position: relative;
 	}
 
-	.whiteboard-chip:hover {
+	.canvas-chip:hover {
 		border-color: hsl(var(--border) / 0.6);
 	}
 
-	.whiteboard-chip.active {
+	.canvas-chip.active {
 		border-color: hsl(var(--foreground) / 0.5);
 	}
 
-	.whiteboard-chip.selected {
+	.canvas-chip.selected {
 		border-color: hsl(var(--accent));
 	}
 
-	.whiteboard-chip.selected.active {
+	.canvas-chip.selected.active {
 		border-color: hsl(var(--foreground) / 0.7);
 		box-shadow: 0 0 0 1px hsl(var(--accent) / 0.3);
 	}

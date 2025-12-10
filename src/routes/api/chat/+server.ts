@@ -14,6 +14,7 @@ import { DEFAULT_PERSONA, getPersonaTools } from '$lib/config/personas';
 import { getPersonaPrompt } from '$lib/prompts';
 import {
 	converseStream,
+	converseStreamFireworks,
 	saveToSuperjournal,
 	triggerBackgroundJobs,
 	getProviderType,
@@ -38,6 +39,20 @@ import {
 	type WhiteboardToolContext,
 	type WhiteboardMutations
 } from '$lib/api/whiteboard-tools';
+import {
+	CANVAS_TOOLS,
+	executeCanvasTool,
+	isCanvasTool,
+	createEmptyCanvasMutations,
+	type CanvasToolContext,
+	type CanvasMutations
+} from '$lib/api/canvas-tools';
+import {
+	SAKURA_TOOLS,
+	executeSakuraTool,
+	isSakuraTool,
+	type SakuraToolContext
+} from '$lib/api/sakura-tools';
 import { refreshAccessToken } from '$lib/api/google-calendar';
 import { BRAVE_SEARCH_TOOL, executeBraveSearch } from '$lib/api/brave-search';
 import { createClient } from '@supabase/supabase-js';
@@ -82,7 +97,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		const validation = validateSchema(chatMessageSchema, parseResult.data);
 		if (!validation.success) return validation.error;
 
-		const { message, persona: requestPersona, chart_id, chart_source, content_ids, whiteboard_ids } = validation.data;
+		const { message, persona: requestPersona, chart_id, chart_source, content_ids, whiteboard_ids, canvas_ids } = validation.data;
 
 		// 4. Load user settings (persona and model)
 		const { data: settings } = await supabase
@@ -164,7 +179,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			conversationModel,
 			message,
 			content_ids,
-			whiteboard_ids
+			whiteboard_ids,
+			canvas_ids
 		);
 
 		log.info('Context built', { ...stats, model: conversationModel, persona });
@@ -177,6 +193,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		let toolExecutor: ToolExecutor | undefined;
 		let todoMutations: TodoMutations | undefined;
 		let whiteboardMutations: WhiteboardMutations | undefined;
+		let canvasMutations: CanvasMutations | undefined;
 
 		const personaTools = getPersonaTools(persona);
 
@@ -187,6 +204,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			// Check which tool categories this persona has
 			const hasTodoTools = personaTools.some(t => isTodoTool(t));
 			const hasWhiteboardTools = personaTools.some(t => isWhiteboardTool(t));
+			const hasCanvasTools = personaTools.some(t => isCanvasTool(t));
+			const hasSakuraTools = personaTools.some(t => isSakuraTool(t));
 
 			// Set up todo tools context (Alicja)
 			let todoContext: TodoToolContext | null = null;
@@ -242,6 +261,23 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				allTools.push(...WHITEBOARD_TOOLS);
 			}
 
+			// Set up canvas tools context (Eva - character design canvases)
+			let canvasContext: CanvasToolContext | null = null;
+
+			if (hasCanvasTools) {
+				canvasMutations = createEmptyCanvasMutations();
+				canvasContext = { supabase, userId };
+				allTools.push(...CANVAS_TOOLS);
+			}
+
+			// Set up sakura tools context (Eva - image generation + export)
+			let sakuraContext: SakuraToolContext | null = null;
+
+			if (hasSakuraTools) {
+				sakuraContext = { userId, supabase };
+				allTools.push(...SAKURA_TOOLS);
+			}
+
 			tools = allTools;
 
 			// Tool executor handles all tool types
@@ -254,6 +290,10 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 						success: !!searchResults,
 						message: searchResults || 'Search failed'
 					};
+				} else if (isSakuraTool(toolName) && sakuraContext) {
+					return executeSakuraTool(toolName, input, sakuraContext);
+				} else if (isCanvasTool(toolName) && canvasContext) {
+					return executeCanvasTool(toolName, input, canvasContext, canvasMutations!);
 				} else if (isWhiteboardTool(toolName) && whiteboardContext) {
 					return executeWhiteboardTool(toolName, input, whiteboardContext, whiteboardMutations!);
 				} else if (isTodoTool(toolName) && todoContext) {
@@ -276,7 +316,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				const encoder = new TextEncoder();
 
 				try {
-					const generator = converseStream({
+					// Route to appropriate provider implementation
+					const streamParams = {
 						personaPrompt,
 						context,
 						message,
@@ -286,7 +327,11 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 						chartImage,
 						tools,
 						toolExecutor
-					});
+					};
+
+					const generator = conversationProvider === 'fireworks'
+						? converseStreamFireworks(streamParams)
+						: converseStream(streamParams);
 
 					let result;
 					while (true) {
@@ -323,6 +368,9 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 						}),
 						...(whiteboardMutations && {
 							whiteboard_mutations: whiteboardMutations
+						}),
+						...(canvasMutations && {
+							canvas_mutations: canvasMutations
 						})
 					});
 					controller.enqueue(encoder.encode(`data: ${doneData}\n\n`));

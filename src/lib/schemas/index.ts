@@ -18,7 +18,7 @@ export const uuidSchema = z.string().uuid('Invalid ID format');
 export const nonEmptyString = z.string().min(1, 'Required');
 
 /** Persona enum (allowed values) */
-export const personaSchema = z.enum(['gunnar', 'kirby', 'samara', 'alicja']);
+export const personaSchema = z.enum(['gunnar', 'kirby', 'samara', 'alicja', 'eva']);
 
 // ============================================================================
 // Chat Schemas
@@ -36,7 +36,8 @@ export const chatMessageSchema = z.object({
 	chart_id: z.string().uuid().optional(),
 	chart_source: chartSourceSchema.optional(),
 	content_ids: z.array(z.string().uuid()).optional(), // active content(s) for context injection
-	whiteboard_ids: z.array(z.string().uuid()).optional() // selected whiteboards for Gunnar context
+	whiteboard_ids: z.array(z.string().uuid()).optional(), // selected whiteboards for Gunnar context
+	canvas_ids: z.array(z.string().uuid()).optional() // selected canvases for Eva context
 });
 
 /** POST /api/chat/compress - Orphan recovery compression */
@@ -58,7 +59,9 @@ export const settingsUpdateSchema = z.object({
 	selected_embedding_model: z.string().optional(),
 	active_content_id: z.string().uuid().nullable().optional(),
 	// Currently selected persona
-	selected_persona: personaSchema.optional()
+	selected_persona: personaSchema.optional(),
+	// Model for file artisan cut (persistent content processing)
+	file_artisan_model: z.string().nullable().optional()
 }).refine(
 	(data) => Object.keys(data).length > 0,
 	{ message: 'At least one field must be provided' }

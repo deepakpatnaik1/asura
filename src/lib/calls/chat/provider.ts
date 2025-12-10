@@ -37,7 +37,7 @@ export function getProviderType(modelIdentifier: string): ProviderType {
  * @returns True if the provider is supported
  */
 export function isProviderSupported(provider: ProviderType): boolean {
-	return provider === 'anthropic';
+	return provider === 'anthropic' || provider === 'fireworks';
 }
 
 /**

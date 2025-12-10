@@ -15,10 +15,13 @@ We will work on the open docs.
 
 ## What Is Asura?
 
-AI chat app with three modes:
-- **Chat**: Strategic conversations with Gunnar (mentor) or Kirby (marketer)
-- **Reader**: Article discussion with Samara (teacher)
-- **Todo**: Task management with Alicja (TBD)
+AI mentor toolkit. Single unified interface at `/` with 4 personas sharing one conversation thread:
+- **Gunnar**: Startup mentor - finance, bootstrapping, strategy (6 whiteboard tools)
+- **Kirby**: Guerrilla marketer - bold ideas, different mindspace
+- **Samara**: Reading teacher - deep reading, pattern recognition
+- **Alicja**: Productivity collector - todos, calendar, founder diary (14 tools)
+
+Persona dropdown switches who you talk to next. History shows all personas interleaved.
 
 ## Tech Stack
 
@@ -51,9 +54,7 @@ src/
 │   ├── stores/           # Svelte stores (chat, connectivity)
 │   └── ui/               # Auto-scroll, scroll utilities
 ├── routes/
-│   ├── chat/             # Chat mode UI
-│   ├── reader/           # Reader mode UI
-│   ├── todo/             # Todo mode UI
+│   ├── +page.svelte      # Main UI (single route at /)
 │   └── api/              # REST endpoints
 └── supabase/migrations/  # DB schema
 ```
@@ -68,14 +69,12 @@ src/
 
 **Context Budget:** 40% of model context window, priority-based truncation.
 
-**Reader Mode:** No compression, no vector search - full conversations stored in superjournal only.
-
 ## Key Patterns
 
 - **Content Markers**: `<!--content:uuid-->` stored in superjournal, expanded on page load
 - **Background Jobs**: Compression + table extraction run async after each message
 - **Optimistic UI**: Toggle actions update immediately, revert on API failure
-- **Mode Separation**: Chat/reader have separate personas, models, files, starred items
+- **Dual-layer Whiteboard**: Render (visual elements) + semantic (meaning) stored separately
 
 ## Database Tables
 
@@ -101,17 +100,17 @@ src/
 | GET /api/superjournal | Message history with pagination |
 | PATCH/DELETE /api/superjournal/[id] | Star/delete message |
 | GET/PUT /api/settings | User preferences |
-| POST /api/nuke | Delete all data for mode |
+| POST /api/nuke | Delete by bucket (persona, content tier, productivity) |
 | GET /api/health | Server/database status |
 
-## Personas
+## Canvas Panel
 
-- **Gunnar** (chat): YC mentor, challenges assumptions
-- **Kirby** (chat): Guerrilla marketer, bold ideas
-- **Samara** (reader): Deep reading teacher, pattern recognition
-- **Alicja** (todo): TBD
+Three canvas types in right panel:
+- **Charts**: Image/table carousel from pasted content or AI responses
+- **Calendar**: Planner/todo/done productivity workspace
+- **Notes**: Konva whiteboard with note/label/line/arrow/group elements
 
-Stored per mode: `selected_persona_chat`, `selected_persona_reader`, `selected_persona_todo`
+Personas have default canvas assignments. Canvas switcher in footer.
 
 ## Charts
 

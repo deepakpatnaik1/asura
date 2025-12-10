@@ -6,10 +6,28 @@
  * across modes, but takes on mode-specific styling and data sources.
  */
 
-export const CANVAS_TYPES = ['carousel', 'calendar', 'notes'] as const;
+export const CANVAS_TYPES = ['carousel', 'calendar', 'notes', 'design'] as const;
 export type CanvasType = (typeof CANVAS_TYPES)[number];
 
 export const DEFAULT_CANVAS: CanvasType = 'carousel';
+
+/**
+ * Default canvas for each persona
+ */
+export const PERSONA_DEFAULT_CANVAS: Record<string, CanvasType> = {
+	gunnar: 'notes',
+	kirby: 'notes',
+	samara: 'carousel',
+	alicja: 'calendar',
+	eva: 'design'
+};
+
+/**
+ * Get default canvas for a persona
+ */
+export function getDefaultCanvasForPersona(persona: string): CanvasType {
+	return PERSONA_DEFAULT_CANVAS[persona] ?? DEFAULT_CANVAS;
+}
 
 /**
  * Canvas metadata for UI rendering
@@ -29,5 +47,10 @@ export const CANVAS_META: Record<CanvasType, { icon: string; label: string; desc
 		icon: 'LuStickyNote',
 		label: 'Scratch',
 		description: 'Markdown scratch pad'
+	},
+	design: {
+		icon: 'LuPalette',
+		label: 'Design',
+		description: 'Character design canvas'
 	}
 };

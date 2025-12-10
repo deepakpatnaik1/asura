@@ -25,6 +25,7 @@ export type ContextChunk =
 	| 'tags' // Canonical tag list
 	| 'calendar' // Google Calendar events (future)
 	| 'whiteboard' // Active whiteboard (for Gunnar)
+	| 'canvas' // Character design canvases (for Eva)
 	| 'time'; // Current timestamp (always injected, not toggleable)
 
 
@@ -47,13 +48,23 @@ export type ToolName =
 	| 'update_calendar_event'
 	| 'delete_calendar_event'
 	| 'check_calendar_availability'
-	// Whiteboard tools
+	// Whiteboard tools (Gunnar)
 	| 'create_whiteboard'
 	| 'rename_whiteboard'
 	| 'delete_whiteboard'
 	| 'open_whiteboard'
 	| 'list_whiteboards'
-	| 'update_whiteboard';
+	| 'update_whiteboard'
+	// Canvas tools (Eva)
+	| 'create_canvas'
+	| 'rename_canvas'
+	| 'delete_canvas'
+	| 'open_canvas'
+	| 'list_canvases'
+	| 'update_canvas'
+	// Sakura tools (character design)
+	| 'generate_image'
+	| 'export_character';
 
 /**
  * Persona configuration interface
@@ -121,6 +132,25 @@ const GUNNAR_TOOLS: ToolName[] = [
 ];
 
 /**
+ * Eva: Character designer - canvases for mood boards + image generation
+ */
+const EVA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'canvas'];
+
+/**
+ * Eva tools: canvas + image generation + export
+ */
+const EVA_TOOLS: ToolName[] = [
+	'create_canvas',
+	'rename_canvas',
+	'delete_canvas',
+	'open_canvas',
+	'list_canvases',
+	'update_canvas',
+	'generate_image',
+	'export_character'
+];
+
+/**
  * All Alicja tools
  */
 const ALICJA_TOOLS: ToolName[] = [
@@ -183,13 +213,23 @@ export const PERSONAS: Record<string, Persona> = {
 		contextChunks: ALICJA_CHUNKS,
 		compression: true, // Full memory of Alicja conversations
 		tools: ALICJA_TOOLS
+	},
+	eva: {
+		name: 'eva',
+		displayName: 'Eva',
+		accentColor: getPaletteColor('eva'),
+		model: null,
+		systemPrompt: 'eva', // Character designer prompt
+		contextChunks: EVA_CHUNKS,
+		compression: true,
+		tools: EVA_TOOLS
 	}
 };
 
 /**
  * Persona names as const array for type safety
  */
-export const PERSONA_NAMES = ['gunnar', 'kirby', 'samara', 'alicja'] as const;
+export const PERSONA_NAMES = ['gunnar', 'kirby', 'samara', 'alicja', 'eva'] as const;
 export type PersonaName = (typeof PERSONA_NAMES)[number];
 
 /**
