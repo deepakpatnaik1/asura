@@ -381,16 +381,26 @@ async function executeRenameCanvas(
 			};
 		}
 
-		const { error } = await supabase
+		const { data: updated, error } = await supabase
 			.from('canvases')
 			.update({
 				title: newTitle,
 				updated_at: new Date().toISOString()
 			})
 			.eq('id', canvasId)
-			.eq('user_id', userId);
+			.eq('user_id', userId)
+			.select('title')
+			.single();
 
 		if (error) throw error;
+
+		// Verify the rename actually happened
+		if (!updated || updated.title !== newTitle) {
+			return {
+				success: false,
+				message: `Rename failed: title did not update. Check database permissions.`
+			};
+		}
 
 		mutations.renamed_canvases.push({ id: canvasId, title: newTitle });
 
@@ -441,6 +451,21 @@ async function executeDeleteCanvas(
 			.eq('user_id', userId);
 
 		if (error) throw error;
+
+		// Verify deletion - record should no longer exist
+		const { data: stillExists } = await supabase
+			.from('canvases')
+			.select('id')
+			.eq('id', canvasId)
+			.eq('user_id', userId)
+			.single();
+
+		if (stillExists) {
+			return {
+				success: false,
+				message: `Delete failed: canvas still exists. Check database permissions.`
+			};
+		}
 
 		mutations.deleted_canvases.push(canvasId);
 
@@ -579,16 +604,34 @@ async function executeUpdateCanvas(
 			viewport
 		};
 
-		const { error } = await supabase
+		const { data: updated, error } = await supabase
 			.from('canvases')
 			.update({
 				state: newState,
 				updated_at: new Date().toISOString()
 			})
 			.eq('id', canvasId)
-			.eq('user_id', userId);
+			.eq('user_id', userId)
+			.select('state')
+			.single();
 
 		if (error) throw error;
+
+		// Verify the update actually saved
+		if (!updated || !updated.state) {
+			return {
+				success: false,
+				message: `Update failed: state did not save. Check database permissions.`
+			};
+		}
+
+		const savedRender = (updated.state as CanvasState).render;
+		if (!savedRender || savedRender.length !== render.length) {
+			return {
+				success: false,
+				message: `Update failed: expected ${render.length} elements, got ${savedRender?.length || 0}`
+			};
+		}
 
 		// Add to mutations for UI update
 		mutations.updated_canvases.push({ id: canvasId, state: newState });

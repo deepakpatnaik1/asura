@@ -188,6 +188,15 @@
 				}
 			}
 
+			// Handle updated canvases - apply state changes
+			if (mutations.updated_canvases && mutations.updated_canvases.length > 0) {
+				for (const updated of mutations.updated_canvases) {
+					evaCanvases = evaCanvases.map(c =>
+						c.id === updated.id ? { ...c, state: updated.state } : c
+					);
+				}
+			}
+
 			// Handle opened canvas - select it, view it, and switch canvas view
 			if (mutations.opened_canvas) {
 				const openedId = mutations.opened_canvas;
