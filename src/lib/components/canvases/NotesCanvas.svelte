@@ -23,6 +23,7 @@
 		selectedWhiteboardIds?: string[]; // Which whiteboards are selected for context injection
 		onSelect?: (id: string) => void;
 		onStateChange?: (id: string, state: WhiteboardState) => void;
+		refreshTrigger?: number; // Increment to force re-render after mutations
 	}
 
 	let {
@@ -30,8 +31,20 @@
 		whiteboard = null,
 		selectedWhiteboardIds = [],
 		onSelect,
-		onStateChange
+		onStateChange,
+		refreshTrigger = 0
 	}: Props = $props();
+
+	// Track refresh trigger to force re-read of whiteboard state
+	$effect(() => {
+		// This effect runs when refreshTrigger changes, forcing a re-evaluation of whiteboard state
+		if (refreshTrigger > 0 && whiteboard?.state) {
+			elements = whiteboard.state.render || [];
+			stageX = whiteboard.state.viewport?.x || 0;
+			stageY = whiteboard.state.viewport?.y || 0;
+			stageScale = whiteboard.state.viewport?.scale || 1;
+		}
+	});
 
 	// Track mounted state for client-only rendering
 	let mounted = $state(false);

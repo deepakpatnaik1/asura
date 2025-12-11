@@ -378,22 +378,34 @@ async function executeRenameWhiteboard(
 			};
 		}
 
-		const { error } = await supabase
+		const oldTitle = existing.title;
+
+		const { data: updated, error } = await supabase
 			.from('whiteboards')
 			.update({
 				title: newTitle,
 				updated_at: new Date().toISOString()
 			})
 			.eq('id', whiteboardId)
-			.eq('user_id', userId);
+			.eq('user_id', userId)
+			.select('title')
+			.single();
 
 		if (error) throw error;
+
+		// Verify the update actually happened
+		if (!updated || updated.title !== newTitle) {
+			return {
+				success: false,
+				message: `Rename failed: title did not update. Check database permissions.`
+			};
+		}
 
 		mutations.renamed_whiteboards.push({ id: whiteboardId, title: newTitle });
 
 		return {
 			success: true,
-			message: `Renamed whiteboard from "${existing.title}" to "${newTitle}"`,
+			message: `Renamed whiteboard from "${oldTitle}" to "${newTitle}"`,
 			data: { id: whiteboardId, title: newTitle }
 		};
 	} catch (error) {
@@ -438,6 +450,21 @@ async function executeDeleteWhiteboard(
 			.eq('user_id', userId);
 
 		if (error) throw error;
+
+		// Verify deletion - record should no longer exist
+		const { data: stillExists } = await supabase
+			.from('whiteboards')
+			.select('id')
+			.eq('id', whiteboardId)
+			.eq('user_id', userId)
+			.single();
+
+		if (stillExists) {
+			return {
+				success: false,
+				message: `Delete failed: whiteboard still exists. Check database permissions.`
+			};
+		}
 
 		mutations.deleted_whiteboards.push(whiteboardId);
 
@@ -576,16 +603,35 @@ async function executeUpdateWhiteboard(
 			viewport
 		};
 
-		const { error } = await supabase
+		const { data: updated, error } = await supabase
 			.from('whiteboards')
 			.update({
 				state: newState,
 				updated_at: new Date().toISOString()
 			})
 			.eq('id', whiteboardId)
-			.eq('user_id', userId);
+			.eq('user_id', userId)
+			.select('state')
+			.single();
 
 		if (error) throw error;
+
+		// Verify the update actually happened
+		if (!updated || !updated.state) {
+			return {
+				success: false,
+				message: `Update failed: state did not save. Check database permissions.`
+			};
+		}
+
+		// Verify render array length matches (basic sanity check)
+		const savedRender = (updated.state as WhiteboardState).render;
+		if (!savedRender || savedRender.length !== render.length) {
+			return {
+				success: false,
+				message: `Update failed: expected ${render.length} elements, got ${savedRender?.length || 0}`
+			};
+		}
 
 		// Add to mutations for UI update
 		mutations.updated_whiteboards.push({ id: whiteboardId, state: newState });

@@ -52,6 +52,7 @@
 	let showLightbox = $state(false);
 	let forceCanvas = $state<CanvasType | null>(null);
 	let calendarRefreshTrigger = $state(0);
+	let whiteboardRefreshTrigger = $state(0);
 
 	// Whiteboard state for notes canvas
 	interface Whiteboard {
@@ -140,6 +141,16 @@
 				}
 				viewingWhiteboardId = openedId;
 				forceCanvas = 'notes'; // Switch to notes canvas when whiteboard is opened
+			}
+
+			// Handle updated whiteboards - apply state changes and trigger refresh
+			if (mutations.updated_whiteboards && mutations.updated_whiteboards.length > 0) {
+				for (const updated of mutations.updated_whiteboards) {
+					whiteboards = whiteboards.map(wb =>
+						wb.id === updated.id ? { ...wb, state: updated.state } : wb
+					);
+				}
+				whiteboardRefreshTrigger++;
 			}
 
 			// Clear mutations after processing
@@ -1269,6 +1280,7 @@
 		bind:showLightbox
 		bind:forceCanvas
 		{calendarRefreshTrigger}
+		{whiteboardRefreshTrigger}
 		enableDelete={true}
 		onDelete={handleChartDeleteClick}
 		{whiteboards}

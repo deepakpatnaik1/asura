@@ -56,6 +56,7 @@
 		// Calendar-specific props
 		calendarRefreshTrigger?: number;
 		// Notes/Whiteboard-specific props
+		whiteboardRefreshTrigger?: number;
 		whiteboards?: Whiteboard[];
 		activeWhiteboardId?: string | null;
 		selectedWhiteboardIds?: string[]; // For showing selection state in carousel
@@ -79,6 +80,7 @@
 		enableDelete = false,
 		onDelete,
 		calendarRefreshTrigger = 0,
+		whiteboardRefreshTrigger = 0,
 		whiteboards = [],
 		activeWhiteboardId = null,
 		selectedWhiteboardIds = [],
@@ -138,6 +140,7 @@
 				{selectedWhiteboardIds}
 				onSelect={onWhiteboardSelect}
 				onStateChange={onWhiteboardStateChange}
+				refreshTrigger={whiteboardRefreshTrigger}
 			/>
 		{:else if activeCanvas === 'design'}
 			<DesignCanvas
