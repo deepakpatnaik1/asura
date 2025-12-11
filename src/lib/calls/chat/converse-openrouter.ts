@@ -1,12 +1,12 @@
 /**
- * Fireworks Chat Streaming
+ * OpenRouter Chat Streaming
  *
- * Handles conversation streaming for Fireworks models (OpenAI-compatible API).
- * Used for uncensored models like Hermes, Dolphin for Eva persona.
+ * Handles conversation streaming for OpenRouter models (OpenAI-compatible API).
+ * Used for uncensored roleplay models like MythoMax, Dolphin for Eva persona.
  * Supports tool/function calling with recursive execution.
  */
 
-import { FIREWORKS_API_KEY } from '$env/static/private';
+import { OPENROUTER_API_KEY } from '$env/static/private';
 import { CONVERSE_PROMPT } from '$lib/prompts';
 import { converseUserPrompt } from '$lib/prompts/templates';
 import { MEMORY } from '$lib/config/memory';
@@ -46,7 +46,7 @@ interface OpenAIStreamChunk {
 }
 
 /**
- * Stream a conversation response using Fireworks API.
+ * Stream a conversation response using OpenRouter API.
  *
  * Supports tool/function calling with OpenAI-compatible format.
  * Handles recursive tool calls up to MEMORY.maxToolUseDepth.
@@ -55,20 +55,20 @@ interface OpenAIStreamChunk {
  * @yields Text chunks as they arrive
  * @returns Final response text and token counts
  */
-export async function* converseStreamFireworks(
+export async function* converseStreamOpenRouter(
 	params: ConverseParams
 ): AsyncGenerator<string, ConverseResult, unknown> {
 	const { personaPrompt, context, message, model, maxTokens, temperature, chartImage, tools, toolExecutor } = params;
 
-	// Build system prompt (no caching on Fireworks)
+	// Build system prompt (no caching on OpenRouter)
 	const systemPrompt = `${personaPrompt}\n\n${CONVERSE_PROMPT}`;
 
 	// Build user prompt with context
 	const fullUserPrompt = converseUserPrompt(context, message);
 
-	// Note: Fireworks vision support varies by model
+	// Note: OpenRouter vision support varies by model
 	if (chartImage) {
-		console.warn('[Fireworks] Chart images not yet supported for Fireworks models');
+		console.warn('[OpenRouter] Chart images not yet supported for OpenRouter models');
 	}
 
 	// Convert Anthropic tools to OpenAI format
@@ -97,12 +97,14 @@ export async function* converseStreamFireworks(
 			return;
 		}
 
-		const response = await fetch('https://api.fireworks.ai/inference/v1/chat/completions', {
+		// Try with tools first, but some models don't support them
+		let response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json',
-				Authorization: `Bearer ${FIREWORKS_API_KEY}`,
-				Accept: 'text/event-stream'
+				Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+				'HTTP-Referer': 'https://asura.vercel.app',
+				'X-Title': 'Asura'
 			},
 			body: JSON.stringify({
 				model,
@@ -115,13 +117,39 @@ export async function* converseStreamFireworks(
 			})
 		});
 
+		// If model doesn't support tools, retry without them
 		if (!response.ok) {
-			const error = await response.text();
-			throw new Error(`Fireworks API error: ${response.status} - ${error}`);
+			const errorText = await response.text();
+			if (errorText.includes('No endpoints found that support tool use')) {
+				console.warn(`[OpenRouter] Model ${model} does not support tools, retrying without`);
+				response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+						Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+						'HTTP-Referer': 'https://asura.vercel.app',
+						'X-Title': 'Asura'
+					},
+					body: JSON.stringify({
+						model,
+						messages: conversationMessages,
+						max_tokens: maxTokens,
+						temperature,
+						stream: true
+						// No tools - model doesn't support them
+					})
+				});
+				if (!response.ok) {
+					const retryError = await response.text();
+					throw new Error(`OpenRouter API error: ${response.status} - ${retryError}`);
+				}
+			} else {
+				throw new Error(`OpenRouter API error: ${response.status} - ${errorText}`);
+			}
 		}
 
 		if (!response.body) {
-			throw new Error('No response body from Fireworks API');
+			throw new Error('No response body from OpenRouter API');
 		}
 
 		// Parse SSE stream

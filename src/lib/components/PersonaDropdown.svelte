@@ -119,7 +119,7 @@
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
-		max-width: 80px;
+		width: 52px; /* Fixed width for longest name (Gunnar/Samara/Alicja) */
 	}
 
 	.dropdown-menu {

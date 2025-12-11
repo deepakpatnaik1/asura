@@ -123,7 +123,8 @@ export const UPDATE_CANVAS_TOOL: Anthropic.Tool = {
 						to: { type: 'array', items: { type: 'number' } },
 						label: { type: 'string' },
 						// Image-specific properties
-						src: { type: 'string', description: 'URL to image' },
+						src: { type: 'string', description: 'URL to full image' },
+						thumbnail_url: { type: 'string', description: 'URL to thumbnail (from generate_image)' },
 						prompt: { type: 'string', description: 'Generation prompt for iteration' },
 						seed: { type: 'number', description: 'Seed for consistent generations' },
 						model: { type: 'string', description: 'Model that generated the image' },
@@ -201,6 +202,7 @@ export type RenderElement = {
 	label?: string;
 	// Image-specific properties
 	src?: string;
+	thumbnail_url?: string; // Thumbnail URL for generated images
 	prompt?: string;
 	seed?: number;
 	model?: string;

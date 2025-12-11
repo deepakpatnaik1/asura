@@ -231,6 +231,38 @@
 	function getElementCount(c: Canvas): number {
 		return c.state?.render?.length || 0;
 	}
+
+	// Get thumbnail URL for a canvas (hero image or first image)
+	function getCanvasThumbnail(c: Canvas): string | null {
+		const render = c.state?.render || [];
+		const images = render.filter((el) => el.type === 'image' && el.src);
+
+		// Try to find hero image first
+		const heroImage = images.find((img) => img.role === 'hero');
+		if (heroImage) {
+			return heroImage.thumbnail_url || heroImage.src || null;
+		}
+
+		// Fall back to first image
+		if (images.length > 0) {
+			return images[0].thumbnail_url || images[0].src || null;
+		}
+
+		return null;
+	}
+
+	// Track which canvas thumbnails failed to load
+	let failedThumbnails = $state<Set<string>>(new Set());
+
+	function handleThumbnailError(canvasId: string) {
+		failedThumbnails = new Set([...failedThumbnails, canvasId]);
+	}
+
+	// Check if we should show image (has URL and hasn't failed)
+	function shouldShowImage(c: Canvas): boolean {
+		const url = getCanvasThumbnail(c);
+		return !!url && !failedThumbnails.has(c.id);
+	}
 </script>
 
 <CanvasFrame>
@@ -416,18 +448,31 @@
 				style="--thumbnail-height: {CANVAS.footer.contentHeight}px; --body-font: {LAYOUT.typography.body}px;"
 			>
 				{#each canvases as c (c.id)}
+					{@const showImage = shouldShowImage(c)}
+					{@const thumbnailUrl = getCanvasThumbnail(c)}
 					<button
 						class="canvas-chip"
 						class:active={canvas?.id === c.id}
 						class:selected={selectedCanvasIds.includes(c.id)}
+						class:has-image={showImage}
 						onclick={() => handleCanvasClick(c.id)}
 						title={c.title}
 					>
 						{#if selectedCanvasIds.includes(c.id)}
 							<span class="chip-check">✓</span>
 						{/if}
-						<span class="chip-title">{c.title}</span>
-						<span class="chip-count">{getElementCount(c)}</span>
+						{#if showImage && thumbnailUrl}
+							<img
+								class="chip-thumbnail"
+								src={thumbnailUrl}
+								alt={c.title}
+								loading="lazy"
+								onerror={() => handleThumbnailError(c.id)}
+							/>
+						{:else}
+							<span class="chip-title">{c.title}</span>
+							<span class="chip-count">{getElementCount(c)}</span>
+						{/if}
 					</button>
 				{/each}
 			</div>
@@ -504,6 +549,14 @@
 		transition: all 0.2s ease;
 		flex-shrink: 0;
 		position: relative;
+		overflow: hidden;
+	}
+
+	/* Image thumbnail variant - no padding, let image fill */
+	.canvas-chip.has-image {
+		padding: 0;
+		width: auto;
+		min-width: auto;
 	}
 
 	.canvas-chip:hover {
@@ -543,5 +596,13 @@
 		font-size: 9px;
 		color: hsl(var(--muted-foreground));
 		margin-top: auto;
+	}
+
+	/* Image thumbnail in canvas chip */
+	.chip-thumbnail {
+		height: 100%;
+		width: auto;
+		object-fit: cover;
+		border-radius: 3px;
 	}
 </style>

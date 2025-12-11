@@ -7,8 +7,13 @@
 
 import type Anthropic from '@anthropic-ai/sdk';
 import { PUBLIC_SUPABASE_URL } from '$env/static/public';
-import { SUPABASE_SERVICE_ROLE_KEY, FIREWORKS_API_KEY, OPENROUTER_API_KEY } from '$env/static/private';
+import { SUPABASE_SERVICE_ROLE_KEY, FIREWORKS_API_KEY, OPENROUTER_API_KEY, FAL_API_KEY } from '$env/static/private';
 import { createClient } from '@supabase/supabase-js';
+import {
+	generateThumbnail,
+	uploadImageToStorage,
+	uploadThumbnailToStorage
+} from '$lib/capabilities/image-extraction';
 
 // Service role client for storage operations
 const supabaseStorage = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -32,9 +37,52 @@ const OPENROUTER_MODELS = {
 	'sdxl': 'stabilityai/stable-diffusion-xl-base-1.0' // SDXL base
 } as const;
 
+/**
+ * Fal.ai image models - NSFW capable with enable_safety_checker: false
+ */
+const FAL_MODELS = {
+	'fal-flux-dev': 'fal-ai/flux/dev', // High quality, $0.025/megapixel
+	'fal-flux-schnell': 'fal-ai/flux/schnell', // Fast generation
+	'fal-flux-pro': 'fal-ai/flux-pro/v1.1', // Premium quality
+	'fal-realistic': 'fal-ai/realistic-vision', // Realistic/NSFW, FREE
+	'fal-sdxl': 'fal-ai/fast-sdxl' // SDXL, free tier
+} as const;
+
 type FireworksModel = keyof typeof FIREWORKS_MODELS;
 type OpenRouterModel = keyof typeof OPENROUTER_MODELS;
-type ImageModel = FireworksModel | OpenRouterModel;
+type FalModel = keyof typeof FAL_MODELS;
+type ImageModel = FireworksModel | OpenRouterModel | FalModel;
+
+// Reverse mapping: database model_identifier → internal tool key
+const MODEL_IDENTIFIER_TO_KEY: Record<string, ImageModel> = {
+	// Fal.ai models
+	'fal-ai/flux/dev': 'fal-flux-dev',
+	'fal-ai/flux/schnell': 'fal-flux-schnell',
+	'fal-ai/flux-pro/v1.1': 'fal-flux-pro',
+	'fal-ai/realistic-vision': 'fal-realistic',
+	'fal-ai/fast-sdxl': 'fal-sdxl',
+	// Fireworks models
+	'accounts/fireworks/models/flux-1-schnell-fp8': 'flux-schnell',
+	'accounts/fireworks/models/flux-1-dev-fp8': 'flux-dev',
+	'accounts/fireworks/models/flux-1-1-pro': 'flux-pro'
+};
+
+/**
+ * Convert database model_identifier to internal tool key
+ * Accepts either format and returns the internal key
+ */
+function normalizeModelKey(modelInput: string): ImageModel {
+	// Check if it's already an internal key
+	if (modelInput in FIREWORKS_MODELS || modelInput in OPENROUTER_MODELS || modelInput in FAL_MODELS) {
+		return modelInput as ImageModel;
+	}
+	// Check reverse mapping (database identifier → internal key)
+	if (modelInput in MODEL_IDENTIFIER_TO_KEY) {
+		return MODEL_IDENTIFIER_TO_KEY[modelInput];
+	}
+	// Default fallback
+	return 'flux-schnell';
+}
 
 function isOpenRouterModel(model: string): model is OpenRouterModel {
 	return model in OPENROUTER_MODELS;
@@ -42,6 +90,10 @@ function isOpenRouterModel(model: string): model is OpenRouterModel {
 
 function isFireworksModel(model: string): model is FireworksModel {
 	return model in FIREWORKS_MODELS;
+}
+
+function isFalModel(model: string): model is FalModel {
+	return model in FAL_MODELS;
 }
 
 /**
@@ -67,9 +119,9 @@ export const GENERATE_IMAGE_TOOL: Anthropic.Tool = {
 			},
 			model: {
 				type: 'string',
-				enum: ['flux-schnell', 'flux-dev', 'flux-pro', 'flux-schnell-or', 'flux-dev-or', 'sd-turbo', 'sdxl'],
+				enum: ['flux-schnell', 'flux-dev', 'flux-pro', 'flux-schnell-or', 'flux-dev-or', 'sd-turbo', 'sdxl', 'fal-flux-dev', 'fal-flux-schnell', 'fal-flux-pro', 'fal-realistic', 'fal-sdxl'],
 				description:
-					'Model to use. Fireworks: flux-schnell/dev/pro. OpenRouter: flux-schnell-or, flux-dev-or, sd-turbo, sdxl. Default: flux-schnell'
+					'Model to use. Fireworks: flux-schnell/dev/pro. OpenRouter: flux-schnell-or, flux-dev-or, sd-turbo, sdxl. Fal.ai (NSFW): fal-flux-dev, fal-flux-schnell, fal-flux-pro, fal-realistic (free), fal-sdxl (free). Default: flux-schnell'
 			},
 			seed: {
 				type: 'number',
@@ -121,6 +173,7 @@ export const SAKURA_TOOLS: Anthropic.Tool[] = [GENERATE_IMAGE_TOOL, EXPORT_CHARA
 export interface SakuraToolContext {
 	userId: string;
 	supabase?: any; // For export_character (reading whiteboard state)
+	defaultImageModel?: string; // User's preferred image model from Settings
 }
 
 /**
@@ -263,27 +316,107 @@ async function generateWithOpenRouter(params: {
 }
 
 /**
- * Upload image to Supabase storage
+ * Call Fal.ai API to generate image
+ * Docs: https://fal.ai/models/fal-ai/flux/dev/api
+ * Key feature: enable_safety_checker: false for unrestricted NSFW content
+ */
+async function generateWithFal(params: {
+	prompt: string;
+	negative_prompt?: string;
+	model: FalModel;
+	seed?: number;
+	width?: number;
+	height?: number;
+}): Promise<{ imageBase64: string; seed: number }> {
+	const modelId = FAL_MODELS[params.model];
+
+	// Generate seed if not provided
+	const seed = params.seed ?? Math.floor(Math.random() * 2147483647);
+
+	// Fal.ai REST API: https://fal.run/{model_id}
+	const url = `https://fal.run/${modelId}`;
+
+	const response = await fetch(url, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Key ${FAL_API_KEY}`
+		},
+		body: JSON.stringify({
+			prompt: params.prompt,
+			negative_prompt: params.negative_prompt || 'bad hands, deformed, blurry, watermark, text',
+			image_size: {
+				width: params.width || 1024,
+				height: params.height || 1024
+			},
+			num_inference_steps: params.model === 'fal-flux-schnell' ? 4 : 28,
+			seed,
+			guidance_scale: 3.5,
+			num_images: 1,
+			enable_safety_checker: false // NSFW capable
+		})
+	});
+
+	if (!response.ok) {
+		const error = await response.text();
+		throw new Error(`Fal.ai API error: ${response.status} - ${error}`);
+	}
+
+	const data = await response.json();
+
+	// Fal.ai returns images array with url
+	if (!data.images || !data.images[0] || !data.images[0].url) {
+		throw new Error('Invalid response from Fal.ai API - no image URL');
+	}
+
+	// Download image and convert to base64
+	const imageResponse = await fetch(data.images[0].url);
+	if (!imageResponse.ok) {
+		throw new Error('Failed to fetch generated image from Fal.ai URL');
+	}
+	const imageBuffer = await imageResponse.arrayBuffer();
+	const imageBase64 = Buffer.from(imageBuffer).toString('base64');
+
+	return {
+		imageBase64,
+		seed: data.seed || seed
+	};
+}
+
+/**
+ * Upload image to Supabase storage with thumbnail
+ * Uses unified storage pattern: images/ for full size, thumbnails/ for thumbnails
  */
 async function uploadToStorage(
 	imageBase64: string,
 	userId: string,
 	filename: string
-): Promise<string> {
+): Promise<{ fullUrl: string; thumbnailUrl: string }> {
 	const imageBuffer = Buffer.from(imageBase64, 'base64');
-	const storagePath = `generated/${userId}/${filename}`;
+	const bucket = 'content';
 
-	const { error } = await supabaseStorage.storage.from('content').upload(storagePath, imageBuffer, {
-		contentType: 'image/png',
-		upsert: true
-	});
+	// Use unified folder structure (same as uploaded images)
+	const imageId = filename.replace('.png', '');
+	const imagePath = `images/${userId}/generated/${imageId}.png`;
+	const thumbnailPath = `thumbnails/${userId}/generated/${imageId}.jpg`;
 
-	if (error) {
-		throw new Error(`Storage upload failed: ${error.message}`);
+	// Upload full image
+	await uploadImageToStorage(imageBuffer, bucket, imagePath);
+
+	// Generate and upload thumbnail
+	let finalThumbnailPath = thumbnailPath;
+	try {
+		const thumbnailBuffer = await generateThumbnail(imageBuffer);
+		await uploadThumbnailToStorage(thumbnailBuffer, bucket, thumbnailPath);
+	} catch (thumbErr) {
+		console.warn('[SakuraTools] Thumbnail generation failed, using original:', thumbErr);
+		finalThumbnailPath = imagePath;
 	}
 
-	// Return public URL
-	return `${PUBLIC_SUPABASE_URL}/storage/v1/object/public/content/${storagePath}`;
+	return {
+		fullUrl: `${PUBLIC_SUPABASE_URL}/storage/v1/object/public/${bucket}/${imagePath}`,
+		thumbnailUrl: `${PUBLIC_SUPABASE_URL}/storage/v1/object/public/${bucket}/${finalThumbnailPath}`
+	};
 }
 
 /**
@@ -317,10 +450,12 @@ async function executeGenerateImage(
 	context: SakuraToolContext
 ): Promise<ToolExecutionResult> {
 	try {
-		const { userId } = context;
+		const { userId, defaultImageModel } = context;
 		const prompt = input.prompt as string;
 		const negative_prompt = input.negative_prompt as string | undefined;
-		const model = (input.model as string) || 'flux-schnell';
+		// Use tool input if specified, otherwise fall back to user's preferred model from Settings
+		const modelInput = (input.model as string) || defaultImageModel || 'flux-schnell';
+		const model = normalizeModelKey(modelInput);
 		const seed = input.seed as number | undefined;
 		const width = (input.width as number) || 1024;
 		const height = (input.height as number) || 1024;
@@ -372,23 +507,41 @@ async function executeGenerateImage(
 			});
 			imageBase64 = result.imageBase64;
 			usedSeed = result.seed;
+		} else if (isFalModel(model)) {
+			if (!FAL_API_KEY) {
+				return {
+					success: false,
+					message: 'FAL_API_KEY not configured. Cannot generate images with Fal.ai models.'
+				};
+			}
+			const result = await generateWithFal({
+				prompt,
+				negative_prompt,
+				model,
+				seed,
+				width,
+				height
+			});
+			imageBase64 = result.imageBase64;
+			usedSeed = result.seed;
 		} else {
 			return {
 				success: false,
-				message: `Unknown model: ${model}. Valid models: ${[...Object.keys(FIREWORKS_MODELS), ...Object.keys(OPENROUTER_MODELS)].join(', ')}`
+				message: `Unknown model: ${model}. Valid models: ${[...Object.keys(FIREWORKS_MODELS), ...Object.keys(OPENROUTER_MODELS), ...Object.keys(FAL_MODELS)].join(', ')}`
 			};
 		}
 
-		// Upload to storage
+		// Upload to storage (full image + thumbnail)
 		const timestamp = Date.now();
 		const filename = `${model}-${usedSeed}-${timestamp}.png`;
-		const publicUrl = await uploadToStorage(imageBase64, userId, filename);
+		const { fullUrl, thumbnailUrl } = await uploadToStorage(imageBase64, userId, filename);
 
 		return {
 			success: true,
-			message: `Generated image with ${model} (seed: ${usedSeed}). URL: ${publicUrl}`,
+			message: `Generated image with ${model} (seed: ${usedSeed}). URL: ${fullUrl}`,
 			data: {
-				url: publicUrl,
+				url: fullUrl,
+				thumbnail_url: thumbnailUrl,
 				seed: usedSeed,
 				model,
 				prompt,

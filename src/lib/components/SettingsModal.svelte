@@ -1,9 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { Icon } from 'svelte-icons-pack';
-	import { LuX, LuPlus, LuTrash2, LuFlame } from 'svelte-icons-pack/lu';
-	import { DEFAULT_MODEL, EMBEDDING_MODEL } from '$lib/config/models';
-	import { PERSONAS, PERSONA_NAMES, type PersonaName } from '$lib/config/personas';
+	import { LuX, LuFlame, LuDownload } from 'svelte-icons-pack/lu';
+	import { DEFAULT_MODEL } from '$lib/config/models';
 	import NukeMenu from './NukeMenu.svelte';
 
 	// Props
@@ -24,35 +23,30 @@
 		output_price_per_million: number;
 	}
 
-	interface ModelOverride {
-		persona: PersonaName;
-		model: string;
-	}
+	// All override keys (personas + processors)
+	const OVERRIDE_KEYS = ['gunnar', 'kirby', 'samara', 'alicja', 'eva', 'embeddings', 'image_gen', 'compression'] as const;
+	type OverrideKey = typeof OVERRIDE_KEYS[number];
 
 	let models = $state<Model[]>([]);
 	let defaultModel = $state<string>('');
-	let selectedEmbeddingModel = $state<string>('');
-	let fileArtisanModel = $state<string>(''); // Empty string = use default model
-	let modelOverrides = $state<ModelOverride[]>([]);
+	let modelOverrides = $state<Record<OverrideKey, string>>({
+		gunnar: '',
+		kirby: '',
+		samara: '',
+		alicja: '',
+		eva: '',
+		embeddings: '',
+		image_gen: '',
+		compression: ''
+	});
 	let isLoading = $state(true);
-	let isSaving = $state(false);
 	let isExporting = $state(false);
 	let errorMessage = $state<string | null>(null);
-
-	// Add override form state
-	let showAddOverride = $state(false);
-	let newOverridePersona = $state<PersonaName | ''>('');
-	let newOverrideModel = $state<string>('');
-
-	// Derived: personas that don't have overrides yet
-	const availablePersonas = $derived(
-		PERSONA_NAMES.filter((p) => !modelOverrides.some((o) => o.persona === p))
-	);
 
 	// Fetch data on mount
 	onMount(async () => {
 		try {
-			// Fetch models and settings in parallel
+			// Fetch models, settings, and overrides in parallel
 			const [modelsRes, settingsRes, overridesRes] = await Promise.all([
 				fetch('/api/models'),
 				fetch('/api/settings'),
@@ -65,11 +59,21 @@
 
 			models = await modelsRes.json();
 			const settings = await settingsRes.json();
-			modelOverrides = await overridesRes.json();
+			const overrides: { persona: string; model: string }[] = await overridesRes.json();
 
 			defaultModel = settings.default_model || DEFAULT_MODEL;
-			selectedEmbeddingModel = settings.selected_embedding_model || EMBEDDING_MODEL;
-			fileArtisanModel = settings.file_artisan_model || '';
+
+			// Initialize all overrides to default model
+			for (const key of OVERRIDE_KEYS) {
+				modelOverrides[key] = defaultModel;
+			}
+
+			// Apply any saved overrides
+			for (const override of overrides) {
+				if (OVERRIDE_KEYS.includes(override.persona as OverrideKey)) {
+					modelOverrides[override.persona as OverrideKey] = override.model;
+				}
+			}
 
 			isLoading = false;
 		} catch (error) {
@@ -79,9 +83,8 @@
 		}
 	});
 
-	// Handle save (default model + embedding model)
-	async function handleSave() {
-		isSaving = true;
+	// Auto-save default model setting
+	async function saveDefaultModel() {
 		errorMessage = null;
 
 		try {
@@ -89,30 +92,21 @@
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
-					default_model: defaultModel,
-					selected_embedding_model: selectedEmbeddingModel,
-					file_artisan_model: fileArtisanModel || null // null to clear, empty string means use default
+					default_model: defaultModel
 				})
 			});
 
 			if (!response.ok) {
 				throw new Error('Failed to save settings');
 			}
-
-			// Success - close modal
-			onClose();
 		} catch (error) {
 			console.error('[SettingsModal] Failed to save:', error);
-			errorMessage = 'Failed to save settings. Please try again.';
-		} finally {
-			isSaving = false;
+			errorMessage = 'Failed to save settings.';
 		}
 	}
 
-	// Handle adding a model override
-	async function handleAddOverride() {
-		if (!newOverridePersona || !newOverrideModel) return;
-
+	// Save a model override
+	async function saveModelOverride(key: OverrideKey, model: string) {
 		errorMessage = null;
 
 		try {
@@ -120,49 +114,42 @@
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
-					persona: newOverridePersona,
-					model: newOverrideModel
+					persona: key,
+					model: model
 				})
 			});
 
 			if (!response.ok) {
-				throw new Error('Failed to add override');
+				throw new Error('Failed to save model override');
 			}
-
-			// Update local state
-			modelOverrides = [...modelOverrides, { persona: newOverridePersona, model: newOverrideModel }];
-
-			// Reset form
-			showAddOverride = false;
-			newOverridePersona = '';
-			newOverrideModel = '';
 		} catch (error) {
-			console.error('[SettingsModal] Failed to add override:', error);
-			errorMessage = 'Failed to add override. Please try again.';
+			console.error('[SettingsModal] Failed to save override:', error);
+			errorMessage = 'Failed to save model override.';
 		}
 	}
 
-	// Handle removing a model override
-	async function handleRemoveOverride(persona: PersonaName) {
-		errorMessage = null;
+	// Handle default model change - cascade to all dropdowns using the old value
+	function handleDefaultModelChange(event: Event) {
+		const oldDefault = defaultModel;
+		const newDefault = (event.target as HTMLSelectElement).value;
+		defaultModel = newDefault;
 
-		try {
-			const response = await fetch('/api/model-overrides', {
-				method: 'DELETE',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ persona })
-			});
-
-			if (!response.ok) {
-				throw new Error('Failed to remove override');
+		// Cascade: update all overrides that were using the old default
+		for (const key of OVERRIDE_KEYS) {
+			if (modelOverrides[key] === oldDefault) {
+				modelOverrides[key] = newDefault;
+				saveModelOverride(key, newDefault);
 			}
-
-			// Update local state
-			modelOverrides = modelOverrides.filter((o) => o.persona !== persona);
-		} catch (error) {
-			console.error('[SettingsModal] Failed to remove override:', error);
-			errorMessage = 'Failed to remove override. Please try again.';
 		}
+
+		saveDefaultModel();
+	}
+
+	// Handle individual override change
+	function handleOverrideChange(key: OverrideKey, event: Event) {
+		const newModel = (event.target as HTMLSelectElement).value;
+		modelOverrides[key] = newModel;
+		saveModelOverride(key, newModel);
 	}
 
 	// Handle overlay click (close modal)
@@ -216,16 +203,98 @@
 		}
 	}
 
-	// Get model display name
-	function getModelName(modelId: string): string {
-		const model = models.find((m) => m.model_identifier === modelId);
-		return model ? `${model.model_name}` : modelId;
-	}
+	// Group text generation models by provider, sorted alphabetically within each group
+	const modelsByProvider = $derived(() => {
+		const textModels = models.filter((m) => m.model_type === 'text_generation');
 
-	// Get persona display name
-	function getPersonaName(persona: string): string {
-		return PERSONAS[persona]?.displayName ?? persona;
-	}
+		// Group by provider
+		const grouped = textModels.reduce((acc, model) => {
+			const provider = model.provider;
+			if (!acc[provider]) acc[provider] = [];
+			acc[provider].push(model);
+			return acc;
+		}, {} as Record<string, Model[]>);
+
+		// Sort models within each provider alphabetically
+		for (const provider of Object.keys(grouped)) {
+			grouped[provider].sort((a, b) => a.model_name.localeCompare(b.model_name));
+		}
+
+		// Return providers in order: Anthropic first, then alphabetically
+		const providers = Object.keys(grouped).sort((a, b) => {
+			if (a === 'anthropic') return -1;
+			if (b === 'anthropic') return 1;
+			return a.localeCompare(b);
+		});
+
+		return providers.map(provider => ({
+			provider,
+			label: provider.charAt(0).toUpperCase() + provider.slice(1),
+			models: grouped[provider]
+		}));
+	});
+
+	// Group image generation models by provider (for Image gen dropdown)
+	const imageModelsByProvider = $derived(() => {
+		const imageModels = models.filter((m) => m.model_type === 'image_generation');
+
+		// Group by provider
+		const grouped = imageModels.reduce((acc, model) => {
+			const provider = model.provider;
+			if (!acc[provider]) acc[provider] = [];
+			acc[provider].push(model);
+			return acc;
+		}, {} as Record<string, Model[]>);
+
+		// Sort models within each provider alphabetically
+		for (const provider of Object.keys(grouped)) {
+			grouped[provider].sort((a, b) => a.model_name.localeCompare(b.model_name));
+		}
+
+		// Return providers alphabetically (fal first since it's the main image provider)
+		const providers = Object.keys(grouped).sort((a, b) => {
+			if (a === 'fal') return -1;
+			if (b === 'fal') return 1;
+			return a.localeCompare(b);
+		});
+
+		return providers.map(provider => ({
+			provider,
+			label: provider.charAt(0).toUpperCase() + provider.slice(1),
+			models: grouped[provider]
+		}));
+	});
+
+	// Group embedding models by provider (for Embeddings dropdown)
+	const embeddingModelsByProvider = $derived(() => {
+		const embeddingModels = models.filter((m) => m.model_type === 'embedding');
+
+		// Group by provider
+		const grouped = embeddingModels.reduce((acc, model) => {
+			const provider = model.provider;
+			if (!acc[provider]) acc[provider] = [];
+			acc[provider].push(model);
+			return acc;
+		}, {} as Record<string, Model[]>);
+
+		// Sort models within each provider alphabetically
+		for (const provider of Object.keys(grouped)) {
+			grouped[provider].sort((a, b) => a.model_name.localeCompare(b.model_name));
+		}
+
+		// Return providers alphabetically (voyage first since it's the main embedding provider)
+		const providers = Object.keys(grouped).sort((a, b) => {
+			if (a === 'voyage') return -1;
+			if (b === 'voyage') return 1;
+			return a.localeCompare(b);
+		});
+
+		return providers.map(provider => ({
+			provider,
+			label: provider.charAt(0).toUpperCase() + provider.slice(1),
+			models: grouped[provider]
+		}));
+	});
 </script>
 
 <svelte:document onkeydown={(e) => e.key === 'Escape' && open && onClose()} />
@@ -244,113 +313,126 @@
 			{#if isLoading}
 				<div class="loading-state">Loading settings...</div>
 			{:else}
-				<!-- Default Model Selection -->
+				<!-- Model Selection -->
 				<div class="settings-section">
-					<label for="default-model">Default Model</label>
-					<select id="default-model" bind:value={defaultModel}>
-						{#each models.filter((m) => m.model_type === 'text_generation') as model}
-							<option value={model.model_identifier}>
-								{model.model_name} ({model.provider})
-							</option>
-						{/each}
-					</select>
-					<p class="help-text">Used for all personas unless overridden below</p>
-				</div>
-
-				<!-- Model Overrides Section -->
-				<div class="settings-section overrides-section">
-					<label>Model Overrides</label>
-
-					{#if modelOverrides.length > 0}
-						<div class="overrides-list">
-							{#each modelOverrides as override}
-								<div class="override-item">
-									<span class="override-persona">{getPersonaName(override.persona)}</span>
-									<span class="override-arrow">&rarr;</span>
-									<span class="override-model">{getModelName(override.model)}</span>
-									<button
-										class="remove-btn"
-										onclick={() => handleRemoveOverride(override.persona)}
-										aria-label="Remove override"
-									>
-										<Icon src={LuTrash2} size="12" />
-									</button>
-								</div>
-							{/each}
-						</div>
-					{/if}
-
-					{#if showAddOverride}
-						<div class="add-override-form">
-							<select bind:value={newOverridePersona} class="persona-select">
-								<option value="">Select persona...</option>
-								{#each availablePersonas as persona}
-									<option value={persona}>{getPersonaName(persona)}</option>
-								{/each}
-							</select>
-							<select bind:value={newOverrideModel} class="model-select">
-								<option value="">Select model...</option>
-								{#each models.filter((m) => m.model_type === 'text_generation') as model}
+					<label for="default-model">Default LLM</label>
+					<select id="default-model" value={defaultModel} onchange={handleDefaultModelChange}>
+						{#each modelsByProvider() as group}
+							<optgroup label={group.label}>
+								{#each group.models as model}
 									<option value={model.model_identifier}>
 										{model.model_name}
 									</option>
 								{/each}
-							</select>
-							<div class="add-override-actions">
-								<button
-									class="add-btn"
-									onclick={handleAddOverride}
-									disabled={!newOverridePersona || !newOverrideModel}
-								>
-									Add
-								</button>
-								<button
-									class="cancel-btn"
-									onclick={() => {
-										showAddOverride = false;
-										newOverridePersona = '';
-										newOverrideModel = '';
-									}}
-								>
-									Cancel
-								</button>
+							</optgroup>
+						{/each}
+					</select>
+				</div>
+
+				<!-- Two Column Box -->
+				<div class="placeholder-box">
+					<div class="two-column-row">
+						<div class="column">
+							<div class="settings-section inner">
+								<label for="gunnar-select">Gunnar</label>
+								<select id="gunnar-select" value={modelOverrides.gunnar} onchange={(e) => handleOverrideChange('gunnar', e)}>
+									{#each modelsByProvider() as group}
+										<optgroup label={group.label}>
+											{#each group.models as model}
+												<option value={model.model_identifier}>{model.model_name}</option>
+											{/each}
+										</optgroup>
+									{/each}
+								</select>
+							</div>
+							<div class="settings-section inner">
+								<label for="kirby-select">Kirby</label>
+								<select id="kirby-select" value={modelOverrides.kirby} onchange={(e) => handleOverrideChange('kirby', e)}>
+									{#each modelsByProvider() as group}
+										<optgroup label={group.label}>
+											{#each group.models as model}
+												<option value={model.model_identifier}>{model.model_name}</option>
+											{/each}
+										</optgroup>
+									{/each}
+								</select>
+							</div>
+							<div class="settings-section inner">
+								<label for="samara-select">Samara</label>
+								<select id="samara-select" value={modelOverrides.samara} onchange={(e) => handleOverrideChange('samara', e)}>
+									{#each modelsByProvider() as group}
+										<optgroup label={group.label}>
+											{#each group.models as model}
+												<option value={model.model_identifier}>{model.model_name}</option>
+											{/each}
+										</optgroup>
+									{/each}
+								</select>
+							</div>
+							<div class="settings-section inner">
+								<label for="alicja-select">Alicja</label>
+								<select id="alicja-select" value={modelOverrides.alicja} onchange={(e) => handleOverrideChange('alicja', e)}>
+									{#each modelsByProvider() as group}
+										<optgroup label={group.label}>
+											{#each group.models as model}
+												<option value={model.model_identifier}>{model.model_name}</option>
+											{/each}
+										</optgroup>
+									{/each}
+								</select>
+							</div>
+							<div class="settings-section inner">
+								<label for="eva-select">Eva</label>
+								<select id="eva-select" value={modelOverrides.eva} onchange={(e) => handleOverrideChange('eva', e)}>
+									{#each modelsByProvider() as group}
+										<optgroup label={group.label}>
+											{#each group.models as model}
+												<option value={model.model_identifier}>{model.model_name}</option>
+											{/each}
+										</optgroup>
+									{/each}
+								</select>
 							</div>
 						</div>
-					{:else if availablePersonas.length > 0}
-						<button class="add-override-btn" onclick={() => (showAddOverride = true)}>
-							<Icon src={LuPlus} size="12" />
-							Add override
-						</button>
-					{/if}
-
-					<p class="help-text">Override the default model for specific personas</p>
-				</div>
-
-				<!-- File Artisan Model Selection -->
-				<div class="settings-section">
-					<label for="file-artisan-model">File Processing Model</label>
-					<select id="file-artisan-model" bind:value={fileArtisanModel}>
-						<option value="">Use default model</option>
-						{#each models.filter((m) => m.model_type === 'text_generation') as model}
-							<option value={model.model_identifier}>
-								{model.model_name} ({model.provider})
-							</option>
-						{/each}
-					</select>
-					<p class="help-text">Model for persistent content artisan cut</p>
-				</div>
-
-				<!-- Embedding Model Selection -->
-				<div class="settings-section">
-					<label for="embedding-model">Embedding Model</label>
-					<select id="embedding-model" bind:value={selectedEmbeddingModel}>
-						{#each models.filter((m) => m.model_type === 'embedding') as model}
-							<option value={model.model_identifier}>
-								{model.model_name}
-							</option>
-						{/each}
-					</select>
-					<p class="help-text">Used for vector embeddings (memory search & file chunks)</p>
+						<div class="column">
+							<div class="settings-section inner">
+								<label for="embeddings-select">Embeddings</label>
+								<select id="embeddings-select" value={modelOverrides.embeddings} onchange={(e) => handleOverrideChange('embeddings', e)}>
+									{#each embeddingModelsByProvider() as group}
+										<optgroup label={group.label}>
+											{#each group.models as model}
+												<option value={model.model_identifier}>{model.model_name}</option>
+											{/each}
+										</optgroup>
+									{/each}
+								</select>
+							</div>
+							<div class="settings-section inner">
+								<label for="image-gen-select">Image gen</label>
+								<select id="image-gen-select" value={modelOverrides.image_gen} onchange={(e) => handleOverrideChange('image_gen', e)}>
+									{#each imageModelsByProvider() as group}
+										<optgroup label={group.label}>
+											{#each group.models as model}
+												<option value={model.model_identifier}>{model.model_name}</option>
+											{/each}
+										</optgroup>
+									{/each}
+								</select>
+							</div>
+							<div class="settings-section inner">
+								<label for="compression-select">Compression</label>
+								<select id="compression-select" value={modelOverrides.compression} onchange={(e) => handleOverrideChange('compression', e)}>
+									{#each modelsByProvider() as group}
+										<optgroup label={group.label}>
+											{#each group.models as model}
+												<option value={model.model_identifier}>{model.model_name}</option>
+											{/each}
+										</optgroup>
+									{/each}
+								</select>
+							</div>
+						</div>
+					</div>
 				</div>
 
 				<!-- Error Message -->
@@ -358,33 +440,24 @@
 					<div class="error-message">{errorMessage}</div>
 				{/if}
 
-				<!-- Save Button -->
-				<button class="save-btn" onclick={handleSave} disabled={isSaving}>
-					{isSaving ? 'Saving...' : 'Save Changes'}
-				</button>
-
-				<!-- Data Export Section -->
-				<div class="export-section">
-					<div class="section-divider"></div>
-					<p class="export-label">Data Export</p>
-					<button class="export-btn" onclick={handleExport} disabled={isExporting}>
-						{isExporting ? 'Exporting...' : 'Export All Data'}
+				<!-- Footer Icons -->
+				<div class="footer-icons">
+					<button
+						class="icon-btn"
+						onclick={handleExport}
+						disabled={isExporting}
+						title="Export all data as JSON"
+					>
+						<Icon src={LuDownload} size="16" />
 					</button>
-					<p class="help-text">Download all your data as JSON (1 export per hour)</p>
-				</div>
-
-				<!-- Nuke Section -->
-				<div class="nuke-section">
-					<div class="section-divider"></div>
-					<p class="nuke-label">Danger Zone</p>
 					<div class="nuke-wrapper">
 						<button
-							class="nuke-btn"
+							class="icon-btn danger"
 							onclick={() => showNukeMenu = !showNukeMenu}
 							bind:this={nukeButtonRef}
+							title="Delete data"
 						>
-							<Icon src={LuFlame} size="14" />
-							Nuke Data
+							<Icon src={LuFlame} size="16" />
 						</button>
 						<NukeMenu
 							isOpen={showNukeMenu}
@@ -396,7 +469,6 @@
 							triggerRef={nukeButtonRef}
 						/>
 					</div>
-					<p class="help-text">Permanently delete specific data buckets</p>
 				</div>
 			{/if}
 		</div>
@@ -422,10 +494,64 @@
 		border: 1px solid hsl(var(--border));
 		border-radius: 4px;
 		padding: 20px;
-		width: 420px;
+		width: 700px;
 		max-width: 90%;
 		max-height: 80vh;
 		overflow-y: auto;
+		font-family: "iA Writer Quattro V", system-ui, -apple-system, sans-serif;
+		font-size: 8pt;
+	}
+
+	.two-column-row {
+		display: flex;
+		gap: 120px;
+	}
+
+	.column {
+		flex: 1;
+		min-width: 0;
+	}
+
+	.placeholder-box {
+		border: 1px solid hsl(var(--border));
+		min-height: 80px;
+		padding: 12px;
+	}
+
+	/* Footer icons */
+	.footer-icons {
+		display: flex;
+		gap: 12px;
+		margin-top: 24px;
+	}
+
+	.icon-btn {
+		background: none;
+		border: none;
+		color: hsl(var(--muted-foreground));
+		cursor: pointer;
+		padding: 6px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		opacity: 0.6;
+	}
+
+	.icon-btn:hover:not(:disabled) {
+		opacity: 1;
+	}
+
+	.icon-btn:disabled {
+		opacity: 0.3;
+		cursor: not-allowed;
+	}
+
+	.icon-btn.danger {
+		color: hsl(0, 70%, 60%);
+	}
+
+	.icon-btn.danger:hover {
+		opacity: 1;
 	}
 
 	.modal-header {
@@ -438,7 +564,7 @@
 	}
 
 	.modal-header h2 {
-		font-size: 11px;
+		font-size: 8pt;
 		font-weight: 400;
 		color: hsl(var(--foreground));
 		margin: 0;
@@ -461,29 +587,51 @@
 	}
 
 	.settings-section {
-		margin-bottom: 12px;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		margin-bottom: 24px;
+		width: 257px;
+		margin-left: 13px;
+	}
+
+	.settings-section.inner {
+		width: 100%;
+		margin-left: 0;
+		margin-bottom: 8px;
+		justify-content: space-between;
+	}
+
+	.settings-section.inner:last-child {
+		margin-bottom: 0;
+	}
+
+	.settings-section.inner select {
+		flex: none;
+		width: 150px;
 	}
 
 	.settings-section label {
-		display: block;
 		font-weight: 400;
-		margin-bottom: 4px;
 		color: hsl(var(--muted-foreground));
-		font-size: 11px;
+		font-size: 8pt;
+		white-space: nowrap;
 	}
 
 	.settings-section select {
-		width: 100%;
-		padding: 6px 24px 6px 8px;
-		background: transparent;
+		flex: none;
+		width: 150px;
+		padding: 3px 20px 3px 6px;
+		background: #000;
 		background-image: url("data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 12 12' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M3 5L6 8L9 5' stroke='%23666' stroke-width='1' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 		background-repeat: no-repeat;
-		background-position: right 8px center;
+		background-position: right 6px center;
 		border: 1px solid hsl(var(--border));
 		border-radius: 0;
 		color: hsl(var(--foreground));
-		font-family: Menlo, Monaco, 'Courier New', monospace;
-		font-size: 10px;
+		font-family: inherit;
+		font-size: 8pt;
 		cursor: pointer;
 		appearance: none;
 	}
@@ -493,163 +641,23 @@
 		border-color: hsl(var(--border));
 	}
 
-	.help-text {
-		font-size: 11px;
+	.settings-section select optgroup {
+		font-weight: 600;
+		font-style: normal;
 		color: hsl(var(--muted-foreground));
-		margin-top: 4px;
-		opacity: 0.5;
+		background: hsl(var(--background));
 	}
 
-	/* Overrides Section */
-	.overrides-section {
-		margin-bottom: 16px;
-	}
-
-	.overrides-list {
-		margin-bottom: 8px;
-	}
-
-	.override-item {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		padding: 6px 8px;
-		background: hsl(var(--muted) / 0.3);
-		border: 1px solid hsl(var(--border));
-		margin-bottom: 4px;
-		font-size: 10px;
-		font-family: Menlo, Monaco, 'Courier New', monospace;
-	}
-
-	.override-persona {
-		color: hsl(var(--foreground));
-		min-width: 60px;
-	}
-
-	.override-arrow {
-		color: hsl(var(--muted-foreground));
-		opacity: 0.5;
-	}
-
-	.override-model {
-		color: hsl(var(--foreground));
-		flex: 1;
-	}
-
-	.remove-btn {
-		background: none;
-		border: none;
-		color: hsl(var(--muted-foreground));
-		cursor: pointer;
-		padding: 2px;
-		opacity: 0.5;
-		display: flex;
-		align-items: center;
-	}
-
-	.remove-btn:hover {
-		opacity: 1;
-		color: hsl(0, 70%, 60%);
-	}
-
-	.add-override-btn {
-		display: flex;
-		align-items: center;
-		gap: 4px;
-		background: none;
-		border: 1px dashed hsl(var(--border));
-		color: hsl(var(--muted-foreground));
-		padding: 6px 8px;
-		font-size: 10px;
-		cursor: pointer;
-		width: 100%;
-		justify-content: center;
-	}
-
-	.add-override-btn:hover {
-		border-color: hsl(var(--foreground));
-		color: hsl(var(--foreground));
-	}
-
-	.add-override-form {
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
-		margin-bottom: 8px;
-	}
-
-	.add-override-form select {
-		width: 100%;
-		padding: 6px 24px 6px 8px;
-		background: transparent;
-		background-image: url("data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 12 12' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M3 5L6 8L9 5' stroke='%23666' stroke-width='1' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-		background-repeat: no-repeat;
-		background-position: right 8px center;
-		border: 1px solid hsl(var(--border));
-		border-radius: 0;
-		color: hsl(var(--foreground));
-		font-family: Menlo, Monaco, 'Courier New', monospace;
-		font-size: 10px;
-		cursor: pointer;
-		appearance: none;
-	}
-
-	.add-override-actions {
-		display: flex;
-		gap: 4px;
-		margin-top: 4px;
-	}
-
-	.add-btn,
-	.cancel-btn {
-		flex: 1;
-		padding: 6px;
-		border: 1px solid hsl(var(--border));
-		background: transparent;
-		color: hsl(var(--foreground));
-		font-size: 10px;
-		cursor: pointer;
-	}
-
-	.add-btn:hover:not(:disabled) {
-		border-color: hsl(var(--foreground));
-	}
-
-	.add-btn:disabled {
-		opacity: 0.3;
-		cursor: not-allowed;
-	}
-
-	.cancel-btn:hover {
-		border-color: hsl(var(--foreground));
-	}
-
-	.save-btn {
-		width: 100%;
-		padding: 6px;
-		background: transparent;
-		color: hsl(var(--foreground));
-		border: 1px solid hsl(var(--border));
-		border-radius: 0;
+	.settings-section select option {
 		font-weight: 400;
-		font-size: 11px;
-		cursor: pointer;
-	}
-
-	.save-btn:hover:not(:disabled) {
-		border-color: hsl(var(--foreground));
-	}
-
-	.save-btn:disabled {
-		opacity: 0.3;
-		cursor: not-allowed;
+		padding-left: 8px;
 	}
 
 	.loading-state {
 		text-align: center;
 		padding: 40px;
 		color: hsl(var(--muted-foreground));
-		font-size: 11px;
+		font-size: 8pt;
 	}
 
 	.error-message {
@@ -657,79 +665,12 @@
 		border: 1px solid hsla(0, 70%, 50%, 0.3);
 		color: hsl(0, 70%, 60%);
 		padding: 8px 12px;
-		font-size: 11px;
+		font-size: 8pt;
 		margin-bottom: 12px;
-	}
-
-	.export-section {
-		margin-top: 8px;
-	}
-
-	.section-divider {
-		border-top: 1px solid hsl(var(--border));
-		margin: 16px 0;
-	}
-
-	.export-label {
-		font-size: 11px;
-		color: hsl(var(--muted-foreground));
-		margin-bottom: 8px;
-	}
-
-	.export-btn {
-		width: 100%;
-		padding: 6px;
-		background: transparent;
-		color: hsl(var(--foreground));
-		border: 1px solid hsl(var(--border));
-		border-radius: 0;
-		font-weight: 400;
-		font-size: 11px;
-		cursor: pointer;
-	}
-
-	.export-btn:hover:not(:disabled) {
-		border-color: hsl(var(--foreground));
-	}
-
-	.export-btn:disabled {
-		opacity: 0.3;
-		cursor: not-allowed;
-	}
-
-	/* Nuke Section */
-	.nuke-section {
-		margin-top: 8px;
-	}
-
-	.nuke-label {
-		font-size: 11px;
-		color: hsl(0, 70%, 60%);
-		margin-bottom: 8px;
 	}
 
 	.nuke-wrapper {
 		position: relative;
-	}
-
-	.nuke-btn {
-		width: 100%;
-		padding: 6px;
-		background: transparent;
-		color: hsl(0, 70%, 60%);
-		border: 1px solid hsl(0, 70%, 60%, 0.5);
-		border-radius: 0;
-		font-weight: 400;
-		font-size: 11px;
-		cursor: pointer;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		gap: 6px;
-	}
-
-	.nuke-btn:hover {
-		border-color: hsl(0, 70%, 60%);
-		background: hsl(0, 70%, 60%, 0.1);
+		margin-left: auto;
 	}
 </style>

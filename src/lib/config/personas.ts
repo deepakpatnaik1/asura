@@ -223,6 +223,17 @@ export const PERSONAS: Record<string, Persona> = {
 		contextChunks: EVA_CHUNKS,
 		compression: true,
 		tools: EVA_TOOLS
+	},
+	// Legacy alias for eva (cached browser state may still send 'suki')
+	suki: {
+		name: 'eva',
+		displayName: 'Eva',
+		accentColor: getPaletteColor('eva'),
+		model: null,
+		systemPrompt: 'eva',
+		contextChunks: EVA_CHUNKS,
+		compression: true,
+		tools: EVA_TOOLS
 	}
 };
 

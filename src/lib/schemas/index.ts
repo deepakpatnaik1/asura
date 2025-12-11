@@ -20,6 +20,9 @@ export const nonEmptyString = z.string().min(1, 'Required');
 /** Persona enum (allowed values) */
 export const personaSchema = z.enum(['gunnar', 'kirby', 'samara', 'alicja', 'eva']);
 
+/** Override key enum (personas + processor types for model overrides) */
+export const overrideKeySchema = z.enum(['gunnar', 'kirby', 'samara', 'alicja', 'eva', 'embeddings', 'image_gen', 'compression']);
+
 // ============================================================================
 // Chat Schemas
 // ============================================================================
@@ -73,13 +76,13 @@ export const settingsUpdateSchema = z.object({
 
 /** POST /api/model-overrides - Create model override */
 export const createModelOverrideSchema = z.object({
-	persona: personaSchema,
+	persona: overrideKeySchema,
 	model: z.string().min(1, 'Model identifier is required')
 });
 
 /** DELETE /api/model-overrides - Delete model override */
 export const deleteModelOverrideSchema = z.object({
-	persona: personaSchema
+	persona: overrideKeySchema
 });
 
 // ============================================================================

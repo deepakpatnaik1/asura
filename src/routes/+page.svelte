@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Icon } from 'svelte-icons-pack';
-	import { LuPaperclip, LuFolder, LuCloudDownload, LuStickyNote, LuPalette } from 'svelte-icons-pack/lu';
+	import { LuPaperclip, LuFolder, LuStickyNote, LuPalette } from 'svelte-icons-pack/lu';
 	import { currentMessage, isLoading, sendMessage, abortCurrentMessage, lastMutations, lastWhiteboardMutations, lastCanvasMutations } from '$lib/stores/chat';
 	import { tick, onMount } from 'svelte';
 	import { DEFAULT_PERSONA, PERSONAS } from '$lib/config/personas';
@@ -1036,6 +1036,11 @@
 			textareaRef?.focus();
 			return;
 		}
+		if (event.key === 'Escape' && showCanvasLibrary) {
+			showCanvasLibrary = false;
+			textareaRef?.focus();
+			return;
+		}
 		if (event.key === 'Escape') {
 			const selection = window.getSelection();
 			if (selection && selection.toString().length > 0) {
@@ -1056,7 +1061,7 @@
 	}
 
 	function refocusInput() {
-		if (!showFilePaste && !showFileLibrary && !showBoardLibrary) {
+		if (!showFilePaste && !showFileLibrary && !showBoardLibrary && !showCanvasLibrary) {
 			textareaRef?.focus();
 		}
 	}
@@ -1154,63 +1159,55 @@
 						{/if}
 					</div>
 
-					{#if selectedPersona === 'gunnar'}
-						<div class="board-wrapper">
-							<button
-								class="control-btn hit-target"
-								class:active={showBoardLibrary || selectedWhiteboardIds.length > 0}
-								title="Board library"
-								onclick={handleBoardLibraryClick}
-							>
-								<Icon src={LuStickyNote} size="11" />
-								{#if selectedWhiteboardIds.length > 0}
-									<span class="selection-badge">{selectedWhiteboardIds.length}</span>
-								{/if}
-							</button>
-							{#if showBoardLibrary}
-								<BoardLibrary
-									{whiteboards}
-									selectedIds={selectedWhiteboardIds}
-									isDeleting={isDeletingWhiteboard}
-									onToggle={toggleWhiteboardSelection}
-									onOpen={handleOpenWhiteboard}
-									onDelete={handleWhiteboardDeleteClick}
-									onClear={clearWhiteboardSelection}
-								/>
+					<div class="board-wrapper">
+						<button
+							class="control-btn hit-target"
+							class:active={showBoardLibrary || selectedWhiteboardIds.length > 0}
+							title="Board library"
+							onclick={handleBoardLibraryClick}
+						>
+							<Icon src={LuStickyNote} size="11" />
+							{#if selectedWhiteboardIds.length > 0}
+								<span class="selection-badge">{selectedWhiteboardIds.length}</span>
 							{/if}
-						</div>
-					{/if}
+						</button>
+						{#if showBoardLibrary}
+							<BoardLibrary
+								{whiteboards}
+								selectedIds={selectedWhiteboardIds}
+								isDeleting={isDeletingWhiteboard}
+								onToggle={toggleWhiteboardSelection}
+								onOpen={handleOpenWhiteboard}
+								onDelete={handleWhiteboardDeleteClick}
+								onClear={clearWhiteboardSelection}
+							/>
+						{/if}
+					</div>
 
-					{#if selectedPersona === 'eva'}
-						<div class="canvas-wrapper">
-							<button
-								class="control-btn hit-target"
-								class:active={showCanvasLibrary || selectedCanvasIds.length > 0}
-								title="Canvas library"
-								onclick={handleCanvasLibraryClick}
-							>
-								<Icon src={LuPalette} size="11" />
-								{#if selectedCanvasIds.length > 0}
-									<span class="selection-badge">{selectedCanvasIds.length}</span>
-								{/if}
-							</button>
-							{#if showCanvasLibrary}
-								<CanvasLibrary
-									canvases={evaCanvases}
-									selectedIds={selectedCanvasIds}
-									isDeleting={isDeletingCanvas}
-									onToggle={toggleCanvasSelection}
-									onOpen={handleOpenCanvas}
-									onDelete={handleCanvasDeleteClick}
-									onClear={clearCanvasSelection}
-								/>
+					<div class="canvas-wrapper">
+						<button
+							class="control-btn hit-target"
+							class:active={showCanvasLibrary || selectedCanvasIds.length > 0}
+							title="Canvas library"
+							onclick={handleCanvasLibraryClick}
+						>
+							<Icon src={LuPalette} size="11" />
+							{#if selectedCanvasIds.length > 0}
+								<span class="selection-badge">{selectedCanvasIds.length}</span>
 							{/if}
-						</div>
-					{/if}
-
-					<button class="control-btn hit-target" title="Download from cloud">
-						<Icon src={LuCloudDownload} size="11" />
-					</button>
+						</button>
+						{#if showCanvasLibrary}
+							<CanvasLibrary
+								canvases={evaCanvases}
+								selectedIds={selectedCanvasIds}
+								isDeleting={isDeletingCanvas}
+								onToggle={toggleCanvasSelection}
+								onOpen={handleOpenCanvas}
+								onDelete={handleCanvasDeleteClick}
+								onClear={clearCanvasSelection}
+							/>
+						{/if}
+					</div>
 
 					<PersonaDropdown
 						selectedPersona={selectedPersona}
@@ -1390,14 +1387,14 @@
 
 	.selection-badge {
 		position: absolute;
-		top: -4px;
-		right: -4px;
+		top: -3px;
+		right: -3px;
 		background: var(--current-accent);
 		color: hsl(var(--background));
-		font-size: 0.6rem;
+		font-size: 0.5rem;
 		font-weight: 600;
-		width: 14px;
-		height: 14px;
+		width: 9px;
+		height: 9px;
 		border-radius: 50%;
 		display: flex;
 		align-items: center;
@@ -1427,14 +1424,6 @@
 		align-items: center;
 		gap: var(--action-icon-gap);
 		margin-left: 12px;
-	}
-
-	.settings-btn {
-		color: rgb(239, 68, 68);
-	}
-
-	.settings-btn:hover {
-		color: rgb(220, 38, 38);
 	}
 
 	.input-container {

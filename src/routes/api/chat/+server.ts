@@ -15,6 +15,7 @@ import { getPersonaPrompt } from '$lib/prompts';
 import {
 	converseStream,
 	converseStreamFireworks,
+	converseStreamOpenRouter,
 	saveToSuperjournal,
 	triggerBackgroundJobs,
 	getProviderType,
@@ -117,6 +118,15 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			.single();
 
 		const conversationModel = modelOverride?.model || settings?.default_model || DEFAULT_MODEL;
+
+		// Fetch image_gen model override for Eva's generate_image tool
+		const { data: imageModelOverride } = await supabase
+			.from('model_overrides')
+			.select('model')
+			.eq('user_id', userId)
+			.eq('persona', 'image_gen')
+			.single();
+		const defaultImageModel = imageModelOverride?.model;
 
 		// 5. Fetch chart image if referenced
 		let chartImage: ChartImageData | null = null;
@@ -274,7 +284,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			let sakuraContext: SakuraToolContext | null = null;
 
 			if (hasSakuraTools) {
-				sakuraContext = { userId, supabase };
+				sakuraContext = { userId, supabase, defaultImageModel };
 				allTools.push(...SAKURA_TOOLS);
 			}
 
@@ -329,9 +339,13 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 						toolExecutor
 					};
 
-					const generator = conversationProvider === 'fireworks'
-						? converseStreamFireworks(streamParams)
-						: converseStream(streamParams);
+					// Route to appropriate provider implementation
+					const generator =
+						conversationProvider === 'fireworks'
+							? converseStreamFireworks(streamParams)
+							: conversationProvider === 'openrouter'
+								? converseStreamOpenRouter(streamParams)
+								: converseStream(streamParams);
 
 					let result;
 					while (true) {

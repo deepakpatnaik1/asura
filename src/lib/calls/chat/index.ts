@@ -5,6 +5,7 @@
 // Core AI calls
 export { converseStream, type ConverseParams, type ConverseResult, type ChartImageData, type ToolExecutor } from './converse';
 export { converseStreamFireworks } from './converse-fireworks';
+export { converseStreamOpenRouter } from './converse-openrouter';
 export { compress, type CompressParams, type CompressResult } from './compress';
 
 // Background jobs
