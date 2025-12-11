@@ -84,31 +84,16 @@
 	let selectedCanvasIds = $state<string[]>([]); // Canvases selected for context injection
 	let viewingCanvasId = $state<string | null>(null); // Currently displayed canvas
 
-	// Refresh calendar when todos, diary, or calendar events are mutated
+	// Refresh calendar when any Alicja mutations occur (todos, tags, diary, calendar)
 	$effect(() => {
 		const mutations = $lastMutations;
 		if (mutations) {
-			// Check for any todo changes
-			const hasTodoChanges =
-				(mutations.created_todos && mutations.created_todos.length > 0) ||
-				(mutations.completed_todos && mutations.completed_todos.length > 0) ||
-				(mutations.reopened_todos && mutations.reopened_todos.length > 0) ||
-				(mutations.updated_todos && mutations.updated_todos.length > 0) ||
-				(mutations.deleted_todos && mutations.deleted_todos.length > 0);
+			// Check if any mutation arrays have data - refresh on ANY change
+			const hasAnyMutation = Object.values(mutations).some(
+				(arr) => Array.isArray(arr) && arr.length > 0
+			);
 
-			// Check for any diary changes
-			const hasDiaryChanges =
-				(mutations.diary_entries && mutations.diary_entries.length > 0) ||
-				(mutations.updated_diary && mutations.updated_diary.length > 0) ||
-				(mutations.deleted_diary && mutations.deleted_diary.length > 0);
-
-			// Check for any calendar event changes
-			const hasCalendarChanges =
-				(mutations.created_events && mutations.created_events.length > 0) ||
-				(mutations.updated_events && mutations.updated_events.length > 0) ||
-				(mutations.deleted_events && mutations.deleted_events.length > 0);
-
-			if (hasTodoChanges || hasDiaryChanges || hasCalendarChanges) {
+			if (hasAnyMutation) {
 				calendarRefreshTrigger++;
 			}
 			// Clear mutations after processing

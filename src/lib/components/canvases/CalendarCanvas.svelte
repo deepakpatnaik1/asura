@@ -586,7 +586,7 @@
 								</div>
 								<!-- Child todos (indented) -->
 								{#each todo.children as child (child.id)}
-									<div class="todo-item todo-child" class:completed={child.status === 'completed'}>
+									<div class="todo-item todo-child" class:completed={child.status === 'completed'} class:parent-completed={todo.status === 'completed'}>
 										<div class="todo-content">
 											<span class="todo-text">{normalizeText(child.description)}</span>
 										</div>
@@ -976,7 +976,15 @@
 		font-size: var(--font-caption);
 	}
 
-	.todo-item.completed .todo-text {
+	.todo-item.completed .todo-text,
+	.todo-item.completed .todo-tag,
+	.todo-item.completed .todo-deadline,
+	.todo-item.completed .todo-time {
+		color: hsl(var(--foreground) / 0.2);
+	}
+
+	/* Gray out children when parent is completed (regardless of child's own status) */
+	.todo-item.parent-completed .todo-text {
 		color: hsl(var(--foreground) / 0.2);
 	}
 

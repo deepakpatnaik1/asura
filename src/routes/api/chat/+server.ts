@@ -16,6 +16,7 @@ import {
 	converseStream,
 	converseStreamFireworks,
 	converseStreamOpenRouter,
+	converseStreamOpenAI,
 	saveToSuperjournal,
 	triggerBackgroundJobs,
 	getProviderType,
@@ -345,7 +346,9 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 							? converseStreamFireworks(streamParams)
 							: conversationProvider === 'openrouter'
 								? converseStreamOpenRouter(streamParams)
-								: converseStream(streamParams);
+								: conversationProvider === 'openai'
+									? converseStreamOpenAI(streamParams)
+									: converseStream(streamParams);
 
 					let result;
 					while (true) {

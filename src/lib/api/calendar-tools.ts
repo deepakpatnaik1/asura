@@ -10,6 +10,7 @@ import {
 	createCalendarEvent,
 	updateCalendarEvent,
 	deleteCalendarEvent,
+	getCalendarEvent,
 	fetchCalendarEvents,
 	getWorkCalendarId,
 	type CreateEventInput,
@@ -158,7 +159,7 @@ export const LIST_EVENTS_TOOL: Anthropic.Tool = {
 		properties: {
 			days_ahead: {
 				type: 'number',
-				description: 'Number of days to look ahead (default: 7, max: 30)'
+				description: 'Number of days to look ahead (default: 7, max: 180)'
 			}
 		},
 		required: []
@@ -292,6 +293,23 @@ async function executeCreateEvent(
 
 		const event = await createCalendarEvent(accessToken, calendarId, eventInput);
 
+		// Verify the created event exists and has the right summary
+		// (Don't compare exact timestamps - Google may normalize timezone format)
+		if (!event.id) {
+			return {
+				success: false,
+				message: 'Create failed: no event ID returned.',
+				data: event
+			};
+		}
+		if (event.summary !== eventInput.summary) {
+			return {
+				success: false,
+				message: `Create failed: summary "${event.summary}" does not match requested "${eventInput.summary}".`,
+				data: { event_id: event.id, ...event }
+			};
+		}
+
 		// Track mutation for UI refresh
 		if (mutations && event.id) {
 			mutations.created_events.push(event.id);
@@ -350,6 +368,21 @@ async function executeUpdateEvent(
 
 		const event = await updateCalendarEvent(accessToken, calendarId, eventId, updates);
 
+		// Verify key fields that don't have timezone normalization issues
+		// (Don't compare exact timestamps - Google may normalize timezone format)
+		const discrepancies: string[] = [];
+		if (updates.summary && event.summary !== updates.summary) discrepancies.push('summary');
+		if (updates.description && event.description !== updates.description) discrepancies.push('description');
+		if (updates.location && event.location !== updates.location) discrepancies.push('location');
+
+		if (discrepancies.length > 0) {
+			return {
+				success: false,
+				message: `Update failed: ${discrepancies.join(', ')} did not change as expected.`,
+				data: { event_id: event.id, ...event }
+			};
+		}
+
 		// Track mutation for UI refresh
 		if (mutations && event.id) {
 			mutations.updated_events.push(event.id);
@@ -387,6 +420,17 @@ async function executeDeleteEvent(
 
 		await deleteCalendarEvent(accessToken, calendarId, eventId);
 
+		// Verify the deletion actually happened by checking the event is gone
+		const checkDeleted = await getCalendarEvent(accessToken, calendarId, eventId);
+
+		if (checkDeleted) {
+			return {
+				success: false,
+				message: 'Delete failed: event still exists after deletion attempt.',
+				data: { event_id: eventId }
+			};
+		}
+
 		// Track mutation for UI refresh
 		if (mutations) {
 			mutations.deleted_events.push(eventId);
@@ -412,7 +456,7 @@ async function executeListEvents(
 	input: Record<string, unknown>
 ): Promise<ToolExecutionResult> {
 	try {
-		const daysAhead = Math.min(Math.max((input.days_ahead as number) || 7, 1), 30);
+		const daysAhead = Math.min(Math.max((input.days_ahead as number) || 7, 1), 180);
 
 		const events = await fetchCalendarEvents(accessToken, daysAhead);
 
@@ -458,6 +502,21 @@ async function executeCheckAvailability(
 		const startTime = input.start_time as string;
 		const endTime = input.end_time as string;
 
+		// Ensure RFC3339 format with timezone for FreeBusy API
+		// If no timezone offset provided, append Z for UTC
+		const formatRFC3339 = (time: string): string => {
+			// Already has timezone offset (+HH:MM, -HH:MM) or Z
+			if (/[+-]\d{2}:\d{2}$/.test(time) || time.endsWith('Z')) {
+				return time;
+			}
+			// Parse as local and convert to ISO with Z (treating as UTC)
+			const date = new Date(time);
+			return date.toISOString();
+		};
+
+		const timeMin = formatRFC3339(startTime);
+		const timeMax = formatRFC3339(endTime);
+
 		// Use freebusy API to check availability
 		const response = await fetch('https://www.googleapis.com/calendar/v3/freeBusy', {
 			method: 'POST',
@@ -466,8 +525,8 @@ async function executeCheckAvailability(
 				'Content-Type': 'application/json'
 			},
 			body: JSON.stringify({
-				timeMin: startTime,
-				timeMax: endTime,
+				timeMin,
+				timeMax,
 				items: [{ id: calendarId }]
 			})
 		});

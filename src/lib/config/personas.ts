@@ -37,7 +37,11 @@ export type ToolName =
 	| 'reopen_todo'
 	| 'update_todo'
 	| 'delete_todo'
+	// Tag tools
 	| 'create_tag'
+	| 'delete_tag'
+	| 'rename_tag'
+	| 'merge_tags'
 	// Diary tools
 	| 'log_diary'
 	| 'update_diary'
@@ -160,6 +164,9 @@ const ALICJA_TOOLS: ToolName[] = [
 	'update_todo',
 	'delete_todo',
 	'create_tag',
+	'delete_tag',
+	'rename_tag',
+	'merge_tags',
 	'log_diary',
 	'update_diary',
 	'delete_diary',

@@ -141,6 +141,62 @@ export const CREATE_TAG_TOOL: Anthropic.Tool = {
 	}
 };
 
+export const DELETE_TAG_TOOL: Anthropic.Tool = {
+	name: 'delete_tag',
+	description:
+		'Delete a tag permanently. This removes the tag from the canonical list and from all todos that use it.',
+	input_schema: {
+		type: 'object',
+		properties: {
+			name: {
+				type: 'string',
+				description: 'The tag name to delete'
+			}
+		},
+		required: ['name']
+	}
+};
+
+export const RENAME_TAG_TOOL: Anthropic.Tool = {
+	name: 'rename_tag',
+	description:
+		'Rename a tag. Updates the canonical tag and all todos that use it.',
+	input_schema: {
+		type: 'object',
+		properties: {
+			old_name: {
+				type: 'string',
+				description: 'The current tag name'
+			},
+			new_name: {
+				type: 'string',
+				description: 'The new tag name (lowercase, no spaces)'
+			}
+		},
+		required: ['old_name', 'new_name']
+	}
+};
+
+export const MERGE_TAGS_TOOL: Anthropic.Tool = {
+	name: 'merge_tags',
+	description:
+		'Merge one tag into another. All todos with the source tag will be updated to use the target tag, then the source tag is deleted.',
+	input_schema: {
+		type: 'object',
+		properties: {
+			source_tag: {
+				type: 'string',
+				description: 'The tag to merge from (will be deleted)'
+			},
+			target_tag: {
+				type: 'string',
+				description: 'The tag to merge into (will remain)'
+			}
+		},
+		required: ['source_tag', 'target_tag']
+	}
+};
+
 export const LOG_DIARY_TOOL: Anthropic.Tool = {
 	name: 'log_diary',
 	description:
@@ -180,7 +236,8 @@ export const LOG_DIARY_TOOL: Anthropic.Tool = {
 
 export const UPDATE_DIARY_TOOL: Anthropic.Tool = {
 	name: 'update_diary',
-	description: 'Update a founder diary entry. Use this to edit the description or tags of an existing entry.',
+	description:
+		'Update a founder diary entry. Can edit description, tags, or date (logged_at/event_period).',
 	input_schema: {
 		type: 'object',
 		properties: {
@@ -196,6 +253,20 @@ export const UPDATE_DIARY_TOOL: Anthropic.Tool = {
 				type: 'array',
 				items: { type: 'string' },
 				description: 'New tags for the entry - replaces existing tags (optional)'
+			},
+			logged_at: {
+				type: 'string',
+				description:
+					'New date for the entry (ISO 8601). Use when user wants to change when the entry was logged.'
+			},
+			event_period: {
+				type: 'string',
+				description:
+					'New fuzzy date like "Summer 2023", "Early 2022". Replaces logged_at display.'
+			},
+			sort_date: {
+				type: 'string',
+				description: 'REQUIRED when event_period provided. YYYY-MM-DD for sorting.'
 			}
 		},
 		required: ['diary_id']
@@ -227,6 +298,9 @@ export const TODO_TOOLS: Anthropic.Tool[] = [
 	UPDATE_TODO_TOOL,
 	DELETE_TODO_TOOL,
 	CREATE_TAG_TOOL,
+	DELETE_TAG_TOOL,
+	RENAME_TAG_TOOL,
+	MERGE_TAGS_TOOL,
 	LOG_DIARY_TOOL,
 	UPDATE_DIARY_TOOL,
 	DELETE_DIARY_TOOL
@@ -287,7 +361,11 @@ export interface TodoMutations {
 	reopened_todos: string[]; // IDs
 	updated_todos: { id: string; description?: string; tags?: string[] }[];
 	deleted_todos: string[]; // IDs
+	// Tag mutations
 	created_tags: string[]; // Names
+	deleted_tags: string[]; // Names
+	renamed_tags: { old_name: string; new_name: string }[];
+	merged_tags: { source_tag: string; target_tag: string }[];
 	// Diary mutations
 	diary_entries: DiaryEntry[];
 	updated_diary: { id: string; description?: string; tags?: string[] }[];
@@ -309,6 +387,9 @@ export function createEmptyMutations(): TodoMutations {
 		updated_todos: [],
 		deleted_todos: [],
 		created_tags: [],
+		deleted_tags: [],
+		renamed_tags: [],
+		merged_tags: [],
 		diary_entries: [],
 		updated_diary: [],
 		deleted_diary: [],
@@ -346,6 +427,15 @@ export async function executeTodoTool(
 		case 'create_tag':
 			return executeCreateTag(input, context, mutations);
 
+		case 'delete_tag':
+			return executeDeleteTag(input, context, mutations);
+
+		case 'rename_tag':
+			return executeRenameTag(input, context, mutations);
+
+		case 'merge_tags':
+			return executeMergeTags(input, context, mutations);
+
 		case 'log_diary':
 			return executeLogDiary(input, context, mutations);
 
@@ -380,6 +470,7 @@ async function executeCreateTodo(
 		const markComplete = input.mark_complete as boolean | undefined;
 
 		const now = new Date().toISOString();
+		const expectedStatus = markComplete ? 'completed' : 'open';
 		const { data, error } = await supabase
 			.from('todos')
 			.insert({
@@ -389,13 +480,29 @@ async function executeCreateTodo(
 				deadline_period: deadlinePeriod || null,
 				parent_id: parentId || null,
 				source_message_id: sourceMessageId || null,
-				status: markComplete ? 'completed' : 'open',
+				status: expectedStatus,
 				completed_at: markComplete ? now : null
 			})
 			.select()
 			.single();
 
 		if (error) throw error;
+
+		// Verify the created todo matches what was requested
+		const discrepancies: string[] = [];
+		if (data.description !== description) discrepancies.push('description');
+		if (JSON.stringify(data.tags) !== JSON.stringify(tags)) discrepancies.push('tags');
+		if (data.deadline_period !== (deadlinePeriod || null)) discrepancies.push('deadline_period');
+		if (data.parent_id !== (parentId || null)) discrepancies.push('parent_id');
+		if (data.status !== expectedStatus) discrepancies.push('status');
+
+		if (discrepancies.length > 0) {
+			return {
+				success: false,
+				message: `Create failed: ${discrepancies.join(', ')} did not save as expected.`,
+				data: { id: data.id, ...data }
+			};
+		}
 
 		const todo: Todo = {
 			id: data.id,
@@ -455,6 +562,15 @@ async function executeCompleteTodo(
 
 		if (error) throw error;
 
+		// Verify the completion actually happened
+		if (data.status !== 'completed' || !data.completed_at) {
+			return {
+				success: false,
+				message: 'Completion failed: status or completed_at did not update as expected.',
+				data: { id: data.id, status: data.status, completed_at: data.completed_at }
+			};
+		}
+
 		mutations.completed_todos.push(todoId);
 
 		return {
@@ -497,6 +613,15 @@ async function executeReopenTodo(
 			.single();
 
 		if (error) throw error;
+
+		// Verify the reopen actually happened
+		if (data.status !== 'open' || data.completed_at !== null) {
+			return {
+				success: false,
+				message: 'Reopen failed: status or completed_at did not update as expected.',
+				data: { id: data.id, status: data.status, completed_at: data.completed_at }
+			};
+		}
 
 		mutations.reopened_todos.push(todoId);
 
@@ -556,6 +681,29 @@ async function executeUpdateTodo(
 
 		if (error) throw error;
 
+		// Verify what actually changed vs what was requested
+		const discrepancies: string[] = [];
+		if (newDescription !== undefined && data.description !== newDescription) {
+			discrepancies.push('description');
+		}
+		if (newTags !== undefined && JSON.stringify(data.tags) !== JSON.stringify(newTags)) {
+			discrepancies.push('tags');
+		}
+		if (newDeadlinePeriod !== undefined) {
+			const expectedDeadline = newDeadlinePeriod || null;
+			if (data.deadline_period !== expectedDeadline) {
+				discrepancies.push('deadline_period');
+			}
+		}
+
+		if (discrepancies.length > 0) {
+			return {
+				success: false,
+				message: `Update failed: ${discrepancies.join(', ')} did not change as expected.`,
+				data: { id: data.id, ...data }
+			};
+		}
+
 		mutations.updated_todos.push({
 			id: todoId,
 			description: newDescription,
@@ -612,6 +760,21 @@ async function executeDeleteTodo(
 
 		if (error) throw error;
 
+		// Verify the deletion actually happened by checking the record is gone
+		const { data: checkDeleted } = await supabase
+			.from('todos')
+			.select('id')
+			.eq('id', todoId)
+			.single();
+
+		if (checkDeleted) {
+			return {
+				success: false,
+				message: 'Delete failed: todo still exists after deletion attempt.',
+				data: { id: todoId }
+			};
+		}
+
 		mutations.deleted_todos.push(todoId);
 
 		return {
@@ -659,6 +822,15 @@ async function executeCreateTag(
 			throw error;
 		}
 
+		// Verify the created tag matches what was requested
+		if (data.name !== name) {
+			return {
+				success: false,
+				message: `Create failed: tag name "${data.name}" does not match requested "${name}".`,
+				data: { id: data.id, name: data.name }
+			};
+		}
+
 		mutations.created_tags.push(name);
 
 		return {
@@ -670,6 +842,315 @@ async function executeCreateTag(
 		return {
 			success: false,
 			message: `Failed to create tag: ${error instanceof Error ? error.message : 'Unknown error'}`
+		};
+	}
+}
+
+/**
+ * Delete Tag Executor
+ */
+async function executeDeleteTag(
+	input: Record<string, unknown>,
+	context: TodoToolContext,
+	mutations: TodoMutations
+): Promise<ToolExecutionResult> {
+	try {
+		const { supabase, userId } = context;
+		const name = (input.name as string).toLowerCase().trim();
+
+		// Find the tag first
+		const { data: tag, error: fetchError } = await supabase
+			.from('tags')
+			.select('id')
+			.eq('user_id', userId)
+			.eq('name', name)
+			.single();
+
+		if (fetchError || !tag) {
+			return {
+				success: false,
+				message: `Tag "${name}" not found`
+			};
+		}
+
+		// Remove tag from all todos that use it
+		const { data: todosWithTag } = await supabase
+			.from('todos')
+			.select('id, tags')
+			.eq('user_id', userId)
+			.contains('tags', [name]);
+
+		if (todosWithTag && todosWithTag.length > 0) {
+			for (const todo of todosWithTag) {
+				const newTags = (todo.tags as string[]).filter((t: string) => t !== name);
+				await supabase
+					.from('todos')
+					.update({ tags: newTags })
+					.eq('id', todo.id);
+			}
+		}
+
+		// Delete the tag
+		const { error } = await supabase
+			.from('tags')
+			.delete()
+			.eq('id', tag.id);
+
+		if (error) throw error;
+
+		// Verify deletion
+		const { data: checkDeleted } = await supabase
+			.from('tags')
+			.select('id')
+			.eq('id', tag.id)
+			.single();
+
+		if (checkDeleted) {
+			return {
+				success: false,
+				message: 'Delete failed: tag still exists after deletion attempt.',
+				data: { name }
+			};
+		}
+
+		mutations.deleted_tags.push(name);
+
+		const todoCount = todosWithTag?.length || 0;
+		return {
+			success: true,
+			message: `Deleted tag "${name}"${todoCount > 0 ? ` and removed from ${todoCount} todo(s)` : ''}`,
+			data: { name, affected_todos: todoCount }
+		};
+	} catch (error) {
+		return {
+			success: false,
+			message: `Failed to delete tag: ${error instanceof Error ? error.message : 'Unknown error'}`
+		};
+	}
+}
+
+/**
+ * Rename Tag Executor
+ */
+async function executeRenameTag(
+	input: Record<string, unknown>,
+	context: TodoToolContext,
+	mutations: TodoMutations
+): Promise<ToolExecutionResult> {
+	try {
+		const { supabase, userId } = context;
+		const oldName = (input.old_name as string).toLowerCase().trim();
+		const newName = (input.new_name as string).toLowerCase().trim();
+
+		if (oldName === newName) {
+			return {
+				success: false,
+				message: 'Old and new tag names are the same'
+			};
+		}
+
+		// Find the tag
+		const { data: tag, error: fetchError } = await supabase
+			.from('tags')
+			.select('id')
+			.eq('user_id', userId)
+			.eq('name', oldName)
+			.single();
+
+		if (fetchError || !tag) {
+			return {
+				success: false,
+				message: `Tag "${oldName}" not found`
+			};
+		}
+
+		// Check if new name already exists
+		const { data: existingTag } = await supabase
+			.from('tags')
+			.select('id')
+			.eq('user_id', userId)
+			.eq('name', newName)
+			.single();
+
+		if (existingTag) {
+			return {
+				success: false,
+				message: `Tag "${newName}" already exists. Use merge_tags to combine them.`
+			};
+		}
+
+		// Rename the tag
+		const { data: updatedTag, error } = await supabase
+			.from('tags')
+			.update({ name: newName })
+			.eq('id', tag.id)
+			.select('name')
+			.single();
+
+		if (error) throw error;
+
+		// Verify the update actually happened (RLS can silently block)
+		if (!updatedTag || updatedTag.name !== newName) {
+			return {
+				success: false,
+				message: `Rename failed: tag "${oldName}" could not be updated. Check database permissions.`
+			};
+		}
+
+		// Update all todos that use this tag
+		const { data: todosWithTag } = await supabase
+			.from('todos')
+			.select('id, tags')
+			.eq('user_id', userId)
+			.contains('tags', [oldName]);
+
+		if (todosWithTag && todosWithTag.length > 0) {
+			for (const todo of todosWithTag) {
+				const newTags = (todo.tags as string[]).map((t: string) => t === oldName ? newName : t);
+				await supabase
+					.from('todos')
+					.update({ tags: newTags })
+					.eq('id', todo.id);
+			}
+		}
+
+		// Verify rename
+		const { data: renamed } = await supabase
+			.from('tags')
+			.select('name')
+			.eq('id', tag.id)
+			.single();
+
+		if (!renamed || renamed.name !== newName) {
+			return {
+				success: false,
+				message: 'Rename failed: tag name did not update as expected.'
+			};
+		}
+
+		mutations.renamed_tags.push({ old_name: oldName, new_name: newName });
+
+		const todoCount = todosWithTag?.length || 0;
+		return {
+			success: true,
+			message: `Renamed tag "${oldName}" to "${newName}"${todoCount > 0 ? ` (updated ${todoCount} todo(s))` : ''}`,
+			data: { old_name: oldName, new_name: newName, affected_todos: todoCount }
+		};
+	} catch (error) {
+		return {
+			success: false,
+			message: `Failed to rename tag: ${error instanceof Error ? error.message : 'Unknown error'}`
+		};
+	}
+}
+
+/**
+ * Merge Tags Executor
+ */
+async function executeMergeTags(
+	input: Record<string, unknown>,
+	context: TodoToolContext,
+	mutations: TodoMutations
+): Promise<ToolExecutionResult> {
+	try {
+		const { supabase, userId } = context;
+		const sourceTag = (input.source_tag as string).toLowerCase().trim();
+		const targetTag = (input.target_tag as string).toLowerCase().trim();
+
+		if (sourceTag === targetTag) {
+			return {
+				success: false,
+				message: 'Source and target tags are the same'
+			};
+		}
+
+		// Verify both tags exist
+		const { data: source } = await supabase
+			.from('tags')
+			.select('id')
+			.eq('user_id', userId)
+			.eq('name', sourceTag)
+			.single();
+
+		const { data: target } = await supabase
+			.from('tags')
+			.select('id')
+			.eq('user_id', userId)
+			.eq('name', targetTag)
+			.single();
+
+		if (!source) {
+			return {
+				success: false,
+				message: `Source tag "${sourceTag}" not found`
+			};
+		}
+
+		if (!target) {
+			return {
+				success: false,
+				message: `Target tag "${targetTag}" not found`
+			};
+		}
+
+		// Update all todos: replace source tag with target tag
+		const { data: todosWithSource } = await supabase
+			.from('todos')
+			.select('id, tags')
+			.eq('user_id', userId)
+			.contains('tags', [sourceTag]);
+
+		let mergedCount = 0;
+		if (todosWithSource && todosWithSource.length > 0) {
+			for (const todo of todosWithSource) {
+				const tags = todo.tags as string[];
+				// Remove source, add target if not already present
+				const newTags = tags.filter((t: string) => t !== sourceTag);
+				if (!newTags.includes(targetTag)) {
+					newTags.push(targetTag);
+				}
+				await supabase
+					.from('todos')
+					.update({ tags: newTags })
+					.eq('id', todo.id);
+				mergedCount++;
+			}
+		}
+
+		// Delete the source tag
+		const { error } = await supabase
+			.from('tags')
+			.delete()
+			.eq('id', source.id);
+
+		if (error) throw error;
+
+		// Verify deletion
+		const { data: checkDeleted } = await supabase
+			.from('tags')
+			.select('id')
+			.eq('id', source.id)
+			.single();
+
+		if (checkDeleted) {
+			return {
+				success: false,
+				message: 'Merge failed: source tag still exists after deletion.',
+				data: { source_tag: sourceTag, target_tag: targetTag }
+			};
+		}
+
+		mutations.merged_tags.push({ source_tag: sourceTag, target_tag: targetTag });
+
+		return {
+			success: true,
+			message: `Merged "${sourceTag}" into "${targetTag}" (${mergedCount} todo(s) updated)`,
+			data: { source_tag: sourceTag, target_tag: targetTag, affected_todos: mergedCount }
+		};
+	} catch (error) {
+		return {
+			success: false,
+			message: `Failed to merge tags: ${error instanceof Error ? error.message : 'Unknown error'}`
 		};
 	}
 }
@@ -693,13 +1174,14 @@ async function executeLogDiary(
 		// Compute sort_date: use provided value, or derive from loggedAt, or default to today
 		const computedSortDate = sortDate || (loggedAt ? loggedAt.split('T')[0] : new Date().toISOString().split('T')[0]);
 
+		const expectedLoggedAt = loggedAt || new Date().toISOString();
 		const { data, error } = await supabase
 			.from('founder_diary')
 			.insert({
 				user_id: userId,
 				description,
 				tags,
-				logged_at: loggedAt || new Date().toISOString(),
+				logged_at: expectedLoggedAt,
 				event_period: eventPeriod || null,
 				sort_date: computedSortDate,
 				source_message_id: sourceMessageId || null
@@ -708,6 +1190,21 @@ async function executeLogDiary(
 			.single();
 
 		if (error) throw error;
+
+		// Verify the created entry matches what was requested
+		const discrepancies: string[] = [];
+		if (data.description !== description) discrepancies.push('description');
+		if (JSON.stringify(data.tags) !== JSON.stringify(tags)) discrepancies.push('tags');
+		if (data.event_period !== (eventPeriod || null)) discrepancies.push('event_period');
+		if (data.sort_date !== computedSortDate) discrepancies.push('sort_date');
+
+		if (discrepancies.length > 0) {
+			return {
+				success: false,
+				message: `Log failed: ${discrepancies.join(', ')} did not save as expected.`,
+				data: { id: data.id, ...data }
+			};
+		}
 
 		const entry: DiaryEntry = {
 			id: data.id,
@@ -754,16 +1251,22 @@ async function executeUpdateDiary(
 		const diaryId = input.diary_id as string;
 		const newDescription = input.description as string | undefined;
 		const newTags = input.tags as string[] | undefined;
+		const newLoggedAt = input.logged_at as string | undefined;
+		const newEventPeriod = input.event_period as string | undefined;
+		const newSortDate = input.sort_date as string | undefined;
 
 		// Build update object with only provided fields
 		const updateData: Record<string, unknown> = {};
 		if (newDescription !== undefined) updateData.description = newDescription;
 		if (newTags !== undefined) updateData.tags = newTags;
+		if (newLoggedAt !== undefined) updateData.logged_at = newLoggedAt;
+		if (newEventPeriod !== undefined) updateData.event_period = newEventPeriod;
+		if (newSortDate !== undefined) updateData.sort_date = newSortDate;
 
 		if (Object.keys(updateData).length === 0) {
 			return {
 				success: false,
-				message: 'No fields to update. Provide description or tags.'
+				message: 'No fields to update. Provide description, tags, logged_at, or event_period.'
 			};
 		}
 
@@ -776,6 +1279,32 @@ async function executeUpdateDiary(
 
 		if (error) throw error;
 
+		// Verify what actually changed vs what was requested
+		const discrepancies: string[] = [];
+		if (newDescription !== undefined && data.description !== newDescription) {
+			discrepancies.push('description');
+		}
+		if (newTags !== undefined && JSON.stringify(data.tags) !== JSON.stringify(newTags)) {
+			discrepancies.push('tags');
+		}
+		if (newLoggedAt !== undefined && data.logged_at !== newLoggedAt) {
+			discrepancies.push('logged_at');
+		}
+		if (newEventPeriod !== undefined && data.event_period !== newEventPeriod) {
+			discrepancies.push('event_period');
+		}
+		if (newSortDate !== undefined && data.sort_date !== newSortDate) {
+			discrepancies.push('sort_date');
+		}
+
+		if (discrepancies.length > 0) {
+			return {
+				success: false,
+				message: `Update failed: ${discrepancies.join(', ')} did not change as expected.`,
+				data: { id: data.id, ...data }
+			};
+		}
+
 		mutations.updated_diary.push({
 			id: diaryId,
 			description: newDescription,
@@ -785,6 +1314,8 @@ async function executeUpdateDiary(
 		const changes: string[] = [];
 		if (newDescription) changes.push(`updated to "${newDescription}"`);
 		if (newTags) changes.push(`tags set to [${newTags.join(', ')}]`);
+		if (newLoggedAt) changes.push(`date changed to ${newLoggedAt}`);
+		if (newEventPeriod) changes.push(`period changed to "${newEventPeriod}"`);
 
 		return {
 			success: true,
@@ -792,7 +1323,9 @@ async function executeUpdateDiary(
 			data: {
 				id: data.id,
 				description: data.description,
-				tags: data.tags
+				tags: data.tags,
+				logged_at: data.logged_at,
+				event_period: data.event_period
 			}
 		};
 	} catch (error) {
@@ -828,6 +1361,21 @@ async function executeDeleteDiary(
 
 		if (error) throw error;
 
+		// Verify the deletion actually happened by checking the record is gone
+		const { data: checkDeleted } = await supabase
+			.from('founder_diary')
+			.select('id')
+			.eq('id', diaryId)
+			.single();
+
+		if (checkDeleted) {
+			return {
+				success: false,
+				message: 'Delete failed: diary entry still exists after deletion attempt.',
+				data: { id: diaryId }
+			};
+		}
+
 		mutations.deleted_diary.push(diaryId);
 
 		return {
@@ -854,6 +1402,9 @@ export function isTodoTool(toolName: string): boolean {
 		'update_todo',
 		'delete_todo',
 		'create_tag',
+		'delete_tag',
+		'rename_tag',
+		'merge_tags',
 		'log_diary',
 		'update_diary',
 		'delete_diary'

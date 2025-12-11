@@ -358,3 +358,41 @@ export async function deleteCalendarEvent(
 		throw new Error(`Failed to delete event: ${error}`);
 	}
 }
+
+/**
+ * Get a single calendar event by ID
+ * Returns null if event doesn't exist (404) or is cancelled/deleted
+ */
+export async function getCalendarEvent(
+	accessToken: string,
+	calendarId: string,
+	eventId: string
+): Promise<CalendarEvent | null> {
+	const response = await fetch(
+		`${CALENDAR_API_BASE}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
+		{
+			headers: {
+				Authorization: `Bearer ${accessToken}`
+			}
+		}
+	);
+
+	// 404 = never existed, 410 = already deleted
+	if (response.status === 404 || response.status === 410) {
+		return null;
+	}
+
+	if (!response.ok) {
+		const error = await response.text();
+		throw new Error(`Failed to get event: ${error}`);
+	}
+
+	const event = await response.json();
+
+	// Google Calendar returns deleted events with status: "cancelled"
+	if (event.status === 'cancelled') {
+		return null;
+	}
+
+	return event;
+}
