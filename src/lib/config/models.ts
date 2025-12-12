@@ -16,15 +16,3 @@ export const DEFAULT_MODEL = 'claude-haiku-4-5-20251001' as const;
 /** Default embedding model for vector search - Voyage AI v3 (1024 dimensions) */
 export const EMBEDDING_MODEL = 'voyage-3' as const;
 
-// ============================================================================
-// DEPRECATED - Kept for backward compatibility during migration
-// ============================================================================
-
-/** @deprecated Use DEFAULT_MODEL instead */
-export const DEFAULT_CHAT_MODEL = DEFAULT_MODEL;
-
-/** @deprecated Use DEFAULT_MODEL instead */
-export const DEFAULT_READER_MODEL = DEFAULT_MODEL;
-
-/** @deprecated Use DEFAULT_MODEL instead */
-export const DEFAULT_WORK_MODEL = DEFAULT_MODEL;

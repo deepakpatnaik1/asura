@@ -76,7 +76,7 @@
 
 	<!-- Main content -->
 	<div class="main-content">
-		<ErrorBoundary mode="chat">
+		<ErrorBoundary>
 			{@render children()}
 		</ErrorBoundary>
 	</div>

@@ -82,8 +82,9 @@ export function triggerBackgroundJobs(params: {
 	message: string;
 	aiResponse: string;
 	persona: string;
+	conversationModel: string;
 }): void {
-	const { superjournalId, userId, message, aiResponse, persona } = params;
+	const { superjournalId, userId, message, aiResponse, persona, conversationModel } = params;
 
 	setTimeout(() => {
 		runCompressJob({
@@ -91,7 +92,8 @@ export function triggerBackgroundJobs(params: {
 			userId,
 			userMessage: message,
 			aiResponse,
-			personaName: persona
+			personaName: persona,
+			conversationModel
 		});
 		runExtractTablesJob({
 			superjournalId,
@@ -111,7 +113,7 @@ export function triggerBackgroundJobs(params: {
  * @param params - The conversation parameters to save
  */
 export async function saveConversation(params: SaveConversationParams): Promise<void> {
-	const { userId, message, aiResponse, persona } = params;
+	const { userId, message, aiResponse, conversationModel, persona } = params;
 	const log = createLogger('ChatSave', userId);
 
 	try {
@@ -123,7 +125,8 @@ export async function saveConversation(params: SaveConversationParams): Promise<
 				userId,
 				message,
 				aiResponse,
-				persona
+				persona,
+				conversationModel
 			});
 		}
 	} catch (error) {
@@ -140,7 +143,8 @@ export async function saveConversation(params: SaveConversationParams): Promise<
 					userId,
 					message,
 					aiResponse,
-					persona
+					persona,
+					conversationModel
 				});
 			}
 		}, 'SuperjournalSave', userId);

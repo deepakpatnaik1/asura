@@ -20,7 +20,7 @@ export interface ModelParams {
 /**
  * Use case for model parameters
  */
-export type ModelUseCase = 'conversation' | 'compression' | 'reader';
+export type ModelUseCase = 'conversation' | 'compression';
 
 /**
  * Fetch model parameters from database for specific use case

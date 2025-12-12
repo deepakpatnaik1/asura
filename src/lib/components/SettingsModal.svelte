@@ -1,8 +1,9 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { Icon } from 'svelte-icons-pack';
-	import { LuX, LuFlame, LuDownload } from 'svelte-icons-pack/lu';
+	import { LuX, LuFlame, LuDownload, LuTrash2 } from 'svelte-icons-pack/lu';
 	import { DEFAULT_MODEL } from '$lib/config/models';
+	import { createConfirmation } from '$lib/composables/confirmation.svelte';
 	import NukeMenu from './NukeMenu.svelte';
 
 	// Props
@@ -42,6 +43,60 @@
 	let isLoading = $state(true);
 	let isExporting = $state(false);
 	let errorMessage = $state<string | null>(null);
+
+	// Delete confirmation state
+	const deleteConfirm = createConfirmation();
+
+	// Cleanup on unmount
+	onDestroy(() => {
+		deleteConfirm.cleanup();
+	});
+
+	// Delete a model permanently
+	async function handleDeleteModel(modelId: string) {
+		try {
+			const response = await fetch(`/api/models/${encodeURIComponent(modelId)}`, {
+				method: 'DELETE'
+			});
+
+			if (!response.ok) {
+				throw new Error('Failed to delete model');
+			}
+
+			// Remove from local state
+			models = models.filter(m => m.model_identifier !== modelId);
+		} catch (error) {
+			console.error('[SettingsModal] Delete failed:', error);
+			errorMessage = 'Failed to delete model.';
+		}
+	}
+
+	// Handle delete button click
+	function onDeleteClick(modelId: string, event: MouseEvent) {
+		event.stopPropagation();
+		if (deleteConfirm.isActive && deleteConfirm.targetId === modelId) {
+			deleteConfirm.cancel();
+		} else {
+			deleteConfirm.start(modelId, () => handleDeleteModel(modelId));
+		}
+	}
+
+	// Format model type for display
+	function formatModelType(type: string): string {
+		switch (type) {
+			case 'text_generation': return 'text';
+			case 'image_generation': return 'image';
+			case 'embedding': return 'embed';
+			default: return type;
+		}
+	}
+
+	// Format price for display
+	function formatPrice(price: number): string {
+		if (price === 0) return 'free';
+		if (price < 0.01) return '<0.01';
+		return price.toFixed(2);
+	}
 
 	// Fetch data on mount
 	onMount(async () => {
@@ -295,6 +350,36 @@
 			models: grouped[provider]
 		}));
 	});
+
+	// Group ALL models by provider (for All Models list)
+	const allModelsByProvider = $derived(() => {
+		// Group by provider
+		const grouped = models.reduce((acc, model) => {
+			const provider = model.provider;
+			if (!acc[provider]) acc[provider] = [];
+			acc[provider].push(model);
+			return acc;
+		}, {} as Record<string, Model[]>);
+
+		// Sort models within each provider alphabetically
+		for (const provider of Object.keys(grouped)) {
+			grouped[provider].sort((a, b) => a.model_name.localeCompare(b.model_name));
+		}
+
+		// Return providers in order: Anthropic first, then alphabetically
+		const providers = Object.keys(grouped).sort((a, b) => {
+			if (a === 'anthropic') return -1;
+			if (b === 'anthropic') return 1;
+			return a.localeCompare(b);
+		});
+
+		return providers.map(provider => ({
+			provider,
+			label: provider.charAt(0).toUpperCase() + provider.slice(1),
+			models: grouped[provider]
+		}));
+	});
+
 </script>
 
 <svelte:document onkeydown={(e) => e.key === 'Escape' && open && onClose()} />
@@ -313,27 +398,13 @@
 			{#if isLoading}
 				<div class="loading-state">Loading settings...</div>
 			{:else}
-				<!-- Model Selection -->
-				<div class="settings-section">
-					<label for="default-model">Default LLM</label>
-					<select id="default-model" value={defaultModel} onchange={handleDefaultModelChange}>
-						{#each modelsByProvider() as group}
-							<optgroup label={group.label}>
-								{#each group.models as model}
-									<option value={model.model_identifier}>
-										{model.model_name}
-									</option>
-								{/each}
-							</optgroup>
-						{/each}
-					</select>
-				</div>
-
-				<!-- Two Column Box -->
-				<div class="placeholder-box">
-					<div class="two-column-row">
-						<div class="column">
-							<div class="settings-section inner">
+				<!-- Two Column Grid -->
+				<div class="settings-grid">
+					<div class="column-left">
+						<!-- Personas Section -->
+						<div class="section-group">
+							<h3 class="section-heading">Personas</h3>
+							<div class="dropdown-row">
 								<label for="gunnar-select">Gunnar</label>
 								<select id="gunnar-select" value={modelOverrides.gunnar} onchange={(e) => handleOverrideChange('gunnar', e)}>
 									{#each modelsByProvider() as group}
@@ -345,7 +416,7 @@
 									{/each}
 								</select>
 							</div>
-							<div class="settings-section inner">
+							<div class="dropdown-row">
 								<label for="kirby-select">Kirby</label>
 								<select id="kirby-select" value={modelOverrides.kirby} onchange={(e) => handleOverrideChange('kirby', e)}>
 									{#each modelsByProvider() as group}
@@ -357,7 +428,7 @@
 									{/each}
 								</select>
 							</div>
-							<div class="settings-section inner">
+							<div class="dropdown-row">
 								<label for="samara-select">Samara</label>
 								<select id="samara-select" value={modelOverrides.samara} onchange={(e) => handleOverrideChange('samara', e)}>
 									{#each modelsByProvider() as group}
@@ -369,7 +440,7 @@
 									{/each}
 								</select>
 							</div>
-							<div class="settings-section inner">
+							<div class="dropdown-row">
 								<label for="alicja-select">Alicja</label>
 								<select id="alicja-select" value={modelOverrides.alicja} onchange={(e) => handleOverrideChange('alicja', e)}>
 									{#each modelsByProvider() as group}
@@ -381,7 +452,7 @@
 									{/each}
 								</select>
 							</div>
-							<div class="settings-section inner">
+							<div class="dropdown-row">
 								<label for="eva-select">Eva</label>
 								<select id="eva-select" value={modelOverrides.eva} onchange={(e) => handleOverrideChange('eva', e)}>
 									{#each modelsByProvider() as group}
@@ -394,8 +465,11 @@
 								</select>
 							</div>
 						</div>
-						<div class="column">
-							<div class="settings-section inner">
+
+						<!-- Processes Section -->
+						<div class="section-group">
+							<h3 class="section-heading">Processes</h3>
+							<div class="dropdown-row">
 								<label for="embeddings-select">Embeddings</label>
 								<select id="embeddings-select" value={modelOverrides.embeddings} onchange={(e) => handleOverrideChange('embeddings', e)}>
 									{#each embeddingModelsByProvider() as group}
@@ -407,7 +481,7 @@
 									{/each}
 								</select>
 							</div>
-							<div class="settings-section inner">
+							<div class="dropdown-row">
 								<label for="image-gen-select">Image gen</label>
 								<select id="image-gen-select" value={modelOverrides.image_gen} onchange={(e) => handleOverrideChange('image_gen', e)}>
 									{#each imageModelsByProvider() as group}
@@ -419,7 +493,7 @@
 									{/each}
 								</select>
 							</div>
-							<div class="settings-section inner">
+							<div class="dropdown-row">
 								<label for="compression-select">Compression</label>
 								<select id="compression-select" value={modelOverrides.compression} onchange={(e) => handleOverrideChange('compression', e)}>
 									{#each modelsByProvider() as group}
@@ -430,6 +504,40 @@
 										</optgroup>
 									{/each}
 								</select>
+							</div>
+						</div>
+					</div>
+					<div class="column-right">
+						<!-- All Models Section -->
+						<div class="section-group">
+							<h3 class="section-heading">All Models</h3>
+							<div class="all-models-list">
+								{#each allModelsByProvider() as group}
+									<div class="provider-group">
+										<div class="provider-header">{group.label}</div>
+										{#each group.models as model}
+											<div class="model-row">
+												<span class="model-name">{model.model_name}</span>
+												<span class="model-type">{formatModelType(model.model_type)}</span>
+												<span class="model-price">${formatPrice(model.input_price_per_million)}</span>
+												<span class="model-price">${formatPrice(model.output_price_per_million)}</span>
+												<button
+													class="delete-btn"
+													class:confirming={deleteConfirm.isActive && deleteConfirm.targetId === model.model_identifier}
+													style:--progress={deleteConfirm.isActive && deleteConfirm.targetId === model.model_identifier ? `${deleteConfirm.progress}%` : '0%'}
+													onclick={(e) => onDeleteClick(model.model_identifier, e)}
+													title={deleteConfirm.isActive && deleteConfirm.targetId === model.model_identifier ? 'Click to cancel' : 'Delete model'}
+												>
+													{#if deleteConfirm.isActive && deleteConfirm.targetId === model.model_identifier}
+														<Icon src={LuX} size="12" />
+													{:else}
+														<Icon src={LuTrash2} size="12" />
+													{/if}
+												</button>
+											</div>
+										{/each}
+									</div>
+								{/each}
 							</div>
 						</div>
 					</div>
@@ -494,12 +602,91 @@
 		border: 1px solid hsl(var(--border));
 		border-radius: 4px;
 		padding: 20px;
-		width: 700px;
-		max-width: 90%;
+		width: 750px;
+		max-width: 95%;
 		max-height: 80vh;
 		overflow-y: auto;
 		font-family: "iA Writer Quattro V", system-ui, -apple-system, sans-serif;
 		font-size: 8pt;
+	}
+
+	.settings-grid {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 40px;
+	}
+
+	.column-left,
+	.column-right {
+		min-width: 0;
+	}
+
+	.section-group {
+		margin-bottom: 20px;
+	}
+
+	.section-group:last-child {
+		margin-bottom: 0;
+	}
+
+	.section-heading {
+		font-size: 1.17em;
+		font-weight: 400;
+		color: hsl(var(--muted-foreground));
+		margin: 0 0 8px 12px;
+		padding-bottom: 4px;
+		border-bottom: 1px solid hsl(var(--border));
+	}
+
+	.dropdown-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-left: 24px;
+		margin-bottom: 6px;
+	}
+
+	.dropdown-row:last-child {
+		margin-bottom: 0;
+	}
+
+	.dropdown-row label {
+		font-size: 8pt;
+		font-weight: 400;
+		color: hsl(var(--muted-foreground));
+	}
+
+	.dropdown-row select {
+		width: 150px;
+		padding: 3px 20px 3px 6px;
+		background: #000;
+		background-image: url("data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 12 12' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M3 5L6 8L9 5' stroke='%23666' stroke-width='1' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+		background-repeat: no-repeat;
+		background-position: right 6px center;
+		border: 1px solid hsl(var(--border));
+		border-radius: 0;
+		color: hsl(var(--foreground));
+		font-family: inherit;
+		font-size: 8pt;
+		cursor: pointer;
+		appearance: none;
+	}
+
+	.dropdown-row select:focus {
+		outline: none;
+		border-color: hsl(var(--border));
+	}
+
+	.dropdown-row select optgroup {
+		font-weight: 600;
+		font-style: normal;
+		color: hsl(var(--muted-foreground));
+		background: hsl(var(--background));
+	}
+
+	.dropdown-row select option {
+		font-weight: 400;
+		padding-left: 8px;
 	}
 
 	.two-column-row {
@@ -559,12 +746,10 @@
 		justify-content: space-between;
 		align-items: center;
 		margin-bottom: 20px;
-		padding-bottom: 12px;
-		border-bottom: 1px solid hsl(var(--border));
 	}
 
 	.modal-header h2 {
-		font-size: 8pt;
+		font-size: 2em;
 		font-weight: 400;
 		color: hsl(var(--foreground));
 		margin: 0;
@@ -672,5 +857,134 @@
 	.nuke-wrapper {
 		position: relative;
 		margin-left: auto;
+	}
+
+	.top-row {
+		display: flex;
+		justify-content: space-between;
+		margin-bottom: 24px;
+	}
+
+	.top-row .settings-section:last-child {
+		margin-left: 0;
+		margin-right: 12px;
+	}
+
+	/* All Models Section */
+	.all-models-section {
+		width: 400px;
+		flex-shrink: 0;
+	}
+
+	.all-models-section label {
+		display: block;
+		font-weight: 400;
+		color: hsl(var(--muted-foreground));
+		font-size: 8pt;
+		margin-bottom: 8px;
+		margin-left: 13px;
+	}
+
+	.all-models-list {
+		max-height: 280px;
+		overflow-y: auto;
+		border: 1px solid hsl(var(--border));
+		background: #000;
+		margin-left: 24px;
+	}
+
+	.provider-group {
+		border-bottom: 1px solid hsl(var(--border) / 0.3);
+	}
+
+	.provider-group:last-child {
+		border-bottom: none;
+	}
+
+	.provider-header {
+		font-weight: 600;
+		font-size: 8pt;
+		color: hsl(var(--muted-foreground));
+		padding: 4px 8px;
+		background: hsl(var(--accent) / 0.3);
+	}
+
+	.model-row {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 3px 8px 3px 16px;
+		transition: background 0.15s;
+	}
+
+	.model-row:hover {
+		background: hsl(var(--accent) / 0.5);
+	}
+
+	.model-name {
+		flex: 1;
+		min-width: 0;
+		font-size: 8pt;
+		color: hsl(var(--foreground));
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.model-type {
+		flex-shrink: 0;
+		width: 40px;
+		font-size: 8pt;
+		color: hsl(var(--muted-foreground));
+		text-align: center;
+	}
+
+	.model-price {
+		flex-shrink: 0;
+		width: 45px;
+		font-size: 8pt;
+		color: hsl(var(--muted-foreground));
+		text-align: right;
+	}
+
+	.model-row .delete-btn {
+		flex-shrink: 0;
+		width: 22px;
+		height: 22px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: transparent;
+		border: none;
+		color: hsl(var(--muted-foreground));
+		cursor: pointer;
+		transition: all 0.2s ease;
+		opacity: 0;
+		position: relative;
+	}
+
+	.model-row:hover .delete-btn {
+		opacity: 1;
+	}
+
+	.model-row .delete-btn:hover {
+		color: rgb(239, 68, 68);
+	}
+
+	.model-row .delete-btn.confirming {
+		opacity: 1;
+		color: rgb(239, 68, 68);
+	}
+
+	.model-row .delete-btn.confirming::before {
+		content: '';
+		position: absolute;
+		inset: 0;
+		border-radius: 3px;
+		background: linear-gradient(
+			to right,
+			rgba(239, 68, 68, 0.3) var(--progress, 0%),
+			transparent var(--progress, 0%)
+		);
 	}
 </style>

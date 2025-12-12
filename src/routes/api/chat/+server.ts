@@ -17,9 +17,13 @@ import {
 	converseStreamFireworks,
 	converseStreamOpenRouter,
 	converseStreamOpenAI,
+	converseStreamGoogle,
+	converseStreamTogether,
+	converseStreamGroq,
+	converseStreamReplicate,
 	saveToSuperjournal,
 	triggerBackgroundJobs,
-	getProviderType,
+	getModelProvider,
 	assertProviderSupported,
 	type ChartImageData,
 	type ToolExecutor
@@ -176,8 +180,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			}
 		}
 
-		// 6. Validate provider support
-		const conversationProvider = getProviderType(conversationModel);
+		// 6. Look up provider from database and validate support
+		const conversationProvider = await getModelProvider(supabase, conversationModel);
 		assertProviderSupported(conversationProvider);
 
 		// 6. Build context and get model params
@@ -348,7 +352,15 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 								? converseStreamOpenRouter(streamParams)
 								: conversationProvider === 'openai'
 									? converseStreamOpenAI(streamParams)
-									: converseStream(streamParams);
+									: conversationProvider === 'google'
+										? converseStreamGoogle(streamParams)
+										: conversationProvider === 'together'
+											? converseStreamTogether(streamParams)
+											: conversationProvider === 'groq'
+												? converseStreamGroq(streamParams)
+												: conversationProvider === 'replicate'
+													? converseStreamReplicate(streamParams)
+													: converseStream(streamParams);
 
 					let result;
 					while (true) {
@@ -400,7 +412,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 							userId,
 							message,
 							aiResponse,
-							persona
+							persona,
+							conversationModel
 						});
 					}
 				} catch (error) {

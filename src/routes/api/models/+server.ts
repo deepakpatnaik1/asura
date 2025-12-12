@@ -7,13 +7,12 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 	const auth = await requireAuth(safeGetSession);
 	if (!auth.success) return auth.error;
 
-	// 2. FETCH ACTIVE MODELS
+	// 2. FETCH ALL MODELS
 	const { data, error } = await supabase
 		.from('models')
 		.select(
 			'model_identifier, model_name, provider, model_type, context_window, input_price_per_million, output_price_per_million'
 		)
-		.eq('is_active', true)
 		.order('model_type', { ascending: true })
 		.order('provider', { ascending: true })
 		.order('model_name', { ascending: true });
@@ -22,9 +21,5 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 		return json({ error: error.message }, { status: 500 });
 	}
 
-	return json(data || [], {
-		headers: {
-			'Cache-Control': 'private, max-age=300, stale-while-revalidate=60' // 5 min cache
-		}
-	});
+	return json(data || []);
 };

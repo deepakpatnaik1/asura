@@ -326,22 +326,3 @@ export function isValidPersona(name: string): name is PersonaName {
 	return name in PERSONAS;
 }
 
-// ============================================================================
-// DEPRECATED - Backward compatibility for old mode-based code
-// Remove after Chunk 3 (Single Route) deletes /chat, /reader, /todo routes
-// ============================================================================
-
-/** @deprecated Use DEFAULT_PERSONA instead */
-export const DEFAULT_READER_PERSONA = 'samara' as const;
-
-/** @deprecated Use DEFAULT_PERSONA instead */
-export const DEFAULT_TODO_PERSONA = 'alicja' as const;
-
-/** @deprecated Modes are being removed - use persona directly */
-export const CHAT_PERSONAS = ['gunnar', 'kirby'] as const;
-
-/** @deprecated Modes are being removed - use persona directly */
-export const READER_PERSONAS = ['samara'] as const;
-
-/** @deprecated Modes are being removed - use persona directly */
-export const TODO_PERSONAS = ['alicja'] as const;

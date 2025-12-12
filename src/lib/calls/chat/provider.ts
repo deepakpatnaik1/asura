@@ -1,13 +1,14 @@
 /**
  * Model Provider Detection & Tool Conversion
  *
- * Utilities for detecting the provider type from a model identifier,
- * and converting tool schemas between Anthropic and OpenAI formats.
+ * Utilities for looking up provider from database and converting
+ * tool schemas between Anthropic and OpenAI formats.
  */
 
 import type Anthropic from '@anthropic-ai/sdk';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
-export type ProviderType = 'anthropic' | 'openai' | 'fireworks' | 'openrouter';
+export type ProviderType = 'anthropic' | 'openai' | 'google' | 'fireworks' | 'openrouter' | 'together' | 'groq' | 'replicate' | 'fal';
 
 /**
  * OpenAI-compatible tool format (used by Fireworks, OpenRouter)
@@ -66,35 +67,28 @@ export function convertToolsToOpenAI(anthropicTools: Anthropic.Tool[]): OpenAITo
 }
 
 /**
- * Detect the provider type from a model identifier.
+ * Look up the provider for a model from the database.
  *
+ * @param supabase - Supabase client
  * @param modelIdentifier - The model identifier string
- * @returns The provider type
- * @throws Error if the provider cannot be determined
- *
- * @example
- * getProviderType('claude-3-opus-20240229') // 'anthropic'
- * getProviderType('gpt-4-turbo') // 'openai'
- * getProviderType('accounts/fireworks/models/hermes-2-pro-mistral-7b') // 'fireworks'
- * getProviderType('accounts/sentientfoundation-serverless/models/dobby-mini-unhinged-plus-llama-3-1-8b') // 'fireworks'
- * getProviderType('gryphe/mythomax-l2-13b') // 'openrouter'
+ * @returns The provider type from the models table
+ * @throws Error if the model is not found in the database
  */
-export function getProviderType(modelIdentifier: string): ProviderType {
-	if (modelIdentifier.startsWith('claude-')) {
-		return 'anthropic';
+export async function getModelProvider(
+	supabase: SupabaseClient,
+	modelIdentifier: string
+): Promise<ProviderType> {
+	const { data, error } = await supabase
+		.from('models')
+		.select('provider')
+		.eq('model_identifier', modelIdentifier)
+		.single();
+
+	if (error || !data) {
+		throw new Error(`Model not found in database: ${modelIdentifier}`);
 	}
-	if (modelIdentifier.startsWith('gpt-') || modelIdentifier.startsWith('o1-')) {
-		return 'openai';
-	}
-	// Fireworks uses accounts/xxx/models/yyy format (various account prefixes)
-	if (modelIdentifier.startsWith('accounts/')) {
-		return 'fireworks';
-	}
-	// OpenRouter uses format: provider/model-name (contains / but not accounts/)
-	if (modelIdentifier.includes('/')) {
-		return 'openrouter';
-	}
-	throw new Error(`Unknown model provider for identifier: ${modelIdentifier}`);
+
+	return data.provider as ProviderType;
 }
 
 /**
@@ -104,7 +98,16 @@ export function getProviderType(modelIdentifier: string): ProviderType {
  * @returns True if the provider is supported
  */
 export function isProviderSupported(provider: ProviderType): boolean {
-	return provider === 'anthropic' || provider === 'fireworks' || provider === 'openrouter';
+	return (
+		provider === 'anthropic' ||
+		provider === 'openai' ||
+		provider === 'google' ||
+		provider === 'fireworks' ||
+		provider === 'openrouter' ||
+		provider === 'together' ||
+		provider === 'groq' ||
+		provider === 'replicate'
+	);
 }
 
 /**
@@ -115,6 +118,6 @@ export function isProviderSupported(provider: ProviderType): boolean {
  */
 export function assertProviderSupported(provider: ProviderType): void {
 	if (!isProviderSupported(provider)) {
-		throw new Error(`Provider '${provider}' not implemented. Only 'anthropic' is currently supported.`);
+		throw new Error(`Provider '${provider}' not implemented.`);
 	}
 }

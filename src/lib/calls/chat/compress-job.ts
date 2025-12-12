@@ -9,12 +9,12 @@ import { VoyageAIClient } from 'voyageai';
 import { VOYAGE_API_KEY, SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
 import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { DEFAULT_CHAT_MODEL, EMBEDDING_MODEL } from '$lib/config/models';
+import { EMBEDDING_MODEL } from '$lib/config/models';
 import { getModelParams } from '$lib/config/model-params';
 import { personaUsesCompression } from '$lib/config/personas';
 import { createLogger } from '$lib/api/logger';
 import { compress } from './compress';
-import { getProviderType, assertProviderSupported } from './provider';
+import { getModelProvider } from './provider';
 import { scheduleRetries } from './retry';
 
 // Lazy-initialized clients
@@ -41,6 +41,7 @@ export interface CompressJobParams {
 	userMessage: string;
 	aiResponse: string;
 	personaName: string;
+	conversationModel: string;
 }
 
 /**
@@ -50,7 +51,7 @@ export interface CompressJobParams {
  * @param params - The compression job parameters
  */
 export async function runCompressJob(params: CompressJobParams): Promise<void> {
-	const { superjournalId, userId, userMessage, aiResponse, personaName } = params;
+	const { superjournalId, userId, userMessage, aiResponse, personaName, conversationModel } = params;
 	const log = createLogger('Compression', userId);
 	const supabase = getSupabaseServiceRole();
 
@@ -61,35 +62,8 @@ export async function runCompressJob(params: CompressJobParams): Promise<void> {
 			return;
 		}
 
-		// Get model: check override first, then default
-		const [settingsResult, overrideResult] = await Promise.all([
-			supabase.from('user_settings').select('default_model').eq('user_id', userId).single(),
-			supabase.from('model_overrides').select('model').eq('user_id', userId).eq('persona', personaName).single()
-		]);
-
-		const compressionModel = overrideResult.data?.model || settingsResult.data?.default_model || DEFAULT_CHAT_MODEL;
-
-		// Fetch compression parameters from database
-		const compressionParams = await getModelParams(compressionModel, 'compression');
-
-		log.info('Starting compression', { superjournalId, model: compressionModel });
-
-		const compressionProvider = getProviderType(compressionModel);
-		assertProviderSupported(compressionProvider);
-
-		// Call 2: Artisan Cut compression
-		const compressionJson = await compress({
-			userMessage,
-			aiResponse,
-			personaName,
-			model: compressionModel,
-			maxTokens: compressionParams.max_tokens,
-			temperature: compressionParams.temperature
-		});
-
-		log.debug('Compression output', {
-			salienceScore: compressionJson.salience_score
-		});
+		// Look up provider from database
+		const provider = await getModelProvider(supabase, conversationModel);
 
 		// Check if placeholder journal row exists (created by star button)
 		const { data: existingJournal } = await supabase
@@ -100,58 +74,113 @@ export async function runCompressJob(params: CompressJobParams): Promise<void> {
 			.single();
 
 		let journalId: string;
+		let embeddingText: string;
 
-		if (existingJournal) {
-			// Update existing row (preserve is_starred from placeholder)
-			const { error: updateError } = await supabase
-				.from('journal')
-				.update({
-					persona_name: compressionJson.persona_name || personaName,
-					boss_essence: compressionJson.boss_essence || userMessage,
-					persona_essence: compressionJson.persona_essence || aiResponse,
-					decision_arc_summary: compressionJson.decision_arc_summary || 'No arc generated',
-					salience_score: compressionJson.salience_score || 5
-				})
-				.eq('id', existingJournal.id);
+		if (provider === 'anthropic') {
+			// Anthropic: Run full compression with Claude
+			log.info('Starting compression (Anthropic)', { superjournalId, model: conversationModel });
 
-			if (updateError) {
-				throw new Error(`Journal update failed: ${updateError.message}`);
+			const compressionParams = await getModelParams(conversationModel, 'compression');
+
+			const compressionJson = await compress({
+				userMessage,
+				aiResponse,
+				personaName,
+				model: conversationModel,
+				maxTokens: compressionParams.max_tokens,
+				temperature: compressionParams.temperature
+			});
+
+			log.debug('Compression output', { salienceScore: compressionJson.salience_score });
+
+			const journalData = {
+				persona_name: compressionJson.persona_name || personaName,
+				boss_essence: compressionJson.boss_essence || userMessage,
+				persona_essence: compressionJson.persona_essence || aiResponse,
+				decision_arc_summary: compressionJson.decision_arc_summary || 'No arc generated',
+				salience_score: compressionJson.salience_score || 5
+			};
+
+			if (existingJournal) {
+				const { error: updateError } = await supabase
+					.from('journal')
+					.update(journalData)
+					.eq('id', existingJournal.id);
+
+				if (updateError) throw new Error(`Journal update failed: ${updateError.message}`);
+				journalId = existingJournal.id;
+				log.info('Updated existing journal', { journalId, wasStarred: existingJournal.is_starred });
+			} else {
+				const { data: inserted, error: insertError } = await supabase
+					.from('journal')
+					.insert({
+						superjournal_id: superjournalId,
+						user_id: userId,
+						...journalData,
+						is_starred: false,
+						file_name: null,
+						file_type: null,
+						embedding: null
+					})
+					.select('id')
+					.single();
+
+				if (insertError) throw new Error(`Journal insert failed: ${insertError.message}`);
+				journalId = inserted.id;
+				log.info('Saved to journal', { journalId });
 			}
-			journalId = existingJournal.id;
-			log.info('Updated existing journal', { journalId, wasStarred: existingJournal.is_starred });
+
+			embeddingText = compressionJson.decision_arc_summary || 'No arc generated';
 		} else {
-			// Insert new row (journal is chat-only, reader mode skipped above)
-			const { data: journalData, error: journalError } = await supabase
-				.from('journal')
-				.insert({
-					superjournal_id: superjournalId,
-					user_id: userId,
-					persona_name: compressionJson.persona_name || personaName,
-					boss_essence: compressionJson.boss_essence || userMessage,
-					persona_essence: compressionJson.persona_essence || aiResponse,
-					decision_arc_summary: compressionJson.decision_arc_summary || 'No arc generated',
-					salience_score: compressionJson.salience_score || 5,
-					is_starred: false,
-					file_name: null,
-					file_type: null,
-					embedding: null
-				})
-				.select('id')
-				.single();
+			// Non-Anthropic: Store verbatim (no compression LLM call)
+			log.info('Storing verbatim (non-Anthropic)', { superjournalId, model: conversationModel, provider });
 
-			if (journalError) {
-				throw new Error(`Journal insert failed: ${journalError.message}`);
+			const journalData = {
+				persona_name: personaName,
+				boss_essence: userMessage,
+				persona_essence: aiResponse,
+				decision_arc_summary: null, // No compression
+				salience_score: 5 // Default
+			};
+
+			if (existingJournal) {
+				const { error: updateError } = await supabase
+					.from('journal')
+					.update(journalData)
+					.eq('id', existingJournal.id);
+
+				if (updateError) throw new Error(`Journal update failed: ${updateError.message}`);
+				journalId = existingJournal.id;
+				log.info('Updated existing journal (verbatim)', { journalId });
+			} else {
+				const { data: inserted, error: insertError } = await supabase
+					.from('journal')
+					.insert({
+						superjournal_id: superjournalId,
+						user_id: userId,
+						...journalData,
+						is_starred: false,
+						file_name: null,
+						file_type: null,
+						embedding: null
+					})
+					.select('id')
+					.single();
+
+				if (insertError) throw new Error(`Journal insert failed: ${insertError.message}`);
+				journalId = inserted.id;
+				log.info('Saved to journal (verbatim)', { journalId });
 			}
-			journalId = journalData.id;
-			log.info('Saved to journal', { journalId });
+
+			// For embedding, concatenate user message and AI response
+			embeddingText = `${userMessage}\n\n${aiResponse}`;
 		}
 
-		// Generate embedding for decision_arc_summary
-		const decisionArc = compressionJson.decision_arc_summary || 'No arc generated';
-		log.debug('Generating embedding', { arcLength: decisionArc.length });
+		// Generate embedding (works for both paths)
+		log.debug('Generating embedding', { textLength: embeddingText.length });
 
 		const embeddingResponse = await getVoyage().embed({
-			input: decisionArc,
+			input: embeddingText,
 			model: EMBEDDING_MODEL
 		});
 
@@ -160,7 +189,6 @@ export async function runCompressJob(params: CompressJobParams): Promise<void> {
 			throw new Error('No embedding data returned from Voyage');
 		}
 
-		// Update Journal row with embedding
 		const { error: embeddingError } = await supabase
 			.from('journal')
 			.update({ embedding: JSON.stringify(embedding) })

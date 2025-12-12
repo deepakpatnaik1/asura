@@ -11,8 +11,8 @@ import { FIREWORKS_API_KEY } from '$env/static/private';
 import { requireAuth } from '$lib/api/require-auth';
 import { parseRequestJson } from '$lib/api/parse-json';
 import { createMessage } from '$lib/api/anthropic-client';
-import { getProviderType, assertProviderSupported } from '$lib/calls/chat/provider';
-import { DEFAULT_CHAT_MODEL } from '$lib/config/models';
+import { getModelProvider, assertProviderSupported } from '$lib/calls/chat/provider';
+import { DEFAULT_MODEL } from '$lib/config/models';
 import { DEFAULT_PERSONA } from '$lib/config/personas';
 import { FILE_ARTISAN_CUT_PROMPT } from '$lib/prompts/file-artisan-cut';
 import { databaseError, validationError, internalError } from '$lib/api/errors';
@@ -116,7 +116,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			.single();
 
 		// Use file_artisan_model if set, otherwise fall back to default_model
-		const model = settings?.file_artisan_model || settings?.default_model || DEFAULT_CHAT_MODEL;
+		const model = settings?.file_artisan_model || settings?.default_model || DEFAULT_MODEL;
 		const persona = requestPersona || settings?.selected_persona || DEFAULT_PERSONA;
 
 		// Detect if content is HTML or already markdown
@@ -140,8 +140,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 
 		if (persistent) {
 			// Persistent: Call AI to generate title + artisan cut
-			// Route to correct provider based on model identifier
-			const provider = getProviderType(model);
+			// Look up provider from database
+			const provider = await getModelProvider(supabase, model);
 			assertProviderSupported(provider);
 
 			let responseText: string;

@@ -12,8 +12,6 @@
 		sendingText?: string;
 		/** Whether currently sending */
 		isSending?: boolean;
-		/** Mode for accent color */
-		mode?: 'chat' | 'reader';
 		/** Send handler */
 		onSend: () => void;
 	}
@@ -25,7 +23,6 @@
 		sendText = 'Send',
 		sendingText = 'Sending...',
 		isSending = false,
-		mode = 'chat',
 		onSend
 	}: Props = $props();
 
@@ -52,7 +49,7 @@
 	}
 </script>
 
-<div class="input-bar" class:chat={mode === 'chat'} class:reader={mode === 'reader'}>
+<div class="input-bar">
 	<textarea
 		bind:this={textareaRef}
 		bind:value
@@ -115,31 +112,17 @@
 
 	.send-button {
 		background: transparent;
-		border: 1px solid;
+		border: 1px solid var(--boss-accent);
 		border-radius: 6px;
 		padding: 12px 24px;
 		font-weight: 500;
 		cursor: pointer;
 		transition: all 0.2s;
-	}
-
-	.chat .send-button {
 		color: var(--boss-accent);
-		border-color: var(--boss-accent);
 	}
 
-	.chat .send-button:hover:not(:disabled) {
+	.send-button:hover:not(:disabled) {
 		background: var(--boss-accent);
-		color: hsl(var(--background));
-	}
-
-	.reader .send-button {
-		color: var(--reader-accent);
-		border-color: var(--reader-accent);
-	}
-
-	.reader .send-button:hover:not(:disabled) {
-		background: var(--reader-accent);
 		color: hsl(var(--background));
 	}
 
