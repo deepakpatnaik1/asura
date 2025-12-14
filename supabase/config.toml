@@ -10,7 +10,7 @@ max_rows = 1000
 
 [db]
 port = 54322
-major_version = 15
+major_version = 17
 
 [studio]
 enabled = true
@@ -26,3 +26,9 @@ jwt_expiry = 3600
 enable_signup = true
 double_confirm_changes = true
 enable_confirmations = false
+
+[auth.external.google]
+enabled = true
+client_id = "***REMOVED***"
+secret = "***REMOVED***"
+redirect_uri = "http://localhost:54321/auth/v1/callback"
