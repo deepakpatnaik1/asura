@@ -108,15 +108,15 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 	}
 
 	try {
-		// Fetch user settings (default model + persona + file artisan model)
+		// Fetch user settings (default model + persona + file compression model)
 		const { data: settings } = await supabase
 			.from('user_settings')
-			.select('default_model, selected_persona, file_artisan_model')
+			.select('default_model, selected_persona, model_compression')
 			.eq('user_id', userId)
 			.single();
 
-		// Use file_artisan_model if set, otherwise fall back to default_model
-		const model = settings?.file_artisan_model || settings?.default_model || DEFAULT_MODEL;
+		// Use model_compression if set, otherwise fall back to default_model
+		const model = settings?.model_compression || settings?.default_model || DEFAULT_MODEL;
 		const persona = requestPersona || settings?.selected_persona || DEFAULT_PERSONA;
 
 		// Detect if content is HTML or already markdown
