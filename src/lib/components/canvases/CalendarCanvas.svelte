@@ -302,7 +302,7 @@
 	let todosLoading = $state(false);
 
 	// Group todos into parent-child hierarchy
-	const groupedTodos = $derived(() => {
+	const groupedTodos = $derived.by(() => {
 		const parentTodos: TodoWithChildren[] = [];
 		const childrenByParent = new Map<string, Todo[]>();
 
@@ -568,7 +568,7 @@
 				</div>
 				<div class="pane-content">
 					<div class="todo-list">
-						{#each groupedTodos() as todo (todo.id)}
+						{#each groupedTodos as todo (todo.id)}
 							<div class="todo-group">
 								<div class="todo-item" class:completed={todo.status === 'completed'}>
 									<div class="todo-content">
