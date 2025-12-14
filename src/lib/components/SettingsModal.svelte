@@ -26,7 +26,7 @@
 	}
 
 	// All override keys (personas + processors)
-	const OVERRIDE_KEYS = ['gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya', 'embeddings', 'image_gen', 'captioning', 'image_edit', 'tool_calling', 'audio_gen', 'video_gen', 'compression'] as const;
+	const OVERRIDE_KEYS = ['gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya', 'embeddings', 'image_gen', 'captioning', 'image_edit', 'tool_calling', 'audio_gen', 'video_gen', 'compression', 'chat_compression'] as const;
 	type OverrideKey = typeof OVERRIDE_KEYS[number];
 
 	let models = $state<Model[]>([]);
@@ -45,7 +45,8 @@
 		tool_calling: '',
 		audio_gen: '',
 		video_gen: '',
-		compression: ''
+		compression: '',
+		chat_compression: ''
 	});
 	let isLoading = $state(true);
 	let isExporting = $state(false);
@@ -126,10 +127,31 @@
 			models = await modelsRes.json();
 			const settings = await settingsRes.json();
 
+			console.log('[SettingsModal] Settings received:', settings);
+
 			defaultModel = settings.default_model || DEFAULT_MODEL;
 
 			// Persona keys use defaultModel as fallback (they're all text models)
 			const personaKeys = ['gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya'] as const;
+
+			// Build new overrides object to ensure reactivity
+			const newOverrides: Record<OverrideKey, string> = {
+				gunnar: '',
+				kirby: '',
+				samara: '',
+				alicja: '',
+				eva: '',
+				ananya: '',
+				embeddings: '',
+				image_gen: '',
+				captioning: '',
+				image_edit: '',
+				tool_calling: '',
+				audio_gen: '',
+				video_gen: '',
+				compression: '',
+				chat_compression: ''
+			};
 
 			// Load model overrides from settings
 			for (const key of OVERRIDE_KEYS) {
@@ -137,16 +159,18 @@
 				const savedValue = settings[columnName];
 
 				if (savedValue) {
-					// Use saved value if it exists
-					modelOverrides[key] = savedValue;
+					newOverrides[key] = savedValue;
 				} else if (personaKeys.includes(key as typeof personaKeys[number])) {
-					// Personas fallback to defaultModel (text generation)
-					modelOverrides[key] = defaultModel;
+					newOverrides[key] = defaultModel;
 				} else {
-					// Process types: leave empty if not set (dropdown will show blank)
-					modelOverrides[key] = '';
+					newOverrides[key] = '';
 				}
 			}
+
+			console.log('[SettingsModal] Overrides built:', newOverrides);
+
+			// Replace entire object to ensure reactivity
+			modelOverrides = newOverrides;
 
 			isLoading = false;
 		} catch (error) {
@@ -253,8 +277,10 @@
 	}
 
 	// Group text generation models by provider, sorted alphabetically within each group
-	const modelsByProvider = $derived(() => {
+	const modelsByProvider = $derived.by(() => {
+		console.log('[DEBUG] modelsByProvider computing, models count:', models.length);
 		const textModels = models.filter((m) => m.model_type === 'text_generation');
+		console.log('[DEBUG] text models found:', textModels.length);
 
 		// Group by provider
 		const grouped = textModels.reduce((acc, model) => {
@@ -284,7 +310,7 @@
 	});
 
 	// Group image generation models by provider (for Image gen dropdown)
-	const imageModelsByProvider = $derived(() => {
+	const imageModelsByProvider = $derived.by(() => {
 		const imageModels = models.filter((m) => m.model_type === 'image_generation');
 
 		// Group by provider
@@ -315,8 +341,10 @@
 	});
 
 	// Group embedding models by provider (for Embeddings dropdown)
-	const embeddingModelsByProvider = $derived(() => {
+	const embeddingModelsByProvider = $derived.by(() => {
+		console.log('[DEBUG] embeddingModelsByProvider computing, models count:', models.length);
 		const embeddingModels = models.filter((m) => m.model_type === 'embedding');
+		console.log('[DEBUG] embedding models found:', embeddingModels.length, embeddingModels.map(m => m.model_name));
 
 		// Group by provider
 		const grouped = embeddingModels.reduce((acc, model) => {
@@ -346,7 +374,7 @@
 	});
 
 	// Group captioning models by provider (for Captioning dropdown)
-	const captioningModelsByProvider = $derived(() => {
+	const captioningModelsByProvider = $derived.by(() => {
 		const captioningModels = models.filter((m) => m.model_type === 'captioning');
 
 		const grouped = captioningModels.reduce((acc, model) => {
@@ -374,7 +402,7 @@
 	});
 
 	// Group image edit models by provider (for Image Edit dropdown)
-	const imageEditModelsByProvider = $derived(() => {
+	const imageEditModelsByProvider = $derived.by(() => {
 		const imageEditModels = models.filter((m) => m.model_type === 'image_edit');
 
 		const grouped = imageEditModels.reduce((acc, model) => {
@@ -402,7 +430,7 @@
 	});
 
 	// Group tool calling models by provider (for Tool calling dropdown)
-	const toolCallingModelsByProvider = $derived(() => {
+	const toolCallingModelsByProvider = $derived.by(() => {
 		const toolCallingModels = models.filter((m) => m.model_type === 'tool_calling');
 
 		const grouped = toolCallingModels.reduce((acc, model) => {
@@ -430,7 +458,7 @@
 	});
 
 	// Group audio generation models by provider (for Audio gen dropdown)
-	const audioModelsByProvider = $derived(() => {
+	const audioModelsByProvider = $derived.by(() => {
 		const audioModels = models.filter((m) => m.model_type === 'audio_generation');
 
 		const grouped = audioModels.reduce((acc, model) => {
@@ -454,7 +482,7 @@
 	});
 
 	// Group video generation models by provider (for Video gen dropdown)
-	const videoModelsByProvider = $derived(() => {
+	const videoModelsByProvider = $derived.by(() => {
 		const videoModels = models.filter((m) => m.model_type === 'video_generation');
 
 		const grouped = videoModels.reduce((acc, model) => {
@@ -478,7 +506,7 @@
 	});
 
 	// Group ALL models by provider (for All Models list)
-	const allModelsByProvider = $derived(() => {
+	const allModelsByProvider = $derived.by(() => {
 		// Group by provider
 		const grouped = models.reduce((acc, model) => {
 			const provider = model.provider;
@@ -533,7 +561,7 @@
 							<div class="dropdown-row">
 								<label for="gunnar-select">Gunnar</label>
 								<select id="gunnar-select" value={modelOverrides.gunnar} onchange={(e) => handleOverrideChange('gunnar', e)}>
-									{#each modelsByProvider() as group}
+									{#each modelsByProvider as group}
 										<optgroup label={group.label}>
 											{#each group.models as model}
 												<option value={model.model_identifier}>{model.model_name}</option>
@@ -545,7 +573,7 @@
 							<div class="dropdown-row">
 								<label for="kirby-select">Kirby</label>
 								<select id="kirby-select" value={modelOverrides.kirby} onchange={(e) => handleOverrideChange('kirby', e)}>
-									{#each modelsByProvider() as group}
+									{#each modelsByProvider as group}
 										<optgroup label={group.label}>
 											{#each group.models as model}
 												<option value={model.model_identifier}>{model.model_name}</option>
@@ -557,7 +585,7 @@
 							<div class="dropdown-row">
 								<label for="samara-select">Samara</label>
 								<select id="samara-select" value={modelOverrides.samara} onchange={(e) => handleOverrideChange('samara', e)}>
-									{#each modelsByProvider() as group}
+									{#each modelsByProvider as group}
 										<optgroup label={group.label}>
 											{#each group.models as model}
 												<option value={model.model_identifier}>{model.model_name}</option>
@@ -569,7 +597,7 @@
 							<div class="dropdown-row">
 								<label for="alicja-select">Alicja</label>
 								<select id="alicja-select" value={modelOverrides.alicja} onchange={(e) => handleOverrideChange('alicja', e)}>
-									{#each modelsByProvider() as group}
+									{#each modelsByProvider as group}
 										<optgroup label={group.label}>
 											{#each group.models as model}
 												<option value={model.model_identifier}>{model.model_name}</option>
@@ -581,7 +609,7 @@
 							<div class="dropdown-row">
 								<label for="eva-select">Eva</label>
 								<select id="eva-select" value={modelOverrides.eva} onchange={(e) => handleOverrideChange('eva', e)}>
-									{#each modelsByProvider() as group}
+									{#each modelsByProvider as group}
 										<optgroup label={group.label}>
 											{#each group.models as model}
 												<option value={model.model_identifier}>{model.model_name}</option>
@@ -593,7 +621,7 @@
 							<div class="dropdown-row">
 								<label for="ananya-select">Ananya</label>
 								<select id="ananya-select" value={modelOverrides.ananya} onchange={(e) => handleOverrideChange('ananya', e)}>
-									{#each modelsByProvider() as group}
+									{#each modelsByProvider as group}
 										<optgroup label={group.label}>
 											{#each group.models as model}
 												<option value={model.model_identifier}>{model.model_name}</option>
@@ -610,7 +638,7 @@
 							<div class="dropdown-row">
 								<label for="embeddings-select">Embeddings</label>
 								<select id="embeddings-select" value={modelOverrides.embeddings} onchange={(e) => handleOverrideChange('embeddings', e)}>
-									{#each embeddingModelsByProvider() as group}
+									{#each embeddingModelsByProvider as group}
 										<optgroup label={group.label}>
 											{#each group.models as model}
 												<option value={model.model_identifier}>{model.model_name}</option>
@@ -622,7 +650,7 @@
 							<div class="dropdown-row">
 								<label for="image-gen-select">Image gen</label>
 								<select id="image-gen-select" value={modelOverrides.image_gen} onchange={(e) => handleOverrideChange('image_gen', e)}>
-									{#each imageModelsByProvider() as group}
+									{#each imageModelsByProvider as group}
 										<optgroup label={group.label}>
 											{#each group.models as model}
 												<option value={model.model_identifier}>{model.model_name}</option>
@@ -634,7 +662,7 @@
 							<div class="dropdown-row">
 								<label for="captioning-select">Captioning</label>
 								<select id="captioning-select" value={modelOverrides.captioning} onchange={(e) => handleOverrideChange('captioning', e)}>
-									{#each captioningModelsByProvider() as group}
+									{#each captioningModelsByProvider as group}
 										<optgroup label={group.label}>
 											{#each group.models as model}
 												<option value={model.model_identifier}>{model.model_name}</option>
@@ -646,7 +674,7 @@
 							<div class="dropdown-row">
 								<label for="image-edit-select">Image edit</label>
 								<select id="image-edit-select" value={modelOverrides.image_edit} onchange={(e) => handleOverrideChange('image_edit', e)}>
-									{#each imageEditModelsByProvider() as group}
+									{#each imageEditModelsByProvider as group}
 										<optgroup label={group.label}>
 											{#each group.models as model}
 												<option value={model.model_identifier}>{model.model_name}</option>
@@ -658,7 +686,7 @@
 							<div class="dropdown-row">
 								<label for="tool-calling-select">Tool calling</label>
 								<select id="tool-calling-select" value={modelOverrides.tool_calling} onchange={(e) => handleOverrideChange('tool_calling', e)}>
-									{#each toolCallingModelsByProvider() as group}
+									{#each toolCallingModelsByProvider as group}
 										<optgroup label={group.label}>
 											{#each group.models as model}
 												<option value={model.model_identifier}>{model.model_name}</option>
@@ -670,7 +698,7 @@
 							<div class="dropdown-row">
 								<label for="audio-gen-select">Audio gen</label>
 								<select id="audio-gen-select" value={modelOverrides.audio_gen} onchange={(e) => handleOverrideChange('audio_gen', e)}>
-									{#each audioModelsByProvider() as group}
+									{#each audioModelsByProvider as group}
 										<optgroup label={group.label}>
 											{#each group.models as model}
 												<option value={model.model_identifier}>{model.model_name}</option>
@@ -682,7 +710,7 @@
 							<div class="dropdown-row">
 								<label for="video-gen-select">Video gen</label>
 								<select id="video-gen-select" value={modelOverrides.video_gen} onchange={(e) => handleOverrideChange('video_gen', e)}>
-									{#each videoModelsByProvider() as group}
+									{#each videoModelsByProvider as group}
 										<optgroup label={group.label}>
 											{#each group.models as model}
 												<option value={model.model_identifier}>{model.model_name}</option>
@@ -694,7 +722,19 @@
 							<div class="dropdown-row">
 								<label for="compression-select">File artisan cut</label>
 								<select id="compression-select" value={modelOverrides.compression} onchange={(e) => handleOverrideChange('compression', e)}>
-									{#each modelsByProvider() as group}
+									{#each modelsByProvider as group}
+										<optgroup label={group.label}>
+											{#each group.models as model}
+												<option value={model.model_identifier}>{model.model_name}</option>
+											{/each}
+										</optgroup>
+									{/each}
+								</select>
+							</div>
+							<div class="dropdown-row">
+								<label for="chat-compression-select">Chat artisan cut</label>
+								<select id="chat-compression-select" value={modelOverrides.chat_compression} onchange={(e) => handleOverrideChange('chat_compression', e)}>
+									{#each modelsByProvider as group}
 										<optgroup label={group.label}>
 											{#each group.models as model}
 												<option value={model.model_identifier}>{model.model_name}</option>
@@ -710,7 +750,7 @@
 						<div class="section-group">
 							<h3 class="section-heading">All Models</h3>
 							<div class="all-models-list">
-								{#each allModelsByProvider() as group}
+								{#each allModelsByProvider as group}
 									<div class="provider-group">
 										<div class="provider-header">{group.label}</div>
 										{#each group.models as model}
@@ -1105,7 +1145,7 @@
 	 */
 	.all-models-list {
 		--personas-count: 6;      /* Gunnar, Kirby, Samara, Alicja, Eva, Ananya */
-		--processes-count: 8;     /* Embeddings, Image gen, Captioning, Image edit, Tool calling, Audio gen, Video gen, Compression */
+		--processes-count: 9;     /* Embeddings, Image gen, Captioning, Image edit, Tool calling, Audio gen, Video gen, File artisan cut, Chat artisan cut */
 		--dropdown-height: 24px;
 		--dropdown-gap: 6px;
 		--section-gap: 51px;      /* 20px + 23px + 8px */

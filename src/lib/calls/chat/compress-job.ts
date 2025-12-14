@@ -3,6 +3,7 @@
  *
  * Compresses a conversation turn into the journal format with embeddings.
  * Runs asynchronously after the conversation is saved to superjournal.
+ * Uses dedicated compression model from user settings (default: Opus 4.5).
  */
 
 import { VoyageAIClient } from 'voyageai';
@@ -14,8 +15,10 @@ import { getModelParams } from '$lib/config/model-params';
 import { personaUsesCompression } from '$lib/config/personas';
 import { createLogger } from '$lib/api/logger';
 import { compress } from './compress';
-import { getModelCanCompress } from './provider';
 import { scheduleRetries } from './retry';
+
+// Default compression model (Opus 4.5)
+const DEFAULT_COMPRESSION_MODEL = 'claude-opus-4-5-20251101';
 
 // Lazy-initialized clients
 let voyage: VoyageAIClient | null = null;
@@ -56,14 +59,23 @@ export async function runCompressJob(params: CompressJobParams): Promise<void> {
 	const supabase = getSupabaseServiceRole();
 
 	const doCompression = async () => {
+		log.info('Compression job started', { superjournalId, personaName });
+
 		// Check if persona uses compression
 		if (!personaUsesCompression(personaName)) {
 			log.debug('Skipping compression for persona', { superjournalId, personaName });
 			return;
 		}
 
-		// Check if model can do compression
-		const canCompress = await getModelCanCompress(supabase, conversationModel);
+		// Get compression model from user settings
+		const { data: settings } = await supabase
+			.from('user_settings')
+			.select('model_chat_compression')
+			.eq('user_id', userId)
+			.single();
+
+		const compressionModel = settings?.model_chat_compression || DEFAULT_COMPRESSION_MODEL;
+		log.info('Using compression model', { compressionModel });
 
 		// Check if placeholder journal row exists (created by star button)
 		const { data: existingJournal } = await supabase
@@ -73,108 +85,62 @@ export async function runCompressJob(params: CompressJobParams): Promise<void> {
 			.eq('user_id', userId)
 			.single();
 
+		// Run Artisan Cut compression with dedicated model
+		log.info('Starting compression', { superjournalId, model: compressionModel });
+
+		const compressionParams = await getModelParams(compressionModel, 'compression');
+
+		const compressionJson = await compress({
+			userMessage,
+			aiResponse,
+			personaName,
+			model: compressionModel,
+			maxTokens: compressionParams.max_tokens,
+			temperature: compressionParams.temperature
+		});
+
+		log.debug('Compression output', { salienceScore: compressionJson.salience_score });
+
+		const journalData = {
+			persona_name: compressionJson.persona_name || personaName,
+			boss_essence: compressionJson.boss_essence || userMessage,
+			persona_essence: compressionJson.persona_essence || aiResponse,
+			decision_arc_summary: compressionJson.decision_arc_summary || 'No arc generated',
+			salience_score: compressionJson.salience_score || 5
+		};
+
 		let journalId: string;
-		let embeddingText: string;
 
-		if (canCompress) {
-			// Model can compress: Run full Artisan Cut compression
-			log.info('Starting compression', { superjournalId, model: conversationModel });
+		if (existingJournal) {
+			const { error: updateError } = await supabase
+				.from('journal')
+				.update(journalData)
+				.eq('id', existingJournal.id);
 
-			const compressionParams = await getModelParams(conversationModel, 'compression');
-
-			const compressionJson = await compress({
-				userMessage,
-				aiResponse,
-				personaName,
-				model: conversationModel,
-				maxTokens: compressionParams.max_tokens,
-				temperature: compressionParams.temperature
-			});
-
-			log.debug('Compression output', { salienceScore: compressionJson.salience_score });
-
-			const journalData = {
-				persona_name: compressionJson.persona_name || personaName,
-				boss_essence: compressionJson.boss_essence || userMessage,
-				persona_essence: compressionJson.persona_essence || aiResponse,
-				decision_arc_summary: compressionJson.decision_arc_summary || 'No arc generated',
-				salience_score: compressionJson.salience_score || 5
-			};
-
-			if (existingJournal) {
-				const { error: updateError } = await supabase
-					.from('journal')
-					.update(journalData)
-					.eq('id', existingJournal.id);
-
-				if (updateError) throw new Error(`Journal update failed: ${updateError.message}`);
-				journalId = existingJournal.id;
-				log.info('Updated existing journal', { journalId, wasStarred: existingJournal.is_starred });
-			} else {
-				const { data: inserted, error: insertError } = await supabase
-					.from('journal')
-					.insert({
-						superjournal_id: superjournalId,
-						user_id: userId,
-						...journalData,
-						is_starred: false,
-						file_name: null,
-						file_type: null,
-						embedding: null
-					})
-					.select('id')
-					.single();
-
-				if (insertError) throw new Error(`Journal insert failed: ${insertError.message}`);
-				journalId = inserted.id;
-				log.info('Saved to journal', { journalId });
-			}
-
-			embeddingText = compressionJson.decision_arc_summary || 'No arc generated';
+			if (updateError) throw new Error(`Journal update failed: ${updateError.message}`);
+			journalId = existingJournal.id;
+			log.info('Updated existing journal', { journalId, wasStarred: existingJournal.is_starred });
 		} else {
-			// Model cannot compress: Store verbatim (no compression LLM call)
-			log.info('Storing verbatim (no compression)', { superjournalId, model: conversationModel });
+			const { data: inserted, error: insertError } = await supabase
+				.from('journal')
+				.insert({
+					superjournal_id: superjournalId,
+					user_id: userId,
+					...journalData,
+					is_starred: false,
+					file_name: null,
+					file_type: null,
+					embedding: null
+				})
+				.select('id')
+				.single();
 
-			const journalData = {
-				persona_name: personaName,
-				boss_essence: userMessage,
-				persona_essence: aiResponse,
-				decision_arc_summary: null, // No compression
-				salience_score: 5 // Default
-			};
-
-			if (existingJournal) {
-				const { error: updateError } = await supabase
-					.from('journal')
-					.update(journalData)
-					.eq('id', existingJournal.id);
-
-				if (updateError) throw new Error(`Journal update failed: ${updateError.message}`);
-				journalId = existingJournal.id;
-				log.info('Updated existing journal (verbatim)', { journalId });
-			} else {
-				const { data: inserted, error: insertError } = await supabase
-					.from('journal')
-					.insert({
-						superjournal_id: superjournalId,
-						user_id: userId,
-						...journalData,
-						is_starred: false,
-						file_name: null,
-						file_type: null,
-						embedding: null
-					})
-					.select('id')
-					.single();
-
-				if (insertError) throw new Error(`Journal insert failed: ${insertError.message}`);
-				journalId = inserted.id;
-				log.info('Saved to journal (verbatim)', { journalId });
-			}
-
-			// For embedding, concatenate user message and AI response
-			embeddingText = `${userMessage}\n\n${aiResponse}`;
+			if (insertError) throw new Error(`Journal insert failed: ${insertError.message}`);
+			journalId = inserted.id;
+			log.info('Saved to journal', { journalId });
 		}
+
+		const embeddingText = compressionJson.decision_arc_summary || 'No arc generated';
 
 		// Generate embedding (works for both paths)
 		log.debug('Generating embedding', { textLength: embeddingText.length });

@@ -222,7 +222,7 @@ export const PERSONAS: Record<string, Persona> = {
 		model: null,
 		systemPrompt: 'samara',
 		contextChunks: SAMARA_CHUNKS,
-		compression: false, // Tactical persona - no long-term memory needed
+		compression: true, // All personas use compression
 		tools: []
 	},
 	alicja: {

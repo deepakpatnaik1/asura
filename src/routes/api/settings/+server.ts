@@ -22,7 +22,8 @@ const MODEL_COLUMNS = [
 	'model_tool_calling',
 	'model_audio_gen',
 	'model_video_gen',
-	'model_compression'
+	'model_compression',
+	'model_chat_compression'
 ] as const;
 
 export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase } }) => {
@@ -38,13 +39,15 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 			`default_model, active_content_id, selected_persona,
 			 model_gunnar, model_kirby, model_samara, model_alicja, model_eva, model_ananya,
 			 model_embeddings, model_image_gen, model_captioning, model_image_edit, model_tool_calling,
-			 model_audio_gen, model_video_gen, model_compression`
+			 model_audio_gen, model_video_gen, model_compression, model_chat_compression`
 		)
 		.eq('user_id', userId)
 		.single();
 
 	// 3. HANDLE MISSING SETTINGS (create defaults for new user)
 	if (error) {
+		console.error('[Settings API] Query error:', error.message, error.code, error.details);
+
 		const defaults = {
 			default_model: DEFAULT_MODEL,
 			selected_persona: DEFAULT_PERSONA
@@ -58,6 +61,8 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 
 		return json(defaults);
 	}
+
+	console.log('[Settings API] Returning data:', JSON.stringify(data));
 
 	return json(data);
 };

@@ -23,7 +23,7 @@ export const personaSchema = z.enum(['gunnar', 'kirby', 'samara', 'alicja', 'eva
 /** Override key enum (personas + processor types for model overrides) */
 export const overrideKeySchema = z.enum([
 	'gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya', // Personas
-	'embeddings', 'compression', // Text processes
+	'embeddings', 'compression', 'chat_compression', // Text processes
 	'image_gen', 'captioning', 'image_edit', // Image processes
 	'tool_calling', // Dedicated tool/function calling
 	'audio_gen', 'video_gen' // Audio/video generation
@@ -84,7 +84,8 @@ export const settingsUpdateSchema = z.object({
 	model_tool_calling: z.string().nullable().optional(),
 	model_audio_gen: z.string().nullable().optional(),
 	model_video_gen: z.string().nullable().optional(),
-	model_compression: z.string().nullable().optional()
+	model_compression: z.string().nullable().optional(),
+	model_chat_compression: z.string().nullable().optional()
 }).refine(
 	(data) => Object.keys(data).length > 0,
 	{ message: 'At least one field must be provided' }
