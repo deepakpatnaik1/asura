@@ -1,4 +1,4 @@
--- Create atomic nuke function for single-user mode
+-- Create atomic nuke function for user data deletion
 -- Deletes all user data in a single transaction
 
 CREATE OR REPLACE FUNCTION nuke_all_data()

@@ -14,7 +14,7 @@ import { getModelParams } from '$lib/config/model-params';
 import { personaUsesCompression } from '$lib/config/personas';
 import { createLogger } from '$lib/api/logger';
 import { compress } from './compress';
-import { getModelProvider } from './provider';
+import { getModelCanCompress } from './provider';
 import { scheduleRetries } from './retry';
 
 // Lazy-initialized clients
@@ -62,8 +62,8 @@ export async function runCompressJob(params: CompressJobParams): Promise<void> {
 			return;
 		}
 
-		// Look up provider from database
-		const provider = await getModelProvider(supabase, conversationModel);
+		// Check if model can do compression
+		const canCompress = await getModelCanCompress(supabase, conversationModel);
 
 		// Check if placeholder journal row exists (created by star button)
 		const { data: existingJournal } = await supabase
@@ -76,9 +76,9 @@ export async function runCompressJob(params: CompressJobParams): Promise<void> {
 		let journalId: string;
 		let embeddingText: string;
 
-		if (provider === 'anthropic') {
-			// Anthropic: Run full compression with Claude
-			log.info('Starting compression (Anthropic)', { superjournalId, model: conversationModel });
+		if (canCompress) {
+			// Model can compress: Run full Artisan Cut compression
+			log.info('Starting compression', { superjournalId, model: conversationModel });
 
 			const compressionParams = await getModelParams(conversationModel, 'compression');
 
@@ -132,8 +132,8 @@ export async function runCompressJob(params: CompressJobParams): Promise<void> {
 
 			embeddingText = compressionJson.decision_arc_summary || 'No arc generated';
 		} else {
-			// Non-Anthropic: Store verbatim (no compression LLM call)
-			log.info('Storing verbatim (non-Anthropic)', { superjournalId, model: conversationModel, provider });
+			// Model cannot compress: Store verbatim (no compression LLM call)
+			log.info('Storing verbatim (no compression)', { superjournalId, model: conversationModel });
 
 			const journalData = {
 				persona_name: personaName,

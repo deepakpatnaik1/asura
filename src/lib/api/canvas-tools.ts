@@ -128,7 +128,10 @@ export const UPDATE_CANVAS_TOOL: Anthropic.Tool = {
 						prompt: { type: 'string', description: 'Generation prompt for iteration' },
 						seed: { type: 'number', description: 'Seed for consistent generations' },
 						model: { type: 'string', description: 'Model that generated the image' },
-						role: { type: 'string', description: 'Image purpose: hero, card, gallery, expression' }
+						role: { type: 'string', description: 'Image purpose: hero, card, gallery, expression' },
+						// Genealogy tracking
+						parent_id: { type: 'string', description: 'ID of parent image (for variants/branches)' },
+						created_at: { type: 'string', description: 'ISO timestamp when image was generated' }
 					},
 					required: ['id', 'type']
 				}
@@ -143,6 +146,26 @@ export const UPDATE_CANVAS_TOOL: Anthropic.Tool = {
 	}
 };
 
+export const CHECKOUT_IMAGE_TOOL: Anthropic.Tool = {
+	name: 'checkout_image',
+	description:
+		'Set the branching point for creating image variants. Like git checkout, this marks which image to use as parent for new variations. Use this before generating variants of a specific image.',
+	input_schema: {
+		type: 'object',
+		properties: {
+			canvas_id: {
+				type: 'string',
+				description: 'The UUID of the canvas containing the image'
+			},
+			image_id: {
+				type: 'string',
+				description: 'The ID of the image element to checkout as the branching point. Pass null to clear checkout.'
+			}
+		},
+		required: ['canvas_id', 'image_id']
+	}
+};
+
 /**
  * All canvas tools
  */
@@ -152,7 +175,8 @@ export const CANVAS_TOOLS: Anthropic.Tool[] = [
 	DELETE_CANVAS_TOOL,
 	OPEN_CANVAS_TOOL,
 	LIST_CANVASES_TOOL,
-	UPDATE_CANVAS_TOOL
+	UPDATE_CANVAS_TOOL,
+	CHECKOUT_IMAGE_TOOL
 ];
 
 /**
@@ -207,6 +231,9 @@ export type RenderElement = {
 	seed?: number;
 	model?: string;
 	role?: string; // 'hero' | 'card' | 'gallery' | 'expression'
+	// Genealogy tracking
+	parent_id?: string; // ID of parent image (null = root)
+	created_at?: string; // ISO timestamp for ordering
 };
 
 /**
@@ -216,6 +243,7 @@ export interface CanvasState {
 	render: RenderElement[];
 	semantic: Record<string, unknown>;
 	viewport: { x: number; y: number; scale: number };
+	checked_out_id?: string; // Current branching point for variations
 }
 
 /**
@@ -269,6 +297,9 @@ export async function executeCanvasTool(
 
 		case 'update_canvas':
 			return executeUpdateCanvas(input, context, mutations);
+
+		case 'checkout_image':
+			return executeCheckoutImage(input, context, mutations);
 
 		default:
 			return {
@@ -652,6 +683,96 @@ async function executeUpdateCanvas(
 }
 
 /**
+ * Checkout Image Executor
+ * Sets the branching point for creating variants
+ */
+async function executeCheckoutImage(
+	input: Record<string, unknown>,
+	context: CanvasToolContext,
+	mutations: CanvasMutations
+): Promise<ToolExecutionResult> {
+	try {
+		const { supabase, userId } = context;
+		const canvasId = input.canvas_id as string;
+		const imageId = input.image_id as string | null;
+
+		// Verify canvas exists and belongs to user
+		const { data: existing, error: fetchError } = await supabase
+			.from('canvases')
+			.select('title, state')
+			.eq('id', canvasId)
+			.eq('user_id', userId)
+			.single();
+
+		if (fetchError || !existing) {
+			return {
+				success: false,
+				message: 'Canvas not found'
+			};
+		}
+
+		const existingState = existing.state as CanvasState | null;
+		const render = existingState?.render || [];
+		const semantic = existingState?.semantic || {};
+		const viewport = existingState?.viewport || { x: 0, y: 0, scale: 1 };
+
+		// If image_id is provided, verify it exists in the canvas
+		if (imageId) {
+			const imageExists = render.some(
+				(el: RenderElement) => el.id === imageId && el.type === 'image'
+			);
+			if (!imageExists) {
+				return {
+					success: false,
+					message: `Image "${imageId}" not found in canvas`
+				};
+			}
+		}
+
+		// Update state with checked_out_id
+		const newState: CanvasState = {
+			render,
+			semantic,
+			viewport,
+			checked_out_id: imageId || undefined
+		};
+
+		const { error } = await supabase
+			.from('canvases')
+			.update({
+				state: newState,
+				updated_at: new Date().toISOString()
+			})
+			.eq('id', canvasId)
+			.eq('user_id', userId);
+
+		if (error) throw error;
+
+		// Add to mutations for UI update
+		mutations.updated_canvases.push({ id: canvasId, state: newState });
+
+		if (imageId) {
+			return {
+				success: true,
+				message: `Checked out image "${imageId}" as branching point. New images generated with parent_id will be variants of this image.`,
+				data: { canvas_id: canvasId, checked_out_id: imageId }
+			};
+		} else {
+			return {
+				success: true,
+				message: `Cleared checkout. New images will be root images (no parent).`,
+				data: { canvas_id: canvasId, checked_out_id: null }
+			};
+		}
+	} catch (error) {
+		return {
+			success: false,
+			message: `Failed to checkout image: ${error instanceof Error ? error.message : 'Unknown error'}`
+		};
+	}
+}
+
+/**
  * Check if a tool name is a canvas tool
  */
 export function isCanvasTool(toolName: string): boolean {
@@ -661,6 +782,7 @@ export function isCanvasTool(toolName: string): boolean {
 		'delete_canvas',
 		'open_canvas',
 		'list_canvases',
-		'update_canvas'
+		'update_canvas',
+		'checkout_image'
 	].includes(toolName);
 }

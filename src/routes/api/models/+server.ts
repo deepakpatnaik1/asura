@@ -11,7 +11,7 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 	const { data, error } = await supabase
 		.from('models')
 		.select(
-			'model_identifier, model_name, provider, model_type, context_window, input_price_per_million, output_price_per_million'
+			'model_identifier, model_name, provider, model_type, context_window, input_price_per_million, output_price_per_million, cost_per_image'
 		)
 		.order('model_type', { ascending: true })
 		.order('provider', { ascending: true })

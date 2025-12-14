@@ -1,4 +1,5 @@
--- Add mode filter to vector search function for reader/chat isolation
+-- Historical migration - adds mode filter to vector search
+-- NOTE: mode filter is removed by 20251206100000_update_vector_search_no_mode.sql
 
 CREATE OR REPLACE FUNCTION search_journal_by_embedding(
   query_embedding TEXT,

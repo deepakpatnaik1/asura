@@ -1,7 +1,7 @@
--- Create files table for chat mode file paste feature
+-- Create files table for file paste feature
 -- Stores pasted HTML/text content with AI-generated artisan cuts for context injection
 
-CREATE TABLE files (
+CREATE TABLE IF NOT EXISTS files (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
@@ -13,23 +13,33 @@ CREATE TABLE files (
 );
 
 -- Indexes for performance
-CREATE INDEX idx_files_user_id ON files(user_id);
-CREATE INDEX idx_files_enabled ON files(user_id, is_enabled) WHERE is_enabled = true;
-CREATE INDEX idx_files_created_at ON files(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_files_user_id ON files(user_id);
+-- Only create is_enabled index if column exists (newer schema)
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'files' AND column_name = 'is_enabled') THEN
+        CREATE INDEX IF NOT EXISTS idx_files_enabled ON files(user_id, is_enabled) WHERE is_enabled = true;
+    END IF;
+END $$;
+CREATE INDEX IF NOT EXISTS idx_files_created_at ON files(created_at DESC);
 
 -- Enable Row-Level Security
 ALTER TABLE files ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies
+DROP POLICY IF EXISTS "Users can view own files" ON files;
 CREATE POLICY "Users can view own files" ON files
   FOR SELECT USING (auth.uid() = user_id OR is_admin(auth.uid()));
 
+DROP POLICY IF EXISTS "Users can insert own files" ON files;
 CREATE POLICY "Users can insert own files" ON files
   FOR INSERT WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update own files" ON files;
 CREATE POLICY "Users can update own files" ON files
   FOR UPDATE USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete own files" ON files;
 CREATE POLICY "Users can delete own files" ON files
   FOR DELETE USING (auth.uid() = user_id);
 
@@ -47,7 +57,14 @@ CREATE TRIGGER files_updated_at
   FOR EACH ROW
   EXECUTE FUNCTION update_files_updated_at();
 
--- Comments
-COMMENT ON TABLE files IS 'Stores pasted file content with AI-compressed artisan cuts for chat mode context injection.';
-COMMENT ON COLUMN files.artisan_cut IS 'AI-generated compression of raw_content using Artisan Cut prompt';
-COMMENT ON COLUMN files.is_enabled IS 'When true, artisan_cut is injected into Call 1 context';
+-- Comments (only add if columns exist)
+COMMENT ON TABLE files IS 'Stores pasted file content with AI-compressed artisan cuts for context injection.';
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'files' AND column_name = 'artisan_cut') THEN
+        COMMENT ON COLUMN files.artisan_cut IS 'AI-generated compression of raw_content using Artisan Cut prompt';
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'files' AND column_name = 'is_enabled') THEN
+        COMMENT ON COLUMN files.is_enabled IS 'When true, artisan_cut is injected into Call 1 context';
+    END IF;
+END $$;

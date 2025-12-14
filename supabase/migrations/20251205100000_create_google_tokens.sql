@@ -1,5 +1,5 @@
 -- Google OAuth tokens for Calendar integration
-CREATE TABLE google_tokens (
+CREATE TABLE IF NOT EXISTS google_tokens (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES auth.users NOT NULL UNIQUE,
   access_token TEXT NOT NULL,
@@ -29,4 +29,4 @@ CREATE POLICY "Users can delete own tokens"
   USING (auth.uid() = user_id);
 
 -- Index for quick lookups
-CREATE INDEX google_tokens_user_id ON google_tokens(user_id);
+CREATE INDEX IF NOT EXISTS google_tokens_user_id ON google_tokens(user_id);

@@ -6,14 +6,16 @@
  */
 
 import type Anthropic from '@anthropic-ai/sdk';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { PUBLIC_SUPABASE_URL } from '$env/static/public';
-import { SUPABASE_SERVICE_ROLE_KEY, FIREWORKS_API_KEY, OPENROUTER_API_KEY, FAL_API_KEY } from '$env/static/private';
+import { SUPABASE_SERVICE_ROLE_KEY, FIREWORKS_API_KEY, OPENROUTER_API_KEY, FAL_API_KEY, MODELSLAB_API_KEY, VENICE_API_KEY } from '$env/static/private';
 import { createClient } from '@supabase/supabase-js';
 import {
 	generateThumbnail,
 	uploadImageToStorage,
 	uploadThumbnailToStorage
 } from '$lib/capabilities/image-extraction';
+import { captionImage as captionImageCall } from '$lib/calls/caption/index';
 
 // Service role client for storage operations
 const supabaseStorage = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -48,10 +50,44 @@ const FAL_MODELS = {
 	'fal-sdxl': 'fal-ai/fast-sdxl' // SDXL, free tier
 } as const;
 
+/**
+ * FLUX Kontext models - instruction-based image editing (no mask needed)
+ * Preserves identity automatically when editing clothing, hair, expression, etc.
+ */
+const KONTEXT_MODELS = {
+	'kontext-dev': 'fal-ai/flux-kontext/dev', // Open source, good quality
+	'kontext-pro': 'fal-ai/flux-pro/kontext' // Premium, $0.04/image
+} as const;
+
+type KontextModel = keyof typeof KONTEXT_MODELS;
+
+/**
+ * ModelsLab image models - NSFW-focused provider with uncensored generation
+ * Docs: https://docs.modelslab.com/image-generation/text-to-image
+ */
+const MODELSLAB_MODELS = {
+	'ml-realistic-vision': 'realistic-vision-v51', // Popular photorealistic, NSFW capable
+	'ml-juggernaut-xl': 'juggernaut-xl-v9', // High quality SDXL, NSFW capable
+	'ml-epicrealism': 'epicrealism-natural-sin', // Realistic portraits, uncensored
+	'ml-deliberate': 'deliberate-v3' // Versatile, good for characters
+} as const;
+
+/**
+ * Venice AI image models - Privacy-first, uncensored generation
+ * Docs: https://docs.venice.ai/api-reference/endpoint/image/generate
+ */
+const VENICE_MODELS = {
+	'venice-flux-uncensored': 'flux-dev-uncensored', // FLUX Dev uncensored, NSFW capable
+	'venice-flux-dev': 'flux-dev', // Standard FLUX Dev
+	'venice-lustify': 'lustify-sdxl' // Optimized for character art
+} as const;
+
 type FireworksModel = keyof typeof FIREWORKS_MODELS;
 type OpenRouterModel = keyof typeof OPENROUTER_MODELS;
 type FalModel = keyof typeof FAL_MODELS;
-type ImageModel = FireworksModel | OpenRouterModel | FalModel;
+type ModelsLabModel = keyof typeof MODELSLAB_MODELS;
+type VeniceModel = keyof typeof VENICE_MODELS;
+type ImageModel = FireworksModel | OpenRouterModel | FalModel | ModelsLabModel | VeniceModel;
 
 // Reverse mapping: database model_identifier → internal tool key
 const MODEL_IDENTIFIER_TO_KEY: Record<string, ImageModel> = {
@@ -64,7 +100,16 @@ const MODEL_IDENTIFIER_TO_KEY: Record<string, ImageModel> = {
 	// Fireworks models
 	'accounts/fireworks/models/flux-1-schnell-fp8': 'flux-schnell',
 	'accounts/fireworks/models/flux-1-dev-fp8': 'flux-dev',
-	'accounts/fireworks/models/flux-1-1-pro': 'flux-pro'
+	'accounts/fireworks/models/flux-1-1-pro': 'flux-pro',
+	// ModelsLab models
+	'realistic-vision-v51': 'ml-realistic-vision',
+	'juggernaut-xl-v9': 'ml-juggernaut-xl',
+	'epicrealism-natural-sin': 'ml-epicrealism',
+	'deliberate-v3': 'ml-deliberate',
+	// Venice AI models
+	'flux-dev-uncensored': 'venice-flux-uncensored',
+	'flux-dev': 'venice-flux-dev',
+	'lustify-sdxl': 'venice-lustify'
 };
 
 /**
@@ -73,15 +118,15 @@ const MODEL_IDENTIFIER_TO_KEY: Record<string, ImageModel> = {
  */
 function normalizeModelKey(modelInput: string): ImageModel {
 	// Check if it's already an internal key
-	if (modelInput in FIREWORKS_MODELS || modelInput in OPENROUTER_MODELS || modelInput in FAL_MODELS) {
+	if (modelInput in FIREWORKS_MODELS || modelInput in OPENROUTER_MODELS || modelInput in FAL_MODELS || modelInput in MODELSLAB_MODELS || modelInput in VENICE_MODELS) {
 		return modelInput as ImageModel;
 	}
 	// Check reverse mapping (database identifier → internal key)
 	if (modelInput in MODEL_IDENTIFIER_TO_KEY) {
 		return MODEL_IDENTIFIER_TO_KEY[modelInput];
 	}
-	// Default fallback
-	return 'flux-schnell';
+	// Default fallback - Fal.ai flux-schnell (fast, NSFW capable)
+	return 'fal-flux-schnell';
 }
 
 function isOpenRouterModel(model: string): model is OpenRouterModel {
@@ -94,6 +139,14 @@ function isFireworksModel(model: string): model is FireworksModel {
 
 function isFalModel(model: string): model is FalModel {
 	return model in FAL_MODELS;
+}
+
+function isModelsLabModel(model: string): model is ModelsLabModel {
+	return model in MODELSLAB_MODELS;
+}
+
+function isVeniceModel(model: string): model is VeniceModel {
+	return model in VENICE_MODELS;
 }
 
 /**
@@ -119,9 +172,9 @@ export const GENERATE_IMAGE_TOOL: Anthropic.Tool = {
 			},
 			model: {
 				type: 'string',
-				enum: ['flux-schnell', 'flux-dev', 'flux-pro', 'flux-schnell-or', 'flux-dev-or', 'sd-turbo', 'sdxl', 'fal-flux-dev', 'fal-flux-schnell', 'fal-flux-pro', 'fal-realistic', 'fal-sdxl'],
+				enum: ['fal-flux-schnell', 'fal-flux-dev', 'fal-flux-pro', 'fal-realistic', 'fal-sdxl', 'ml-realistic-vision', 'ml-juggernaut-xl', 'ml-epicrealism', 'ml-deliberate', 'flux-schnell', 'flux-dev', 'flux-pro', 'flux-schnell-or', 'flux-dev-or', 'sd-turbo', 'sdxl', 'venice-flux-uncensored', 'venice-flux-dev', 'venice-lustify'],
 				description:
-					'Model to use. Fireworks: flux-schnell/dev/pro. OpenRouter: flux-schnell-or, flux-dev-or, sd-turbo, sdxl. Fal.ai (NSFW): fal-flux-dev, fal-flux-schnell, fal-flux-pro, fal-realistic (free), fal-sdxl (free). Default: flux-schnell'
+					'Model to use. Fal.ai (recommended, NSFW capable): fal-flux-schnell (fast), fal-flux-dev (quality), fal-flux-pro (premium), fal-realistic, fal-sdxl. ModelsLab (NSFW): ml-realistic-vision, ml-juggernaut-xl, ml-epicrealism, ml-deliberate. Fireworks: flux-schnell/dev/pro. OpenRouter: flux-schnell-or, flux-dev-or, sd-turbo, sdxl. Default: fal-flux-schnell'
 			},
 			seed: {
 				type: 'number',
@@ -130,16 +183,21 @@ export const GENERATE_IMAGE_TOOL: Anthropic.Tool = {
 			},
 			width: {
 				type: 'number',
-				description: 'Image width in pixels (256-1440). Default: 1024'
+				description: 'Image width in pixels (256-1440). Default: 256 (draft mode)'
 			},
 			height: {
 				type: 'number',
-				description: 'Image height in pixels (256-1440). Default: 1024'
+				description: 'Image height in pixels (256-1440). Default: 256 (draft mode)'
 			},
 			role: {
 				type: 'string',
 				description:
 					'Purpose of this image in the character profile: hero (main portrait), card (thumbnail), gallery (additional shots), expression (emotion variants)'
+			},
+			parent_id: {
+				type: 'string',
+				description:
+					'ID of parent image to branch from. Creates a variant/iteration. Omit for root images.'
 			}
 		},
 		required: ['prompt']
@@ -162,18 +220,65 @@ export const EXPORT_CHARACTER_TOOL: Anthropic.Tool = {
 	}
 };
 
+export const CAPTION_IMAGE_TOOL: Anthropic.Tool = {
+	name: 'caption_image',
+	description:
+		'Describe an image in detail using AI vision. Use this to "see" generated images or external reference images. Returns a detailed text description of the image contents including subjects, poses, expressions, clothing, lighting, composition, and style. This is your eyes - use it to understand what was generated or what the user is showing you.',
+	input_schema: {
+		type: 'object',
+		properties: {
+			image_url: {
+				type: 'string',
+				description: 'URL of the image to caption. Can be a Supabase storage URL or external URL.'
+			},
+			prompt: {
+				type: 'string',
+				description:
+					'Optional prompt to guide the description. Default: detailed description of subject, pose, expression, clothing, lighting, and style.'
+			}
+		},
+		required: ['image_url']
+	}
+};
+
+export const EDIT_IMAGE_TOOL: Anthropic.Tool = {
+	name: 'edit_image',
+	description:
+		'Edit an existing image using natural language instructions. Uses FLUX Kontext which automatically preserves identity - same person, same pose, same background - while changing what you specify. No mask needed. Use this when Boss wants to change clothing color, hair style, expression, accessories, or other specific elements. Say exactly what to change and what to keep.',
+	input_schema: {
+		type: 'object',
+		properties: {
+			image_url: {
+				type: 'string',
+				description: 'URL of the image to edit'
+			},
+			prompt: {
+				type: 'string',
+				description: 'Natural language edit instruction. Be specific about what to change AND what to preserve. Example: "Change her lingerie from red to white silk. Keep her facial features, pose, and expression exactly the same. Keep the same background and lighting."'
+			},
+			seed: {
+				type: 'number',
+				description: 'Seed for reproducible results'
+			}
+		},
+		required: ['image_url', 'prompt']
+	}
+};
+
 /**
  * All sakura tools
  */
-export const SAKURA_TOOLS: Anthropic.Tool[] = [GENERATE_IMAGE_TOOL, EXPORT_CHARACTER_TOOL];
+export const SAKURA_TOOLS: Anthropic.Tool[] = [GENERATE_IMAGE_TOOL, EXPORT_CHARACTER_TOOL, CAPTION_IMAGE_TOOL, EDIT_IMAGE_TOOL];
 
 /**
  * Context for tool execution
  */
 export interface SakuraToolContext {
 	userId: string;
-	supabase?: any; // For export_character (reading whiteboard state)
-	defaultImageModel?: string; // User's preferred image model from Settings
+	supabase?: SupabaseClient; // For export_character (reading whiteboard state) and caption_image (model lookup)
+	defaultImageModel?: string; // User's preferred image gen model from Settings (image_gen override)
+	defaultImageEditModel?: string; // User's preferred image edit model from Settings (image_edit override)
+	defaultCaptioningModel?: string; // User's preferred captioning model from Settings (captioning override)
 }
 
 /**
@@ -384,6 +489,192 @@ async function generateWithFal(params: {
 }
 
 /**
+ * Call ModelsLab API to generate image
+ * Docs: https://docs.modelslab.com/image-generation/text-to-image
+ * NSFW-focused provider with uncensored generation
+ */
+async function generateWithModelsLab(params: {
+	prompt: string;
+	negative_prompt?: string;
+	model: ModelsLabModel;
+	seed?: number;
+	width?: number;
+	height?: number;
+}): Promise<{ imageBase64: string; seed: number }> {
+	const modelId = MODELSLAB_MODELS[params.model];
+
+	// Generate seed if not provided
+	const seed = params.seed ?? Math.floor(Math.random() * 2147483647);
+
+	// ModelsLab text2img API
+	const response = await fetch('https://modelslab.com/api/v6/images/text2img', {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json'
+		},
+		body: JSON.stringify({
+			key: MODELSLAB_API_KEY,
+			model_id: modelId,
+			prompt: params.prompt,
+			negative_prompt: params.negative_prompt || 'bad hands, deformed, blurry, watermark, text',
+			width: String(params.width || 512),
+			height: String(params.height || 512),
+			samples: '1',
+			num_inference_steps: '30',
+			seed: seed,
+			guidance_scale: 7.5,
+			safety_checker: 'no', // NSFW capable
+			enhance_prompt: 'no',
+			webhook: null,
+			track_id: null
+		})
+	});
+
+	if (!response.ok) {
+		const error = await response.text();
+		throw new Error(`ModelsLab API error: ${response.status} - ${error}`);
+	}
+
+	const data = await response.json();
+
+	// ModelsLab returns status and output array
+	if (data.status === 'error') {
+		throw new Error(`ModelsLab API error: ${data.message || 'Unknown error'}`);
+	}
+
+	// Handle processing status (async generation)
+	if (data.status === 'processing') {
+		// Poll for completion
+		const fetchResult = data.fetch_result;
+		if (!fetchResult) {
+			throw new Error('ModelsLab returned processing status but no fetch_result URL');
+		}
+
+		// Wait and poll
+		let attempts = 0;
+		const maxAttempts = 30; // 30 seconds max wait
+		while (attempts < maxAttempts) {
+			await new Promise((resolve) => setTimeout(resolve, 1000));
+			const pollResponse = await fetch(fetchResult, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ key: MODELSLAB_API_KEY })
+			});
+			const pollData = await pollResponse.json();
+			if (pollData.status === 'success' && pollData.output && pollData.output[0]) {
+				const imageUrl = pollData.output[0];
+				const imageResponse = await fetch(imageUrl);
+				if (!imageResponse.ok) {
+					throw new Error('Failed to fetch generated image from ModelsLab URL');
+				}
+				const imageBuffer = await imageResponse.arrayBuffer();
+				const imageBase64 = Buffer.from(imageBuffer).toString('base64');
+				return { imageBase64, seed };
+			}
+			if (pollData.status === 'error') {
+				throw new Error(`ModelsLab generation failed: ${pollData.message || 'Unknown error'}`);
+			}
+			attempts++;
+		}
+		throw new Error('ModelsLab generation timed out');
+	}
+
+	// Handle immediate success
+	if (!data.output || !data.output[0]) {
+		throw new Error('Invalid response from ModelsLab API - no output URL');
+	}
+
+	// Download image and convert to base64
+	const imageResponse = await fetch(data.output[0]);
+	if (!imageResponse.ok) {
+		throw new Error('Failed to fetch generated image from ModelsLab URL');
+	}
+	const imageBuffer = await imageResponse.arrayBuffer();
+	const imageBase64 = Buffer.from(imageBuffer).toString('base64');
+
+	return {
+		imageBase64,
+		seed
+	};
+}
+
+/**
+ * Call Venice AI API to generate image
+ * Docs: https://docs.venice.ai/api-reference/endpoint/image/generate
+ * Privacy-first, uncensored generation with FLUX models
+ */
+async function generateWithVenice(params: {
+	prompt: string;
+	negative_prompt?: string;
+	model: VeniceModel;
+	seed?: number;
+	width?: number;
+	height?: number;
+}): Promise<{ imageBase64: string; seed: number }> {
+	const modelId = VENICE_MODELS[params.model];
+
+	// Generate seed if not provided
+	const seed = params.seed ?? Math.floor(Math.random() * 2147483647);
+
+	// Venice image generation API
+	const response = await fetch('https://api.venice.ai/api/v1/image/generate', {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${VENICE_API_KEY}`
+		},
+		body: JSON.stringify({
+			model: modelId,
+			prompt: params.prompt,
+			negative_prompt: params.negative_prompt || 'bad hands, deformed, blurry, watermark, text',
+			width: params.width || 512,
+			height: params.height || 512,
+			steps: 25,
+			seed,
+			cfg_scale: 7.5
+		})
+	});
+
+	if (!response.ok) {
+		const error = await response.text();
+		throw new Error(`Venice API error: ${response.status} - ${error}`);
+	}
+
+	const data = await response.json();
+
+	// Venice returns images array with url or base64
+	if (!data.images || !data.images[0]) {
+		throw new Error('Invalid response from Venice API - no images');
+	}
+
+	const imageData = data.images[0];
+
+	// Handle base64 response
+	if (imageData.base64) {
+		return {
+			imageBase64: imageData.base64,
+			seed: data.seed || seed
+		};
+	}
+
+	// Handle URL response - fetch and convert to base64
+	if (imageData.url) {
+		const imageResponse = await fetch(imageData.url);
+		if (!imageResponse.ok) {
+			throw new Error('Failed to fetch generated image from Venice URL');
+		}
+		const imageBuffer = await imageResponse.arrayBuffer();
+		const imageBase64 = Buffer.from(imageBuffer).toString('base64');
+		return {
+			imageBase64,
+			seed: data.seed || seed
+		};
+	}
+
+	throw new Error('Invalid response from Venice API - no image URL or base64');
+}
+
+/**
  * Upload image to Supabase storage with thumbnail
  * Uses unified storage pattern: images/ for full size, thumbnails/ for thumbnails
  */
@@ -434,6 +725,12 @@ export async function executeSakuraTool(
 		case 'export_character':
 			return executeExportCharacter(input, context);
 
+		case 'caption_image':
+			return executeCaptionImage(input, context);
+
+		case 'edit_image':
+			return executeEditImage(input, context);
+
 		default:
 			return {
 				success: false,
@@ -454,12 +751,14 @@ async function executeGenerateImage(
 		const prompt = input.prompt as string;
 		const negative_prompt = input.negative_prompt as string | undefined;
 		// Use tool input if specified, otherwise fall back to user's preferred model from Settings
-		const modelInput = (input.model as string) || defaultImageModel || 'flux-schnell';
+		const modelInput = (input.model as string) || defaultImageModel || 'fal-flux-schnell';
 		const model = normalizeModelKey(modelInput);
 		const seed = input.seed as number | undefined;
-		const width = (input.width as number) || 1024;
-		const height = (input.height as number) || 1024;
+		const width = (input.width as number) || 256;
+		const height = (input.height as number) || 256;
 		const role = input.role as string | undefined;
+		const parent_id = input.parent_id as string | undefined;
+		const created_at = new Date().toISOString(); // Auto-populate timestamp
 
 		// Validate prompt
 		if (!prompt || prompt.trim().length === 0) {
@@ -524,10 +823,44 @@ async function executeGenerateImage(
 			});
 			imageBase64 = result.imageBase64;
 			usedSeed = result.seed;
+		} else if (isModelsLabModel(model)) {
+			if (!MODELSLAB_API_KEY) {
+				return {
+					success: false,
+					message: 'MODELSLAB_API_KEY not configured. Cannot generate images with ModelsLab models.'
+				};
+			}
+			const result = await generateWithModelsLab({
+				prompt,
+				negative_prompt,
+				model,
+				seed,
+				width,
+				height
+			});
+			imageBase64 = result.imageBase64;
+			usedSeed = result.seed;
+		} else if (isVeniceModel(model)) {
+			if (!VENICE_API_KEY) {
+				return {
+					success: false,
+					message: 'VENICE_API_KEY not configured. Cannot generate images with Venice models.'
+				};
+			}
+			const result = await generateWithVenice({
+				prompt,
+				negative_prompt,
+				model,
+				seed,
+				width,
+				height
+			});
+			imageBase64 = result.imageBase64;
+			usedSeed = result.seed;
 		} else {
 			return {
 				success: false,
-				message: `Unknown model: ${model}. Valid models: ${[...Object.keys(FIREWORKS_MODELS), ...Object.keys(OPENROUTER_MODELS), ...Object.keys(FAL_MODELS)].join(', ')}`
+				message: `Unknown model: ${model}. Valid models: ${[...Object.keys(FIREWORKS_MODELS), ...Object.keys(OPENROUTER_MODELS), ...Object.keys(FAL_MODELS), ...Object.keys(MODELSLAB_MODELS), ...Object.keys(VENICE_MODELS)].join(', ')}`
 			};
 		}
 
@@ -547,7 +880,9 @@ async function executeGenerateImage(
 				prompt,
 				width,
 				height,
-				role
+				role,
+				parent_id,
+				created_at
 			}
 		};
 	} catch (error) {
@@ -556,6 +891,165 @@ async function executeGenerateImage(
 		return {
 			success: false,
 			message: `Image generation failed: ${errorMsg}`
+		};
+	}
+}
+
+/**
+ * Caption Image Executor
+ * Uses JoyCaption via Replicate to describe images - Eva's "eyes" for NSFW content
+ */
+async function executeCaptionImage(
+	input: Record<string, unknown>,
+	context: SakuraToolContext
+): Promise<ToolExecutionResult> {
+	try {
+		const { supabase, defaultCaptioningModel } = context;
+		const imageUrl = input.image_url as string;
+		const prompt = input.prompt as string | undefined;
+
+		if (!imageUrl) {
+			return {
+				success: false,
+				message: 'image_url is required'
+			};
+		}
+
+		if (!supabase) {
+			return {
+				success: false,
+				message: 'Database access not available for captioning (needed for model lookup)'
+			};
+		}
+
+		// Default prompt for character design workflow
+		const captionPrompt = prompt ||
+			'Describe this image in detail. Include: the subject (appearance, age, ethnicity), pose and expression, clothing and accessories, lighting and mood, background and setting, composition and style. Be specific and vivid.';
+
+		// Use model from settings, defaulting to JoyCaption (NSFW-capable)
+		const captionModel = defaultCaptioningModel || 'nsfw-api/joycaption-beta-one';
+
+		const result = await captionImageCall(supabase, {
+			imageUrl,
+			prompt: captionPrompt,
+			model: captionModel,
+			maxTokens: 512,
+			temperature: 0.6
+		});
+
+		return {
+			success: true,
+			message: `Image description (${result.caption.length} chars):\n\n${result.caption}`,
+			data: {
+				caption: result.caption,
+				model: result.model,
+				latencyMs: result.latencyMs
+			}
+		};
+	} catch (error) {
+		const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+		console.error('[SakuraTools] Image captioning failed:', errorMsg);
+		return {
+			success: false,
+			message: `Image captioning failed: ${errorMsg}`
+		};
+	}
+}
+
+/**
+ * Edit Image Executor
+ * Uses FLUX Kontext for instruction-based editing with automatic identity preservation
+ */
+async function executeEditImage(
+	input: Record<string, unknown>,
+	context: SakuraToolContext
+): Promise<ToolExecutionResult> {
+	try {
+		const { userId, defaultImageEditModel } = context;
+		const imageUrl = input.image_url as string;
+		const prompt = input.prompt as string;
+		const seed = (input.seed as number) ?? Math.floor(Math.random() * 2147483647);
+
+		// Use model from settings, defaulting to kontext-pro (high quality)
+		const modelIdentifier = defaultImageEditModel || 'fal-ai/flux-pro/kontext';
+
+		if (!imageUrl || !prompt) {
+			return {
+				success: false,
+				message: 'image_url and prompt are required'
+			};
+		}
+
+		if (!FAL_API_KEY) {
+			return {
+				success: false,
+				message: 'FAL_API_KEY not configured. Cannot edit images.'
+			};
+		}
+
+		// Call FLUX Kontext endpoint using model identifier from settings
+		const url = `https://fal.run/${modelIdentifier}`;
+
+		const response = await fetch(url, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Key ${FAL_API_KEY}`
+			},
+			body: JSON.stringify({
+				image_url: imageUrl,
+				prompt,
+				seed,
+				num_inference_steps: 28,
+				guidance_scale: 2.5,
+				enable_safety_checker: false // NSFW capable
+			})
+		});
+
+		if (!response.ok) {
+			const error = await response.text();
+			throw new Error(`Kontext error: ${response.status} - ${error}`);
+		}
+
+		const data = await response.json();
+
+		if (!data.images || !data.images[0] || !data.images[0].url) {
+			throw new Error('Invalid response from Kontext - no image URL');
+		}
+
+		// Download the edited image
+		const imageResponse = await fetch(data.images[0].url);
+		if (!imageResponse.ok) {
+			throw new Error('Failed to fetch edited image from Kontext URL');
+		}
+		const imageBuffer = await imageResponse.arrayBuffer();
+		const imageBase64 = Buffer.from(imageBuffer).toString('base64');
+
+		// Upload to storage
+		const timestamp = Date.now();
+		const usedSeed = data.seed || seed;
+		const modelShortName = modelIdentifier.split('/').pop() || 'kontext';
+		const filename = `edit-${modelShortName}-${usedSeed}-${timestamp}.png`;
+		const { fullUrl, thumbnailUrl } = await uploadToStorage(imageBase64, userId, filename);
+
+		return {
+			success: true,
+			message: `Edited image with ${modelIdentifier} (seed: ${usedSeed}). URL: ${fullUrl}`,
+			data: {
+				url: fullUrl,
+				thumbnail_url: thumbnailUrl,
+				seed: usedSeed,
+				model: modelIdentifier,
+				prompt,
+				original_image: imageUrl
+			}
+		};
+	} catch (error) {
+		const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+		console.error('[SakuraTools] Image editing failed:', errorMsg);
+		return {
+			success: false,
+			message: `Image editing failed: ${errorMsg}`
 		};
 	}
 }
@@ -728,5 +1222,5 @@ async function executeExportCharacter(
  * Check if a tool name is a sakura tool
  */
 export function isSakuraTool(toolName: string): boolean {
-	return ['generate_image', 'export_character'].includes(toolName);
+	return ['generate_image', 'export_character', 'caption_image', 'edit_image'].includes(toolName);
 }

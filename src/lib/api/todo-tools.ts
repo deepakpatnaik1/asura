@@ -262,7 +262,7 @@ export const UPDATE_DIARY_TOOL: Anthropic.Tool = {
 			event_period: {
 				type: 'string',
 				description:
-					'New fuzzy date like "Summer 2023", "Early 2022". Replaces logged_at display.'
+					'New fuzzy date like "Summer 2023", "Early 2022". Replaces logged_at display. Set to empty string to clear (when switching from fuzzy to specific date).'
 			},
 			sort_date: {
 				type: 'string',
@@ -1260,7 +1260,10 @@ async function executeUpdateDiary(
 		if (newDescription !== undefined) updateData.description = newDescription;
 		if (newTags !== undefined) updateData.tags = newTags;
 		if (newLoggedAt !== undefined) updateData.logged_at = newLoggedAt;
-		if (newEventPeriod !== undefined) updateData.event_period = newEventPeriod;
+		if (newEventPeriod !== undefined) {
+			// Empty string clears the event_period (switch from fuzzy to specific date)
+			updateData.event_period = newEventPeriod || null;
+		}
 		if (newSortDate !== undefined) updateData.sort_date = newSortDate;
 
 		if (Object.keys(updateData).length === 0) {
@@ -1290,8 +1293,11 @@ async function executeUpdateDiary(
 		if (newLoggedAt !== undefined && data.logged_at !== newLoggedAt) {
 			discrepancies.push('logged_at');
 		}
-		if (newEventPeriod !== undefined && data.event_period !== newEventPeriod) {
-			discrepancies.push('event_period');
+		if (newEventPeriod !== undefined) {
+			const expectedEventPeriod = newEventPeriod || null;
+			if (data.event_period !== expectedEventPeriod) {
+				discrepancies.push('event_period');
+			}
 		}
 		if (newSortDate !== undefined && data.sort_date !== newSortDate) {
 			discrepancies.push('sort_date');

@@ -1,5 +1,5 @@
 -- Remove obsolete 'reader' use case from model_parameters
--- The reader mode was unified into the single universal mode - all personas now use 'conversation'
+-- All personas now use 'conversation' use case
 
 -- Step 1: Delete all 'reader' rows from model_parameters
 DELETE FROM model_parameters WHERE use_case = 'reader';

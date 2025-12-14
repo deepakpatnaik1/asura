@@ -6,6 +6,7 @@
 
 	import { onMount } from 'svelte';
 	import CanvasFrame from '$lib/components/CanvasFrame.svelte';
+	import GenealogyTree from '$lib/components/GenealogyTree.svelte';
 	import type { RenderElement, CanvasState } from '$lib/api/canvas-tools';
 	import { CANVAS, LAYOUT } from '$lib/config/layout';
 
@@ -23,6 +24,7 @@
 		selectedCanvasIds?: string[]; // Which canvases are selected for context injection
 		onSelect?: (id: string) => void;
 		onStateChange?: (id: string, state: CanvasState) => void;
+		onCheckout?: (canvasId: string, imageId: string) => void;
 	}
 
 	let {
@@ -30,8 +32,13 @@
 		canvas = null,
 		selectedCanvasIds = [],
 		onSelect,
-		onStateChange
+		onStateChange,
+		onCheckout
 	}: Props = $props();
+
+	// View mode: 'canvas' for Konva freeform, 'tree' for genealogy view
+	type ViewMode = 'canvas' | 'tree';
+	let viewMode = $state<ViewMode>('canvas');
 
 	// Track mounted state for client-only rendering
 	let mounted = $state(false);
@@ -263,12 +270,65 @@
 		const url = getCanvasThumbnail(c);
 		return !!url && !failedThumbnails.has(c.id);
 	}
+
+	// Get image elements for genealogy tree
+	let imageElements = $derived(elements.filter((el) => el.type === 'image' && el.src));
+
+	// Get checked out image ID from canvas state
+	let checkedOutId = $derived(canvas?.state?.checked_out_id ?? null);
+
+	// Handle checkout from genealogy tree
+	function handleTreeCheckout(imageId: string) {
+		if (canvas && onCheckout) {
+			onCheckout(canvas.id, imageId);
+		}
+	}
+
+	// Count images for showing tree toggle
+	let hasImages = $derived(imageElements.length > 0);
 </script>
 
 <CanvasFrame>
 	{#snippet content()}
 		<div class="canvas-container" bind:this={containerEl}>
-			{#if mounted && Stage}
+			<!-- View mode toggle -->
+			{#if hasImages && canvas}
+				<div class="view-toggle">
+					<button
+						class:active={viewMode === 'canvas'}
+						onclick={() => (viewMode = 'canvas')}
+						title="Canvas view"
+					>
+						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<rect x="3" y="3" width="18" height="18" rx="2" />
+							<line x1="9" y1="3" x2="9" y2="21" />
+							<line x1="15" y1="3" x2="15" y2="21" />
+						</svg>
+					</button>
+					<button
+						class:active={viewMode === 'tree'}
+						onclick={() => (viewMode = 'tree')}
+						title="Genealogy tree"
+					>
+						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<circle cx="6" cy="12" r="3" />
+							<circle cx="18" cy="6" r="3" />
+							<circle cx="18" cy="18" r="3" />
+							<line x1="9" y1="12" x2="15" y2="6" />
+							<line x1="9" y1="12" x2="15" y2="18" />
+						</svg>
+					</button>
+				</div>
+			{/if}
+
+			{#if viewMode === 'tree' && hasImages && canvas}
+				<!-- Genealogy Tree View -->
+				<GenealogyTree
+					images={imageElements}
+					checkedOutId={checkedOutId}
+					onCheckout={handleTreeCheckout}
+				/>
+			{:else if mounted && Stage}
 				{#if canvas}
 					<svelte:component
 						this={Stage}
@@ -604,5 +664,42 @@
 		width: auto;
 		object-fit: cover;
 		border-radius: 3px;
+	}
+
+	/* View mode toggle */
+	.view-toggle {
+		position: absolute;
+		top: 8px;
+		right: 8px;
+		display: flex;
+		gap: 2px;
+		background: hsl(270, 10%, 10%);
+		border-radius: 6px;
+		padding: 2px;
+		z-index: 10;
+	}
+
+	.view-toggle button {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 28px;
+		height: 28px;
+		border: none;
+		border-radius: 4px;
+		background: transparent;
+		color: hsl(var(--muted-foreground));
+		cursor: pointer;
+		transition: all 0.15s ease;
+	}
+
+	.view-toggle button:hover {
+		background: hsl(270, 15%, 18%);
+		color: hsl(var(--foreground));
+	}
+
+	.view-toggle button.active {
+		background: hsl(270, 20%, 25%);
+		color: hsl(var(--foreground));
 	}
 </style>

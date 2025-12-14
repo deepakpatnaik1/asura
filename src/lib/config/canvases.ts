@@ -19,7 +19,8 @@ export const PERSONA_DEFAULT_CANVAS: Record<string, CanvasType> = {
 	kirby: 'notes',
 	samara: 'carousel',
 	alicja: 'calendar',
-	eva: 'design'
+	eva: 'design',
+	ananya: 'carousel'
 };
 
 /**

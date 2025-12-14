@@ -18,10 +18,16 @@ export const uuidSchema = z.string().uuid('Invalid ID format');
 export const nonEmptyString = z.string().min(1, 'Required');
 
 /** Persona enum (allowed values) */
-export const personaSchema = z.enum(['gunnar', 'kirby', 'samara', 'alicja', 'eva']);
+export const personaSchema = z.enum(['gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya']);
 
 /** Override key enum (personas + processor types for model overrides) */
-export const overrideKeySchema = z.enum(['gunnar', 'kirby', 'samara', 'alicja', 'eva', 'embeddings', 'image_gen', 'compression']);
+export const overrideKeySchema = z.enum([
+	'gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya', // Personas
+	'embeddings', 'compression', // Text processes
+	'image_gen', 'captioning', 'image_edit', // Image processes
+	'tool_calling', // Dedicated tool/function calling
+	'audio_gen', 'video_gen' // Audio/video generation
+]);
 
 // ============================================================================
 // Chat Schemas
@@ -57,33 +63,32 @@ export const compressSchema = z.object({
 
 /** PUT /api/settings - Update user settings */
 export const settingsUpdateSchema = z.object({
-	// Default model for all personas (overridden via model_overrides table)
+	// Core settings
 	default_model: z.string().optional(),
-	selected_embedding_model: z.string().optional(),
 	active_content_id: z.string().uuid().nullable().optional(),
-	// Currently selected persona
 	selected_persona: personaSchema.optional(),
-	// Model for file artisan cut (persistent content processing)
-	file_artisan_model: z.string().nullable().optional()
+
+	// Persona model overrides
+	model_gunnar: z.string().nullable().optional(),
+	model_kirby: z.string().nullable().optional(),
+	model_samara: z.string().nullable().optional(),
+	model_alicja: z.string().nullable().optional(),
+	model_eva: z.string().nullable().optional(),
+	model_ananya: z.string().nullable().optional(),
+
+	// Process model overrides
+	model_embeddings: z.string().nullable().optional(),
+	model_image_gen: z.string().nullable().optional(),
+	model_captioning: z.string().nullable().optional(),
+	model_image_edit: z.string().nullable().optional(),
+	model_tool_calling: z.string().nullable().optional(),
+	model_audio_gen: z.string().nullable().optional(),
+	model_video_gen: z.string().nullable().optional(),
+	model_compression: z.string().nullable().optional()
 }).refine(
 	(data) => Object.keys(data).length > 0,
 	{ message: 'At least one field must be provided' }
 );
-
-// ============================================================================
-// Model Overrides Schemas
-// ============================================================================
-
-/** POST /api/model-overrides - Create model override */
-export const createModelOverrideSchema = z.object({
-	persona: overrideKeySchema,
-	model: z.string().min(1, 'Model identifier is required')
-});
-
-/** DELETE /api/model-overrides - Delete model override */
-export const deleteModelOverrideSchema = z.object({
-	persona: overrideKeySchema
-});
 
 // ============================================================================
 // Reader Schemas

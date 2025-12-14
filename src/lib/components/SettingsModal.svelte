@@ -22,10 +22,11 @@
 		context_window: number;
 		input_price_per_million: number;
 		output_price_per_million: number;
+		cost_per_image: number;
 	}
 
 	// All override keys (personas + processors)
-	const OVERRIDE_KEYS = ['gunnar', 'kirby', 'samara', 'alicja', 'eva', 'embeddings', 'image_gen', 'compression'] as const;
+	const OVERRIDE_KEYS = ['gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya', 'embeddings', 'image_gen', 'captioning', 'image_edit', 'tool_calling', 'audio_gen', 'video_gen', 'compression'] as const;
 	type OverrideKey = typeof OVERRIDE_KEYS[number];
 
 	let models = $state<Model[]>([]);
@@ -36,8 +37,14 @@
 		samara: '',
 		alicja: '',
 		eva: '',
+		ananya: '',
 		embeddings: '',
 		image_gen: '',
+		captioning: '',
+		image_edit: '',
+		tool_calling: '',
+		audio_gen: '',
+		video_gen: '',
 		compression: ''
 	});
 	let isLoading = $state(true);
@@ -86,7 +93,13 @@
 		switch (type) {
 			case 'text_generation': return 'text';
 			case 'image_generation': return 'image';
+			case 'image_edit': return 'edit';
+			case 'captioning': return 'caption';
 			case 'embedding': return 'embed';
+			case 'tool_calling': return 'tools';
+			case 'audio_generation': return 'audio';
+			case 'audio_transcription': return 'transcribe';
+			case 'video_generation': return 'video';
 			default: return type;
 		}
 	}
@@ -101,32 +114,37 @@
 	// Fetch data on mount
 	onMount(async () => {
 		try {
-			// Fetch models, settings, and overrides in parallel
-			const [modelsRes, settingsRes, overridesRes] = await Promise.all([
+			// Fetch models and settings in parallel
+			const [modelsRes, settingsRes] = await Promise.all([
 				fetch('/api/models'),
-				fetch('/api/settings'),
-				fetch('/api/model-overrides')
+				fetch('/api/settings')
 			]);
 
 			if (!modelsRes.ok) throw new Error('Failed to fetch models');
 			if (!settingsRes.ok) throw new Error('Failed to fetch settings');
-			if (!overridesRes.ok) throw new Error('Failed to fetch model overrides');
 
 			models = await modelsRes.json();
 			const settings = await settingsRes.json();
-			const overrides: { persona: string; model: string }[] = await overridesRes.json();
 
 			defaultModel = settings.default_model || DEFAULT_MODEL;
 
-			// Initialize all overrides to default model
-			for (const key of OVERRIDE_KEYS) {
-				modelOverrides[key] = defaultModel;
-			}
+			// Persona keys use defaultModel as fallback (they're all text models)
+			const personaKeys = ['gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya'] as const;
 
-			// Apply any saved overrides
-			for (const override of overrides) {
-				if (OVERRIDE_KEYS.includes(override.persona as OverrideKey)) {
-					modelOverrides[override.persona as OverrideKey] = override.model;
+			// Load model overrides from settings
+			for (const key of OVERRIDE_KEYS) {
+				const columnName = `model_${key}` as keyof typeof settings;
+				const savedValue = settings[columnName];
+
+				if (savedValue) {
+					// Use saved value if it exists
+					modelOverrides[key] = savedValue;
+				} else if (personaKeys.includes(key as typeof personaKeys[number])) {
+					// Personas fallback to defaultModel (text generation)
+					modelOverrides[key] = defaultModel;
+				} else {
+					// Process types: leave empty if not set (dropdown will show blank)
+					modelOverrides[key] = '';
 				}
 			}
 
@@ -138,48 +156,23 @@
 		}
 	});
 
-	// Auto-save default model setting
-	async function saveDefaultModel() {
+	// Save a setting to user_settings table
+	async function saveSetting(data: Record<string, unknown>) {
 		errorMessage = null;
 
 		try {
 			const response = await fetch('/api/settings', {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					default_model: defaultModel
-				})
+				body: JSON.stringify(data)
 			});
 
 			if (!response.ok) {
-				throw new Error('Failed to save settings');
+				throw new Error('Failed to save setting');
 			}
 		} catch (error) {
 			console.error('[SettingsModal] Failed to save:', error);
-			errorMessage = 'Failed to save settings.';
-		}
-	}
-
-	// Save a model override
-	async function saveModelOverride(key: OverrideKey, model: string) {
-		errorMessage = null;
-
-		try {
-			const response = await fetch('/api/model-overrides', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					persona: key,
-					model: model
-				})
-			});
-
-			if (!response.ok) {
-				throw new Error('Failed to save model override');
-			}
-		} catch (error) {
-			console.error('[SettingsModal] Failed to save override:', error);
-			errorMessage = 'Failed to save model override.';
+			errorMessage = 'Failed to save setting.';
 		}
 	}
 
@@ -190,21 +183,22 @@
 		defaultModel = newDefault;
 
 		// Cascade: update all overrides that were using the old default
+		const updates: Record<string, string> = { default_model: newDefault };
 		for (const key of OVERRIDE_KEYS) {
 			if (modelOverrides[key] === oldDefault) {
 				modelOverrides[key] = newDefault;
-				saveModelOverride(key, newDefault);
+				updates[`model_${key}`] = newDefault;
 			}
 		}
 
-		saveDefaultModel();
+		saveSetting(updates);
 	}
 
 	// Handle individual override change
 	function handleOverrideChange(key: OverrideKey, event: Event) {
 		const newModel = (event.target as HTMLSelectElement).value;
 		modelOverrides[key] = newModel;
-		saveModelOverride(key, newModel);
+		saveSetting({ [`model_${key}`]: newModel });
 	}
 
 	// Handle overlay click (close modal)
@@ -351,6 +345,138 @@
 		}));
 	});
 
+	// Group captioning models by provider (for Captioning dropdown)
+	const captioningModelsByProvider = $derived(() => {
+		const captioningModels = models.filter((m) => m.model_type === 'captioning');
+
+		const grouped = captioningModels.reduce((acc, model) => {
+			const provider = model.provider;
+			if (!acc[provider]) acc[provider] = [];
+			acc[provider].push(model);
+			return acc;
+		}, {} as Record<string, Model[]>);
+
+		for (const provider of Object.keys(grouped)) {
+			grouped[provider].sort((a, b) => a.model_name.localeCompare(b.model_name));
+		}
+
+		const providers = Object.keys(grouped).sort((a, b) => {
+			if (a === 'replicate') return -1;
+			if (b === 'replicate') return 1;
+			return a.localeCompare(b);
+		});
+
+		return providers.map(provider => ({
+			provider,
+			label: provider.charAt(0).toUpperCase() + provider.slice(1),
+			models: grouped[provider]
+		}));
+	});
+
+	// Group image edit models by provider (for Image Edit dropdown)
+	const imageEditModelsByProvider = $derived(() => {
+		const imageEditModels = models.filter((m) => m.model_type === 'image_edit');
+
+		const grouped = imageEditModels.reduce((acc, model) => {
+			const provider = model.provider;
+			if (!acc[provider]) acc[provider] = [];
+			acc[provider].push(model);
+			return acc;
+		}, {} as Record<string, Model[]>);
+
+		for (const provider of Object.keys(grouped)) {
+			grouped[provider].sort((a, b) => a.model_name.localeCompare(b.model_name));
+		}
+
+		const providers = Object.keys(grouped).sort((a, b) => {
+			if (a === 'fal') return -1;
+			if (b === 'fal') return 1;
+			return a.localeCompare(b);
+		});
+
+		return providers.map(provider => ({
+			provider,
+			label: provider.charAt(0).toUpperCase() + provider.slice(1),
+			models: grouped[provider]
+		}));
+	});
+
+	// Group tool calling models by provider (for Tool calling dropdown)
+	const toolCallingModelsByProvider = $derived(() => {
+		const toolCallingModels = models.filter((m) => m.model_type === 'tool_calling');
+
+		const grouped = toolCallingModels.reduce((acc, model) => {
+			const provider = model.provider;
+			if (!acc[provider]) acc[provider] = [];
+			acc[provider].push(model);
+			return acc;
+		}, {} as Record<string, Model[]>);
+
+		for (const provider of Object.keys(grouped)) {
+			grouped[provider].sort((a, b) => a.model_name.localeCompare(b.model_name));
+		}
+
+		const providers = Object.keys(grouped).sort((a, b) => {
+			if (a === 'groq') return -1;
+			if (b === 'groq') return 1;
+			return a.localeCompare(b);
+		});
+
+		return providers.map(provider => ({
+			provider,
+			label: provider.charAt(0).toUpperCase() + provider.slice(1),
+			models: grouped[provider]
+		}));
+	});
+
+	// Group audio generation models by provider (for Audio gen dropdown)
+	const audioModelsByProvider = $derived(() => {
+		const audioModels = models.filter((m) => m.model_type === 'audio_generation');
+
+		const grouped = audioModels.reduce((acc, model) => {
+			const provider = model.provider;
+			if (!acc[provider]) acc[provider] = [];
+			acc[provider].push(model);
+			return acc;
+		}, {} as Record<string, Model[]>);
+
+		for (const provider of Object.keys(grouped)) {
+			grouped[provider].sort((a, b) => a.model_name.localeCompare(b.model_name));
+		}
+
+		const providers = Object.keys(grouped).sort((a, b) => a.localeCompare(b));
+
+		return providers.map(provider => ({
+			provider,
+			label: provider.charAt(0).toUpperCase() + provider.slice(1),
+			models: grouped[provider]
+		}));
+	});
+
+	// Group video generation models by provider (for Video gen dropdown)
+	const videoModelsByProvider = $derived(() => {
+		const videoModels = models.filter((m) => m.model_type === 'video_generation');
+
+		const grouped = videoModels.reduce((acc, model) => {
+			const provider = model.provider;
+			if (!acc[provider]) acc[provider] = [];
+			acc[provider].push(model);
+			return acc;
+		}, {} as Record<string, Model[]>);
+
+		for (const provider of Object.keys(grouped)) {
+			grouped[provider].sort((a, b) => a.model_name.localeCompare(b.model_name));
+		}
+
+		const providers = Object.keys(grouped).sort((a, b) => a.localeCompare(b));
+
+		return providers.map(provider => ({
+			provider,
+			label: provider.charAt(0).toUpperCase() + provider.slice(1),
+			models: grouped[provider]
+		}));
+	});
+
 	// Group ALL models by provider (for All Models list)
 	const allModelsByProvider = $derived(() => {
 		// Group by provider
@@ -464,6 +590,18 @@
 									{/each}
 								</select>
 							</div>
+							<div class="dropdown-row">
+								<label for="ananya-select">Ananya</label>
+								<select id="ananya-select" value={modelOverrides.ananya} onchange={(e) => handleOverrideChange('ananya', e)}>
+									{#each modelsByProvider() as group}
+										<optgroup label={group.label}>
+											{#each group.models as model}
+												<option value={model.model_identifier}>{model.model_name}</option>
+											{/each}
+										</optgroup>
+									{/each}
+								</select>
+							</div>
 						</div>
 
 						<!-- Processes Section -->
@@ -494,7 +632,67 @@
 								</select>
 							</div>
 							<div class="dropdown-row">
-								<label for="compression-select">Compression</label>
+								<label for="captioning-select">Captioning</label>
+								<select id="captioning-select" value={modelOverrides.captioning} onchange={(e) => handleOverrideChange('captioning', e)}>
+									{#each captioningModelsByProvider() as group}
+										<optgroup label={group.label}>
+											{#each group.models as model}
+												<option value={model.model_identifier}>{model.model_name}</option>
+											{/each}
+										</optgroup>
+									{/each}
+								</select>
+							</div>
+							<div class="dropdown-row">
+								<label for="image-edit-select">Image edit</label>
+								<select id="image-edit-select" value={modelOverrides.image_edit} onchange={(e) => handleOverrideChange('image_edit', e)}>
+									{#each imageEditModelsByProvider() as group}
+										<optgroup label={group.label}>
+											{#each group.models as model}
+												<option value={model.model_identifier}>{model.model_name}</option>
+											{/each}
+										</optgroup>
+									{/each}
+								</select>
+							</div>
+							<div class="dropdown-row">
+								<label for="tool-calling-select">Tool calling</label>
+								<select id="tool-calling-select" value={modelOverrides.tool_calling} onchange={(e) => handleOverrideChange('tool_calling', e)}>
+									{#each toolCallingModelsByProvider() as group}
+										<optgroup label={group.label}>
+											{#each group.models as model}
+												<option value={model.model_identifier}>{model.model_name}</option>
+											{/each}
+										</optgroup>
+									{/each}
+								</select>
+							</div>
+							<div class="dropdown-row">
+								<label for="audio-gen-select">Audio gen</label>
+								<select id="audio-gen-select" value={modelOverrides.audio_gen} onchange={(e) => handleOverrideChange('audio_gen', e)}>
+									{#each audioModelsByProvider() as group}
+										<optgroup label={group.label}>
+											{#each group.models as model}
+												<option value={model.model_identifier}>{model.model_name}</option>
+											{/each}
+										</optgroup>
+									{/each}
+								</select>
+							</div>
+							<div class="dropdown-row">
+								<label for="video-gen-select">Video gen</label>
+								<select id="video-gen-select" value={modelOverrides.video_gen} onchange={(e) => handleOverrideChange('video_gen', e)}>
+									{#each videoModelsByProvider() as group}
+										<optgroup label={group.label}>
+											{#each group.models as model}
+												<option value={model.model_identifier}>{model.model_name}</option>
+											{/each}
+										</optgroup>
+									{/each}
+								</select>
+							</div>
+							<div class="dropdown-row">
+								<label for="compression-select">File artisan cut</label>
 								<select id="compression-select" value={modelOverrides.compression} onchange={(e) => handleOverrideChange('compression', e)}>
 									{#each modelsByProvider() as group}
 										<optgroup label={group.label}>
@@ -519,8 +717,13 @@
 											<div class="model-row">
 												<span class="model-name">{model.model_name}</span>
 												<span class="model-type">{formatModelType(model.model_type)}</span>
-												<span class="model-price">${formatPrice(model.input_price_per_million)}</span>
-												<span class="model-price">${formatPrice(model.output_price_per_million)}</span>
+												{#if model.model_type === 'image_generation' || model.model_type === 'image_edit' || model.model_type === 'captioning'}
+													<span class="model-price" title="Cost per image">${formatPrice(model.cost_per_image ?? 0)}/img</span>
+													<span class="model-price"></span>
+												{:else}
+													<span class="model-price">${formatPrice(model.input_price_per_million)}</span>
+													<span class="model-price">${formatPrice(model.output_price_per_million)}</span>
+												{/if}
 												<button
 													class="delete-btn"
 													class:confirming={deleteConfirm.isActive && deleteConfirm.targetId === model.model_identifier}
@@ -614,6 +817,7 @@
 		display: grid;
 		grid-template-columns: 1fr 1fr;
 		gap: 40px;
+		align-items: start;
 	}
 
 	.column-left,
@@ -885,8 +1089,33 @@
 		margin-left: 13px;
 	}
 
+	/*
+	 * All Models list height formula:
+	 * Height = 30(x + y) + 39, where x = personas dropdowns, y = processes dropdowns
+	 *
+	 * Breakdown:
+	 * - Dropdown height: 24px (15.98px content + 6px padding + 2px border)
+	 * - Gap between dropdowns: 6px (margin-bottom on .dropdown-row)
+	 * - Section 1 (Personas): x × 24 + (x-1) × 6 = 30x - 6
+	 * - Section gap: 51px (20px section margin + 23px heading + 8px heading margin)
+	 * - Section 2 (Processes): y × 24 + (y-1) × 6 = 30y - 6
+	 * - Total: 30x - 6 + 51 + 30y - 6 = 30(x + y) + 39
+	 *
+	 * Update these counts when adding/removing dropdowns:
+	 */
 	.all-models-list {
-		max-height: 280px;
+		--personas-count: 6;      /* Gunnar, Kirby, Samara, Alicja, Eva, Ananya */
+		--processes-count: 8;     /* Embeddings, Image gen, Captioning, Image edit, Tool calling, Audio gen, Video gen, Compression */
+		--dropdown-height: 24px;
+		--dropdown-gap: 6px;
+		--section-gap: 51px;      /* 20px + 23px + 8px */
+
+		/* Formula: 30(x + y) + 39 */
+		height: calc(
+			(var(--dropdown-height) + var(--dropdown-gap)) * (var(--personas-count) + var(--processes-count))
+			+ var(--section-gap)
+			- var(--dropdown-gap) * 2
+		);
 		overflow-y: auto;
 		border: 1px solid hsl(var(--border));
 		background: #000;

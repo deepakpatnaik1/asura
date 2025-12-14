@@ -1,7 +1,7 @@
 -- Create article_chat_charts table for LLM-generated tables in reader Q&A
 -- Mirrors superjournal_charts pattern but keyed by article_chat message ID
 
-CREATE TABLE article_chat_charts (
+CREATE TABLE IF NOT EXISTS article_chat_charts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   article_chat_id UUID NOT NULL REFERENCES article_chat(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -14,8 +14,8 @@ CREATE TABLE article_chat_charts (
 );
 
 -- Indexes for performance
-CREATE INDEX idx_article_chat_charts_article_chat_id ON article_chat_charts(article_chat_id);
-CREATE INDEX idx_article_chat_charts_user_id ON article_chat_charts(user_id);
+CREATE INDEX IF NOT EXISTS idx_article_chat_charts_article_chat_id ON article_chat_charts(article_chat_id);
+CREATE INDEX IF NOT EXISTS idx_article_chat_charts_user_id ON article_chat_charts(user_id);
 
 -- Enable Row-Level Security
 ALTER TABLE article_chat_charts ENABLE ROW LEVEL SECURITY;
@@ -30,4 +30,4 @@ CREATE POLICY "Users can insert own article chat charts" ON article_chat_charts
 CREATE POLICY "Users can delete own article chat charts" ON article_chat_charts
   FOR DELETE USING (auth.uid() = user_id);
 
-COMMENT ON TABLE article_chat_charts IS 'Stores SVG tables extracted from Samara AI responses in reader Q&A mode.';
+COMMENT ON TABLE article_chat_charts IS 'Stores SVG tables extracted from Samara AI responses in reader Q&A.';

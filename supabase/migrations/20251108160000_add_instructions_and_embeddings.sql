@@ -2,11 +2,11 @@
 -- Note: embedding field and HNSW index already exist in 20251108000002_create_journal.sql
 
 ALTER TABLE journal
-  ADD COLUMN is_instruction BOOLEAN DEFAULT false NOT NULL,
-  ADD COLUMN instruction_scope TEXT;
+  ADD COLUMN IF NOT EXISTS is_instruction BOOLEAN DEFAULT false NOT NULL,
+  ADD COLUMN IF NOT EXISTS instruction_scope TEXT;
 
 -- Create index for instruction filtering (partial index for efficiency)
-CREATE INDEX journal_instruction_scope_idx
+CREATE INDEX IF NOT EXISTS journal_instruction_scope_idx
   ON journal (is_instruction, instruction_scope)
   WHERE is_instruction = true;
 

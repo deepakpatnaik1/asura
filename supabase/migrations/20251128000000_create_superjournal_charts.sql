@@ -1,7 +1,7 @@
--- Create superjournal_charts table for LLM-generated tables in chat mode
+-- Create superjournal_charts table for LLM-generated tables
 -- Mirrors article_charts structure; stores SVG renders of markdown tables
 
-CREATE TABLE superjournal_charts (
+CREATE TABLE IF NOT EXISTS superjournal_charts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   superjournal_id UUID NOT NULL REFERENCES superjournal(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -15,8 +15,8 @@ CREATE TABLE superjournal_charts (
 );
 
 -- Indexes
-CREATE INDEX idx_superjournal_charts_superjournal_id ON superjournal_charts(superjournal_id);
-CREATE INDEX idx_superjournal_charts_user_id ON superjournal_charts(user_id);
+CREATE INDEX IF NOT EXISTS idx_superjournal_charts_superjournal_id ON superjournal_charts(superjournal_id);
+CREATE INDEX IF NOT EXISTS idx_superjournal_charts_user_id ON superjournal_charts(user_id);
 
 -- Enable RLS
 ALTER TABLE superjournal_charts ENABLE ROW LEVEL SECURITY;
@@ -31,4 +31,4 @@ CREATE POLICY "Users can insert own charts" ON superjournal_charts
 CREATE POLICY "Users can delete own charts" ON superjournal_charts
   FOR DELETE USING (auth.uid() = user_id);
 
-COMMENT ON TABLE superjournal_charts IS 'Stores SVG renders of markdown tables extracted from AI responses in chat mode.';
+COMMENT ON TABLE superjournal_charts IS 'Stores SVG renders of markdown tables extracted from AI responses.';

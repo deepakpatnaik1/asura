@@ -1,7 +1,7 @@
 -- Create personas table as single source of truth for AI personas
 -- Replaces hardcoded PERSONAS config in personas.ts
 
-CREATE TABLE personas (
+CREATE TABLE IF NOT EXISTS personas (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT UNIQUE NOT NULL,           -- 'gunnar', 'kirby', 'samara'
   display_name TEXT NOT NULL,          -- 'Gunnar', 'Kirby', 'Samara'
@@ -27,4 +27,4 @@ INSERT INTO personas (name, display_name, mode) VALUES
 COMMENT ON TABLE personas IS 'AI personas available in the system';
 COMMENT ON COLUMN personas.name IS 'Lowercase identifier used in code';
 COMMENT ON COLUMN personas.display_name IS 'Human-readable name shown in UI';
-COMMENT ON COLUMN personas.mode IS 'Which conversation mode this persona is available in';
+-- mode column is dropped by later migration (20251206000000_simplification.sql)

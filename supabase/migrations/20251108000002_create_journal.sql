@@ -21,44 +21,44 @@ CREATE TABLE IF NOT EXISTS public.journal (
 );
 
 -- Create index on user_id for efficient querying
-CREATE INDEX idx_journal_user_id ON public.journal(user_id);
+CREATE INDEX IF NOT EXISTS idx_journal_user_id ON public.journal(user_id);
 
 -- Create index on created_at for efficient sorting
-CREATE INDEX idx_journal_created_at ON public.journal(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_journal_created_at ON public.journal(created_at DESC);
 
 -- Create index on is_starred for efficient filtering
-CREATE INDEX idx_journal_is_starred ON public.journal(is_starred) WHERE is_starred = true;
+CREATE INDEX IF NOT EXISTS idx_journal_is_starred ON public.journal(is_starred) WHERE is_starred = true;
 
 -- Create index on salience_score for efficient filtering
-CREATE INDEX idx_journal_salience_score ON public.journal(salience_score DESC);
+CREATE INDEX IF NOT EXISTS idx_journal_salience_score ON public.journal(salience_score DESC);
 
 -- Create index on superjournal_id for cascading deletes
-CREATE INDEX idx_journal_superjournal_id ON public.journal(superjournal_id);
+CREATE INDEX IF NOT EXISTS idx_journal_superjournal_id ON public.journal(superjournal_id);
 
 -- Create HNSW index for vector similarity search
-CREATE INDEX idx_journal_embedding ON public.journal
+CREATE INDEX IF NOT EXISTS idx_journal_embedding ON public.journal
     USING hnsw (embedding vector_cosine_ops);
 
 -- Enable Row Level Security
 ALTER TABLE public.journal ENABLE ROW LEVEL SECURITY;
 
 -- Create policy: Users can only access their own journal entries
-CREATE POLICY "Users can view their own journal entries"
-    ON public.journal
-    FOR SELECT
-    USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can insert their own journal entries"
-    ON public.journal
-    FOR INSERT
-    WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Users can update their own journal entries"
-    ON public.journal
-    FOR UPDATE
-    USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can delete their own journal entries"
-    ON public.journal
-    FOR DELETE
-    USING (auth.uid() = user_id);
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can view their own journal entries' AND tablename = 'journal') THEN
+        CREATE POLICY "Users can view their own journal entries"
+            ON public.journal FOR SELECT USING (auth.uid() = user_id);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can insert their own journal entries' AND tablename = 'journal') THEN
+        CREATE POLICY "Users can insert their own journal entries"
+            ON public.journal FOR INSERT WITH CHECK (auth.uid() = user_id);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can update their own journal entries' AND tablename = 'journal') THEN
+        CREATE POLICY "Users can update their own journal entries"
+            ON public.journal FOR UPDATE USING (auth.uid() = user_id);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can delete their own journal entries' AND tablename = 'journal') THEN
+        CREATE POLICY "Users can delete their own journal entries"
+            ON public.journal FOR DELETE USING (auth.uid() = user_id);
+    END IF;
+END $$;

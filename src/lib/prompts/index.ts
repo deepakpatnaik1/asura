@@ -10,12 +10,14 @@ export { PERSONA_KIRBY } from './personas/kirby';
 export { PERSONA_SAMARA } from './personas/samara';
 export { PERSONA_ALICJA } from './personas/alicja';
 export { PERSONA_EVA } from './personas/eva';
+export { PERSONA_ANANYA } from './personas/ananya';
 
 import { PERSONA_GUNNAR } from './personas/gunnar';
 import { PERSONA_KIRBY } from './personas/kirby';
 import { PERSONA_SAMARA } from './personas/samara';
 import { PERSONA_ALICJA } from './personas/alicja';
 import { PERSONA_EVA } from './personas/eva';
+import { PERSONA_ANANYA } from './personas/ananya';
 
 /** Lookup map for persona prompts by name */
 const PERSONA_PROMPTS: Record<string, string> = {
@@ -24,6 +26,7 @@ const PERSONA_PROMPTS: Record<string, string> = {
 	samara: PERSONA_SAMARA,
 	alicja: PERSONA_ALICJA,
 	eva: PERSONA_EVA,
+	ananya: PERSONA_ANANYA,
 	suki: PERSONA_EVA // Legacy alias for eva
 };
 

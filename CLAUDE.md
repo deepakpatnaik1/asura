@@ -27,8 +27,25 @@ Persona dropdown switches who you talk to next. History shows all personas inter
 
 - **Frontend**: SvelteKit 2.x, Svelte 5 runes (`$state`, `$effect`, `$props`, `$derived`)
 - **Backend**: SvelteKit API routes, Supabase PostgreSQL with RLS
+- **Database**: Local Supabase via Docker Desktop (port 54322)
 - **AI**: Anthropic Claude, Voyage AI embeddings (pgvector)
 - **APIs**: Brave Search, Cheerio, pdf-parse, Sharp
+
+## Local Database (Local-Only Setup)
+
+**We use local Supabase via Docker Desktop exclusively. No remote database.**
+
+Run migrations:
+```bash
+PGPASSWORD=postgres psql -h localhost -p 54322 -U postgres -d postgres -f supabase/migrations/MIGRATION_FILE.sql
+```
+
+Query the database:
+```bash
+PGPASSWORD=postgres psql -h localhost -p 54322 -U postgres -d postgres -c "SELECT * FROM models;"
+```
+
+**Do NOT use any `npx supabase db` commands** - they target remote Supabase which we don't use.
 
 ## Commands
 

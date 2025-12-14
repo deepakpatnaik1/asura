@@ -1,4 +1,4 @@
--- Update vector search function to remove mode filter (mode column was dropped)
+-- Update vector search function to remove mode filter
 
 CREATE OR REPLACE FUNCTION search_journal_by_embedding(
   query_embedding TEXT,

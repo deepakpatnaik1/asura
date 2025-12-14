@@ -105,33 +105,27 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 
 		const { message, persona: requestPersona, chart_id, chart_source, content_ids, whiteboard_ids, canvas_ids } = validation.data;
 
-		// 4. Load user settings (persona and model)
+		// 4. Load user settings (persona and all model overrides in one query)
 		const { data: settings } = await supabase
 			.from('user_settings')
-			.select('selected_persona, default_model')
+			.select(`selected_persona, default_model,
+				model_gunnar, model_kirby, model_samara, model_alicja, model_eva, model_ananya,
+				model_image_gen, model_image_edit, model_captioning, model_tool_calling`)
 			.eq('user_id', userId)
 			.single();
 
 		const persona = requestPersona || settings?.selected_persona || DEFAULT_PERSONA;
 
-		// Check for per-persona model override
-		const { data: modelOverride } = await supabase
-			.from('model_overrides')
-			.select('model')
-			.eq('user_id', userId)
-			.eq('persona', persona)
-			.single();
+		// Get per-persona model override from settings
+		const personaModelColumn = `model_${persona}`;
+		const personaModel = settings ? (settings as Record<string, unknown>)[personaModelColumn] : null;
+		const conversationModel = (personaModel as string) || settings?.default_model || DEFAULT_MODEL;
 
-		const conversationModel = modelOverride?.model || settings?.default_model || DEFAULT_MODEL;
-
-		// Fetch image_gen model override for Eva's generate_image tool
-		const { data: imageModelOverride } = await supabase
-			.from('model_overrides')
-			.select('model')
-			.eq('user_id', userId)
-			.eq('persona', 'image_gen')
-			.single();
-		const defaultImageModel = imageModelOverride?.model;
+		// Get image/caption/tool model overrides for Eva's tools
+		const defaultImageModel = settings?.model_image_gen || undefined;
+		const defaultImageEditModel = settings?.model_image_edit || undefined;
+		const defaultCaptioningModel = settings?.model_captioning || undefined;
+		const defaultToolCallingModel = settings?.model_tool_calling || undefined;
 
 		// 5. Fetch chart image if referenced
 		let chartImage: ChartImageData | null = null;
@@ -289,7 +283,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			let sakuraContext: SakuraToolContext | null = null;
 
 			if (hasSakuraTools) {
-				sakuraContext = { userId, supabase, defaultImageModel };
+				sakuraContext = { userId, supabase, defaultImageModel, defaultImageEditModel, defaultCaptioningModel };
 				allTools.push(...SAKURA_TOOLS);
 			}
 

@@ -1,8 +1,5 @@
 -- Add selected_todo_model column to user_settings
--- Used for todo mode conversations
+-- NOTE: This column is dropped by 20251206000000_simplification.sql
 
 ALTER TABLE user_settings
-ADD COLUMN selected_todo_model TEXT;
-
--- Comment for documentation
-COMMENT ON COLUMN user_settings.selected_todo_model IS 'Model identifier for todo mode conversations';
+ADD COLUMN IF NOT EXISTS selected_todo_model TEXT;

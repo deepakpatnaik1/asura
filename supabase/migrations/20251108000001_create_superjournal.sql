@@ -12,34 +12,34 @@ CREATE TABLE IF NOT EXISTS public.superjournal (
 );
 
 -- Create index on user_id for efficient querying
-CREATE INDEX idx_superjournal_user_id ON public.superjournal(user_id);
+CREATE INDEX IF NOT EXISTS idx_superjournal_user_id ON public.superjournal(user_id);
 
 -- Create index on created_at for efficient sorting
-CREATE INDEX idx_superjournal_created_at ON public.superjournal(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_superjournal_created_at ON public.superjournal(created_at DESC);
 
 -- Create index on is_starred for efficient filtering
-CREATE INDEX idx_superjournal_is_starred ON public.superjournal(is_starred) WHERE is_starred = true;
+CREATE INDEX IF NOT EXISTS idx_superjournal_is_starred ON public.superjournal(is_starred) WHERE is_starred = true;
 
 -- Enable Row Level Security
 ALTER TABLE public.superjournal ENABLE ROW LEVEL SECURITY;
 
 -- Create policy: Users can only access their own superjournal entries
-CREATE POLICY "Users can view their own superjournal entries"
-    ON public.superjournal
-    FOR SELECT
-    USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can insert their own superjournal entries"
-    ON public.superjournal
-    FOR INSERT
-    WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Users can update their own superjournal entries"
-    ON public.superjournal
-    FOR UPDATE
-    USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can delete their own superjournal entries"
-    ON public.superjournal
-    FOR DELETE
-    USING (auth.uid() = user_id);
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can view their own superjournal entries' AND tablename = 'superjournal') THEN
+        CREATE POLICY "Users can view their own superjournal entries"
+            ON public.superjournal FOR SELECT USING (auth.uid() = user_id);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can insert their own superjournal entries' AND tablename = 'superjournal') THEN
+        CREATE POLICY "Users can insert their own superjournal entries"
+            ON public.superjournal FOR INSERT WITH CHECK (auth.uid() = user_id);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can update their own superjournal entries' AND tablename = 'superjournal') THEN
+        CREATE POLICY "Users can update their own superjournal entries"
+            ON public.superjournal FOR UPDATE USING (auth.uid() = user_id);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can delete their own superjournal entries' AND tablename = 'superjournal') THEN
+        CREATE POLICY "Users can delete their own superjournal entries"
+            ON public.superjournal FOR DELETE USING (auth.uid() = user_id);
+    END IF;
+END $$;

@@ -1,5 +1,5 @@
 -- Remove instruction fields from journal table (simplify to star-only persistent memory)
--- Stars become the sole mechanism for persistent memory across both modes
+-- Stars become the sole mechanism for persistent memory
 
 -- Drop instruction columns from journal
 ALTER TABLE journal DROP COLUMN IF EXISTS is_instruction;

@@ -10,4 +10,5 @@ ALTER TABLE model_parameters ADD CONSTRAINT model_parameters_use_case_check
 INSERT INTO model_parameters (model_identifier, use_case, temperature, max_tokens, thinking_enabled, max_tokens_thinking)
 SELECT model_identifier, 'reader', temperature, max_tokens, thinking_enabled, max_tokens_thinking
 FROM model_parameters
-WHERE use_case = 'conversation';
+WHERE use_case = 'conversation'
+ON CONFLICT (model_identifier, use_case) DO NOTHING;

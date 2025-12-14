@@ -8,7 +8,7 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-export type ProviderType = 'anthropic' | 'openai' | 'google' | 'fireworks' | 'openrouter' | 'together' | 'groq' | 'replicate' | 'fal';
+export type ProviderType = 'anthropic' | 'openai' | 'google' | 'fireworks' | 'openrouter' | 'together' | 'groq' | 'replicate' | 'fal' | 'voyage' | 'modelslab' | 'venice';
 
 /**
  * OpenAI-compatible tool format (used by Fireworks, OpenRouter)
@@ -120,4 +120,29 @@ export function assertProviderSupported(provider: ProviderType): void {
 	if (!isProviderSupported(provider)) {
 		throw new Error(`Provider '${provider}' not implemented.`);
 	}
+}
+
+/**
+ * Check if a model can perform Artisan Cut compression.
+ *
+ * @param supabase - Supabase client
+ * @param modelIdentifier - The model identifier string
+ * @returns True if the model has can_compress = true in the database
+ */
+export async function getModelCanCompress(
+	supabase: SupabaseClient,
+	modelIdentifier: string
+): Promise<boolean> {
+	const { data, error } = await supabase
+		.from('models')
+		.select('can_compress')
+		.eq('model_identifier', modelIdentifier)
+		.single();
+
+	if (error || !data) {
+		// Model not found - default to false (no compression)
+		return false;
+	}
+
+	return data.can_compress === true;
 }

@@ -6,7 +6,12 @@
 -- STEP 2: DROP MODE COLUMNS
 ALTER TABLE superjournal DROP COLUMN IF EXISTS mode;
 ALTER TABLE journal DROP COLUMN IF EXISTS mode;
-ALTER TABLE content DROP COLUMN IF EXISTS mode;
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'content') THEN
+        ALTER TABLE content DROP COLUMN IF EXISTS mode;
+    END IF;
+END $$;
 ALTER TABLE personas DROP COLUMN IF EXISTS mode;
 
 -- STEP 3: SIMPLIFY USER_SETTINGS

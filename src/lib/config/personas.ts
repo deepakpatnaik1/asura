@@ -68,7 +68,9 @@ export type ToolName =
 	| 'update_canvas'
 	// Sakura tools (character design)
 	| 'generate_image'
-	| 'export_character';
+	| 'export_character'
+	| 'caption_image'
+	| 'edit_image';
 
 /**
  * Persona configuration interface
@@ -141,7 +143,7 @@ const GUNNAR_TOOLS: ToolName[] = [
 const EVA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'canvas'];
 
 /**
- * Eva tools: canvas + image generation + export
+ * Eva tools: canvas + image generation + captioning + editing + export
  */
 const EVA_TOOLS: ToolName[] = [
 	'create_canvas',
@@ -151,8 +153,20 @@ const EVA_TOOLS: ToolName[] = [
 	'list_canvases',
 	'update_canvas',
 	'generate_image',
+	'caption_image',
+	'edit_image',
 	'export_character'
 ];
+
+/**
+ * Ananya: Reddit engagement - full memory pyramid + active files
+ */
+const ANANYA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'canon', 'semantic', 'active'];
+
+/**
+ * Ananya tools: empty for now, Reddit tools added in Layer 2
+ */
+const ANANYA_TOOLS: ToolName[] = [];
 
 /**
  * All Alicja tools
@@ -185,7 +199,7 @@ export const PERSONAS: Record<string, Persona> = {
 		name: 'gunnar',
 		displayName: 'Gunnar',
 		accentColor: getPaletteColor('gunnar'),
-		model: null, // uses default, can be overridden in model_overrides
+		model: null, // uses default, can be overridden in user_settings.model_gunnar
 		systemPrompt: 'gunnar', // resolved via getSystemPrompt()
 		contextChunks: GUNNAR_CHUNKS,
 		compression: true,
@@ -231,6 +245,16 @@ export const PERSONAS: Record<string, Persona> = {
 		compression: true,
 		tools: EVA_TOOLS
 	},
+	ananya: {
+		name: 'ananya',
+		displayName: 'Ananya',
+		accentColor: getPaletteColor('ananya'),
+		model: null,
+		systemPrompt: 'ananya', // Reddit engagement manager
+		contextChunks: ANANYA_CHUNKS,
+		compression: true,
+		tools: ANANYA_TOOLS
+	},
 	// Legacy alias for eva (cached browser state may still send 'suki')
 	suki: {
 		name: 'eva',
@@ -247,7 +271,7 @@ export const PERSONAS: Record<string, Persona> = {
 /**
  * Persona names as const array for type safety
  */
-export const PERSONA_NAMES = ['gunnar', 'kirby', 'samara', 'alicja', 'eva'] as const;
+export const PERSONA_NAMES = ['gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya'] as const;
 export type PersonaName = (typeof PERSONA_NAMES)[number];
 
 /**

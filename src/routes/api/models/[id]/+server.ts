@@ -27,15 +27,19 @@ export const DELETE: RequestHandler = async ({ params, locals: { safeGetSession 
 		return json({ error: paramsError.message }, { status: 500 });
 	}
 
-	// Delete from model_overrides
-	const { error: overridesError } = await supabaseAdmin
-		.from('model_overrides')
-		.delete()
-		.eq('model', modelId);
+	// Clear model from user_settings where it's referenced
+	// (Set to null so it falls back to default_model)
+	const modelColumns = [
+		'model_gunnar', 'model_kirby', 'model_samara', 'model_alicja', 'model_eva', 'model_ananya',
+		'model_embeddings', 'model_image_gen', 'model_captioning', 'model_image_edit',
+		'model_audio_gen', 'model_video_gen', 'model_compression'
+	];
 
-	if (overridesError) {
-		console.error('[DELETE /api/models/:id] Error deleting overrides:', overridesError);
-		return json({ error: overridesError.message }, { status: 500 });
+	for (const col of modelColumns) {
+		await supabaseAdmin
+			.from('user_settings')
+			.update({ [col]: null })
+			.eq(col, modelId);
 	}
 
 	// 3. DELETE THE MODEL (use .select() to verify deletion actually happened)
