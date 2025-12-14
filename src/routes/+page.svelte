@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Icon } from 'svelte-icons-pack';
-	import { LuPaperclip, LuFolder, LuStickyNote, LuPalette } from 'svelte-icons-pack/lu';
+	import { LuPaperclip, LuFolder } from 'svelte-icons-pack/lu';
 	import { currentMessage, isLoading, sendMessage, abortCurrentMessage, lastMutations, lastWhiteboardMutations, lastCanvasMutations } from '$lib/stores/chat';
 	import { tick, onMount } from 'svelte';
 	import { DEFAULT_PERSONA, PERSONAS } from '$lib/config/personas';
@@ -14,9 +14,7 @@
 	import PersonaDropdown from '$lib/components/PersonaDropdown.svelte';
 	import CanvasContainer from '$lib/components/CanvasContainer.svelte';
 	import PasteArea from '$lib/components/PasteArea.svelte';
-	import ContentLibrary from '$lib/components/ContentLibrary.svelte';
-	import BoardLibrary from '$lib/components/BoardLibrary.svelte';
-	import CanvasLibrary from '$lib/components/CanvasLibrary.svelte';
+	import UnifiedLibrary from '$lib/components/UnifiedLibrary.svelte';
 	
 	// Receive loaded data from server
 	let { data } = $props();
@@ -225,9 +223,7 @@
 
 	// File paste and library state
 	let showFilePaste = $state(false);
-	let showFileLibrary = $state(false);
-	let showBoardLibrary = $state(false);
-	let showCanvasLibrary = $state(false);
+	let showLibrary = $state(false);
 		interface FileItem {
 		id: string;
 		title: string;
@@ -245,6 +241,11 @@
 	let isDeletingWhiteboard = $state(false);
 	const canvasDeleteConfirm = createConfirmation();
 	let isDeletingCanvas = $state(false);
+
+	// Total selections for library badge
+	const totalLibrarySelections = $derived(
+		files.filter(f => f.is_enabled).length + selectedWhiteboardIds.length + selectedCanvasIds.length
+	);
 
 	let pendingTimeouts: number[] = [];
 
@@ -505,15 +506,6 @@
 		});
 	}
 
-	// Toggle canvas library dropdown
-	function handleCanvasLibraryClick() {
-		showCanvasLibrary = !showCanvasLibrary;
-		if (showCanvasLibrary) {
-			showFileLibrary = false;
-			showBoardLibrary = false;
-		}
-	}
-
 	onMount(() => {
 		textareaRef?.focus();
 
@@ -593,9 +585,8 @@
 		if (!PERSONAS[persona]) return;
 		selectedPersona = persona;
 
-		// Close persona-specific library dropdowns
-		showBoardLibrary = false;
-		showCanvasLibrary = false;
+		// Close library dropdown
+		showLibrary = false;
 
 		// Auto-switch canvas based on persona default
 		forceCanvas = getDefaultCanvasForPersona(persona);
@@ -805,8 +796,7 @@
 
 	// File paste handlers
 	async function handlePaperclipClick() {
-		showFileLibrary = false;
-		showBoardLibrary = false;
+		showLibrary = false;
 		showFilePaste = !showFilePaste;
 		if (showFilePaste) {
 			await tick();
@@ -815,30 +805,22 @@
 		}
 	}
 
-	async function handleFolderClick() {
+	async function handleLibraryClick() {
 		showFilePaste = false;
-		showBoardLibrary = false;
-		showFileLibrary = !showFileLibrary;
-		if (showFileLibrary) {
+		showLibrary = !showLibrary;
+		if (showLibrary) {
 			await loadFiles();
 		}
 	}
 
-	async function handleBoardLibraryClick() {
-		showFilePaste = false;
-		showFileLibrary = false;
-		showBoardLibrary = !showBoardLibrary;
-	}
-
 	function clearWhiteboardSelection() {
 		selectedWhiteboardIds = [];
-		showBoardLibrary = false;
 	}
 
 	function handleOpenWhiteboard(id: string) {
 		viewingWhiteboardId = id;
 		forceCanvas = 'notes';
-		showBoardLibrary = false;
+		showLibrary = false;
 	}
 
 	function handleWhiteboardDeleteClick(whiteboardId: string, event: MouseEvent) {
@@ -915,7 +897,6 @@
 		if (enabledFiles.length === 0) return;
 
 		files = files.map(f => ({ ...f, is_enabled: false }));
-		showFileLibrary = false;
 
 		try {
 			await Promise.all(
@@ -994,7 +975,7 @@
 			setTimeout(() => scrollToLastTurn(CHAT_CONFIG), 100);
 		}
 
-		if (showFileLibrary) loadFiles();
+		if (showLibrary) loadFiles();
 		await loadFileCharts();
 		forceCanvas = 'carousel'; // Switch to carousel when content is pasted
 	}
@@ -1026,23 +1007,13 @@
 	}
 
 	function handleKeydown(event: KeyboardEvent) {
-		if (event.key === 'Escape' && showFileLibrary) {
-			showFileLibrary = false;
+		if (event.key === 'Escape' && showLibrary) {
+			showLibrary = false;
 			textareaRef?.focus();
 			return;
 		}
 		if (event.key === 'Escape' && showFilePaste) {
 			showFilePaste = false;
-			textareaRef?.focus();
-			return;
-		}
-		if (event.key === 'Escape' && showBoardLibrary) {
-			showBoardLibrary = false;
-			textareaRef?.focus();
-			return;
-		}
-		if (event.key === 'Escape' && showCanvasLibrary) {
-			showCanvasLibrary = false;
 			textareaRef?.focus();
 			return;
 		}
@@ -1060,13 +1031,13 @@
 		if (showFilePaste) {
 			const pasteArea = document.querySelector('.paste-area') as HTMLElement;
 			pasteArea?.focus();
-		} else if (!showFileLibrary) {
+		} else if (!showLibrary) {
 			textareaRef?.focus();
 		}
 	}
 
 	function refocusInput() {
-		if (!showFilePaste && !showFileLibrary && !showBoardLibrary && !showCanvasLibrary) {
+		if (!showFilePaste && !showLibrary) {
 			textareaRef?.focus();
 		}
 	}
@@ -1143,73 +1114,42 @@
 						<Icon src={LuPaperclip} size="11" />
 					</button>
 
-					<div class="folder-wrapper">
+					<div class="library-wrapper">
 						<button
 							class="control-btn hit-target"
-							class:active={showFileLibrary}
-							title="File library"
-							onclick={handleFolderClick}
+							class:active={showLibrary || totalLibrarySelections > 0}
+							title="Library"
+							onclick={handleLibraryClick}
 						>
 							<Icon src={LuFolder} size="11" />
-						</button>
-						{#if showFileLibrary}
-							<ContentLibrary
-								items={files}
-								isDeleting={isDeletingFile}
-								onToggle={toggleFile}
-								onRename={renameFile}
-								onDelete={handleFileDeleteClick}
-								onClear={clearAllFiles}
-							/>
-						{/if}
-					</div>
-
-					<div class="board-wrapper">
-						<button
-							class="control-btn hit-target"
-							class:active={showBoardLibrary || selectedWhiteboardIds.length > 0}
-							title="Board library"
-							onclick={handleBoardLibraryClick}
-						>
-							<Icon src={LuStickyNote} size="11" />
-							{#if selectedWhiteboardIds.length > 0}
-								<span class="selection-badge">{selectedWhiteboardIds.length}</span>
+							{#if totalLibrarySelections > 0}
+								<span class="selection-badge">{totalLibrarySelections}</span>
 							{/if}
 						</button>
-						{#if showBoardLibrary}
-							<BoardLibrary
+						{#if showLibrary}
+							<UnifiedLibrary
+								{files}
+								onFileToggle={toggleFile}
+								onFileRename={renameFile}
+								onFileDelete={handleFileDeleteClick}
+								onFileClear={clearAllFiles}
+								isDeletingFile={isDeletingFile}
+
 								{whiteboards}
-								selectedIds={selectedWhiteboardIds}
-								isDeleting={isDeletingWhiteboard}
-								onToggle={toggleWhiteboardSelection}
-								onOpen={handleOpenWhiteboard}
-								onDelete={handleWhiteboardDeleteClick}
-								onClear={clearWhiteboardSelection}
-							/>
-						{/if}
-					</div>
+								selectedWhiteboardIds={selectedWhiteboardIds}
+								onWhiteboardToggle={toggleWhiteboardSelection}
+								onWhiteboardOpen={handleOpenWhiteboard}
+								onWhiteboardDelete={handleWhiteboardDeleteClick}
+								onWhiteboardClear={clearWhiteboardSelection}
+								isDeletingWhiteboard={isDeletingWhiteboard}
 
-					<div class="canvas-wrapper">
-						<button
-							class="control-btn hit-target"
-							class:active={showCanvasLibrary || selectedCanvasIds.length > 0}
-							title="Canvas library"
-							onclick={handleCanvasLibraryClick}
-						>
-							<Icon src={LuPalette} size="11" />
-							{#if selectedCanvasIds.length > 0}
-								<span class="selection-badge">{selectedCanvasIds.length}</span>
-							{/if}
-						</button>
-						{#if showCanvasLibrary}
-							<CanvasLibrary
 								canvases={evaCanvases}
-								selectedIds={selectedCanvasIds}
-								isDeleting={isDeletingCanvas}
-								onToggle={toggleCanvasSelection}
-								onOpen={handleOpenCanvas}
-								onDelete={handleCanvasDeleteClick}
-								onClear={clearCanvasSelection}
+								selectedCanvasIds={selectedCanvasIds}
+								onCanvasToggle={toggleCanvasSelection}
+								onCanvasOpen={handleOpenCanvas}
+								onCanvasDelete={handleCanvasDeleteClick}
+								onCanvasClear={clearCanvasSelection}
+								isDeletingCanvas={isDeletingCanvas}
 							/>
 						{/if}
 					</div>
@@ -1385,9 +1325,7 @@
 		border-radius: 6px;
 	}
 
-	.folder-wrapper,
-	.board-wrapper,
-	.canvas-wrapper {
+	.library-wrapper {
 		position: relative;
 	}
 

@@ -1,13 +1,11 @@
 <script lang="ts">
 	/**
-	 * CanvasSwitcher - Vertical icon tab stack for switching canvas types
+	 * CanvasSwitcher - Vertical text tab stack for switching canvas types
 	 *
 	 * Positioned at the canvas column edge, aligned with the input bar.
-	 * Active canvas icon shows mode accent color.
+	 * Active canvas shows mode accent color.
 	 */
 
-	import { Icon } from 'svelte-icons-pack';
-	import { LuLayoutGrid, LuCalendar, LuStickyNote, LuPalette } from 'svelte-icons-pack/lu';
 	import { CANVAS_TYPES, CANVAS_META, type CanvasType } from '$lib/config/canvases';
 	import { getPersonaColor } from '$lib/config/personas';
 
@@ -19,18 +17,6 @@
 
 	let { persona, activeCanvas, onSelect }: Props = $props();
 
-	// Map icon names to components
-	const ICON_MAP = {
-		LuLayoutGrid,
-		LuCalendar,
-		LuStickyNote,
-		LuPalette
-	} as const;
-
-	function getIcon(iconName: string) {
-		return ICON_MAP[iconName as keyof typeof ICON_MAP] || LuLayoutGrid;
-	}
-
 	// Get accent color from persona
 	const accentColor = $derived(getPersonaColor(persona));
 </script>
@@ -40,11 +26,10 @@
 		<button
 			class="switcher-btn"
 			class:active={activeCanvas === canvasType}
-			title={CANVAS_META[canvasType].label}
 			onclick={() => onSelect(canvasType)}
 			style:--active-color={accentColor}
 		>
-			<Icon src={getIcon(CANVAS_META[canvasType].icon)} size="14" />
+			{CANVAS_META[canvasType].label}
 		</button>
 	{/each}
 </div>
@@ -53,21 +38,21 @@
 	.canvas-switcher {
 		display: flex;
 		flex-direction: column;
-		gap: 1px;
-		padding: 2px 4px;
+		gap: 2px;
+		padding: 4px;
 	}
 
 	.switcher-btn {
 		background: transparent;
 		border: none;
 		cursor: pointer;
-		padding: 2px;
+		padding: 4px 8px;
 		border-radius: 4px;
 		opacity: 0.5;
 		transition: all 0.2s;
-		display: flex;
-		align-items: center;
-		justify-content: center;
+		font-size: 0.8em;
+		text-align: left;
+		white-space: nowrap;
 	}
 
 	.switcher-btn:hover {

@@ -118,7 +118,7 @@ const KIRBY_CHUNKS: ContextChunk[] = [
 /**
  * Samara: Article-focused, no conversation memory (Wikipedia mode)
  */
-const SAMARA_CHUNKS: ContextChunk[] = ['starred', 'canon', 'active'];
+const SAMARA_CHUNKS: ContextChunk[] = ['working', 'starred', 'canon', 'active'];
 
 /**
  * Alicja: Scribe - productivity data + her own conversation memory
