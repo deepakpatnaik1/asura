@@ -6,7 +6,7 @@
  * across modes, but takes on mode-specific styling and data sources.
  */
 
-export const CANVAS_TYPES = ['carousel', 'calendar', 'notes', 'design'] as const;
+export const CANVAS_TYPES = ['carousel', 'calendar', 'notes', 'designer'] as const;
 export type CanvasType = (typeof CANVAS_TYPES)[number];
 
 export const DEFAULT_CANVAS: CanvasType = 'carousel';
@@ -19,7 +19,7 @@ export const PERSONA_DEFAULT_CANVAS: Record<string, CanvasType> = {
 	kirby: 'notes',
 	samara: 'carousel',
 	alicja: 'calendar',
-	eva: 'design',
+	eva: 'designer',
 	ananya: 'carousel'
 };
 
@@ -49,9 +49,9 @@ export const CANVAS_META: Record<CanvasType, { icon: string; label: string; desc
 		label: 'Scratch',
 		description: 'Markdown scratch pad'
 	},
-	design: {
+	designer: {
 		icon: 'LuPalette',
-		label: 'Design',
+		label: 'Designer',
 		description: 'Character design canvas'
 	}
 };

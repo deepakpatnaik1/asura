@@ -1,9 +1,9 @@
 /**
- * Canvas Tools for Eva (Character Designer)
+ * Canvas Tools for Eva
+ * Uses canvas_designer table
  *
- * Tool definitions and executors for canvas operations.
- * These tools allow Eva to create character design canvases
- * separate from Gunnar's whiteboards.
+ * Tool definitions and executors for designer canvas operations.
+ * These tools allow Eva to create, rename, delete, and open designer canvases.
  */
 
 import type Anthropic from '@anthropic-ai/sdk';
@@ -16,13 +16,13 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 export const CREATE_CANVAS_TOOL: Anthropic.Tool = {
 	name: 'create_canvas',
 	description:
-		'Create a new canvas for character design. Use this when starting a new character - each canvas represents one character with their images, backstory, and system prompt.',
+		'Create a new designer canvas for visual character design. Use this when the user wants to start a new canvas for character mood boards, notes, or design explorations.',
 	input_schema: {
 		type: 'object',
 		properties: {
 			title: {
 				type: 'string',
-				description: 'The character name or canvas title. Choose the character name you want to design.'
+				description: 'The title for the canvas. Choose something descriptive that captures the character or design concept.'
 			}
 		},
 		required: ['title']
@@ -31,7 +31,7 @@ export const CREATE_CANVAS_TOOL: Anthropic.Tool = {
 
 export const RENAME_CANVAS_TOOL: Anthropic.Tool = {
 	name: 'rename_canvas',
-	description: 'Rename an existing canvas. Use this when the character name changes or to update the canvas title.',
+	description: 'Rename an existing designer canvas. Use this when the user wants to change the title of a canvas.',
 	input_schema: {
 		type: 'object',
 		properties: {
@@ -41,7 +41,7 @@ export const RENAME_CANVAS_TOOL: Anthropic.Tool = {
 			},
 			title: {
 				type: 'string',
-				description: 'The new title/character name for the canvas'
+				description: 'The new title for the canvas'
 			}
 		},
 		required: ['canvas_id', 'title']
@@ -50,7 +50,7 @@ export const RENAME_CANVAS_TOOL: Anthropic.Tool = {
 
 export const DELETE_CANVAS_TOOL: Anthropic.Tool = {
 	name: 'delete_canvas',
-	description: 'Delete a canvas permanently. Use this to remove a character design that is no longer needed.',
+	description: 'Delete a designer canvas permanently. Use this when the user wants to remove a canvas they no longer need.',
 	input_schema: {
 		type: 'object',
 		properties: {
@@ -66,7 +66,7 @@ export const DELETE_CANVAS_TOOL: Anthropic.Tool = {
 export const OPEN_CANVAS_TOOL: Anthropic.Tool = {
 	name: 'open_canvas',
 	description:
-		'Open/switch to a specific canvas. Use this when the user wants to view or work on a particular character design.',
+		'Open/switch to a specific designer canvas. Use this when the user wants to view or work on a particular canvas. The UI will display it.',
 	input_schema: {
 		type: 'object',
 		properties: {
@@ -82,7 +82,7 @@ export const OPEN_CANVAS_TOOL: Anthropic.Tool = {
 export const LIST_CANVASES_TOOL: Anthropic.Tool = {
 	name: 'list_canvases',
 	description:
-		'List all available character canvases. Use this to show the user their character designs or to help them choose which one to work on.',
+		'List all available designer canvases for the user. Use this to show the user their canvases or to help them choose which one to open.',
 	input_schema: {
 		type: 'object',
 		properties: {},
@@ -93,7 +93,7 @@ export const LIST_CANVASES_TOOL: Anthropic.Tool = {
 export const UPDATE_CANVAS_TOOL: Anthropic.Tool = {
 	name: 'update_canvas',
 	description:
-		'Update a canvas with new elements (images, notes, backstory). Use this after generating images or when adding character details to the canvas.',
+		'Update a designer canvas with new render elements and semantic structure. Use this to add, modify, or remove visual elements on the canvas.',
 	input_schema: {
 		type: 'object',
 		properties: {
@@ -123,15 +123,11 @@ export const UPDATE_CANVAS_TOOL: Anthropic.Tool = {
 						to: { type: 'array', items: { type: 'number' } },
 						label: { type: 'string' },
 						// Image-specific properties
-						src: { type: 'string', description: 'URL to full image' },
-						thumbnail_url: { type: 'string', description: 'URL to thumbnail (from generate_image)' },
+						src: { type: 'string', description: 'URL to image' },
 						prompt: { type: 'string', description: 'Generation prompt for iteration' },
 						seed: { type: 'number', description: 'Seed for consistent generations' },
 						model: { type: 'string', description: 'Model that generated the image' },
-						role: { type: 'string', description: 'Image purpose: hero, card, gallery, expression' },
-						// Genealogy tracking
-						parent_id: { type: 'string', description: 'ID of parent image (for variants/branches)' },
-						created_at: { type: 'string', description: 'ISO timestamp when image was generated' }
+						role: { type: 'string', description: 'Image purpose: hero, gallery, expression' }
 					},
 					required: ['id', 'type']
 				}
@@ -139,30 +135,10 @@ export const UPDATE_CANVAS_TOOL: Anthropic.Tool = {
 			semantic: {
 				type: 'object',
 				description:
-					'Structured character data: name, age, tagline, tags, backstory, system_prompt, and image role mappings.'
+					'Free-form semantic structure describing what the canvas represents. Define character traits, relationships, mood as needed.'
 			}
 		},
 		required: ['canvas_id', 'render', 'semantic']
-	}
-};
-
-export const CHECKOUT_IMAGE_TOOL: Anthropic.Tool = {
-	name: 'checkout_image',
-	description:
-		'Set the branching point for creating image variants. Like git checkout, this marks which image to use as parent for new variations. Use this before generating variants of a specific image.',
-	input_schema: {
-		type: 'object',
-		properties: {
-			canvas_id: {
-				type: 'string',
-				description: 'The UUID of the canvas containing the image'
-			},
-			image_id: {
-				type: 'string',
-				description: 'The ID of the image element to checkout as the branching point. Pass null to clear checkout.'
-			}
-		},
-		required: ['canvas_id', 'image_id']
 	}
 };
 
@@ -175,8 +151,7 @@ export const CANVAS_TOOLS: Anthropic.Tool[] = [
 	DELETE_CANVAS_TOOL,
 	OPEN_CANVAS_TOOL,
 	LIST_CANVASES_TOOL,
-	UPDATE_CANVAS_TOOL,
-	CHECKOUT_IMAGE_TOOL
+	UPDATE_CANVAS_TOOL
 ];
 
 /**
@@ -199,7 +174,7 @@ export interface ToolExecutionResult {
 /**
  * Canvas type for mutations payload
  */
-export interface Canvas {
+export interface DesignerCanvas {
 	id: string;
 	title: string;
 	created_at: string;
@@ -207,7 +182,7 @@ export interface Canvas {
 }
 
 /**
- * Render element types (same as whiteboard)
+ * Render element types
  */
 export type RenderElement = {
 	id: string;
@@ -225,15 +200,12 @@ export type RenderElement = {
 	to?: [number, number];
 	label?: string;
 	// Image-specific properties
-	src?: string;
-	thumbnail_url?: string; // Thumbnail URL for generated images
-	prompt?: string;
-	seed?: number;
-	model?: string;
-	role?: string; // 'hero' | 'card' | 'gallery' | 'expression'
-	// Genealogy tracking
-	parent_id?: string; // ID of parent image (null = root)
-	created_at?: string; // ISO timestamp for ordering
+	src?: string; // URL to image
+	thumbnail_url?: string; // Thumbnail URL
+	prompt?: string; // Generation prompt (for iteration)
+	seed?: number; // For consistent generations
+	model?: string; // Which model generated it
+	role?: string; // 'hero' | 'gallery' | 'expression' etc.
 };
 
 /**
@@ -243,14 +215,13 @@ export interface CanvasState {
 	render: RenderElement[];
 	semantic: Record<string, unknown>;
 	viewport: { x: number; y: number; scale: number };
-	checked_out_id?: string; // Current branching point for variations
 }
 
 /**
  * Mutations payload returned with chat response
  */
 export interface CanvasMutations {
-	created_canvases: Canvas[];
+	created_canvases: DesignerCanvas[];
 	renamed_canvases: { id: string; title: string }[];
 	deleted_canvases: string[]; // IDs
 	opened_canvas: string | null; // ID of canvas to open in UI
@@ -298,9 +269,6 @@ export async function executeCanvasTool(
 		case 'update_canvas':
 			return executeUpdateCanvas(input, context, mutations);
 
-		case 'checkout_image':
-			return executeCheckoutImage(input, context, mutations);
-
 		default:
 			return {
 				success: false,
@@ -336,7 +304,7 @@ async function executeCreateCanvas(
 		}
 
 		const { data, error } = await supabase
-			.from('canvases')
+			.from('canvas_designer')
 			.insert({
 				user_id: userId,
 				title
@@ -346,7 +314,7 @@ async function executeCreateCanvas(
 
 		if (error) throw error;
 
-		const canvas: Canvas = {
+		const canvas: DesignerCanvas = {
 			id: data.id,
 			title: data.title,
 			created_at: data.created_at,
@@ -359,7 +327,7 @@ async function executeCreateCanvas(
 
 		return {
 			success: true,
-			message: `Created canvas "${title}" for character design`,
+			message: `Created canvas "${title}"`,
 			data: canvas
 		};
 	} catch (error) {
@@ -399,7 +367,7 @@ async function executeRenameCanvas(
 
 		// Get old title for message
 		const { data: existing, error: fetchError } = await supabase
-			.from('canvases')
+			.from('canvas_designer')
 			.select('title')
 			.eq('id', canvasId)
 			.eq('user_id', userId)
@@ -412,8 +380,10 @@ async function executeRenameCanvas(
 			};
 		}
 
+		const oldTitle = existing.title;
+
 		const { data: updated, error } = await supabase
-			.from('canvases')
+			.from('canvas_designer')
 			.update({
 				title: newTitle,
 				updated_at: new Date().toISOString()
@@ -425,7 +395,7 @@ async function executeRenameCanvas(
 
 		if (error) throw error;
 
-		// Verify the rename actually happened
+		// Verify the update actually happened
 		if (!updated || updated.title !== newTitle) {
 			return {
 				success: false,
@@ -437,7 +407,7 @@ async function executeRenameCanvas(
 
 		return {
 			success: true,
-			message: `Renamed character from "${existing.title}" to "${newTitle}"`,
+			message: `Renamed canvas from "${oldTitle}" to "${newTitle}"`,
 			data: { id: canvasId, title: newTitle }
 		};
 	} catch (error) {
@@ -462,7 +432,7 @@ async function executeDeleteCanvas(
 
 		// Get title before deleting
 		const { data: canvas, error: fetchError } = await supabase
-			.from('canvases')
+			.from('canvas_designer')
 			.select('title')
 			.eq('id', canvasId)
 			.eq('user_id', userId)
@@ -476,7 +446,7 @@ async function executeDeleteCanvas(
 		}
 
 		const { error } = await supabase
-			.from('canvases')
+			.from('canvas_designer')
 			.delete()
 			.eq('id', canvasId)
 			.eq('user_id', userId);
@@ -485,7 +455,7 @@ async function executeDeleteCanvas(
 
 		// Verify deletion - record should no longer exist
 		const { data: stillExists } = await supabase
-			.from('canvases')
+			.from('canvas_designer')
 			.select('id')
 			.eq('id', canvasId)
 			.eq('user_id', userId)
@@ -527,7 +497,7 @@ async function executeOpenCanvas(
 
 		// Verify canvas exists and belongs to user
 		const { data: canvas, error } = await supabase
-			.from('canvases')
+			.from('canvas_designer')
 			.select('id, title')
 			.eq('id', canvasId)
 			.eq('user_id', userId)
@@ -564,7 +534,7 @@ async function executeListCanvases(context: CanvasToolContext): Promise<ToolExec
 		const { supabase, userId } = context;
 
 		const { data: canvases, error } = await supabase
-			.from('canvases')
+			.from('canvas_designer')
 			.select('id, title, created_at, updated_at')
 			.eq('user_id', userId)
 			.order('updated_at', { ascending: false });
@@ -574,7 +544,7 @@ async function executeListCanvases(context: CanvasToolContext): Promise<ToolExec
 		if (!canvases || canvases.length === 0) {
 			return {
 				success: true,
-				message: 'No character canvases found. You can ask me to create one for a new character.',
+				message: 'No canvases found. You can ask me to create one.',
 				data: { canvases: [] }
 			};
 		}
@@ -585,7 +555,7 @@ async function executeListCanvases(context: CanvasToolContext): Promise<ToolExec
 
 		return {
 			success: true,
-			message: `Found ${canvases.length} character canvas(es):\n${list}`,
+			message: `Found ${canvases.length} canvas(es):\n${list}`,
 			data: { canvases }
 		};
 	} catch (error) {
@@ -612,7 +582,7 @@ async function executeUpdateCanvas(
 
 		// Verify canvas exists and belongs to user
 		const { data: existing, error: fetchError } = await supabase
-			.from('canvases')
+			.from('canvas_designer')
 			.select('title, state')
 			.eq('id', canvasId)
 			.eq('user_id', userId)
@@ -636,7 +606,7 @@ async function executeUpdateCanvas(
 		};
 
 		const { data: updated, error } = await supabase
-			.from('canvases')
+			.from('canvas_designer')
 			.update({
 				state: newState,
 				updated_at: new Date().toISOString()
@@ -648,7 +618,7 @@ async function executeUpdateCanvas(
 
 		if (error) throw error;
 
-		// Verify the update actually saved
+		// Verify the update actually happened
 		if (!updated || !updated.state) {
 			return {
 				success: false,
@@ -656,6 +626,7 @@ async function executeUpdateCanvas(
 			};
 		}
 
+		// Verify render array length matches (basic sanity check)
 		const savedRender = (updated.state as CanvasState).render;
 		if (!savedRender || savedRender.length !== render.length) {
 			return {
@@ -683,96 +654,6 @@ async function executeUpdateCanvas(
 }
 
 /**
- * Checkout Image Executor
- * Sets the branching point for creating variants
- */
-async function executeCheckoutImage(
-	input: Record<string, unknown>,
-	context: CanvasToolContext,
-	mutations: CanvasMutations
-): Promise<ToolExecutionResult> {
-	try {
-		const { supabase, userId } = context;
-		const canvasId = input.canvas_id as string;
-		const imageId = input.image_id as string | null;
-
-		// Verify canvas exists and belongs to user
-		const { data: existing, error: fetchError } = await supabase
-			.from('canvases')
-			.select('title, state')
-			.eq('id', canvasId)
-			.eq('user_id', userId)
-			.single();
-
-		if (fetchError || !existing) {
-			return {
-				success: false,
-				message: 'Canvas not found'
-			};
-		}
-
-		const existingState = existing.state as CanvasState | null;
-		const render = existingState?.render || [];
-		const semantic = existingState?.semantic || {};
-		const viewport = existingState?.viewport || { x: 0, y: 0, scale: 1 };
-
-		// If image_id is provided, verify it exists in the canvas
-		if (imageId) {
-			const imageExists = render.some(
-				(el: RenderElement) => el.id === imageId && el.type === 'image'
-			);
-			if (!imageExists) {
-				return {
-					success: false,
-					message: `Image "${imageId}" not found in canvas`
-				};
-			}
-		}
-
-		// Update state with checked_out_id
-		const newState: CanvasState = {
-			render,
-			semantic,
-			viewport,
-			checked_out_id: imageId || undefined
-		};
-
-		const { error } = await supabase
-			.from('canvases')
-			.update({
-				state: newState,
-				updated_at: new Date().toISOString()
-			})
-			.eq('id', canvasId)
-			.eq('user_id', userId);
-
-		if (error) throw error;
-
-		// Add to mutations for UI update
-		mutations.updated_canvases.push({ id: canvasId, state: newState });
-
-		if (imageId) {
-			return {
-				success: true,
-				message: `Checked out image "${imageId}" as branching point. New images generated with parent_id will be variants of this image.`,
-				data: { canvas_id: canvasId, checked_out_id: imageId }
-			};
-		} else {
-			return {
-				success: true,
-				message: `Cleared checkout. New images will be root images (no parent).`,
-				data: { canvas_id: canvasId, checked_out_id: null }
-			};
-		}
-	} catch (error) {
-		return {
-			success: false,
-			message: `Failed to checkout image: ${error instanceof Error ? error.message : 'Unknown error'}`
-		};
-	}
-}
-
-/**
  * Check if a tool name is a canvas tool
  */
 export function isCanvasTool(toolName: string): boolean {
@@ -782,7 +663,6 @@ export function isCanvasTool(toolName: string): boolean {
 		'delete_canvas',
 		'open_canvas',
 		'list_canvases',
-		'update_canvas',
-		'checkout_image'
+		'update_canvas'
 	].includes(toolName);
 }

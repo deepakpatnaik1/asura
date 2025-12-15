@@ -1,8 +1,9 @@
 /**
- * Canvases API - List and Create
+ * Designer Canvases API - List and Create
+ * Uses canvas_designer table
  *
- * GET: List user's canvases (Eva's character design workspaces)
- * POST: Create a new canvas
+ * GET: List user's designer canvases
+ * POST: Create a new designer canvas
  */
 
 import { json } from '@sveltejs/kit';
@@ -13,7 +14,7 @@ import { databaseError, validationError } from '$lib/api/errors';
 
 /**
  * GET /api/canvases
- * List all canvases for the user
+ * List all designer canvases for the user
  */
 export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase } }) => {
 	const auth = await requireAuth(safeGetSession);
@@ -21,7 +22,7 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 	const { userId } = auth;
 
 	const { data: canvases, error } = await supabase
-		.from('canvases')
+		.from('canvas_designer')
 		.select('id, title, created_at, updated_at')
 		.eq('user_id', userId)
 		.order('updated_at', { ascending: false });
@@ -35,7 +36,7 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 
 /**
  * POST /api/canvases
- * Create a new canvas
+ * Create a new designer canvas
  */
 export const POST: RequestHandler = async ({ request, locals: { safeGetSession, supabase } }) => {
 	const auth = await requireAuth(safeGetSession);
@@ -62,7 +63,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 	}
 
 	const { data, error } = await supabase
-		.from('canvases')
+		.from('canvas_designer')
 		.insert({
 			user_id: userId,
 			title: canvasTitle,

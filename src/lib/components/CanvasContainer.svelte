@@ -5,16 +5,16 @@
 	 * Wraps canvas content with a vertical icon tab switcher.
 	 * Manages active canvas state per mode (localStorage).
 	 * Passes mode-specific props to child canvas components.
-	 * Available canvases: Gallery, Planner, Scratch, Design
+	 * Available canvases: Gallery, Planner, Scratch
 	 */
 
 	import { type CanvasType, DEFAULT_CANVAS } from '$lib/config/canvases';
+	import type { CanvasState } from '$lib/api/canvas-tools';
 	import CanvasSwitcher from './CanvasSwitcher.svelte';
 	import ChartCarousel from './ChartCarousel.svelte';
 	import CalendarCanvas from './canvases/CalendarCanvas.svelte';
 	import NotesCanvas from './canvases/NotesCanvas.svelte';
-	import DesignCanvas from './canvases/DesignCanvas.svelte';
-	import type { CanvasState } from '$lib/api/canvas-tools';
+	import DesignerCanvas from './canvases/DesignerCanvas.svelte';
 
 	// Chart type for Gallery canvas
 	interface Chart {
@@ -36,8 +36,8 @@
 		updated_at: string;
 	}
 
-	// Canvas type for Design canvas (Eva)
-	interface Canvas {
+	// Designer Canvas type for Designer canvas
+	interface DesignerCanvasData {
 		id: string;
 		title: string;
 		state?: CanvasState;
@@ -62,12 +62,13 @@
 		selectedWhiteboardIds?: string[]; // For showing selection state in carousel
 		onWhiteboardSelect?: (id: string) => void;
 		onWhiteboardStateChange?: (id: string, state: Whiteboard['state']) => void;
-		// Design/Canvas-specific props (Eva)
-		canvases?: Canvas[];
-		activeCanvasId?: string | null;
-		selectedCanvasIds?: string[]; // For showing selection state in footer
-		onCanvasSelect?: (id: string) => void;
-		onCanvasStateChange?: (id: string, state: CanvasState) => void;
+		// Designer canvas-specific props
+		designerCanvasRefreshTrigger?: number;
+		designerCanvases?: DesignerCanvasData[];
+		activeDesignerCanvasId?: string | null;
+		selectedDesignerCanvasIds?: string[];
+		onDesignerCanvasSelect?: (id: string) => void;
+		onDesignerCanvasStateChange?: (id: string, state: DesignerCanvasData['state']) => void;
 		// Force switch to specific canvas (e.g., when content is loaded)
 		forceCanvas?: CanvasType | null;
 	}
@@ -86,11 +87,12 @@
 		selectedWhiteboardIds = [],
 		onWhiteboardSelect,
 		onWhiteboardStateChange,
-		canvases = [],
-		activeCanvasId = null,
-		selectedCanvasIds = [],
-		onCanvasSelect,
-		onCanvasStateChange,
+		designerCanvasRefreshTrigger = 0,
+		designerCanvases = [],
+		activeDesignerCanvasId = null,
+		selectedDesignerCanvasIds = [],
+		onDesignerCanvasSelect,
+		onDesignerCanvasStateChange,
 		forceCanvas = $bindable(null)
 	}: Props = $props();
 
@@ -99,9 +101,9 @@
 		whiteboards.find(wb => wb.id === activeWhiteboardId) ?? null
 	);
 
-	// Get active canvas data (for Eva's design canvas)
-	const activeDesignCanvas = $derived(
-		canvases.find(c => c.id === activeCanvasId) ?? null
+	// Get active designer canvas data
+	const activeDesignerCanvas = $derived(
+		designerCanvases.find(c => c.id === activeDesignerCanvasId) ?? null
 	);
 
 	let activeCanvas = $state<CanvasType>(DEFAULT_CANVAS);
@@ -142,13 +144,14 @@
 				onStateChange={onWhiteboardStateChange}
 				refreshTrigger={whiteboardRefreshTrigger}
 			/>
-		{:else if activeCanvas === 'design'}
-			<DesignCanvas
-				{canvases}
-				canvas={activeDesignCanvas}
-				{selectedCanvasIds}
-				onSelect={onCanvasSelect}
-				onStateChange={onCanvasStateChange}
+		{:else if activeCanvas === 'designer'}
+			<DesignerCanvas
+				canvases={designerCanvases}
+				canvas={activeDesignerCanvas}
+				selectedCanvasIds={selectedDesignerCanvasIds}
+				onSelect={onDesignerCanvasSelect}
+				onStateChange={onDesignerCanvasStateChange}
+				refreshTrigger={designerCanvasRefreshTrigger}
 			/>
 		{/if}
 	</div>

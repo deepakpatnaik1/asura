@@ -56,7 +56,14 @@ export type ToolName =
 	| 'delete_whiteboard'
 	| 'open_whiteboard'
 	| 'list_whiteboards'
-	| 'update_whiteboard';
+	| 'update_whiteboard'
+	// Canvas tools (Eva)
+	| 'create_canvas'
+	| 'rename_canvas'
+	| 'delete_canvas'
+	| 'open_canvas'
+	| 'list_canvases'
+	| 'update_canvas';
 
 /**
  * Persona configuration interface
@@ -124,9 +131,16 @@ const GUNNAR_TOOLS: ToolName[] = [
 const EVA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic', 'canon', 'active'];
 
 /**
- * Eva tools: empty for bare minimum (no image generation yet)
+ * Eva canvas tools (parallel to Gunnar's whiteboard tools)
  */
-const EVA_TOOLS: ToolName[] = [];
+const EVA_TOOLS: ToolName[] = [
+	'create_canvas',
+	'rename_canvas',
+	'delete_canvas',
+	'open_canvas',
+	'list_canvases',
+	'update_canvas'
+];
 
 /**
  * Ananya: Reddit engagement - full memory pyramid + active files
