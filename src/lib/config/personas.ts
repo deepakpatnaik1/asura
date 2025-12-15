@@ -19,13 +19,11 @@ export type ContextChunk =
 	| 'starred' // User's standing instructions (all personas should get this)
 	| 'semantic' // Vector search results
 	| 'canon' // is_canon = true files
-	| 'active' // Currently selected file
+	| 'active' // Currently selected library items (content, whiteboards, canvases)
 	| 'todos' // Open + completed todos
 	| 'diary' // Founder diary entries
 	| 'tags' // Canonical tag list
 	| 'calendar' // Google Calendar events (future)
-	| 'whiteboard' // Active whiteboard (for Gunnar)
-	| 'canvas' // Character design canvases (for Eva)
 	| 'time'; // Current timestamp (always injected, not toggleable)
 
 
@@ -65,12 +63,7 @@ export type ToolName =
 	| 'delete_canvas'
 	| 'open_canvas'
 	| 'list_canvases'
-	| 'update_canvas'
-	// Sakura tools (character design)
-	| 'generate_image'
-	| 'export_character'
-	| 'caption_image'
-	| 'edit_image';
+	| 'update_canvas';
 
 /**
  * Persona configuration interface
@@ -87,7 +80,7 @@ export interface Persona {
 }
 
 /**
- * Gunnar: Full memory pyramid + productivity (no tags) + whiteboard
+ * Gunnar: Full memory pyramid
  */
 const GUNNAR_CHUNKS: ContextChunk[] = [
 	'working',
@@ -95,14 +88,11 @@ const GUNNAR_CHUNKS: ContextChunk[] = [
 	'starred',
 	'semantic',
 	'canon',
-	'active',
-	'todos',
-	'diary',
-	'whiteboard'
+	'active'
 ];
 
 /**
- * Kirby: Full memory pyramid + productivity (same as Gunnar)
+ * Kirby: Full memory pyramid
  */
 const KIRBY_CHUNKS: ContextChunk[] = [
 	'working',
@@ -110,20 +100,18 @@ const KIRBY_CHUNKS: ContextChunk[] = [
 	'starred',
 	'semantic',
 	'canon',
-	'active',
-	'todos',
-	'diary'
+	'active'
 ];
 
 /**
- * Samara: Article-focused, no conversation memory (Wikipedia mode)
+ * Samara: Article-focused reader with conversation memory
  */
-const SAMARA_CHUNKS: ContextChunk[] = ['working', 'starred', 'canon', 'active'];
+const SAMARA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic', 'canon', 'active'];
 
 /**
  * Alicja: Scribe - productivity data + her own conversation memory
  */
-const ALICJA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'canon', 'todos', 'diary', 'tags', 'calendar'];
+const ALICJA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic', 'canon', 'active', 'todos', 'diary', 'tags', 'calendar'];
 
 /**
  * Gunnar whiteboard tools
@@ -140,10 +128,10 @@ const GUNNAR_TOOLS: ToolName[] = [
 /**
  * Eva: Character designer - canvases for mood boards + image generation
  */
-const EVA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'canvas'];
+const EVA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic', 'canon', 'active'];
 
 /**
- * Eva tools: canvas + image generation + captioning + editing + export
+ * Eva tools: canvas management
  */
 const EVA_TOOLS: ToolName[] = [
 	'create_canvas',
@@ -151,11 +139,7 @@ const EVA_TOOLS: ToolName[] = [
 	'delete_canvas',
 	'open_canvas',
 	'list_canvases',
-	'update_canvas',
-	'generate_image',
-	'caption_image',
-	'edit_image',
-	'export_character'
+	'update_canvas'
 ];
 
 /**

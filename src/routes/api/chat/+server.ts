@@ -53,12 +53,6 @@ import {
 	type CanvasToolContext,
 	type CanvasMutations
 } from '$lib/api/canvas-tools';
-import {
-	SAKURA_TOOLS,
-	executeSakuraTool,
-	isSakuraTool,
-	type SakuraToolContext
-} from '$lib/api/sakura-tools';
 import { refreshAccessToken } from '$lib/api/google-calendar';
 import { BRAVE_SEARCH_TOOL, executeBraveSearch } from '$lib/api/brave-search';
 import { createClient } from '@supabase/supabase-js';
@@ -121,10 +115,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		const personaModel = settings ? (settings as Record<string, unknown>)[personaModelColumn] : null;
 		const conversationModel = (personaModel as string) || settings?.default_model || DEFAULT_MODEL;
 
-		// Get image/caption/tool model overrides for Eva's tools
-		const defaultImageModel = settings?.model_image_gen || undefined;
-		const defaultImageEditModel = settings?.model_image_edit || undefined;
-		const defaultCaptioningModel = settings?.model_captioning || undefined;
+		// Get tool calling model override
 		const defaultToolCallingModel = settings?.model_tool_calling || undefined;
 
 		// 5. Fetch chart image if referenced
@@ -135,7 +126,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				const bucket = 'content';
 
 				const { data: chartData, error: chartError } = await supabase
-					.from('charts')
+					.from('canvas_gallery_charts')
 					.select('storage_path')
 					.eq('id', chart_id)
 					.eq('user_id', userId)
@@ -214,7 +205,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			const hasTodoTools = personaTools.some(t => isTodoTool(t));
 			const hasWhiteboardTools = personaTools.some(t => isWhiteboardTool(t));
 			const hasCanvasTools = personaTools.some(t => isCanvasTool(t));
-			const hasSakuraTools = personaTools.some(t => isSakuraTool(t));
 
 			// Set up todo tools context (Alicja)
 			let todoContext: TodoToolContext | null = null;
@@ -279,13 +269,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				allTools.push(...CANVAS_TOOLS);
 			}
 
-			// Set up sakura tools context (Eva - image generation + export)
-			let sakuraContext: SakuraToolContext | null = null;
-
-			if (hasSakuraTools) {
-				sakuraContext = { userId, supabase, defaultImageModel, defaultImageEditModel, defaultCaptioningModel };
-				allTools.push(...SAKURA_TOOLS);
-			}
 
 			tools = allTools;
 
@@ -299,8 +282,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 						success: !!searchResults,
 						message: searchResults || 'Search failed'
 					};
-				} else if (isSakuraTool(toolName) && sakuraContext) {
-					return executeSakuraTool(toolName, input, sakuraContext);
 				} else if (isCanvasTool(toolName) && canvasContext) {
 					return executeCanvasTool(toolName, input, canvasContext, canvasMutations!);
 				} else if (isWhiteboardTool(toolName) && whiteboardContext) {
