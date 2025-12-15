@@ -22,7 +22,7 @@ export const PALETTES: Record<string, Palette> = {
 		kirby: 'rgb(236, 72, 153)', // hot pink
 		samara: 'rgb(16, 185, 129)', // emerald
 		alicja: 'rgb(56, 140, 220)', // vibrant blue
-		eva: 'rgb(255, 145, 175)', // cherry blossom pink
+		eva: 'rgb(255, 183, 197)', // cherry blossom
 		ananya: 'rgb(167, 139, 250)' // violet
 	},
 	jewel: {
@@ -31,7 +31,7 @@ export const PALETTES: Record<string, Palette> = {
 		kirby: 'rgb(128, 48, 108)', // plum
 		samara: 'rgb(38, 108, 88)', // forest
 		alicja: 'rgb(48, 78, 128)', // navy
-		eva: 'rgb(180, 80, 120)', // deep rose
+		eva: 'rgb(183, 110, 121)', // deep rose
 		ananya: 'rgb(124, 58, 237)' // violet-600
 	},
 	muted: {
@@ -40,7 +40,7 @@ export const PALETTES: Record<string, Palette> = {
 		kirby: 'rgb(155, 120, 145)', // mauve
 		samara: 'rgb(115, 145, 130)', // sage
 		alicja: 'rgb(110, 135, 155)', // steel
-		eva: 'rgb(175, 140, 155)', // dusty pink
+		eva: 'rgb(200, 160, 170)', // dusty pink
 		ananya: 'rgb(150, 130, 170)' // muted violet
 	},
 	warm: {
@@ -49,7 +49,7 @@ export const PALETTES: Record<string, Palette> = {
 		kirby: 'rgb(200, 100, 120)', // rose
 		samara: 'rgb(140, 160, 90)', // olive
 		alicja: 'rgb(160, 140, 100)', // sand
-		eva: 'rgb(220, 150, 160)', // coral
+		eva: 'rgb(230, 150, 140)', // coral
 		ananya: 'rgb(168, 128, 180)' // dusty violet
 	},
 	neon: {
@@ -58,7 +58,7 @@ export const PALETTES: Record<string, Palette> = {
 		kirby: 'rgb(255, 50, 180)', // neon pink
 		samara: 'rgb(0, 255, 150)', // neon green
 		alicja: 'rgb(50, 150, 255)', // neon blue
-		eva: 'rgb(255, 150, 200)', // neon sakura
+		eva: 'rgb(255, 130, 170)', // neon sakura
 		ananya: 'rgb(196, 130, 255)' // neon violet
 	},
 	mono: {
@@ -67,7 +67,7 @@ export const PALETTES: Record<string, Palette> = {
 		kirby: 'rgb(140, 140, 140)', // medium gray
 		samara: 'rgb(160, 160, 160)', // gray
 		alicja: 'rgb(120, 120, 120)', // dark gray
-		eva: 'rgb(200, 200, 200)', // silver
+		eva: 'rgb(190, 175, 180)', // silver pink
 		ananya: 'rgb(170, 170, 170)' // gray
 	}
 };

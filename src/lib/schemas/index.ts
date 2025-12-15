@@ -23,10 +23,7 @@ export const personaSchema = z.enum(['gunnar', 'kirby', 'samara', 'alicja', 'eva
 /** Override key enum (personas + processor types for model overrides) */
 export const overrideKeySchema = z.enum([
 	'gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya', // Personas
-	'embeddings', 'compression', 'chat_compression', // Text processes
-	'image_gen', 'captioning', 'image_edit', // Image processes
-	'tool_calling', // Dedicated tool/function calling
-	'audio_gen', 'video_gen' // Audio/video generation
+	'embeddings', 'compression', 'chat_compression' // Text processes
 ]);
 
 // ============================================================================
@@ -45,8 +42,7 @@ export const chatMessageSchema = z.object({
 	chart_id: z.string().uuid().optional(),
 	chart_source: chartSourceSchema.optional(),
 	content_ids: z.array(z.string().uuid()).optional(), // active content(s) for context injection
-	whiteboard_ids: z.array(z.string().uuid()).optional(), // selected whiteboards for Gunnar context
-	canvas_ids: z.array(z.string().uuid()).optional() // selected canvases for Eva context
+	whiteboard_ids: z.array(z.string().uuid()).optional() // selected whiteboards for Gunnar context
 });
 
 /** POST /api/chat/compress - Orphan recovery compression */
@@ -78,12 +74,6 @@ export const settingsUpdateSchema = z.object({
 
 	// Process model overrides
 	model_embeddings: z.string().nullable().optional(),
-	model_image_gen: z.string().nullable().optional(),
-	model_captioning: z.string().nullable().optional(),
-	model_image_edit: z.string().nullable().optional(),
-	model_tool_calling: z.string().nullable().optional(),
-	model_audio_gen: z.string().nullable().optional(),
-	model_video_gen: z.string().nullable().optional(),
 	model_compression: z.string().nullable().optional(),
 	model_chat_compression: z.string().nullable().optional()
 }).refine(

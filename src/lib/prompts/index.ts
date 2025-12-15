@@ -26,8 +26,7 @@ const PERSONA_PROMPTS: Record<string, string> = {
 	samara: PERSONA_SAMARA,
 	alicja: PERSONA_ALICJA,
 	eva: PERSONA_EVA,
-	ananya: PERSONA_ANANYA,
-	suki: PERSONA_EVA // Legacy alias for eva
+	ananya: PERSONA_ANANYA
 };
 
 /**

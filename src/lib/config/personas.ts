@@ -56,14 +56,7 @@ export type ToolName =
 	| 'delete_whiteboard'
 	| 'open_whiteboard'
 	| 'list_whiteboards'
-	| 'update_whiteboard'
-	// Canvas tools (Eva)
-	| 'create_canvas'
-	| 'rename_canvas'
-	| 'delete_canvas'
-	| 'open_canvas'
-	| 'list_canvases'
-	| 'update_canvas';
+	| 'update_whiteboard';
 
 /**
  * Persona configuration interface
@@ -126,21 +119,14 @@ const GUNNAR_TOOLS: ToolName[] = [
 ];
 
 /**
- * Eva: Character designer - canvases for mood boards + image generation
+ * Eva: Character designer - standard memory pyramid
  */
 const EVA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic', 'canon', 'active'];
 
 /**
- * Eva tools: canvas management
+ * Eva tools: empty for bare minimum (no image generation yet)
  */
-const EVA_TOOLS: ToolName[] = [
-	'create_canvas',
-	'rename_canvas',
-	'delete_canvas',
-	'open_canvas',
-	'list_canvases',
-	'update_canvas'
-];
+const EVA_TOOLS: ToolName[] = [];
 
 /**
  * Ananya: Reddit engagement - full memory pyramid + active files
@@ -224,7 +210,7 @@ export const PERSONAS: Record<string, Persona> = {
 		displayName: 'Eva',
 		accentColor: getPaletteColor('eva'),
 		model: null,
-		systemPrompt: 'eva', // Character designer prompt
+		systemPrompt: 'eva',
 		contextChunks: EVA_CHUNKS,
 		compression: true,
 		tools: EVA_TOOLS
@@ -238,17 +224,6 @@ export const PERSONAS: Record<string, Persona> = {
 		contextChunks: ANANYA_CHUNKS,
 		compression: true,
 		tools: ANANYA_TOOLS
-	},
-	// Legacy alias for eva (cached browser state may still send 'suki')
-	suki: {
-		name: 'eva',
-		displayName: 'Eva',
-		accentColor: getPaletteColor('eva'),
-		model: null,
-		systemPrompt: 'eva',
-		contextChunks: EVA_CHUNKS,
-		compression: true,
-		tools: EVA_TOOLS
 	}
 };
 

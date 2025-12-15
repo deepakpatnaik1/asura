@@ -26,7 +26,7 @@
 	}
 
 	// All override keys (personas + processors)
-	const OVERRIDE_KEYS = ['gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya', 'embeddings', 'image_gen', 'captioning', 'image_edit', 'tool_calling', 'audio_gen', 'video_gen', 'compression', 'chat_compression'] as const;
+	const OVERRIDE_KEYS = ['gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya', 'embeddings', 'compression', 'chat_compression'] as const;
 	type OverrideKey = typeof OVERRIDE_KEYS[number];
 
 	let models = $state<Model[]>([]);
@@ -39,12 +39,6 @@
 		eva: '',
 		ananya: '',
 		embeddings: '',
-		image_gen: '',
-		captioning: '',
-		image_edit: '',
-		tool_calling: '',
-		audio_gen: '',
-		video_gen: '',
 		compression: '',
 		chat_compression: ''
 	});
@@ -143,12 +137,6 @@
 				eva: '',
 				ananya: '',
 				embeddings: '',
-				image_gen: '',
-				captioning: '',
-				image_edit: '',
-				tool_calling: '',
-				audio_gen: '',
-				video_gen: '',
 				compression: '',
 				chat_compression: ''
 			};
@@ -309,37 +297,6 @@
 		}));
 	});
 
-	// Group image generation models by provider (for Image gen dropdown)
-	const imageModelsByProvider = $derived.by(() => {
-		const imageModels = models.filter((m) => m.model_type === 'image_generation');
-
-		// Group by provider
-		const grouped = imageModels.reduce((acc, model) => {
-			const provider = model.provider;
-			if (!acc[provider]) acc[provider] = [];
-			acc[provider].push(model);
-			return acc;
-		}, {} as Record<string, Model[]>);
-
-		// Sort models within each provider alphabetically
-		for (const provider of Object.keys(grouped)) {
-			grouped[provider].sort((a, b) => a.model_name.localeCompare(b.model_name));
-		}
-
-		// Return providers alphabetically (fal first since it's the main image provider)
-		const providers = Object.keys(grouped).sort((a, b) => {
-			if (a === 'fal') return -1;
-			if (b === 'fal') return 1;
-			return a.localeCompare(b);
-		});
-
-		return providers.map(provider => ({
-			provider,
-			label: provider.charAt(0).toUpperCase() + provider.slice(1),
-			models: grouped[provider]
-		}));
-	});
-
 	// Group embedding models by provider (for Embeddings dropdown)
 	const embeddingModelsByProvider = $derived.by(() => {
 		console.log('[DEBUG] embeddingModelsByProvider computing, models count:', models.length);
@@ -365,138 +322,6 @@
 			if (b === 'voyage') return 1;
 			return a.localeCompare(b);
 		});
-
-		return providers.map(provider => ({
-			provider,
-			label: provider.charAt(0).toUpperCase() + provider.slice(1),
-			models: grouped[provider]
-		}));
-	});
-
-	// Group captioning models by provider (for Captioning dropdown)
-	const captioningModelsByProvider = $derived.by(() => {
-		const captioningModels = models.filter((m) => m.model_type === 'captioning');
-
-		const grouped = captioningModels.reduce((acc, model) => {
-			const provider = model.provider;
-			if (!acc[provider]) acc[provider] = [];
-			acc[provider].push(model);
-			return acc;
-		}, {} as Record<string, Model[]>);
-
-		for (const provider of Object.keys(grouped)) {
-			grouped[provider].sort((a, b) => a.model_name.localeCompare(b.model_name));
-		}
-
-		const providers = Object.keys(grouped).sort((a, b) => {
-			if (a === 'replicate') return -1;
-			if (b === 'replicate') return 1;
-			return a.localeCompare(b);
-		});
-
-		return providers.map(provider => ({
-			provider,
-			label: provider.charAt(0).toUpperCase() + provider.slice(1),
-			models: grouped[provider]
-		}));
-	});
-
-	// Group image edit models by provider (for Image Edit dropdown)
-	const imageEditModelsByProvider = $derived.by(() => {
-		const imageEditModels = models.filter((m) => m.model_type === 'image_edit');
-
-		const grouped = imageEditModels.reduce((acc, model) => {
-			const provider = model.provider;
-			if (!acc[provider]) acc[provider] = [];
-			acc[provider].push(model);
-			return acc;
-		}, {} as Record<string, Model[]>);
-
-		for (const provider of Object.keys(grouped)) {
-			grouped[provider].sort((a, b) => a.model_name.localeCompare(b.model_name));
-		}
-
-		const providers = Object.keys(grouped).sort((a, b) => {
-			if (a === 'fal') return -1;
-			if (b === 'fal') return 1;
-			return a.localeCompare(b);
-		});
-
-		return providers.map(provider => ({
-			provider,
-			label: provider.charAt(0).toUpperCase() + provider.slice(1),
-			models: grouped[provider]
-		}));
-	});
-
-	// Group tool calling models by provider (for Tool calling dropdown)
-	const toolCallingModelsByProvider = $derived.by(() => {
-		const toolCallingModels = models.filter((m) => m.model_type === 'tool_calling');
-
-		const grouped = toolCallingModels.reduce((acc, model) => {
-			const provider = model.provider;
-			if (!acc[provider]) acc[provider] = [];
-			acc[provider].push(model);
-			return acc;
-		}, {} as Record<string, Model[]>);
-
-		for (const provider of Object.keys(grouped)) {
-			grouped[provider].sort((a, b) => a.model_name.localeCompare(b.model_name));
-		}
-
-		const providers = Object.keys(grouped).sort((a, b) => {
-			if (a === 'groq') return -1;
-			if (b === 'groq') return 1;
-			return a.localeCompare(b);
-		});
-
-		return providers.map(provider => ({
-			provider,
-			label: provider.charAt(0).toUpperCase() + provider.slice(1),
-			models: grouped[provider]
-		}));
-	});
-
-	// Group audio generation models by provider (for Audio gen dropdown)
-	const audioModelsByProvider = $derived.by(() => {
-		const audioModels = models.filter((m) => m.model_type === 'audio_generation');
-
-		const grouped = audioModels.reduce((acc, model) => {
-			const provider = model.provider;
-			if (!acc[provider]) acc[provider] = [];
-			acc[provider].push(model);
-			return acc;
-		}, {} as Record<string, Model[]>);
-
-		for (const provider of Object.keys(grouped)) {
-			grouped[provider].sort((a, b) => a.model_name.localeCompare(b.model_name));
-		}
-
-		const providers = Object.keys(grouped).sort((a, b) => a.localeCompare(b));
-
-		return providers.map(provider => ({
-			provider,
-			label: provider.charAt(0).toUpperCase() + provider.slice(1),
-			models: grouped[provider]
-		}));
-	});
-
-	// Group video generation models by provider (for Video gen dropdown)
-	const videoModelsByProvider = $derived.by(() => {
-		const videoModels = models.filter((m) => m.model_type === 'video_generation');
-
-		const grouped = videoModels.reduce((acc, model) => {
-			const provider = model.provider;
-			if (!acc[provider]) acc[provider] = [];
-			acc[provider].push(model);
-			return acc;
-		}, {} as Record<string, Model[]>);
-
-		for (const provider of Object.keys(grouped)) {
-			grouped[provider].sort((a, b) => a.model_name.localeCompare(b.model_name));
-		}
-
-		const providers = Object.keys(grouped).sort((a, b) => a.localeCompare(b));
 
 		return providers.map(provider => ({
 			provider,
@@ -648,78 +473,6 @@
 								</select>
 							</div>
 							<div class="dropdown-row">
-								<label for="image-gen-select">Image gen</label>
-								<select id="image-gen-select" value={modelOverrides.image_gen} onchange={(e) => handleOverrideChange('image_gen', e)}>
-									{#each imageModelsByProvider as group}
-										<optgroup label={group.label}>
-											{#each group.models as model}
-												<option value={model.model_identifier}>{model.model_name}</option>
-											{/each}
-										</optgroup>
-									{/each}
-								</select>
-							</div>
-							<div class="dropdown-row">
-								<label for="captioning-select">Captioning</label>
-								<select id="captioning-select" value={modelOverrides.captioning} onchange={(e) => handleOverrideChange('captioning', e)}>
-									{#each captioningModelsByProvider as group}
-										<optgroup label={group.label}>
-											{#each group.models as model}
-												<option value={model.model_identifier}>{model.model_name}</option>
-											{/each}
-										</optgroup>
-									{/each}
-								</select>
-							</div>
-							<div class="dropdown-row">
-								<label for="image-edit-select">Image edit</label>
-								<select id="image-edit-select" value={modelOverrides.image_edit} onchange={(e) => handleOverrideChange('image_edit', e)}>
-									{#each imageEditModelsByProvider as group}
-										<optgroup label={group.label}>
-											{#each group.models as model}
-												<option value={model.model_identifier}>{model.model_name}</option>
-											{/each}
-										</optgroup>
-									{/each}
-								</select>
-							</div>
-							<div class="dropdown-row">
-								<label for="tool-calling-select">Tool calling</label>
-								<select id="tool-calling-select" value={modelOverrides.tool_calling} onchange={(e) => handleOverrideChange('tool_calling', e)}>
-									{#each toolCallingModelsByProvider as group}
-										<optgroup label={group.label}>
-											{#each group.models as model}
-												<option value={model.model_identifier}>{model.model_name}</option>
-											{/each}
-										</optgroup>
-									{/each}
-								</select>
-							</div>
-							<div class="dropdown-row">
-								<label for="audio-gen-select">Audio gen</label>
-								<select id="audio-gen-select" value={modelOverrides.audio_gen} onchange={(e) => handleOverrideChange('audio_gen', e)}>
-									{#each audioModelsByProvider as group}
-										<optgroup label={group.label}>
-											{#each group.models as model}
-												<option value={model.model_identifier}>{model.model_name}</option>
-											{/each}
-										</optgroup>
-									{/each}
-								</select>
-							</div>
-							<div class="dropdown-row">
-								<label for="video-gen-select">Video gen</label>
-								<select id="video-gen-select" value={modelOverrides.video_gen} onchange={(e) => handleOverrideChange('video_gen', e)}>
-									{#each videoModelsByProvider as group}
-										<optgroup label={group.label}>
-											{#each group.models as model}
-												<option value={model.model_identifier}>{model.model_name}</option>
-											{/each}
-										</optgroup>
-									{/each}
-								</select>
-							</div>
-							<div class="dropdown-row">
 								<label for="compression-select">File artisan cut</label>
 								<select id="compression-select" value={modelOverrides.compression} onchange={(e) => handleOverrideChange('compression', e)}>
 									{#each modelsByProvider as group}
@@ -761,8 +514,8 @@
 													<span class="model-price" title="Cost per image">${formatPrice(model.cost_per_image ?? 0)}/img</span>
 													<span class="model-price"></span>
 												{:else}
-													<span class="model-price">${formatPrice(model.input_price_per_million)}</span>
-													<span class="model-price">${formatPrice(model.output_price_per_million)}</span>
+													<span class="model-price" title="Input cost per million tokens">${formatPrice(model.input_price_per_million)}/M</span>
+													<span class="model-price" title="Output cost per million tokens">${formatPrice(model.output_price_per_million)}/M</span>
 												{/if}
 												<button
 													class="delete-btn"
@@ -1145,7 +898,7 @@
 	 */
 	.all-models-list {
 		--personas-count: 6;      /* Gunnar, Kirby, Samara, Alicja, Eva, Ananya */
-		--processes-count: 9;     /* Embeddings, Image gen, Captioning, Image edit, Tool calling, Audio gen, Video gen, File artisan cut, Chat artisan cut */
+		--processes-count: 3;     /* Embeddings, File artisan cut, Chat artisan cut */
 		--dropdown-height: 24px;
 		--dropdown-gap: 6px;
 		--section-gap: 51px;      /* 20px + 23px + 8px */
