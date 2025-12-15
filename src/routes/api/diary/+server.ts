@@ -16,7 +16,7 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supab
 	const userId = session.user.id;
 
 	const { data: entries, error } = await supabase
-		.from('founder_diary')
+		.from('canvas_planner_diary')
 		.select('*')
 		.eq('user_id', userId)
 		.order('sort_date', { ascending: true });

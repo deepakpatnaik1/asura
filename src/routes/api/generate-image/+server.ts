@@ -2,7 +2,6 @@
  * Image Generation API
  *
  * Generates images using Fireworks FLUX models and uploads to Supabase storage.
- * Used by Eva (character designer persona) for character creation workflow.
  */
 
 import { json } from '@sveltejs/kit';
@@ -118,7 +117,7 @@ async function uploadToStorage(
 	const imageBuffer = Buffer.from(imageBase64, 'base64');
 	const storagePath = `generated/${userId}/${filename}`;
 
-	const { error } = await supabaseStorage.storage.from('content').upload(storagePath, imageBuffer, {
+	const { error } = await supabaseStorage.storage.from('canvas_gallery_content').upload(storagePath, imageBuffer, {
 		contentType: 'image/png',
 		upsert: true
 	});

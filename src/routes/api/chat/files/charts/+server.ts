@@ -27,7 +27,7 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supab
 
 	// Build query - join to content table for file charts
 	let query = supabase
-		.from('charts')
+		.from('canvas_gallery_charts')
 		.select(`
 			id,
 			content_id,

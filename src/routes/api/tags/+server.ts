@@ -14,7 +14,7 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 	}
 
 	const { data: tags, error } = await supabase
-		.from('tags')
+		.from('canvas_planner_tags')
 		.select('name')
 		.eq('user_id', session.user.id)
 		.order('name', { ascending: true });

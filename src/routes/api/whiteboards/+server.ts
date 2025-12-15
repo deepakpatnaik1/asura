@@ -1,5 +1,6 @@
 /**
  * Whiteboards API - List and Create
+ * Uses unified canvases table with type='whiteboard'
  *
  * GET: List user's whiteboards
  * POST: Create a new whiteboard
@@ -21,7 +22,7 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 	const { userId } = auth;
 
 	const { data: whiteboards, error } = await supabase
-		.from('whiteboards')
+		.from('canvas_whiteboard')
 		.select('id, title, created_at, updated_at')
 		.eq('user_id', userId)
 		.order('updated_at', { ascending: false });
@@ -62,7 +63,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 	}
 
 	const { data, error } = await supabase
-		.from('whiteboards')
+		.from('canvas_whiteboard')
 		.insert({
 			user_id: userId,
 			title: whiteboardTitle,

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Icon } from 'svelte-icons-pack';
 	import { LuPaperclip, LuFolder } from 'svelte-icons-pack/lu';
-	import { currentMessage, isLoading, sendMessage, abortCurrentMessage, lastMutations, lastWhiteboardMutations, lastCanvasMutations } from '$lib/stores/chat';
+	import { currentMessage, isLoading, sendMessage, abortCurrentMessage, lastMutations, lastWhiteboardMutations } from '$lib/stores/chat';
 	import { tick, onMount } from 'svelte';
 	import { DEFAULT_PERSONA, PERSONAS } from '$lib/config/personas';
 	import { type CanvasType, getDefaultCanvasForPersona } from '$lib/config/canvases';
@@ -66,22 +66,6 @@
 	let whiteboards = $state<Whiteboard[]>([]);
 	let selectedWhiteboardIds = $state<string[]>([]); // Whiteboards selected for context injection
 	let viewingWhiteboardId = $state<string | null>(null); // Currently displayed in canvas
-
-	// Canvas state for Eva's character design workspace (separate from Gunnar's whiteboards)
-	interface EvaCanvas {
-		id: string;
-		title: string;
-		state?: {
-			render: Array<{ id: string; type: 'note' | 'label' | 'line' | 'arrow' | 'group' | 'image'; x?: number; y?: number; text?: string; fill?: string; width?: number; height?: number; src?: string }>;
-			semantic: Record<string, unknown>;
-			viewport: { x: number; y: number; scale: number };
-		};
-		created_at: string;
-		updated_at: string;
-	}
-	let evaCanvases = $state<EvaCanvas[]>([]);
-	let selectedCanvasIds = $state<string[]>([]); // Canvases selected for context injection
-	let viewingCanvasId = $state<string | null>(null); // Currently displayed canvas
 
 	// Refresh calendar when any Alicja mutations occur (todos, tags, diary, calendar)
 	$effect(() => {
@@ -156,61 +140,6 @@
 		}
 	});
 
-	// Handle canvas mutations from Eva's tools
-	$effect(() => {
-		const mutations = $lastCanvasMutations;
-		if (mutations) {
-			// Handle created canvases - add to list
-			if (mutations.created_canvases && mutations.created_canvases.length > 0) {
-				evaCanvases = [...evaCanvases, ...mutations.created_canvases];
-			}
-
-			// Handle renamed canvases - update titles
-			if (mutations.renamed_canvases && mutations.renamed_canvases.length > 0) {
-				for (const renamed of mutations.renamed_canvases) {
-					evaCanvases = evaCanvases.map(c =>
-						c.id === renamed.id ? { ...c, title: renamed.title } : c
-					);
-				}
-			}
-
-			// Handle deleted canvases - remove from list and selection
-			if (mutations.deleted_canvases && mutations.deleted_canvases.length > 0) {
-				const deletedIds = new Set(mutations.deleted_canvases);
-				evaCanvases = evaCanvases.filter(c => !deletedIds.has(c.id));
-				// Remove deleted from selection
-				selectedCanvasIds = selectedCanvasIds.filter(id => !deletedIds.has(id));
-				// Clear viewing if it was deleted
-				if (viewingCanvasId && deletedIds.has(viewingCanvasId)) {
-					viewingCanvasId = evaCanvases.length > 0 ? evaCanvases[0].id : null;
-				}
-			}
-
-			// Handle updated canvases - apply state changes
-			if (mutations.updated_canvases && mutations.updated_canvases.length > 0) {
-				for (const updated of mutations.updated_canvases) {
-					evaCanvases = evaCanvases.map(c =>
-						c.id === updated.id ? { ...c, state: updated.state } : c
-					);
-				}
-			}
-
-			// Handle opened canvas - select it, view it, and switch canvas view
-			if (mutations.opened_canvas) {
-				const openedId = mutations.opened_canvas;
-				// Add to selection if not already selected
-				if (!selectedCanvasIds.includes(openedId)) {
-					selectedCanvasIds = [...selectedCanvasIds, openedId];
-				}
-				viewingCanvasId = openedId;
-				forceCanvas = 'design'; // Switch to design canvas when canvas is opened
-			}
-
-			// Clear mutations after processing
-			lastCanvasMutations.set(null);
-		}
-	});
-
 	let inputMessage = $state('');
 	let messagesEndRef: HTMLDivElement;
 	let textareaRef: HTMLTextAreaElement;
@@ -239,12 +168,10 @@
 	const chartDeleteConfirm = createConfirmation();
 	const whiteboardDeleteConfirm = createConfirmation();
 	let isDeletingWhiteboard = $state(false);
-	const canvasDeleteConfirm = createConfirmation();
-	let isDeletingCanvas = $state(false);
 
 	// Total selections for library badge
 	const totalLibrarySelections = $derived(
-		files.filter(f => f.is_enabled).length + selectedWhiteboardIds.length + selectedCanvasIds.length
+		files.filter(f => f.is_enabled).length + selectedWhiteboardIds.length
 	);
 
 	let pendingTimeouts: number[] = [];
@@ -322,34 +249,6 @@
 		}
 	}
 
-	// Fetch canvases for Eva's character design workspace
-	async function loadCanvases() {
-		try {
-			const response = await fetch('/api/canvases');
-			if (response.ok) {
-				const data = await response.json();
-				evaCanvases = data.canvases || [];
-				// Auto-select all canvases for context injection
-				selectedCanvasIds = evaCanvases.map(c => c.id);
-				// Auto-view first canvas (most recently updated) and fetch its full state
-				if (evaCanvases.length > 0 && !viewingCanvasId) {
-					const firstId = evaCanvases[0].id;
-					viewingCanvasId = firstId;
-					// Fetch full state for the viewing canvas
-					const stateResponse = await fetch(`/api/canvases/${firstId}`);
-					if (stateResponse.ok) {
-						const stateData = await stateResponse.json();
-						evaCanvases = evaCanvases.map(c =>
-							c.id === firstId ? stateData.canvas : c
-						);
-					}
-				}
-			}
-		} catch (error) {
-			console.error('Failed to load canvases:', error);
-		}
-	}
-
 	// Toggle whiteboard selection for context injection
 	function toggleWhiteboardSelection(id: string) {
 		if (selectedWhiteboardIds.includes(id)) {
@@ -405,107 +304,6 @@
 		}, 1000); // Save after 1 second of no changes
 	}
 
-	// Toggle canvas selection for context injection (Eva)
-	function toggleCanvasSelection(id: string) {
-		if (selectedCanvasIds.includes(id)) {
-			selectedCanvasIds = selectedCanvasIds.filter(cid => cid !== id);
-		} else {
-			selectedCanvasIds = [...selectedCanvasIds, id];
-		}
-	}
-
-	// Handle canvas click from library - toggle selection AND view it
-	async function handleCanvasSelect(id: string) {
-		// Toggle selection
-		toggleCanvasSelection(id);
-		// Also set as viewing
-		viewingCanvasId = id;
-		// Fetch full canvas state
-		try {
-			const response = await fetch(`/api/canvases/${id}`);
-			if (response.ok) {
-				const data = await response.json();
-				// Update the canvas in the list with full state
-				evaCanvases = evaCanvases.map(c =>
-					c.id === id ? data.canvas : c
-				);
-			}
-		} catch (error) {
-			console.error('Failed to fetch canvas:', error);
-		}
-	}
-
-	// Open canvas for viewing (without toggling selection)
-	async function handleOpenCanvas(id: string) {
-		viewingCanvasId = id;
-		// Fetch full canvas state
-		try {
-			const response = await fetch(`/api/canvases/${id}`);
-			if (response.ok) {
-				const data = await response.json();
-				evaCanvases = evaCanvases.map(c =>
-					c.id === id ? data.canvas : c
-				);
-			}
-		} catch (error) {
-			console.error('Failed to fetch canvas:', error);
-		}
-	}
-
-	// Debounced save for canvas state changes
-	let canvasSaveTimeout: ReturnType<typeof setTimeout> | null = null;
-	function handleCanvasStateChange(id: string, state: EvaCanvas['state']) {
-		// Update local state immediately
-		evaCanvases = evaCanvases.map(c =>
-			c.id === id ? { ...c, state } : c
-		);
-
-		// Debounce save to API
-		if (canvasSaveTimeout) {
-			clearTimeout(canvasSaveTimeout);
-		}
-		canvasSaveTimeout = setTimeout(async () => {
-			try {
-				await fetch(`/api/canvases/${id}`, {
-					method: 'PUT',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ state })
-				});
-			} catch (error) {
-				console.error('Failed to save canvas:', error);
-			}
-		}, 1000); // Save after 1 second of no changes
-	}
-
-	// Clear all canvas selections
-	function clearCanvasSelection() {
-		selectedCanvasIds = [];
-	}
-
-	// Delete canvas with confirmation
-	function handleCanvasDeleteClick(canvasId: string, event: MouseEvent) {
-		event.stopPropagation();
-		canvasDeleteConfirm.start(async () => {
-			isDeletingCanvas = true;
-			try {
-				const response = await fetch(`/api/canvases/${canvasId}`, {
-					method: 'DELETE'
-				});
-				if (response.ok) {
-					evaCanvases = evaCanvases.filter(c => c.id !== canvasId);
-					selectedCanvasIds = selectedCanvasIds.filter(id => id !== canvasId);
-					if (viewingCanvasId === canvasId) {
-						viewingCanvasId = evaCanvases.length > 0 ? evaCanvases[0].id : null;
-					}
-				}
-			} catch (error) {
-				console.error('Failed to delete canvas:', error);
-			} finally {
-				isDeletingCanvas = false;
-			}
-		});
-	}
-
 	onMount(() => {
 		textareaRef?.focus();
 
@@ -514,7 +312,7 @@
 
 		(async () => {
 			inputMessage = getPersonaPrefix();
-			await Promise.all([loadCharts(), loadWhiteboards(), loadCanvases()]);
+			await Promise.all([loadCharts(), loadWhiteboards()]);
 		})();
 
 		// Listen for nuke events from SettingsModal
@@ -527,12 +325,10 @@
 			pendingTimeouts.forEach(clearTimeout);
 			pendingTimeouts = [];
 			if (whiteboardSaveTimeout) clearTimeout(whiteboardSaveTimeout);
-			if (canvasSaveTimeout) clearTimeout(canvasSaveTimeout);
 			deleteConfirm.cleanup();
 			fileDeleteConfirm.cleanup();
 			chartDeleteConfirm.cleanup();
 			whiteboardDeleteConfirm.cleanup();
-			canvasDeleteConfirm.cleanup();
 			window.removeEventListener('nuke-complete', handleNukeEvent as EventListener);
 		};
 	});
@@ -661,8 +457,7 @@
 			chartId,
 			chartSource,
 			undefined,
-			selectedWhiteboardIds.length > 0 ? selectedWhiteboardIds : undefined,
-			selectedCanvasIds.length > 0 ? selectedCanvasIds : undefined
+			selectedWhiteboardIds.length > 0 ? selectedWhiteboardIds : undefined
 		);
 
 		if ($currentMessage) {
@@ -1142,14 +937,6 @@
 								onWhiteboardDelete={handleWhiteboardDeleteClick}
 								onWhiteboardClear={clearWhiteboardSelection}
 								isDeletingWhiteboard={isDeletingWhiteboard}
-
-								canvases={evaCanvases}
-								selectedCanvasIds={selectedCanvasIds}
-								onCanvasToggle={toggleCanvasSelection}
-								onCanvasOpen={handleOpenCanvas}
-								onCanvasDelete={handleCanvasDeleteClick}
-								onCanvasClear={clearCanvasSelection}
-								isDeletingCanvas={isDeletingCanvas}
 							/>
 						{/if}
 					</div>
@@ -1216,12 +1003,6 @@
 		onCancel={() => whiteboardDeleteConfirm.cancel()}
 	/>
 
-	<ConfirmationModal
-		isOpen={canvasDeleteConfirm.isActive}
-		progress={canvasDeleteConfirm.progress}
-		onCancel={() => canvasDeleteConfirm.cancel()}
-	/>
-
 	<CanvasContainer
 		persona={selectedPersona}
 		charts={allCharts}
@@ -1237,11 +1018,6 @@
 		{selectedWhiteboardIds}
 		onWhiteboardSelect={handleWhiteboardSelect}
 		onWhiteboardStateChange={handleWhiteboardStateChange}
-		canvases={evaCanvases}
-		activeCanvasId={viewingCanvasId}
-		{selectedCanvasIds}
-		onCanvasSelect={handleCanvasSelect}
-		onCanvasStateChange={handleCanvasStateChange}
 	/>
 </div>
 

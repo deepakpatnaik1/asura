@@ -19,7 +19,7 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supab
 	const status = url.searchParams.get('status'); // 'open', 'completed', or null for all
 
 	let query = supabase
-		.from('todos')
+		.from('canvas_planner_todos')
 		.select('*')
 		.eq('user_id', userId)
 		.order('created_at', { ascending: false });

@@ -65,7 +65,7 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession, supabase 
 	if (contentIds.length > 0) {
 		const { data: contents } = await monitor.track('fetchContentForMarkers', async () =>
 			await supabase
-				.from('content')
+				.from('canvas_gallery_content')
 				.select('id, raw_content')
 				.in('id', contentIds)
 		);

@@ -143,7 +143,7 @@ export async function extractAndSaveCharts(options: ExtractContentOptions): Prom
 		}));
 
 		const { error: chartInsertError } = await supabase
-			.from('charts')
+			.from('canvas_gallery_charts')
 			.insert(chartRecords);
 
 		if (chartInsertError) {

@@ -1,5 +1,6 @@
 /**
  * Whiteboards API - Get, Update, Delete
+ * Uses unified canvases table with type='whiteboard'
  *
  * GET: Get whiteboard with full state
  * PUT: Update whiteboard (title and/or state)
@@ -27,7 +28,7 @@ export const GET: RequestHandler = async ({ params, locals: { safeGetSession, su
 	}
 
 	const { data, error } = await supabase
-		.from('whiteboards')
+		.from('canvas_whiteboard')
 		.select('*')
 		.eq('id', id)
 		.eq('user_id', userId)
@@ -90,7 +91,7 @@ export const PUT: RequestHandler = async ({ params, request, locals: { safeGetSe
 	}
 
 	const { data, error } = await supabase
-		.from('whiteboards')
+		.from('canvas_whiteboard')
 		.update(updateData)
 		.eq('id', id)
 		.eq('user_id', userId)
@@ -119,10 +120,10 @@ export const DELETE: RequestHandler = async ({ params, locals: { safeGetSession,
 	}
 
 	const { error } = await supabase
-		.from('whiteboards')
+		.from('canvas_whiteboard')
 		.delete()
 		.eq('id', id)
-		.eq('user_id', userId);
+		.eq('user_id', userId)
 
 	if (error) {
 		return databaseError('Failed to delete whiteboard');

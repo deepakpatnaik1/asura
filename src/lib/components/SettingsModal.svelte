@@ -2,7 +2,6 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { Icon } from 'svelte-icons-pack';
 	import { LuX, LuFlame, LuDownload, LuTrash2 } from 'svelte-icons-pack/lu';
-	import { DEFAULT_MODEL } from '$lib/config/models';
 	import { createConfirmation } from '$lib/composables/confirmation.svelte';
 	import NukeMenu from './NukeMenu.svelte';
 
@@ -30,7 +29,6 @@
 	type OverrideKey = typeof OVERRIDE_KEYS[number];
 
 	let models = $state<Model[]>([]);
-	let defaultModel = $state<string>('');
 	let modelOverrides = $state<Record<OverrideKey, string>>({
 		gunnar: '',
 		kirby: '',
@@ -123,12 +121,8 @@
 
 			console.log('[SettingsModal] Settings received:', settings);
 
-			defaultModel = settings.default_model || DEFAULT_MODEL;
-
-			// Persona keys use defaultModel as fallback (they're all text models)
-			const personaKeys = ['gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya'] as const;
-
 			// Build new overrides object to ensure reactivity
+			// No fallback logic - NULL values surface as empty (shows errors immediately)
 			const newOverrides: Record<OverrideKey, string> = {
 				gunnar: '',
 				kirby: '',
@@ -141,18 +135,10 @@
 				chat_compression: ''
 			};
 
-			// Load model overrides from settings
+			// Load model overrides from settings - use exact DB values, no fallbacks
 			for (const key of OVERRIDE_KEYS) {
 				const columnName = `model_${key}` as keyof typeof settings;
-				const savedValue = settings[columnName];
-
-				if (savedValue) {
-					newOverrides[key] = savedValue;
-				} else if (personaKeys.includes(key as typeof personaKeys[number])) {
-					newOverrides[key] = defaultModel;
-				} else {
-					newOverrides[key] = '';
-				}
+				newOverrides[key] = settings[columnName] || '';
 			}
 
 			console.log('[SettingsModal] Overrides built:', newOverrides);
@@ -186,24 +172,6 @@
 			console.error('[SettingsModal] Failed to save:', error);
 			errorMessage = 'Failed to save setting.';
 		}
-	}
-
-	// Handle default model change - cascade to all dropdowns using the old value
-	function handleDefaultModelChange(event: Event) {
-		const oldDefault = defaultModel;
-		const newDefault = (event.target as HTMLSelectElement).value;
-		defaultModel = newDefault;
-
-		// Cascade: update all overrides that were using the old default
-		const updates: Record<string, string> = { default_model: newDefault };
-		for (const key of OVERRIDE_KEYS) {
-			if (modelOverrides[key] === oldDefault) {
-				modelOverrides[key] = newDefault;
-				updates[`model_${key}`] = newDefault;
-			}
-		}
-
-		saveSetting(updates);
 	}
 
 	// Handle individual override change

@@ -1,5 +1,6 @@
 /**
  * Whiteboard Tools for Gunnar
+ * Uses unified canvases table with type='whiteboard'
  *
  * Tool definitions and executors for whiteboard operations.
  * These tools allow Gunnar to create, rename, delete, and open whiteboards.
@@ -302,7 +303,7 @@ async function executeCreateWhiteboard(
 		}
 
 		const { data, error } = await supabase
-			.from('whiteboards')
+			.from('canvas_whiteboard')
 			.insert({
 				user_id: userId,
 				title
@@ -365,7 +366,7 @@ async function executeRenameWhiteboard(
 
 		// Get old title for message
 		const { data: existing, error: fetchError } = await supabase
-			.from('whiteboards')
+			.from('canvas_whiteboard')
 			.select('title')
 			.eq('id', whiteboardId)
 			.eq('user_id', userId)
@@ -381,7 +382,7 @@ async function executeRenameWhiteboard(
 		const oldTitle = existing.title;
 
 		const { data: updated, error } = await supabase
-			.from('whiteboards')
+			.from('canvas_whiteboard')
 			.update({
 				title: newTitle,
 				updated_at: new Date().toISOString()
@@ -430,7 +431,7 @@ async function executeDeleteWhiteboard(
 
 		// Get title before deleting
 		const { data: whiteboard, error: fetchError } = await supabase
-			.from('whiteboards')
+			.from('canvas_whiteboard')
 			.select('title')
 			.eq('id', whiteboardId)
 			.eq('user_id', userId)
@@ -444,16 +445,16 @@ async function executeDeleteWhiteboard(
 		}
 
 		const { error } = await supabase
-			.from('whiteboards')
+			.from('canvas_whiteboard')
 			.delete()
 			.eq('id', whiteboardId)
-			.eq('user_id', userId);
+			.eq('user_id', userId)
 
 		if (error) throw error;
 
 		// Verify deletion - record should no longer exist
 		const { data: stillExists } = await supabase
-			.from('whiteboards')
+			.from('canvas_whiteboard')
 			.select('id')
 			.eq('id', whiteboardId)
 			.eq('user_id', userId)
@@ -495,7 +496,7 @@ async function executeOpenWhiteboard(
 
 		// Verify whiteboard exists and belongs to user
 		const { data: whiteboard, error } = await supabase
-			.from('whiteboards')
+			.from('canvas_whiteboard')
 			.select('id, title')
 			.eq('id', whiteboardId)
 			.eq('user_id', userId)
@@ -532,7 +533,7 @@ async function executeListWhiteboards(context: WhiteboardToolContext): Promise<T
 		const { supabase, userId } = context;
 
 		const { data: whiteboards, error } = await supabase
-			.from('whiteboards')
+			.from('canvas_whiteboard')
 			.select('id, title, created_at, updated_at')
 			.eq('user_id', userId)
 			.order('updated_at', { ascending: false });
@@ -580,7 +581,7 @@ async function executeUpdateWhiteboard(
 
 		// Verify whiteboard exists and belongs to user
 		const { data: existing, error: fetchError } = await supabase
-			.from('whiteboards')
+			.from('canvas_whiteboard')
 			.select('title, state')
 			.eq('id', whiteboardId)
 			.eq('user_id', userId)
@@ -604,7 +605,7 @@ async function executeUpdateWhiteboard(
 		};
 
 		const { data: updated, error } = await supabase
-			.from('whiteboards')
+			.from('canvas_whiteboard')
 			.update({
 				state: newState,
 				updated_at: new Date().toISOString()

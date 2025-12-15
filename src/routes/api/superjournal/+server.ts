@@ -56,7 +56,7 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supab
 	let contentMap = new Map<string, string>();
 	if (contentIds.length > 0) {
 		const { data: contents } = await supabase
-			.from('content')
+			.from('canvas_gallery_content')
 			.select('id, raw_content')
 			.in('id', contentIds);
 

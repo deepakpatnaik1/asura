@@ -41,7 +41,7 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 				.eq('user_id', userId)
 				.order('created_at', { ascending: false }),
 			supabase
-				.from('charts')
+				.from('canvas_gallery_charts')
 				.select('*')
 				.eq('user_id', userId)
 				.order('created_at', { ascending: false }),
@@ -51,7 +51,7 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 				.eq('user_id', userId)
 				.order('created_at', { ascending: false }),
 			supabase
-				.from('content')
+				.from('canvas_gallery_content')
 				.select('*')
 				.eq('user_id', userId)
 				.order('created_at', { ascending: false }),

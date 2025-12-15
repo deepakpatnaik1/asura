@@ -73,7 +73,7 @@ export async function runExtractTablesJob(params: ExtractTablesParams): Promise<
 				// Upload SVG to storage
 				const storagePath = `superjournal-charts/${userId}/${superjournalId}/table-${table.index}.svg`;
 				const { error: svgUploadError } = await supabase.storage
-					.from('content')
+					.from('canvas_gallery_content')
 					.upload(storagePath, svgBuffer, {
 						contentType: 'image/svg+xml',
 						upsert: true
@@ -87,7 +87,7 @@ export async function runExtractTablesJob(params: ExtractTablesParams): Promise<
 				// Upload thumbnail to storage
 				const thumbnailPath = `superjournal-thumbnails/${userId}/${superjournalId}/table-${table.index}.jpg`;
 				const { error: thumbUploadError } = await supabase.storage
-					.from('content')
+					.from('canvas_gallery_content')
 					.upload(thumbnailPath, thumbnailBuffer, {
 						contentType: 'image/jpeg',
 						upsert: true
@@ -117,7 +117,7 @@ export async function runExtractTablesJob(params: ExtractTablesParams): Promise<
 		// 3. Insert records into database
 		if (chartRecords.length > 0) {
 			const { error: insertError } = await supabase
-				.from('charts')
+				.from('canvas_gallery_charts')
 				.insert(chartRecords);
 
 			if (insertError) {

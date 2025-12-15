@@ -58,7 +58,7 @@ export const PUT: RequestHandler = async ({ params, request, locals: { safeGetSe
 
 	// Update content (RLS ensures user can only update their own content)
 	const { data, error } = await supabase
-		.from('content')
+		.from('canvas_gallery_content')
 		.update(updateData)
 		.eq('id', id)
 		.eq('user_id', userId)
@@ -88,7 +88,7 @@ export const DELETE: RequestHandler = async ({ params, locals: { safeGetSession,
 
 	// 1. FETCH CHARTS TO GET FILE PATHS (before deletion)
 	const { data: charts } = await supabase
-		.from('charts')
+		.from('canvas_gallery_charts')
 		.select('storage_path, thumbnail_path')
 		.eq('content_id', id)
 		.eq('user_id', userId);
@@ -102,7 +102,7 @@ export const DELETE: RequestHandler = async ({ params, locals: { safeGetSession,
 		}
 	}
 	if (storagePaths.length > 0) {
-		await supabase.storage.from('content').remove(storagePaths);
+		await supabase.storage.from('canvas_gallery_content').remove(storagePaths);
 	}
 
 	// 3. DELETE ASSOCIATED SUPERJOURNAL ENTRY (content marker in ai_response)
@@ -115,7 +115,7 @@ export const DELETE: RequestHandler = async ({ params, locals: { safeGetSession,
 	// 4. DELETE CONTENT FROM DATABASE (CASCADE handles charts via FK)
 	// No mode filter - user owns the content, ID is unique
 	const { error } = await supabase
-		.from('content')
+		.from('canvas_gallery_content')
 		.delete()
 		.eq('id', id)
 		.eq('user_id', userId);

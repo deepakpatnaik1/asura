@@ -67,7 +67,7 @@ export const GET: RequestHandler = async ({ request }) => {
 					.eq('user_id', userId)
 					.order('created_at', { ascending: false }),
 				supabase
-					.from('charts')
+					.from('canvas_gallery_charts')
 					.select('*')
 					.eq('user_id', userId)
 					.order('created_at', { ascending: false }),
@@ -77,7 +77,7 @@ export const GET: RequestHandler = async ({ request }) => {
 					.eq('user_id', userId)
 					.order('created_at', { ascending: false }),
 				supabase
-					.from('content')
+					.from('canvas_gallery_content')
 					.select('*')
 					.eq('user_id', userId)
 					.order('created_at', { ascending: false }),
@@ -87,17 +87,17 @@ export const GET: RequestHandler = async ({ request }) => {
 					.eq('user_id', userId)
 					.single(),
 				supabase
-					.from('todos')
+					.from('canvas_planner_todos')
 					.select('*')
 					.eq('user_id', userId)
 					.order('created_at', { ascending: false }),
 				supabase
-					.from('founder_diary')
+					.from('canvas_planner_diary')
 					.select('*')
 					.eq('user_id', userId)
 					.order('logged_at', { ascending: false }),
 				supabase
-					.from('tags')
+					.from('canvas_planner_tags')
 					.select('*')
 					.eq('user_id', userId)
 					.order('name', { ascending: true })

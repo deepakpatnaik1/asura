@@ -45,14 +45,6 @@ import {
 	type WhiteboardToolContext,
 	type WhiteboardMutations
 } from '$lib/api/whiteboard-tools';
-import {
-	CANVAS_TOOLS,
-	executeCanvasTool,
-	isCanvasTool,
-	createEmptyCanvasMutations,
-	type CanvasToolContext,
-	type CanvasMutations
-} from '$lib/api/canvas-tools';
 import { refreshAccessToken } from '$lib/api/google-calendar';
 import { BRAVE_SEARCH_TOOL, executeBraveSearch } from '$lib/api/brave-search';
 import { createClient } from '@supabase/supabase-js';
@@ -97,14 +89,13 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		const validation = validateSchema(chatMessageSchema, parseResult.data);
 		if (!validation.success) return validation.error;
 
-		const { message, persona: requestPersona, chart_id, chart_source, content_ids, whiteboard_ids, canvas_ids } = validation.data;
+		const { message, persona: requestPersona, chart_id, chart_source, content_ids, whiteboard_ids } = validation.data;
 
 		// 4. Load user settings (persona and all model overrides in one query)
 		const { data: settings } = await supabase
 			.from('user_settings')
 			.select(`selected_persona, default_model,
-				model_gunnar, model_kirby, model_samara, model_alicja, model_eva, model_ananya,
-				model_image_gen, model_image_edit, model_captioning, model_tool_calling`)
+				model_gunnar, model_kirby, model_samara, model_alicja, model_ananya`)
 			.eq('user_id', userId)
 			.single();
 
@@ -114,9 +105,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		const personaModelColumn = `model_${persona}`;
 		const personaModel = settings ? (settings as Record<string, unknown>)[personaModelColumn] : null;
 		const conversationModel = (personaModel as string) || settings?.default_model || DEFAULT_MODEL;
-
-		// Get tool calling model override
-		const defaultToolCallingModel = settings?.model_tool_calling || undefined;
 
 		// 5. Fetch chart image if referenced
 		let chartImage: ChartImageData | null = null;
@@ -179,8 +167,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			conversationModel,
 			message,
 			content_ids,
-			whiteboard_ids,
-			canvas_ids
+			whiteboard_ids
 		);
 
 		log.info('Context built', { ...stats, model: conversationModel, persona });
@@ -193,7 +180,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		let toolExecutor: ToolExecutor | undefined;
 		let todoMutations: TodoMutations | undefined;
 		let whiteboardMutations: WhiteboardMutations | undefined;
-		let canvasMutations: CanvasMutations | undefined;
 
 		const personaTools = getPersonaTools(persona);
 
@@ -204,7 +190,12 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			// Check which tool categories this persona has
 			const hasTodoTools = personaTools.some(t => isTodoTool(t));
 			const hasWhiteboardTools = personaTools.some(t => isWhiteboardTool(t));
-			const hasCanvasTools = personaTools.some(t => isCanvasTool(t));
+
+			log.info('Tool setup', {
+				persona,
+				personaTools,
+				modelUsed: conversationModel
+			});
 
 			// Set up todo tools context (Alicja)
 			let todoContext: TodoToolContext | null = null;
@@ -260,17 +251,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				allTools.push(...WHITEBOARD_TOOLS);
 			}
 
-			// Set up canvas tools context (Eva - character design canvases)
-			let canvasContext: CanvasToolContext | null = null;
-
-			if (hasCanvasTools) {
-				canvasMutations = createEmptyCanvasMutations();
-				canvasContext = { supabase, userId };
-				allTools.push(...CANVAS_TOOLS);
-			}
-
-
 			tools = allTools;
+			log.info('Final tools', { toolCount: allTools.length, toolNames: allTools.map(t => t.name) });
 
 			// Tool executor handles all tool types
 			toolExecutor = async (toolName, input) => {
@@ -282,8 +264,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 						success: !!searchResults,
 						message: searchResults || 'Search failed'
 					};
-				} else if (isCanvasTool(toolName) && canvasContext) {
-					return executeCanvasTool(toolName, input, canvasContext, canvasMutations!);
 				} else if (isWhiteboardTool(toolName) && whiteboardContext) {
 					return executeWhiteboardTool(toolName, input, whiteboardContext, whiteboardMutations!);
 				} else if (isTodoTool(toolName) && todoContext) {
@@ -372,9 +352,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 						}),
 						...(whiteboardMutations && {
 							whiteboard_mutations: whiteboardMutations
-						}),
-						...(canvasMutations && {
-							canvas_mutations: canvasMutations
 						})
 					});
 					controller.enqueue(encoder.encode(`data: ${doneData}\n\n`));

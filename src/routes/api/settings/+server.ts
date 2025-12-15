@@ -16,12 +16,6 @@ const MODEL_COLUMNS = [
 	'model_eva',
 	'model_ananya',
 	'model_embeddings',
-	'model_image_gen',
-	'model_captioning',
-	'model_image_edit',
-	'model_tool_calling',
-	'model_audio_gen',
-	'model_video_gen',
 	'model_compression',
 	'model_chat_compression'
 ] as const;
@@ -38,8 +32,7 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 		.select(
 			`default_model, active_content_id, selected_persona,
 			 model_gunnar, model_kirby, model_samara, model_alicja, model_eva, model_ananya,
-			 model_embeddings, model_image_gen, model_captioning, model_image_edit, model_tool_calling,
-			 model_audio_gen, model_video_gen, model_compression, model_chat_compression`
+			 model_embeddings, model_compression, model_chat_compression`
 		)
 		.eq('user_id', userId)
 		.single();

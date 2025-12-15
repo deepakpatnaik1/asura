@@ -2,7 +2,6 @@
  * Fireworks Chat Streaming
  *
  * Handles conversation streaming for Fireworks models (OpenAI-compatible API).
- * Used for uncensored models like Hermes, Dolphin for Eva persona.
  * Supports tool/function calling with recursive execution.
  */
 

@@ -472,7 +472,7 @@ async function executeCreateTodo(
 		const now = new Date().toISOString();
 		const expectedStatus = markComplete ? 'completed' : 'open';
 		const { data, error } = await supabase
-			.from('todos')
+			.from('canvas_planner_todos')
 			.insert({
 				user_id: userId,
 				description,
@@ -551,7 +551,7 @@ async function executeCompleteTodo(
 		const todoId = input.todo_id as string;
 
 		const { data, error } = await supabase
-			.from('todos')
+			.from('canvas_planner_todos')
 			.update({
 				status: 'completed',
 				completed_at: new Date().toISOString()
@@ -603,7 +603,7 @@ async function executeReopenTodo(
 		const todoId = input.todo_id as string;
 
 		const { data, error } = await supabase
-			.from('todos')
+			.from('canvas_planner_todos')
 			.update({
 				status: 'open',
 				completed_at: null
@@ -673,7 +673,7 @@ async function executeUpdateTodo(
 		}
 
 		const { data, error } = await supabase
-			.from('todos')
+			.from('canvas_planner_todos')
 			.update(updateData)
 			.eq('id', todoId)
 			.select()
@@ -749,20 +749,20 @@ async function executeDeleteTodo(
 
 		// Get description before deleting
 		const { data: todo, error: fetchError } = await supabase
-			.from('todos')
+			.from('canvas_planner_todos')
 			.select('description')
 			.eq('id', todoId)
 			.single();
 
 		if (fetchError) throw fetchError;
 
-		const { error } = await supabase.from('todos').delete().eq('id', todoId);
+		const { error } = await supabase.from('canvas_planner_todos').delete().eq('id', todoId);
 
 		if (error) throw error;
 
 		// Verify the deletion actually happened by checking the record is gone
 		const { data: checkDeleted } = await supabase
-			.from('todos')
+			.from('canvas_planner_todos')
 			.select('id')
 			.eq('id', todoId)
 			.single();
@@ -803,7 +803,7 @@ async function executeCreateTag(
 		const name = (input.name as string).toLowerCase().trim();
 
 		const { data, error } = await supabase
-			.from('tags')
+			.from('canvas_planner_tags')
 			.insert({
 				user_id: userId,
 				name
@@ -860,7 +860,7 @@ async function executeDeleteTag(
 
 		// Find the tag first
 		const { data: tag, error: fetchError } = await supabase
-			.from('tags')
+			.from('canvas_planner_tags')
 			.select('id')
 			.eq('user_id', userId)
 			.eq('name', name)
@@ -875,7 +875,7 @@ async function executeDeleteTag(
 
 		// Remove tag from all todos that use it
 		const { data: todosWithTag } = await supabase
-			.from('todos')
+			.from('canvas_planner_todos')
 			.select('id, tags')
 			.eq('user_id', userId)
 			.contains('tags', [name]);
@@ -884,7 +884,7 @@ async function executeDeleteTag(
 			for (const todo of todosWithTag) {
 				const newTags = (todo.tags as string[]).filter((t: string) => t !== name);
 				await supabase
-					.from('todos')
+					.from('canvas_planner_todos')
 					.update({ tags: newTags })
 					.eq('id', todo.id);
 			}
@@ -892,7 +892,7 @@ async function executeDeleteTag(
 
 		// Delete the tag
 		const { error } = await supabase
-			.from('tags')
+			.from('canvas_planner_tags')
 			.delete()
 			.eq('id', tag.id);
 
@@ -900,7 +900,7 @@ async function executeDeleteTag(
 
 		// Verify deletion
 		const { data: checkDeleted } = await supabase
-			.from('tags')
+			.from('canvas_planner_tags')
 			.select('id')
 			.eq('id', tag.id)
 			.single();
@@ -951,7 +951,7 @@ async function executeRenameTag(
 
 		// Find the tag
 		const { data: tag, error: fetchError } = await supabase
-			.from('tags')
+			.from('canvas_planner_tags')
 			.select('id')
 			.eq('user_id', userId)
 			.eq('name', oldName)
@@ -966,7 +966,7 @@ async function executeRenameTag(
 
 		// Check if new name already exists
 		const { data: existingTag } = await supabase
-			.from('tags')
+			.from('canvas_planner_tags')
 			.select('id')
 			.eq('user_id', userId)
 			.eq('name', newName)
@@ -981,7 +981,7 @@ async function executeRenameTag(
 
 		// Rename the tag
 		const { data: updatedTag, error } = await supabase
-			.from('tags')
+			.from('canvas_planner_tags')
 			.update({ name: newName })
 			.eq('id', tag.id)
 			.select('name')
@@ -999,7 +999,7 @@ async function executeRenameTag(
 
 		// Update all todos that use this tag
 		const { data: todosWithTag } = await supabase
-			.from('todos')
+			.from('canvas_planner_todos')
 			.select('id, tags')
 			.eq('user_id', userId)
 			.contains('tags', [oldName]);
@@ -1008,7 +1008,7 @@ async function executeRenameTag(
 			for (const todo of todosWithTag) {
 				const newTags = (todo.tags as string[]).map((t: string) => t === oldName ? newName : t);
 				await supabase
-					.from('todos')
+					.from('canvas_planner_todos')
 					.update({ tags: newTags })
 					.eq('id', todo.id);
 			}
@@ -1016,7 +1016,7 @@ async function executeRenameTag(
 
 		// Verify rename
 		const { data: renamed } = await supabase
-			.from('tags')
+			.from('canvas_planner_tags')
 			.select('name')
 			.eq('id', tag.id)
 			.single();
@@ -1066,14 +1066,14 @@ async function executeMergeTags(
 
 		// Verify both tags exist
 		const { data: source } = await supabase
-			.from('tags')
+			.from('canvas_planner_tags')
 			.select('id')
 			.eq('user_id', userId)
 			.eq('name', sourceTag)
 			.single();
 
 		const { data: target } = await supabase
-			.from('tags')
+			.from('canvas_planner_tags')
 			.select('id')
 			.eq('user_id', userId)
 			.eq('name', targetTag)
@@ -1095,7 +1095,7 @@ async function executeMergeTags(
 
 		// Update all todos: replace source tag with target tag
 		const { data: todosWithSource } = await supabase
-			.from('todos')
+			.from('canvas_planner_todos')
 			.select('id, tags')
 			.eq('user_id', userId)
 			.contains('tags', [sourceTag]);
@@ -1110,7 +1110,7 @@ async function executeMergeTags(
 					newTags.push(targetTag);
 				}
 				await supabase
-					.from('todos')
+					.from('canvas_planner_todos')
 					.update({ tags: newTags })
 					.eq('id', todo.id);
 				mergedCount++;
@@ -1119,7 +1119,7 @@ async function executeMergeTags(
 
 		// Delete the source tag
 		const { error } = await supabase
-			.from('tags')
+			.from('canvas_planner_tags')
 			.delete()
 			.eq('id', source.id);
 
@@ -1127,7 +1127,7 @@ async function executeMergeTags(
 
 		// Verify deletion
 		const { data: checkDeleted } = await supabase
-			.from('tags')
+			.from('canvas_planner_tags')
 			.select('id')
 			.eq('id', source.id)
 			.single();
@@ -1176,7 +1176,7 @@ async function executeLogDiary(
 
 		const expectedLoggedAt = loggedAt || new Date().toISOString();
 		const { data, error } = await supabase
-			.from('founder_diary')
+			.from('canvas_planner_diary')
 			.insert({
 				user_id: userId,
 				description,
@@ -1274,7 +1274,7 @@ async function executeUpdateDiary(
 		}
 
 		const { data, error } = await supabase
-			.from('founder_diary')
+			.from('canvas_planner_diary')
 			.update(updateData)
 			.eq('id', diaryId)
 			.select()
@@ -1356,20 +1356,20 @@ async function executeDeleteDiary(
 
 		// Get description before deleting
 		const { data: entry, error: fetchError } = await supabase
-			.from('founder_diary')
+			.from('canvas_planner_diary')
 			.select('description')
 			.eq('id', diaryId)
 			.single();
 
 		if (fetchError) throw fetchError;
 
-		const { error } = await supabase.from('founder_diary').delete().eq('id', diaryId);
+		const { error } = await supabase.from('canvas_planner_diary').delete().eq('id', diaryId);
 
 		if (error) throw error;
 
 		// Verify the deletion actually happened by checking the record is gone
 		const { data: checkDeleted } = await supabase
-			.from('founder_diary')
+			.from('canvas_planner_diary')
 			.select('id')
 			.eq('id', diaryId)
 			.single();

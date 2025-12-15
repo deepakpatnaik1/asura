@@ -92,7 +92,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 async function nukeAll(supabase: App.Locals['supabase'], userId: string, log: ReturnType<typeof createLogger>) {
 	// Fetch all charts for storage cleanup
 	const { data: allCharts } = await supabase
-		.from('charts')
+		.from('canvas_gallery_charts')
 		.select('storage_path, thumbnail_path')
 		.eq('user_id', userId);
 
@@ -108,7 +108,7 @@ async function nukeAll(supabase: App.Locals['supabase'], userId: string, log: Re
 	// Delete from storage
 	if (storagePaths.length > 0) {
 		const { error: storageError } = await supabase.storage
-			.from('content')
+			.from('canvas_gallery_content')
 			.remove(storagePaths);
 		if (storageError) {
 			log.warn('Failed to delete chart files from storage', { error: storageError });
@@ -117,7 +117,7 @@ async function nukeAll(supabase: App.Locals['supabase'], userId: string, log: Re
 
 	// Delete content (cascades to charts)
 	const { error: contentError } = await supabase
-		.from('content')
+		.from('canvas_gallery_content')
 		.delete()
 		.eq('user_id', userId);
 
@@ -139,19 +139,19 @@ async function nukeAll(supabase: App.Locals['supabase'], userId: string, log: Re
 
 	// Delete productivity data
 	const { data: deletedTodos } = await supabase
-		.from('todos')
+		.from('canvas_planner_todos')
 		.delete()
 		.eq('user_id', userId)
 		.select('id');
 
 	const { data: deletedTags } = await supabase
-		.from('tags')
+		.from('canvas_planner_tags')
 		.delete()
 		.eq('user_id', userId)
 		.select('id');
 
 	const { data: deletedDiary } = await supabase
-		.from('founder_diary')
+		.from('canvas_planner_diary')
 		.delete()
 		.eq('user_id', userId)
 		.select('id');
@@ -192,7 +192,7 @@ async function nukePersona(supabase: App.Locals['supabase'], userId: string, per
 	let storagePaths: string[] = [];
 	if (ids.length > 0) {
 		const { data: charts } = await supabase
-			.from('charts')
+			.from('canvas_gallery_charts')
 			.select('storage_path, thumbnail_path')
 			.eq('user_id', userId)
 			.in('superjournal_id', ids);
@@ -208,7 +208,7 @@ async function nukePersona(supabase: App.Locals['supabase'], userId: string, per
 	// Delete from storage
 	if (storagePaths.length > 0) {
 		const { error: storageError } = await supabase.storage
-			.from('content')
+			.from('canvas_gallery_content')
 			.remove(storagePaths);
 		if (storageError) {
 			log.warn('Failed to delete chart files from storage', { error: storageError });
@@ -250,7 +250,7 @@ async function nukePersona(supabase: App.Locals['supabase'], userId: string, per
 async function nukeContent(supabase: App.Locals['supabase'], userId: string, tier: string, log: ReturnType<typeof createLogger>) {
 	// Build query based on tier
 	let query = supabase
-		.from('content')
+		.from('canvas_gallery_content')
 		.select('id')
 		.eq('user_id', userId);
 
@@ -292,7 +292,7 @@ async function nukeContent(supabase: App.Locals['supabase'], userId: string, tie
 
 	// Get charts linked to this content (for storage cleanup)
 	const { data: charts } = await supabase
-		.from('charts')
+		.from('canvas_gallery_charts')
 		.select('storage_path, thumbnail_path')
 		.eq('user_id', userId)
 		.in('content_id', ids);
@@ -308,7 +308,7 @@ async function nukeContent(supabase: App.Locals['supabase'], userId: string, tie
 	// Delete from storage
 	if (storagePaths.length > 0) {
 		const { error: storageError } = await supabase.storage
-			.from('content')
+			.from('canvas_gallery_content')
 			.remove(storagePaths);
 		if (storageError) {
 			log.warn('Failed to delete chart files from storage', { error: storageError });
@@ -317,7 +317,7 @@ async function nukeContent(supabase: App.Locals['supabase'], userId: string, tie
 
 	// Delete the content (cascades to charts)
 	const { error: deleteError } = await supabase
-		.from('content')
+		.from('canvas_gallery_content')
 		.delete()
 		.in('id', ids);
 
@@ -349,7 +349,7 @@ async function nukeProductivity(supabase: App.Locals['supabase'], userId: string
 	switch (target) {
 		case 'diary': {
 			const { data: deleted, error } = await supabase
-				.from('founder_diary')
+				.from('canvas_planner_diary')
 				.delete()
 				.eq('user_id', userId)
 				.select('id');
@@ -371,7 +371,7 @@ async function nukeProductivity(supabase: App.Locals['supabase'], userId: string
 		case 'todos': {
 			// Delete todos first, then tags
 			const { data: deletedTodos, error: todosError } = await supabase
-				.from('todos')
+				.from('canvas_planner_todos')
 				.delete()
 				.eq('user_id', userId)
 				.select('id');
@@ -382,7 +382,7 @@ async function nukeProductivity(supabase: App.Locals['supabase'], userId: string
 			}
 
 			const { data: deletedTags, error: tagsError } = await supabase
-				.from('tags')
+				.from('canvas_planner_tags')
 				.delete()
 				.eq('user_id', userId)
 				.select('id');

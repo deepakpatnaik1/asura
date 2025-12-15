@@ -39,7 +39,6 @@ interface ContextComponents {
 	workData: string; // Todo mode: current todos and tags
 	calendar: string; // Google Calendar events (for Alicja)
 	whiteboard: string; // Active whiteboard (for Gunnar)
-	canvas: string; // Character design canvases (for Eva)
 }
 
 interface ContextStats {
@@ -55,7 +54,6 @@ interface ContextStats {
 		workData: number;
 		calendar: number;
 		whiteboard: number;
-		canvas: number;
 	};
 }
 
@@ -99,8 +97,7 @@ export async function buildContext(
 	modelIdentifier: string,
 	userQuery?: string, // Optional: enables vector search
 	contentIds?: string[], // Currently selected content(s) from library
-	whiteboardIds?: string[], // Selected whiteboard IDs (for Gunnar)
-	canvasIds?: string[] // Selected canvas IDs (for Eva)
+	whiteboardIds?: string[] // Selected whiteboard IDs (for Gunnar)
 ): Promise<StructuredContext> {
 	// Get model's context window and calculate budget
 	const contextWindow = await getModelContextWindow(supabase, modelIdentifier);
@@ -117,8 +114,7 @@ export async function buildContext(
 		otherArcs: '',
 		workData: '',
 		calendar: '',
-		whiteboard: '',
-		canvas: ''
+		whiteboard: ''
 	};
 
 	let totalTokens = 0;
@@ -130,7 +126,7 @@ export async function buildContext(
 	// Priority 0: Canon content (always injected if persona has 'canon' chunk)
 	if (hasChunk('canon')) {
 		const { data: canonData } = await supabase
-			.from('content')
+			.from('canvas_gallery_content')
 			.select('title, artisan_cut, raw_content, created_at')
 			.eq('user_id', userId)
 			.eq('is_canon', true)
@@ -143,29 +139,48 @@ export async function buildContext(
 		}
 	}
 
-	// Priority 0.5: Active content (currently selected file(s) from library)
-	if (hasChunk('active') && contentIds && contentIds.length > 0) {
-		const { data: contentData } = await supabase
-			.from('content')
-			.select('title, raw_content, artisan_cut')
-			.in('id', contentIds)
-			.eq('user_id', userId);
+	// Priority 0.5: Active library items (content, whiteboards, canvases)
+	if (hasChunk('active')) {
+		// Load selected content (articles)
+		if (contentIds && contentIds.length > 0) {
+			const { data: contentData } = await supabase
+				.from('canvas_gallery_content')
+				.select('title, raw_content, artisan_cut')
+				.in('id', contentIds)
+				.eq('user_id', userId);
 
-		if (contentData && contentData.length > 0) {
-			const articlesText = contentData
-				.map((item) => {
-					const articleContent = item.artisan_cut || item.raw_content;
-					return articleContent ? `[${item.title}]\n${articleContent}` : null;
-				})
-				.filter(Boolean)
-				.join('\n\n---\n\n');
+			if (contentData && contentData.length > 0) {
+				const articlesText = contentData
+					.map((item) => {
+						const articleContent = item.artisan_cut || item.raw_content;
+						return articleContent ? `[${item.title}]\n${articleContent}` : null;
+					})
+					.filter(Boolean)
+					.join('\n\n---\n\n');
 
-			if (articlesText) {
-				const filesText = `--- ACTIVE CONTENT ---\n${articlesText}\n\n`;
-				components.files = filesText;
-				totalTokens += estimateTokens(filesText);
+				if (articlesText) {
+					const filesText = `--- ACTIVE CONTENT ---\n${articlesText}\n\n`;
+					components.files = filesText;
+					totalTokens += estimateTokens(filesText);
+				}
 			}
 		}
+
+		// Load selected whiteboards
+		if (whiteboardIds && whiteboardIds.length > 0) {
+			const { data: whiteboardsData } = await supabase
+				.from('canvas_whiteboard')
+				.select('id, title, state')
+				.in('id', whiteboardIds)
+				.eq('user_id', userId);
+
+			if (whiteboardsData && whiteboardsData.length > 0) {
+				const whiteboardText = formatWhiteboardsContext(whiteboardsData);
+				components.whiteboard = whiteboardText;
+				totalTokens += estimateTokens(whiteboardText);
+			}
+		}
+
 	}
 
 	// Priority 0.5: Work data (todos, diary, tags, time)
@@ -179,21 +194,21 @@ export async function buildContext(
 		const [todosResult, tagsResult, diaryResult] = await Promise.all([
 			wantsTodos
 				? supabase
-						.from('todos')
+						.from('canvas_planner_todos')
 						.select('id, description, tags, status, created_at, completed_at, deadline_period, parent_id')
 						.eq('user_id', userId)
 						.order('created_at', { ascending: true })
 				: Promise.resolve({ data: [] }),
 			wantsTags
 				? supabase
-						.from('tags')
+						.from('canvas_planner_tags')
 						.select('name')
 						.eq('user_id', userId)
 						.order('name', { ascending: true })
 				: Promise.resolve({ data: [] }),
 			wantsDiary
 				? supabase
-						.from('founder_diary')
+						.from('canvas_planner_diary')
 						.select('id, description, tags, logged_at, event_period')
 						.eq('user_id', userId)
 						.order('logged_at', { ascending: true })
@@ -267,36 +282,6 @@ export async function buildContext(
 		}
 	}
 
-	// Priority 0.7: Selected whiteboards (for Gunnar)
-	if (hasChunk('whiteboard') && whiteboardIds && whiteboardIds.length > 0) {
-		const { data: whiteboardsData } = await supabase
-			.from('whiteboards')
-			.select('id, title, state')
-			.in('id', whiteboardIds)
-			.eq('user_id', userId);
-
-		if (whiteboardsData && whiteboardsData.length > 0) {
-			const whiteboardText = formatWhiteboardsContext(whiteboardsData);
-			components.whiteboard = whiteboardText;
-			totalTokens += estimateTokens(whiteboardText);
-		}
-	}
-
-	// Priority 0.7: Selected canvases (for Eva)
-	if (hasChunk('canvas') && canvasIds && canvasIds.length > 0) {
-		const { data: canvasesData } = await supabase
-			.from('canvases')
-			.select('id, title, state')
-			.in('id', canvasIds)
-			.eq('user_id', userId);
-
-		if (canvasesData && canvasesData.length > 0) {
-			const canvasText = formatCanvasesContext(canvasesData);
-			components.canvas = canvasText;
-			totalTokens += estimateTokens(canvasText);
-		}
-	}
-
 	// Build parallel queries based on persona chunks
 	type QueryResult = { data: unknown[] | null };
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -317,7 +302,7 @@ export async function buildContext(
 		queryKeys.push('superjournal');
 	}
 
-	// Priority 2: Starred messages (user's standing instructions)
+	// Priority 2: Starred messages - persona-only
 	if (hasChunk('starred')) {
 		queries.push(
 			supabase
@@ -325,34 +310,23 @@ export async function buildContext(
 				.select('boss_essence, persona_essence, persona_name, created_at')
 				.eq('is_starred', true)
 				.eq('user_id', userId)
+				.eq('persona_name', personaName)
 				.order('created_at', { ascending: false })
 		);
 		queryKeys.push('starred');
 	}
 
-	// Priority 3: Recent memory (journal) - filtered by persona affinity
-	// Strategic personas (Gunnar, Kirby) share memory; tactical personas get only their own
+	// Priority 3: Recent memory (journal) - persona-only
 	if (hasChunk('recent')) {
-		const strategicPersonas = ['gunnar', 'kirby'];
-		const isStrategic = strategicPersonas.includes(personaName);
-
-		const journalQuery = supabase
-			.from('journal')
-			.select('boss_essence, persona_essence, decision_arc_summary, persona_name, created_at')
-			.eq('user_id', userId)
-			.order('created_at', { ascending: false })
-			.limit(MEMORY.lastNJournalEntries);
-
-		// Filter by persona affinity
-		if (isStrategic) {
-			// Gunnar and Kirby share strategic memory
-			journalQuery.in('persona_name', strategicPersonas);
-		} else {
-			// Tactical personas (Samara, Alicja) only see their own turns
-			journalQuery.eq('persona_name', personaName);
-		}
-
-		queries.push(journalQuery);
+		queries.push(
+			supabase
+				.from('journal')
+				.select('boss_essence, persona_essence, decision_arc_summary, persona_name, created_at')
+				.eq('user_id', userId)
+				.eq('persona_name', personaName)
+				.order('created_at', { ascending: false })
+				.limit(MEMORY.lastNJournalEntries)
+		);
 		queryKeys.push('journal');
 	}
 
@@ -481,12 +455,13 @@ export async function buildContext(
 						}
 					}
 
-					// Perform vector search (no mode filter - unified search)
+					// Perform vector search - persona-only
 					const { data: vectorResults } = await supabase.rpc('search_journal_by_embedding', {
 						query_embedding: JSON.stringify(queryVector),
 						match_count: 50,
 						exclude_ids: excludeIds,
-						user_id_filter: userId
+						user_id_filter: userId,
+						persona_name_filter: personaName
 					});
 
 					if (vectorResults && vectorResults.length > 0) {
@@ -531,8 +506,7 @@ export async function buildContext(
 			otherArcs: estimateTokens(components.otherArcs),
 			workData: estimateTokens(components.workData),
 			calendar: estimateTokens(components.calendar),
-			whiteboard: estimateTokens(components.whiteboard),
-			canvas: estimateTokens(components.canvas)
+			whiteboard: estimateTokens(components.whiteboard)
 		}
 	};
 
@@ -973,75 +947,6 @@ ${formatted}
 `;
 }
 
-// Canvas state interface (same structure as whiteboard for Eva's character designs)
-interface CanvasStateForContext {
-	render?: Array<{
-		id: string;
-		type: string;
-		x?: number;
-		y?: number;
-		text?: string;
-		fill?: string;
-		width?: number;
-		height?: number;
-		src?: string; // Image source URL
-		label?: string;
-	}>;
-	semantic?: Record<string, unknown>;
-	viewport?: { x: number; y: number; scale: number };
-}
-
-function formatSingleCanvas(canvas: {
-	id: string;
-	title: string;
-	state: CanvasStateForContext;
-}): string {
-	const { id, title, state } = canvas;
-
-	const render = state?.render || [];
-	const semantic = state?.semantic || {};
-
-	if (render.length === 0) {
-		return `<canvas id="${id}">
-<title>${title}</title>
-<render>[]</render>
-<semantic>{}</semantic>
-</canvas>`;
-	}
-
-	const renderJson = JSON.stringify(render, null, 2);
-	const semanticJson = JSON.stringify(semantic, null, 2);
-
-	return `<canvas id="${id}">
-<title>${title}</title>
-<render>
-${renderJson}
-</render>
-<semantic>
-${semanticJson}
-</semantic>
-</canvas>`;
-}
-
-function formatCanvasesContext(
-	canvases: Array<{
-		id: string;
-		title: string;
-		state: CanvasStateForContext;
-	}>
-): string {
-	if (canvases.length === 0) return '';
-
-	const formatted = canvases.map(formatSingleCanvas).join('\n\n');
-	const count = canvases.length;
-	const label = count === 1 ? 'SELECTED CANVAS' : `SELECTED CANVASES (${count})`;
-
-	return `--- ${label} ---
-${formatted}
-
-`;
-}
-
 // Assemble all context components into final string
 function assembleContext(components: ContextComponents): string {
 	const parts = [
@@ -1049,7 +954,6 @@ function assembleContext(components: ContextComponents): string {
 		components.workData, // Work data for todo mode (before superjournal so Alicja sees todos first)
 		components.calendar, // Calendar events (for Alicja)
 		components.whiteboard, // Active whiteboard (for Gunnar)
-		components.canvas, // Character design canvases (for Eva)
 		components.superjournal,
 		components.files,
 		components.starred,
