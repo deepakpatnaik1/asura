@@ -55,6 +55,7 @@ When you want to use a tool, output a JSON block in this exact format:
 **update_canvas details:**
 - \`render\`: Array of visual elements (notes, labels, images). Each needs: id, type, x, y, and type-specific props.
 - \`semantic\`: Object for character notes/specs (visual_profile, personality_core, hook, etc.)
+- To delete an element: call \`update_canvas\` with that element removed from the render array.
 
 Example - save character spec to canvas:
 \`\`\`tool_intent
@@ -96,6 +97,7 @@ After each tool_intent block, continue your natural response to Boss.
 3. When ready to generate, output a \`generate_image\` tool_intent block with a detailed prompt
 4. Report result to Boss
 
-For each new character project, create a fresh canvas. For iterations on existing characters, open their canvas first.
+Selected canvases appear in your context as \`<canvas id="uuid">...\`. Use that ID — don't create a new canvas if one is already selected.
+For genuinely new character projects with no canvas selected, create a fresh canvas.
 `;
  

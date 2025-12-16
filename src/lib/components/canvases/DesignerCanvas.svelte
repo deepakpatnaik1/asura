@@ -6,6 +6,8 @@
 	 */
 
 	import { onMount } from 'svelte';
+	import { Icon } from 'svelte-icons-pack';
+	import { LuCompass } from 'svelte-icons-pack/lu';
 	import CanvasFrame from '$lib/components/CanvasFrame.svelte';
 	import type { RenderElement, CanvasState } from '$lib/api/canvas-tools';
 	import { CANVAS, LAYOUT } from '$lib/config/layout';
@@ -245,6 +247,94 @@
 	function getElementCount(c: Canvas): number {
 		return c.state?.render?.length || 0;
 	}
+
+	// Fit to content: auto-layout elements in a cluster with gaps, then center and zoom to fit
+	function fitToContent() {
+		if (elements.length === 0) return;
+
+		const GAP = 10;
+		const PADDING = 40;
+
+		// Get element dimensions
+		const sized = elements.map((el) => ({
+			el,
+			w: el.width || (el.type === 'image' ? 200 : el.type === 'text' ? 400 : 150),
+			h: el.height || (el.type === 'image' ? 200 : el.type === 'text' ? 250 : 100)
+		}));
+
+		// Calculate grid dimensions for a roughly square cluster
+		const cols = Math.ceil(Math.sqrt(sized.length));
+		const rows = Math.ceil(sized.length / cols);
+
+		// Find max width/height per column/row for alignment
+		const colWidths: number[] = Array(cols).fill(0);
+		const rowHeights: number[] = Array(rows).fill(0);
+
+		sized.forEach((item, i) => {
+			const col = i % cols;
+			const row = Math.floor(i / cols);
+			colWidths[col] = Math.max(colWidths[col], item.w);
+			rowHeights[row] = Math.max(rowHeights[row], item.h);
+		});
+
+		// Position elements in grid
+		const positioned: { el: RenderElement; x: number; y: number; w: number; h: number }[] = [];
+
+		sized.forEach((item, i) => {
+			const col = i % cols;
+			const row = Math.floor(i / cols);
+
+			// Calculate x position (sum of previous column widths + gaps)
+			let x = 0;
+			for (let c = 0; c < col; c++) {
+				x += colWidths[c] + GAP;
+			}
+
+			// Calculate y position (sum of previous row heights + gaps)
+			let y = 0;
+			for (let r = 0; r < row; r++) {
+				y += rowHeights[r] + GAP;
+			}
+
+			positioned.push({ ...item, x, y });
+		});
+
+		// Apply new positions to elements
+		elements = elements.map((el) => {
+			const pos = positioned.find((p) => p.el.id === el.id);
+			return pos ? { ...el, x: pos.x, y: pos.y } : el;
+		});
+
+		// Calculate bounding box
+		let minX = Infinity,
+			minY = Infinity,
+			maxX = -Infinity,
+			maxY = -Infinity;
+		for (const p of positioned) {
+			minX = Math.min(minX, p.x);
+			minY = Math.min(minY, p.y);
+			maxX = Math.max(maxX, p.x + p.w);
+			maxY = Math.max(maxY, p.y + p.h);
+		}
+
+		const contentWidth = maxX - minX;
+		const contentHeight = maxY - minY;
+
+		// Calculate zoom to fit content in view
+		const scaleX = (stageWidth - PADDING * 2) / contentWidth;
+		const scaleY = (stageHeight - PADDING * 2) / contentHeight;
+		const newScale = Math.min(scaleX, scaleY, 1);
+
+		stageScale = Math.max(0.3, Math.min(1, newScale));
+
+		// Center content in viewport
+		const centerX = (minX + maxX) / 2;
+		const centerY = (minY + maxY) / 2;
+		stageX = stageWidth / 2 - centerX * stageScale;
+		stageY = stageHeight / 2 - centerY * stageScale;
+
+		notifyStateChange();
+	}
 </script>
 
 <CanvasFrame>
@@ -453,6 +543,17 @@
 			{:else}
 				<div class="loading">Loading canvas...</div>
 			{/if}
+
+			<!-- Fit to content button -->
+			{#if canvas && elements.length > 0}
+				<button
+					class="fit-button"
+					title="Fit to content"
+					onclick={fitToContent}
+				>
+					<Icon src={LuCompass} size="13" />
+				</button>
+			{/if}
 		</div>
 	{/snippet}
 	{#snippet footer()}
@@ -483,6 +584,7 @@
 
 <style>
 	.canvas-container {
+		position: relative;
 		width: 100%;
 		height: 100%;
 		border-radius: 8px;
@@ -518,6 +620,29 @@
 		color: rgba(140, 100, 160, 0.8);
 		font-size: 0.875rem;
 		gap: 4px;
+	}
+
+	.fit-button {
+		position: absolute;
+		bottom: 12px;
+		left: 12px;
+		background: rgba(0, 0, 0, 0.7);
+		border: none;
+		border-radius: 50%;
+		cursor: pointer;
+		opacity: 0.6;
+		transition: opacity 0.2s;
+		padding: 6px;
+		color: hsl(var(--foreground));
+		width: 28px;
+		height: 28px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.fit-button:hover {
+		opacity: 1;
 	}
 
 	/* Canvas picker footer */
