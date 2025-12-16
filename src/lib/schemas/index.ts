@@ -24,7 +24,7 @@ export const personaSchema = z.enum(['gunnar', 'kirby', 'samara', 'alicja', 'eva
 export const overrideKeySchema = z.enum([
 	'gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya', // Personas
 	'embeddings', 'compression', 'chat_compression', 'chat_compression_uncensored', // Text processes
-	'tool_calling', 'image_gen' // Eva pipeline
+	'tool_calling', 'image_gen', 'image_edit' // Eva pipeline
 ]);
 
 // ============================================================================

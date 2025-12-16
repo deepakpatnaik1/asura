@@ -388,6 +388,29 @@
 		}));
 	});
 
+	// Group image editing models by provider
+	const imageEditModelsByProvider = $derived.by(() => {
+		const editModels = models.filter((m) => m.model_type === 'image_edit');
+
+		const grouped = editModels.reduce((acc, model) => {
+			const provider = model.provider;
+			if (!acc[provider]) acc[provider] = [];
+			acc[provider].push(model);
+			return acc;
+		}, {} as Record<string, Model[]>);
+
+		for (const provider of Object.keys(grouped)) {
+			grouped[provider].sort((a, b) => a.model_name.localeCompare(b.model_name));
+		}
+
+		const providers = Object.keys(grouped).sort();
+		return providers.map(provider => ({
+			provider,
+			label: provider.charAt(0).toUpperCase() + provider.slice(1),
+			models: grouped[provider]
+		}));
+	});
+
 	// Group ALL models by provider (for All Models list)
 	const allModelsByProvider = $derived.by(() => {
 		// Group by provider
@@ -588,6 +611,18 @@
 								<label for="image-gen-select">Image generation</label>
 								<select id="image-gen-select" value={modelOverrides.image_gen} onchange={(e) => handleOverrideChange('image_gen', e)}>
 									{#each imageGenModelsByProvider as group}
+										<optgroup label={group.label}>
+											{#each group.models as model}
+												<option value={model.model_identifier}>{model.model_name}</option>
+											{/each}
+										</optgroup>
+									{/each}
+								</select>
+							</div>
+							<div class="dropdown-row">
+								<label for="image-edit-select">Image editing</label>
+								<select id="image-edit-select" value={modelOverrides.image_edit} onchange={(e) => handleOverrideChange('image_edit', e)}>
+									{#each imageEditModelsByProvider as group}
 										<optgroup label={group.label}>
 											{#each group.models as model}
 												<option value={model.model_identifier}>{model.model_name}</option>
@@ -1030,7 +1065,7 @@
 	 */
 	.all-models-list {
 		--personas-count: 6;      /* Gunnar, Kirby, Samara, Alicja, Eva, Ananya */
-		--processes-count: 6;     /* Embeddings, File artisan cut, Chat artisan cut, Chat artisan cut (uncensored), Tool calling, Image generation */
+		--processes-count: 7;     /* Embeddings, File artisan cut, Chat artisan cut, Chat artisan cut (uncensored), Tool calling, Image generation, Image editing */
 		--dropdown-height: 24px;
 		--dropdown-gap: 6px;
 		--section-gap: 51px;      /* 20px + 23px + 8px */
