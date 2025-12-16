@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Icon } from 'svelte-icons-pack';
 	import { LuPaperclip, LuFolder } from 'svelte-icons-pack/lu';
-	import { currentMessage, isLoading, sendMessage, abortCurrentMessage, lastMutations, lastWhiteboardMutations } from '$lib/stores/chat';
+	import { currentMessage, isLoading, sendMessage, abortCurrentMessage, lastMutations, lastWhiteboardMutations, lastCanvasMutations } from '$lib/stores/chat';
 	import { tick, onMount } from 'svelte';
 	import { DEFAULT_PERSONA, PERSONAS } from '$lib/config/personas';
 	import { type CanvasType, getDefaultCanvasForPersona } from '$lib/config/canvases';
@@ -66,6 +66,20 @@
 	let whiteboards = $state<Whiteboard[]>([]);
 	let selectedWhiteboardIds = $state<string[]>([]); // Whiteboards selected for context injection
 	let viewingWhiteboardId = $state<string | null>(null); // Currently displayed in canvas
+
+	// Designer canvas state for Eva
+	import type { CanvasState } from '$lib/api/canvas-tools';
+	interface DesignerCanvasData {
+		id: string;
+		title: string;
+		state?: CanvasState;
+		created_at: string;
+		updated_at: string;
+	}
+	let designerCanvases = $state<DesignerCanvasData[]>([]);
+	let selectedDesignerCanvasIds = $state<string[]>([]); // Canvases selected for context injection
+	let viewingDesignerCanvasId = $state<string | null>(null); // Currently displayed in canvas
+	let designerCanvasRefreshTrigger = $state(0);
 
 	// Refresh calendar when any Alicja mutations occur (todos, tags, diary, calendar)
 	$effect(() => {
@@ -140,6 +154,62 @@
 		}
 	});
 
+	// Handle designer canvas mutations from Eva's tools
+	$effect(() => {
+		const mutations = $lastCanvasMutations;
+		if (mutations) {
+			// Handle created canvases - add to list
+			if (mutations.created_canvases && mutations.created_canvases.length > 0) {
+				designerCanvases = [...designerCanvases, ...mutations.created_canvases];
+			}
+
+			// Handle renamed canvases - update titles
+			if (mutations.renamed_canvases && mutations.renamed_canvases.length > 0) {
+				for (const renamed of mutations.renamed_canvases) {
+					designerCanvases = designerCanvases.map(c =>
+						c.id === renamed.id ? { ...c, title: renamed.title } : c
+					);
+				}
+			}
+
+			// Handle deleted canvases - remove from list and selection
+			if (mutations.deleted_canvases && mutations.deleted_canvases.length > 0) {
+				const deletedIds = new Set(mutations.deleted_canvases);
+				designerCanvases = designerCanvases.filter(c => !deletedIds.has(c.id));
+				// Remove deleted from selection
+				selectedDesignerCanvasIds = selectedDesignerCanvasIds.filter(id => !deletedIds.has(id));
+				// Clear viewing if it was deleted
+				if (viewingDesignerCanvasId && deletedIds.has(viewingDesignerCanvasId)) {
+					viewingDesignerCanvasId = designerCanvases.length > 0 ? designerCanvases[0].id : null;
+				}
+			}
+
+			// Handle opened canvas - select it, view it, and switch canvas
+			if (mutations.opened_canvas) {
+				const openedId = mutations.opened_canvas;
+				// Add to selection if not already selected
+				if (!selectedDesignerCanvasIds.includes(openedId)) {
+					selectedDesignerCanvasIds = [...selectedDesignerCanvasIds, openedId];
+				}
+				viewingDesignerCanvasId = openedId;
+				forceCanvas = 'designer'; // Switch to designer canvas when canvas is opened
+			}
+
+			// Handle updated canvases - apply state changes and trigger refresh
+			if (mutations.updated_canvases && mutations.updated_canvases.length > 0) {
+				for (const updated of mutations.updated_canvases) {
+					designerCanvases = designerCanvases.map(c =>
+						c.id === updated.id ? { ...c, state: updated.state as CanvasState } : c
+					);
+				}
+				designerCanvasRefreshTrigger++;
+			}
+
+			// Clear mutations after processing
+			lastCanvasMutations.set(null);
+		}
+	});
+
 	let inputMessage = $state('');
 	let messagesEndRef: HTMLDivElement;
 	let textareaRef: HTMLTextAreaElement;
@@ -171,7 +241,7 @@
 
 	// Total selections for library badge
 	const totalLibrarySelections = $derived(
-		files.filter(f => f.is_enabled).length + selectedWhiteboardIds.length
+		files.filter(f => f.is_enabled).length + selectedWhiteboardIds.length + selectedDesignerCanvasIds.length
 	);
 
 	let pendingTimeouts: number[] = [];
@@ -249,6 +319,96 @@
 		}
 	}
 
+	// Fetch designer canvases for Eva
+	async function loadDesignerCanvases() {
+		try {
+			const response = await fetch('/api/canvases');
+			if (response.ok) {
+				const data = await response.json();
+				designerCanvases = data.canvases || [];
+				// Auto-select all canvases for context injection
+				selectedDesignerCanvasIds = designerCanvases.map(c => c.id);
+				// Auto-view first canvas (most recently updated) and fetch its full state
+				if (designerCanvases.length > 0 && !viewingDesignerCanvasId) {
+					const firstId = designerCanvases[0].id;
+					viewingDesignerCanvasId = firstId;
+					// Fetch full state for the viewing canvas
+					const stateResponse = await fetch(`/api/canvases/${firstId}`);
+					if (stateResponse.ok) {
+						const stateData = await stateResponse.json();
+						designerCanvases = designerCanvases.map(c =>
+							c.id === firstId ? stateData.canvas : c
+						);
+					}
+				}
+			}
+		} catch (error) {
+			console.error('Failed to load designer canvases:', error);
+		}
+	}
+
+	// Toggle designer canvas selection for context injection
+	function toggleDesignerCanvasSelection(id: string) {
+		if (selectedDesignerCanvasIds.includes(id)) {
+			selectedDesignerCanvasIds = selectedDesignerCanvasIds.filter(cid => cid !== id);
+		} else {
+			selectedDesignerCanvasIds = [...selectedDesignerCanvasIds, id];
+		}
+	}
+
+	// Handle designer canvas click - toggle selection AND view it
+	async function handleDesignerCanvasSelect(id: string) {
+		toggleDesignerCanvasSelection(id);
+		viewingDesignerCanvasId = id;
+		// Fetch full canvas state
+		try {
+			const response = await fetch(`/api/canvases/${id}`);
+			if (response.ok) {
+				const data = await response.json();
+				designerCanvases = designerCanvases.map(c =>
+					c.id === id ? data.canvas : c
+				);
+			}
+		} catch (error) {
+			console.error('Failed to fetch designer canvas:', error);
+		}
+	}
+
+	// Debounced save for designer canvas state changes
+	let designerCanvasSaveTimeout: ReturnType<typeof setTimeout> | null = null;
+	function handleDesignerCanvasStateChange(id: string, state: CanvasState | undefined) {
+		designerCanvases = designerCanvases.map(c =>
+			c.id === id ? { ...c, state } : c
+		);
+		// Debounce save to prevent excessive API calls
+		if (designerCanvasSaveTimeout) {
+			clearTimeout(designerCanvasSaveTimeout);
+		}
+		designerCanvasSaveTimeout = setTimeout(async () => {
+			try {
+				await fetch(`/api/canvases/${id}`, {
+					method: 'PUT',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ state })
+				});
+			} catch (error) {
+				console.error('Failed to save designer canvas:', error);
+			}
+		}, 500);
+	}
+
+	// Clear all designer canvas selections
+	function clearDesignerCanvasSelection() {
+		selectedDesignerCanvasIds = [];
+	}
+
+	// Open designer canvas from library
+	function handleOpenDesignerCanvas(id: string) {
+		viewingDesignerCanvasId = id;
+		forceCanvas = 'designer';
+		showLibrary = false;
+	}
+
 	// Toggle whiteboard selection for context injection
 	function toggleWhiteboardSelection(id: string) {
 		if (selectedWhiteboardIds.includes(id)) {
@@ -312,7 +472,7 @@
 
 		(async () => {
 			inputMessage = getPersonaPrefix();
-			await Promise.all([loadCharts(), loadWhiteboards()]);
+			await Promise.all([loadCharts(), loadWhiteboards(), loadDesignerCanvases()]);
 		})();
 
 		// Listen for nuke events from SettingsModal
@@ -457,7 +617,8 @@
 			chartId,
 			chartSource,
 			undefined,
-			selectedWhiteboardIds.length > 0 ? selectedWhiteboardIds : undefined
+			selectedWhiteboardIds.length > 0 ? selectedWhiteboardIds : undefined,
+			selectedDesignerCanvasIds.length > 0 ? selectedDesignerCanvasIds : undefined
 		);
 
 		if ($currentMessage) {
@@ -937,6 +1098,12 @@
 								onWhiteboardDelete={handleWhiteboardDeleteClick}
 								onWhiteboardClear={clearWhiteboardSelection}
 								isDeletingWhiteboard={isDeletingWhiteboard}
+
+								{designerCanvases}
+								selectedDesignerCanvasIds={selectedDesignerCanvasIds}
+								onDesignerCanvasToggle={toggleDesignerCanvasSelection}
+								onDesignerCanvasOpen={handleOpenDesignerCanvas}
+								onDesignerCanvasClear={clearDesignerCanvasSelection}
 							/>
 						{/if}
 					</div>
@@ -1018,6 +1185,12 @@
 		{selectedWhiteboardIds}
 		onWhiteboardSelect={handleWhiteboardSelect}
 		onWhiteboardStateChange={handleWhiteboardStateChange}
+		{designerCanvasRefreshTrigger}
+		{designerCanvases}
+		activeDesignerCanvasId={viewingDesignerCanvasId}
+		{selectedDesignerCanvasIds}
+		onDesignerCanvasSelect={handleDesignerCanvasSelect}
+		onDesignerCanvasStateChange={handleDesignerCanvasStateChange}
 	/>
 </div>
 

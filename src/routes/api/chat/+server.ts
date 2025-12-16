@@ -56,6 +56,7 @@ import {
 import { IMAGE_GEN_TOOL, executeImageGen, type ImageGenContext } from '$lib/api/image-gen-tools';
 import { refreshAccessToken } from '$lib/api/google-calendar';
 import { BRAVE_SEARCH_TOOL, executeBraveSearch } from '$lib/api/brave-search';
+import { parseToolIntents, hasToolIntents } from '$lib/api/tool-intent-parser';
 import { createClient } from '@supabase/supabase-js';
 import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
@@ -98,7 +99,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		const validation = validateSchema(chatMessageSchema, parseResult.data);
 		if (!validation.success) return validation.error;
 
-		const { message, persona: requestPersona, chart_id, chart_source, content_ids, whiteboard_ids } = validation.data;
+		const { message, persona: requestPersona, chart_id, chart_source, content_ids, whiteboard_ids, canvas_ids } = validation.data;
 
 		// 4. Load user settings (persona and all model overrides in one query)
 		const { data: settings } = await supabase
@@ -163,11 +164,21 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			}
 		}
 
-		// 6. Look up provider from database and validate support
+		// 6. Look up provider and tool calling support from database
 		const conversationProvider = await getModelProvider(supabase, conversationModel);
 		assertProviderSupported(conversationProvider);
 
-		// 6. Build context and get model params
+		// Check if model supports native tool calling
+		const { data: modelData } = await supabase
+			.from('models')
+			.select('supports_tool_calling')
+			.eq('model_identifier', conversationModel)
+			.single();
+		const supportsToolCalling = modelData?.supports_tool_calling ?? false;
+
+		log.info('Model capabilities', { model: conversationModel, provider: conversationProvider, supportsToolCalling });
+
+		// 7. Build context and get model params
 		const conversationParams = await getModelParams(conversationModel, 'conversation');
 
 		const { context, stats } = await buildContext(
@@ -177,15 +188,18 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			conversationModel,
 			message,
 			content_ids,
-			whiteboard_ids
+			whiteboard_ids,
+			canvas_ids
 		);
 
 		log.info('Context built', { ...stats, model: conversationModel, persona });
 
-		// 7. Select persona prompt
+		// 8. Select persona prompt
 		const personaPrompt = getPersonaPrompt(persona);
 
-		// 8. Set up tools based on persona configuration
+		// 9. Set up tools based on persona configuration
+		// Note: We set up contexts even if model doesn't support native tool calling,
+		// so we can execute parsed tool_intent blocks from the response
 		let tools: Anthropic.Tool[] | undefined;
 		let toolExecutor: ToolExecutor | undefined;
 		let todoMutations: TodoMutations | undefined;
@@ -193,6 +207,13 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		let canvasMutations: CanvasMutations | undefined;
 
 		const personaTools = getPersonaTools(persona);
+
+		// Tool contexts - needed for both native tool calling and parsed intents
+		let todoContext: TodoToolContext | null = null;
+		let calendarContext: CalendarToolContext | null = null;
+		let whiteboardContext: WhiteboardToolContext | null = null;
+		let canvasContext: CanvasToolContext | null = null;
+		let imageGenContext: ImageGenContext | null = null;
 
 		if (personaTools.length > 0) {
 			// Persona has tools configured
@@ -207,13 +228,11 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			log.info('Tool setup', {
 				persona,
 				personaTools,
-				modelUsed: conversationModel
+				modelUsed: conversationModel,
+				supportsToolCalling
 			});
 
 			// Set up todo tools context (Alicja)
-			let todoContext: TodoToolContext | null = null;
-			let calendarContext: CalendarToolContext | null = null;
-
 			if (hasTodoTools) {
 				todoMutations = createEmptyMutations();
 				todoContext = { supabase, userId };
@@ -256,8 +275,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			}
 
 			// Set up whiteboard tools context (Gunnar)
-			let whiteboardContext: WhiteboardToolContext | null = null;
-
 			if (hasWhiteboardTools) {
 				whiteboardMutations = createEmptyWhiteboardMutations();
 				whiteboardContext = { supabase, userId };
@@ -265,8 +282,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			}
 
 			// Set up canvas tools context (Eva)
-			let canvasContext: CanvasToolContext | null = null;
-
 			if (hasCanvasTools) {
 				canvasMutations = createEmptyCanvasMutations();
 				canvasContext = { supabase, userId };
@@ -274,7 +289,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			}
 
 			// Set up image generation tool (Eva)
-			let imageGenContext: ImageGenContext | null = null;
 			const imageGenModel = settings?.model_image_gen as string | undefined;
 
 			if (hasImageGen && imageGenModel) {
@@ -282,63 +296,77 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				allTools.push(IMAGE_GEN_TOOL as Anthropic.Tool);
 			}
 
-			tools = allTools;
-			log.info('Final tools', { toolCount: allTools.length, toolNames: allTools.map(t => t.name) });
+			// Only pass tools to model if it supports native tool calling
+			if (supportsToolCalling) {
+				tools = allTools;
+				log.info('Final tools (native)', { toolCount: allTools.length, toolNames: allTools.map(t => t.name) });
 
-			// Tool executor handles all tool types
-			toolExecutor = async (toolName, input) => {
-				if (toolName === 'brave_search') {
-					// Web search (available to all personas)
-					const searchQuery = (input as { query: string }).query;
-					const searchResults = await executeBraveSearch(searchQuery);
+				// Tool executor handles all tool types (for native tool calling)
+				toolExecutor = async (toolName, input) => {
+					return executeToolByName(toolName, input);
+				};
+			} else {
+				// Model doesn't support native tool calling
+				// Tools will be parsed from response as tool_intent blocks
+				tools = undefined;
+				toolExecutor = undefined;
+				log.info('Tool calling disabled (model does not support)', { willParseIntents: true });
+			}
+		}
+
+		// Shared tool executor function (used by both native and parsed intents)
+		async function executeToolByName(
+			toolName: string,
+			input: Record<string, unknown>
+		): Promise<{ success: boolean; message: string; data?: unknown }> {
+			if (toolName === 'brave_search') {
+				const searchQuery = (input as { query: string }).query;
+				const searchResults = await executeBraveSearch(searchQuery);
+				return {
+					success: !!searchResults,
+					message: searchResults || 'Search failed'
+				};
+			} else if (isWhiteboardTool(toolName) && whiteboardContext) {
+				return executeWhiteboardTool(toolName, input, whiteboardContext, whiteboardMutations!);
+			} else if (isCanvasTool(toolName) && canvasContext) {
+				return executeCanvasTool(toolName, input, canvasContext, canvasMutations!);
+			} else if (toolName === 'generate_image' && imageGenContext) {
+				const params = input as {
+					prompt: string;
+					negative_prompt?: string;
+					style?: string;
+					framing?: string;
+					mood?: string;
+					aspect_ratio?: string;
+					canvas_id?: string;
+				};
+				log.info('Generating image', {
+					prompt: params.prompt?.substring(0, 100),
+					model: imageGenContext.model
+				});
+				const result = await executeImageGen(params, imageGenContext);
+				if (result.success && result.imageBase64) {
 					return {
-						success: !!searchResults,
-						message: searchResults || 'Search failed'
+						success: true,
+						message: `Image generated successfully. Base64 length: ${result.imageBase64.length}, seed: ${result.seed}`
 					};
-				} else if (isWhiteboardTool(toolName) && whiteboardContext) {
-					return executeWhiteboardTool(toolName, input, whiteboardContext, whiteboardMutations!);
-				} else if (isCanvasTool(toolName) && canvasContext) {
-					return executeCanvasTool(toolName, input, canvasContext, canvasMutations!);
-				} else if (toolName === 'generate_image' && imageGenContext) {
-					// Image generation - uses model from settings, provider looked up dynamically
-					const params = input as {
-						prompt: string;
-						negative_prompt?: string;
-						style?: string;
-						framing?: string;
-						mood?: string;
-						aspect_ratio?: string;
-						canvas_id?: string;
-					};
-					log.info('Generating image', {
-						prompt: params.prompt?.substring(0, 100),
-						model: imageGenContext.model
-					});
-					const result = await executeImageGen(params, imageGenContext);
-					if (result.success && result.imageBase64) {
-						return {
-							success: true,
-							message: `Image generated successfully. Base64 length: ${result.imageBase64.length}, seed: ${result.seed}`
-						};
-					} else {
-						return {
-							success: false,
-							message: result.error || 'Image generation failed'
-						};
-					}
-				} else if (isTodoTool(toolName) && todoContext) {
-					return executeTodoTool(toolName, input, todoContext, todoMutations!);
-				} else if (calendarContext) {
-					return executeCalendarTool(toolName, input, calendarContext, todoMutations);
 				} else {
 					return {
 						success: false,
-						message: `Tool ${toolName} not available for this persona.`
+						message: result.error || 'Image generation failed'
 					};
 				}
-			};
+			} else if (isTodoTool(toolName) && todoContext) {
+				return executeTodoTool(toolName, input, todoContext, todoMutations!);
+			} else if (calendarContext) {
+				return executeCalendarTool(toolName, input, calendarContext, todoMutations);
+			} else {
+				return {
+					success: false,
+					message: `Tool ${toolName} not available for this persona.`
+				};
+			}
 		}
-		// Else: tools = undefined, converse.ts defaults to BRAVE_SEARCH_TOOL only
 
 		// 9. Stream response
 		const stream = new ReadableStream({
@@ -388,7 +416,29 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 						controller.enqueue(encoder.encode(`data: ${data}\n\n`));
 					}
 
-					const aiResponse = extractMessage(result.fullResponse);
+					let aiResponse = extractMessage(result.fullResponse);
+
+					// If model doesn't support native tool calling, parse and execute tool_intent blocks
+					if (!supportsToolCalling && hasToolIntents(result.fullResponse)) {
+						const intents = parseToolIntents(result.fullResponse);
+						log.info('Parsed tool intents', { count: intents.length, tools: intents.map(i => i.tool) });
+
+						for (const intent of intents) {
+							// Emit tool execution indicator
+							const toolIndicator = `\n⟨${intent.tool}⟩\n`;
+							controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'chunk', content: toolIndicator })}\n\n`));
+
+							// Execute the tool
+							const toolResult = await executeToolByName(intent.tool, intent.params);
+							log.info('Tool intent executed', { tool: intent.tool, success: toolResult.success });
+
+							// Emit result indicator
+							const resultIndicator = toolResult.success
+								? `✓ ${toolResult.message}\n`
+								: `✗ ${toolResult.message}\n`;
+							controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'chunk', content: resultIndicator })}\n\n`));
+						}
+					}
 
 					// Save to superjournal first to get the real ID
 					// Store first content_id as primary (DB only supports single content_id)
@@ -412,6 +462,9 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 						}),
 						...(whiteboardMutations && {
 							whiteboard_mutations: whiteboardMutations
+						}),
+						...(canvasMutations && {
+							canvas_mutations: canvasMutations
 						})
 					});
 					controller.enqueue(encoder.encode(`data: ${doneData}\n\n`));

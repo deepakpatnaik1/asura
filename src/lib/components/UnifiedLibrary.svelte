@@ -1,10 +1,11 @@
 <script lang="ts">
 	/**
-	 * UnifiedLibrary - Two-column dropdown for all selectable content
+	 * UnifiedLibrary - Three-column dropdown for all selectable content
 	 *
 	 * Columns:
 	 * 1. Files - pasted articles/content
 	 * 2. Whiteboards - Gunnar's scratch pads
+	 * 3. Designer - Eva's character canvases
 	 *
 	 * All selections go into AI context for next message turn.
 	 */
@@ -29,6 +30,14 @@
 		updated_at: string;
 	}
 
+	interface DesignerCanvas {
+		id: string;
+		title: string;
+		state?: unknown;
+		created_at: string;
+		updated_at: string;
+	}
+
 	interface Props {
 		// Files
 		files: ContentItem[];
@@ -46,6 +55,15 @@
 		onWhiteboardDelete?: (id: string, event: MouseEvent) => void;
 		onWhiteboardClear?: () => void;
 		isDeletingWhiteboard?: boolean;
+
+		// Designer Canvases
+		designerCanvases?: DesignerCanvas[];
+		selectedDesignerCanvasIds?: string[];
+		onDesignerCanvasToggle?: (id: string) => void;
+		onDesignerCanvasOpen?: (id: string) => void;
+		onDesignerCanvasDelete?: (id: string, event: MouseEvent) => void;
+		onDesignerCanvasClear?: () => void;
+		isDeletingDesignerCanvas?: boolean;
 	}
 
 	let {
@@ -62,18 +80,28 @@
 		onWhiteboardOpen,
 		onWhiteboardDelete,
 		onWhiteboardClear,
-		isDeletingWhiteboard = false
+		isDeletingWhiteboard = false,
+
+		designerCanvases = [],
+		selectedDesignerCanvasIds = [],
+		onDesignerCanvasToggle,
+		onDesignerCanvasOpen,
+		onDesignerCanvasDelete,
+		onDesignerCanvasClear,
+		isDeletingDesignerCanvas = false
 	}: Props = $props();
 
 	// Derived state
 	const hasFileSelection = $derived(files.some((f) => f.is_enabled));
 	const hasWhiteboardSelection = $derived(selectedWhiteboardIds.length > 0);
-	const hasAnySelection = $derived(hasFileSelection || hasWhiteboardSelection);
+	const hasDesignerCanvasSelection = $derived(selectedDesignerCanvasIds.length > 0);
+	const hasAnySelection = $derived(hasFileSelection || hasWhiteboardSelection || hasDesignerCanvasSelection);
 
 	// Clear all selections
 	function clearAllSelections() {
 		if (onFileClear) onFileClear();
 		if (onWhiteboardClear) onWhiteboardClear();
+		if (onDesignerCanvasClear) onDesignerCanvasClear();
 	}
 
 	// File editing state
@@ -137,6 +165,17 @@
 	function handleWhiteboardOpen(id: string, event: MouseEvent) {
 		event.stopPropagation();
 		onWhiteboardOpen(id);
+	}
+
+	// Designer canvas handlers
+	function handleDesignerCanvasToggle(id: string, event: MouseEvent) {
+		event.stopPropagation();
+		if (onDesignerCanvasToggle) onDesignerCanvasToggle(id);
+	}
+
+	function handleDesignerCanvasOpen(id: string, event: MouseEvent) {
+		event.stopPropagation();
+		if (onDesignerCanvasOpen) onDesignerCanvasOpen(id);
 	}
 </script>
 
@@ -253,6 +292,55 @@
 			</div>
 		{/if}
 	</div>
+
+	<!-- Designer Canvases Column -->
+	<div class="column">
+		<div class="column-header">Designer</div>
+		{#if designerCanvases.length === 0}
+			<div class="column-empty">No canvases</div>
+		{:else}
+			{#if onDesignerCanvasClear && hasDesignerCanvasSelection}
+				<button class="clear-btn" onclick={onDesignerCanvasClear}>Clear</button>
+			{/if}
+			<div class="column-items">
+				{#each designerCanvases as canvas (canvas.id)}
+					{@const isSelected = selectedDesignerCanvasIds.includes(canvas.id)}
+					<div class="item" class:active={isSelected}>
+						<button
+							class="toggle-btn"
+							class:active={isSelected}
+							onclick={(e) => handleDesignerCanvasToggle(canvas.id, e)}
+							title={isSelected ? 'Remove from context' : 'Add to context'}
+						>
+							{#if isSelected}
+								<Icon src={LuCheck} size="9" />
+							{/if}
+						</button>
+						<div class="item-info">
+							<button
+								class="title-btn openable"
+								onclick={(e) => handleDesignerCanvasOpen(canvas.id, e)}
+								title="Open canvas"
+							>
+								<span class="item-title">{canvas.title}</span>
+							</button>
+							<span class="item-date">{formatDate(canvas.updated_at)}</span>
+						</div>
+						{#if onDesignerCanvasDelete}
+							<button
+								class="delete-btn"
+								onclick={(e) => onDesignerCanvasDelete(canvas.id, e)}
+								title="Delete"
+								disabled={isDeletingDesignerCanvas}
+							>
+								<Icon src={LuTrash2} size="11" />
+							</button>
+						{/if}
+					</div>
+				{/each}
+			</div>
+		{/if}
+	</div>
 	</div>
 </div>
 
@@ -296,7 +384,7 @@
 
 	.columns-container {
 		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
+		grid-template-columns: repeat(3, minmax(0, 1fr));
 		flex: 1;
 		min-height: 0;
 	}

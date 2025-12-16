@@ -314,6 +314,15 @@ async function executeCreateCanvas(
 
 		if (error) throw error;
 
+		// Verify the created canvas matches what was requested
+		if (data.title !== title) {
+			return {
+				success: false,
+				message: `Create failed: canvas title "${data.title}" does not match requested "${title}".`,
+				data: { id: data.id, title: data.title }
+			};
+		}
+
 		const canvas: DesignerCanvas = {
 			id: data.id,
 			title: data.title,

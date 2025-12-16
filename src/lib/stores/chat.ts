@@ -38,10 +38,20 @@ interface WhiteboardMutations {
 	opened_whiteboard?: string | null; // ID of whiteboard to open in UI
 }
 
+// Canvas mutations from Eva's designer canvas tools
+interface CanvasMutations {
+	created_canvases?: { id: string; title: string; created_at: string; updated_at: string }[];
+	renamed_canvases?: { id: string; title: string }[];
+	deleted_canvases?: string[];
+	updated_canvases?: { id: string; state: unknown }[];
+	opened_canvas?: string | null; // ID of canvas to open in UI
+}
+
 export const currentMessage = writable<Message | null>(null);
 export const isLoading = writable(false);
 export const lastMutations = writable<Mutations | null>(null);
 export const lastWhiteboardMutations = writable<WhiteboardMutations | null>(null);
+export const lastCanvasMutations = writable<CanvasMutations | null>(null);
 
 // AbortController for canceling streaming requests
 let currentAbortController: AbortController | null = null;
@@ -55,7 +65,8 @@ export async function sendMessage(
 	chartId?: string,
 	chartSource?: 'file' | 'superjournal',
 	contentId?: string, // active content for context injection
-	whiteboardIds?: string[] // selected whiteboards for Gunnar context
+	whiteboardIds?: string[], // selected whiteboards for Gunnar context
+	canvasIds?: string[] // selected designer canvases for Eva context
 ): Promise<void> {
 	// Create new abort controller for this request
 	currentAbortController = new AbortController();
@@ -90,6 +101,9 @@ export async function sendMessage(
 		}
 		if (whiteboardIds && whiteboardIds.length > 0) {
 			body.whiteboard_ids = whiteboardIds;
+		}
+		if (canvasIds && canvasIds.length > 0) {
+			body.canvas_ids = canvasIds;
 		}
 
 		const response = await fetchWithTimeout('/api/chat', {
@@ -165,6 +179,10 @@ export async function sendMessage(
 									// Capture whiteboard mutations
 									if (data.whiteboard_mutations) {
 										lastWhiteboardMutations.set(data.whiteboard_mutations);
+									}
+									// Capture canvas mutations
+									if (data.canvas_mutations) {
+										lastCanvasMutations.set(data.canvas_mutations);
 									}
 								} else if (data.type === 'error') {
 									throw new Error(data.message);

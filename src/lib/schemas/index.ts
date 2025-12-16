@@ -43,7 +43,8 @@ export const chatMessageSchema = z.object({
 	chart_id: z.string().uuid().optional(),
 	chart_source: chartSourceSchema.optional(),
 	content_ids: z.array(z.string().uuid()).optional(), // active content(s) for context injection
-	whiteboard_ids: z.array(z.string().uuid()).optional() // selected whiteboards for Gunnar context
+	whiteboard_ids: z.array(z.string().uuid()).optional(), // selected whiteboards for Gunnar context
+	canvas_ids: z.array(z.string().uuid()).optional() // selected designer canvases for Eva context
 });
 
 /** POST /api/chat/compress - Orphan recovery compression */
