@@ -23,7 +23,7 @@ export const personaSchema = z.enum(['gunnar', 'kirby', 'samara', 'alicja', 'eva
 /** Override key enum (personas + processor types for model overrides) */
 export const overrideKeySchema = z.enum([
 	'gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya', // Personas
-	'embeddings', 'compression', 'chat_compression' // Text processes
+	'embeddings', 'compression', 'chat_compression', 'chat_compression_uncensored' // Text processes
 ]);
 
 // ============================================================================
@@ -75,7 +75,16 @@ export const settingsUpdateSchema = z.object({
 	// Process model overrides
 	model_embeddings: z.string().nullable().optional(),
 	model_compression: z.string().nullable().optional(),
-	model_chat_compression: z.string().nullable().optional()
+	model_chat_compression: z.string().nullable().optional(),
+	model_chat_compression_uncensored: z.string().nullable().optional(),
+
+	// Per-persona uncensored compression flags
+	compression_uncensored_gunnar: z.boolean().optional(),
+	compression_uncensored_kirby: z.boolean().optional(),
+	compression_uncensored_samara: z.boolean().optional(),
+	compression_uncensored_alicja: z.boolean().optional(),
+	compression_uncensored_eva: z.boolean().optional(),
+	compression_uncensored_ananya: z.boolean().optional()
 }).refine(
 	(data) => Object.keys(data).length > 0,
 	{ message: 'At least one field must be provided' }

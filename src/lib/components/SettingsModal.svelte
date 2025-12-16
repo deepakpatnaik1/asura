@@ -25,8 +25,12 @@
 	}
 
 	// All override keys (personas + processors)
-	const OVERRIDE_KEYS = ['gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya', 'embeddings', 'compression', 'chat_compression'] as const;
+	const OVERRIDE_KEYS = ['gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya', 'embeddings', 'compression', 'chat_compression', 'chat_compression_uncensored'] as const;
 	type OverrideKey = typeof OVERRIDE_KEYS[number];
+
+	// Persona names for uncensored compression flags
+	const PERSONA_NAMES = ['gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya'] as const;
+	type PersonaName = typeof PERSONA_NAMES[number];
 
 	let models = $state<Model[]>([]);
 	let modelOverrides = $state<Record<OverrideKey, string>>({
@@ -38,7 +42,18 @@
 		ananya: '',
 		embeddings: '',
 		compression: '',
-		chat_compression: ''
+		chat_compression: '',
+		chat_compression_uncensored: ''
+	});
+
+	// Per-persona uncensored compression flags
+	let uncensoredFlags = $state<Record<PersonaName, boolean>>({
+		gunnar: false,
+		kirby: false,
+		samara: false,
+		alicja: false,
+		eva: true,
+		ananya: false
 	});
 	let isLoading = $state(true);
 	let isExporting = $state(false);
@@ -132,7 +147,8 @@
 				ananya: '',
 				embeddings: '',
 				compression: '',
-				chat_compression: ''
+				chat_compression: '',
+				chat_compression_uncensored: ''
 			};
 
 			// Load model overrides from settings - use exact DB values, no fallbacks
@@ -140,6 +156,23 @@
 				const columnName = `model_${key}` as keyof typeof settings;
 				newOverrides[key] = settings[columnName] || '';
 			}
+
+			// Load uncensored compression flags
+			const newFlags: Record<PersonaName, boolean> = {
+				gunnar: false,
+				kirby: false,
+				samara: false,
+				alicja: false,
+				eva: true,
+				ananya: false
+			};
+			for (const persona of PERSONA_NAMES) {
+				const columnName = `compression_uncensored_${persona}` as keyof typeof settings;
+				if (settings[columnName] !== undefined) {
+					newFlags[persona] = settings[columnName] as boolean;
+				}
+			}
+			uncensoredFlags = newFlags;
 
 			console.log('[SettingsModal] Overrides built:', newOverrides);
 
@@ -179,6 +212,13 @@
 		const newModel = (event.target as HTMLSelectElement).value;
 		modelOverrides[key] = newModel;
 		saveSetting({ [`model_${key}`]: newModel });
+	}
+
+	// Handle uncensored compression checkbox change
+	function handleUncensoredChange(persona: PersonaName, event: Event) {
+		const checked = (event.target as HTMLInputElement).checked;
+		uncensoredFlags[persona] = checked;
+		saveSetting({ [`compression_uncensored_${persona}`]: checked });
 	}
 
 	// Handle overlay click (close modal)
@@ -353,6 +393,7 @@
 							<h3 class="section-heading">Personas</h3>
 							<div class="dropdown-row">
 								<label for="gunnar-select">Gunnar</label>
+								<input type="checkbox" id="gunnar-uncensored" checked={uncensoredFlags.gunnar} onchange={(e) => handleUncensoredChange('gunnar', e)} title="Use uncensored compression" />
 								<select id="gunnar-select" value={modelOverrides.gunnar} onchange={(e) => handleOverrideChange('gunnar', e)}>
 									{#each modelsByProvider as group}
 										<optgroup label={group.label}>
@@ -365,6 +406,7 @@
 							</div>
 							<div class="dropdown-row">
 								<label for="kirby-select">Kirby</label>
+								<input type="checkbox" id="kirby-uncensored" checked={uncensoredFlags.kirby} onchange={(e) => handleUncensoredChange('kirby', e)} title="Use uncensored compression" />
 								<select id="kirby-select" value={modelOverrides.kirby} onchange={(e) => handleOverrideChange('kirby', e)}>
 									{#each modelsByProvider as group}
 										<optgroup label={group.label}>
@@ -377,6 +419,7 @@
 							</div>
 							<div class="dropdown-row">
 								<label for="samara-select">Samara</label>
+								<input type="checkbox" id="samara-uncensored" checked={uncensoredFlags.samara} onchange={(e) => handleUncensoredChange('samara', e)} title="Use uncensored compression" />
 								<select id="samara-select" value={modelOverrides.samara} onchange={(e) => handleOverrideChange('samara', e)}>
 									{#each modelsByProvider as group}
 										<optgroup label={group.label}>
@@ -389,6 +432,7 @@
 							</div>
 							<div class="dropdown-row">
 								<label for="alicja-select">Alicja</label>
+								<input type="checkbox" id="alicja-uncensored" checked={uncensoredFlags.alicja} onchange={(e) => handleUncensoredChange('alicja', e)} title="Use uncensored compression" />
 								<select id="alicja-select" value={modelOverrides.alicja} onchange={(e) => handleOverrideChange('alicja', e)}>
 									{#each modelsByProvider as group}
 										<optgroup label={group.label}>
@@ -401,6 +445,7 @@
 							</div>
 							<div class="dropdown-row">
 								<label for="eva-select">Eva</label>
+								<input type="checkbox" id="eva-uncensored" checked={uncensoredFlags.eva} onchange={(e) => handleUncensoredChange('eva', e)} title="Use uncensored compression" />
 								<select id="eva-select" value={modelOverrides.eva} onchange={(e) => handleOverrideChange('eva', e)}>
 									{#each modelsByProvider as group}
 										<optgroup label={group.label}>
@@ -413,6 +458,7 @@
 							</div>
 							<div class="dropdown-row">
 								<label for="ananya-select">Ananya</label>
+								<input type="checkbox" id="ananya-uncensored" checked={uncensoredFlags.ananya} onchange={(e) => handleUncensoredChange('ananya', e)} title="Use uncensored compression" />
 								<select id="ananya-select" value={modelOverrides.ananya} onchange={(e) => handleOverrideChange('ananya', e)}>
 									{#each modelsByProvider as group}
 										<optgroup label={group.label}>
@@ -455,6 +501,18 @@
 							<div class="dropdown-row">
 								<label for="chat-compression-select">Chat artisan cut</label>
 								<select id="chat-compression-select" value={modelOverrides.chat_compression} onchange={(e) => handleOverrideChange('chat_compression', e)}>
+									{#each modelsByProvider as group}
+										<optgroup label={group.label}>
+											{#each group.models as model}
+												<option value={model.model_identifier}>{model.model_name}</option>
+											{/each}
+										</optgroup>
+									{/each}
+								</select>
+							</div>
+							<div class="dropdown-row">
+								<label for="chat-compression-uncensored-select">Chat artisan cut (uncensored)</label>
+								<select id="chat-compression-uncensored-select" value={modelOverrides.chat_compression_uncensored} onchange={(e) => handleOverrideChange('chat_compression_uncensored', e)}>
 									{#each modelsByProvider as group}
 										<optgroup label={group.label}>
 											{#each group.models as model}
@@ -652,6 +710,38 @@
 	.dropdown-row select option {
 		font-weight: 400;
 		padding-left: 8px;
+	}
+
+	.dropdown-row input[type="checkbox"] {
+		width: 12px;
+		height: 12px;
+		margin-left: auto;
+		margin-right: 8px;
+		cursor: pointer;
+		appearance: none;
+		-webkit-appearance: none;
+		background: #000;
+		border: 1px solid hsl(var(--border));
+		border-radius: 2px;
+		position: relative;
+		flex-shrink: 0;
+	}
+
+	.dropdown-row input[type="checkbox"]:checked {
+		background: hsl(var(--primary));
+		border-color: hsl(var(--primary));
+	}
+
+	.dropdown-row input[type="checkbox"]:checked::after {
+		content: '';
+		position: absolute;
+		left: 3px;
+		top: 1px;
+		width: 4px;
+		height: 7px;
+		border: solid #000;
+		border-width: 0 1.5px 1.5px 0;
+		transform: rotate(45deg);
 	}
 
 	.two-column-row {
@@ -866,7 +956,7 @@
 	 */
 	.all-models-list {
 		--personas-count: 6;      /* Gunnar, Kirby, Samara, Alicja, Eva, Ananya */
-		--processes-count: 3;     /* Embeddings, File artisan cut, Chat artisan cut */
+		--processes-count: 4;     /* Embeddings, File artisan cut, Chat artisan cut, Chat artisan cut (uncensored) */
 		--dropdown-height: 24px;
 		--dropdown-gap: 6px;
 		--section-gap: 51px;      /* 20px + 23px + 8px */

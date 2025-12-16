@@ -68,14 +68,24 @@ export async function runCompressJob(params: CompressJobParams): Promise<void> {
 		}
 
 		// Get compression model from user settings
+		// Check persona's uncensored flag to determine which model to use
 		const { data: settings } = await supabase
 			.from('user_settings')
-			.select('model_chat_compression')
+			.select(`model_chat_compression, model_chat_compression_uncensored,
+				compression_uncensored_gunnar, compression_uncensored_kirby,
+				compression_uncensored_samara, compression_uncensored_alicja,
+				compression_uncensored_eva, compression_uncensored_ananya`)
 			.eq('user_id', userId)
 			.single();
 
-		const compressionModel = settings?.model_chat_compression || DEFAULT_COMPRESSION_MODEL;
-		log.info('Using compression model', { compressionModel });
+		// Check if this persona uses uncensored compression
+		const uncensoredFlagKey = `compression_uncensored_${personaName}` as keyof typeof settings;
+		const useUncensored = settings?.[uncensoredFlagKey] === true;
+
+		const compressionModel = useUncensored && settings?.model_chat_compression_uncensored
+			? settings.model_chat_compression_uncensored
+			: (settings?.model_chat_compression || DEFAULT_COMPRESSION_MODEL);
+		log.info('Using compression model', { compressionModel, useUncensored });
 
 		// Check if placeholder journal row exists (created by star button)
 		const { data: existingJournal } = await supabase

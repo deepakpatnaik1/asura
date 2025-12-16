@@ -95,7 +95,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		const { data: settings } = await supabase
 			.from('user_settings')
 			.select(`selected_persona, default_model,
-				model_gunnar, model_kirby, model_samara, model_alicja, model_ananya`)
+				model_gunnar, model_kirby, model_samara, model_alicja, model_eva, model_ananya,
+				model_tool_calling, model_image_gen`)
 			.eq('user_id', userId)
 			.single();
 

@@ -17,7 +17,18 @@ const MODEL_COLUMNS = [
 	'model_ananya',
 	'model_embeddings',
 	'model_compression',
-	'model_chat_compression'
+	'model_chat_compression',
+	'model_chat_compression_uncensored'
+] as const;
+
+// Per-persona uncensored compression flags
+const UNCENSORED_FLAGS = [
+	'compression_uncensored_gunnar',
+	'compression_uncensored_kirby',
+	'compression_uncensored_samara',
+	'compression_uncensored_alicja',
+	'compression_uncensored_eva',
+	'compression_uncensored_ananya'
 ] as const;
 
 export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase } }) => {
@@ -26,13 +37,15 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 	if (!auth.success) return auth.error;
 	const { userId } = auth;
 
-	// 2. QUERY USER SETTINGS (including all model columns)
+	// 2. QUERY USER SETTINGS (including all model columns and uncensored flags)
 	const { data, error } = await supabase
 		.from('user_settings')
 		.select(
 			`default_model, active_content_id, selected_persona,
 			 model_gunnar, model_kirby, model_samara, model_alicja, model_eva, model_ananya,
-			 model_embeddings, model_compression, model_chat_compression`
+			 model_embeddings, model_compression, model_chat_compression, model_chat_compression_uncensored,
+			 compression_uncensored_gunnar, compression_uncensored_kirby, compression_uncensored_samara,
+			 compression_uncensored_alicja, compression_uncensored_eva, compression_uncensored_ananya`
 		)
 		.eq('user_id', userId)
 		.single();
@@ -87,6 +100,13 @@ export const PUT: RequestHandler = async ({ request, locals: { safeGetSession, s
 
 	// Model overrides - check each column
 	for (const col of MODEL_COLUMNS) {
+		if ((validatedData as Record<string, unknown>)[col] !== undefined) {
+			updateData[col] = (validatedData as Record<string, unknown>)[col];
+		}
+	}
+
+	// Uncensored compression flags - check each column
+	for (const col of UNCENSORED_FLAGS) {
 		if ((validatedData as Record<string, unknown>)[col] !== undefined) {
 			updateData[col] = (validatedData as Record<string, unknown>)[col];
 		}

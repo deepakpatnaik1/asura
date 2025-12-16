@@ -139,7 +139,8 @@ const EVA_TOOLS: ToolName[] = [
 	'delete_canvas',
 	'open_canvas',
 	'list_canvases',
-	'update_canvas'
+	'update_canvas',
+	'generate_image'
 ];
 
 /**

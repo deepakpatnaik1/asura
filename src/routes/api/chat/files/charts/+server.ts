@@ -37,7 +37,7 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supab
 			alt_text,
 			is_pinned,
 			created_at,
-			content!inner(id, title, is_enabled)
+			canvas_gallery_content!inner(id, title, is_enabled)
 		`)
 		.eq('user_id', userId)
 		.not('content_id', 'is', null)
@@ -54,7 +54,7 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supab
 
 	// Filter by enabled content only
 	if (enabledOnly) {
-		query = query.eq('content.is_enabled', true);
+		query = query.eq('canvas_gallery_content.is_enabled', true);
 	}
 
 	const { data, error } = await query;
@@ -65,8 +65,8 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supab
 
 	// Transform to public URLs
 	const charts = (data || []).map((chart) => {
-		// content is a single object when using !inner join
-		const content = chart.content as unknown as { title: string } | null;
+		// canvas_gallery_content is a single object when using !inner join
+		const content = chart.canvas_gallery_content as unknown as { title: string } | null;
 		return {
 			id: chart.id,
 			file_id: chart.content_id, // Keep API response naming for backwards compatibility
