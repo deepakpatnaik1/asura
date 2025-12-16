@@ -45,6 +45,15 @@ import {
 	type WhiteboardToolContext,
 	type WhiteboardMutations
 } from '$lib/api/whiteboard-tools';
+import {
+	CANVAS_TOOLS,
+	executeCanvasTool,
+	isCanvasTool,
+	createEmptyCanvasMutations,
+	type CanvasToolContext,
+	type CanvasMutations
+} from '$lib/api/canvas-tools';
+import { IMAGE_GEN_TOOL, executeImageGen, type ImageGenContext } from '$lib/api/image-gen-tools';
 import { refreshAccessToken } from '$lib/api/google-calendar';
 import { BRAVE_SEARCH_TOOL, executeBraveSearch } from '$lib/api/brave-search';
 import { createClient } from '@supabase/supabase-js';
@@ -181,6 +190,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		let toolExecutor: ToolExecutor | undefined;
 		let todoMutations: TodoMutations | undefined;
 		let whiteboardMutations: WhiteboardMutations | undefined;
+		let canvasMutations: CanvasMutations | undefined;
 
 		const personaTools = getPersonaTools(persona);
 
@@ -191,6 +201,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			// Check which tool categories this persona has
 			const hasTodoTools = personaTools.some(t => isTodoTool(t));
 			const hasWhiteboardTools = personaTools.some(t => isWhiteboardTool(t));
+			const hasCanvasTools = personaTools.some(t => isCanvasTool(t));
+			const hasImageGen = personaTools.includes('generate_image');
 
 			log.info('Tool setup', {
 				persona,
@@ -252,6 +264,24 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				allTools.push(...WHITEBOARD_TOOLS);
 			}
 
+			// Set up canvas tools context (Eva)
+			let canvasContext: CanvasToolContext | null = null;
+
+			if (hasCanvasTools) {
+				canvasMutations = createEmptyCanvasMutations();
+				canvasContext = { supabase, userId };
+				allTools.push(...CANVAS_TOOLS);
+			}
+
+			// Set up image generation tool (Eva)
+			let imageGenContext: ImageGenContext | null = null;
+			const imageGenModel = settings?.model_image_gen as string | undefined;
+
+			if (hasImageGen && imageGenModel) {
+				imageGenContext = { supabase, model: imageGenModel };
+				allTools.push(IMAGE_GEN_TOOL as Anthropic.Tool);
+			}
+
 			tools = allTools;
 			log.info('Final tools', { toolCount: allTools.length, toolNames: allTools.map(t => t.name) });
 
@@ -267,6 +297,35 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 					};
 				} else if (isWhiteboardTool(toolName) && whiteboardContext) {
 					return executeWhiteboardTool(toolName, input, whiteboardContext, whiteboardMutations!);
+				} else if (isCanvasTool(toolName) && canvasContext) {
+					return executeCanvasTool(toolName, input, canvasContext, canvasMutations!);
+				} else if (toolName === 'generate_image' && imageGenContext) {
+					// Image generation - uses model from settings, provider looked up dynamically
+					const params = input as {
+						prompt: string;
+						negative_prompt?: string;
+						style?: string;
+						framing?: string;
+						mood?: string;
+						aspect_ratio?: string;
+						canvas_id?: string;
+					};
+					log.info('Generating image', {
+						prompt: params.prompt?.substring(0, 100),
+						model: imageGenContext.model
+					});
+					const result = await executeImageGen(params, imageGenContext);
+					if (result.success && result.imageBase64) {
+						return {
+							success: true,
+							message: `Image generated successfully. Base64 length: ${result.imageBase64.length}, seed: ${result.seed}`
+						};
+					} else {
+						return {
+							success: false,
+							message: result.error || 'Image generation failed'
+						};
+					}
 				} else if (isTodoTool(toolName) && todoContext) {
 					return executeTodoTool(toolName, input, todoContext, todoMutations!);
 				} else if (calendarContext) {

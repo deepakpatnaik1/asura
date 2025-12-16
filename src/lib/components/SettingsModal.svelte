@@ -25,7 +25,7 @@
 	}
 
 	// All override keys (personas + processors)
-	const OVERRIDE_KEYS = ['gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya', 'embeddings', 'compression', 'chat_compression', 'chat_compression_uncensored'] as const;
+	const OVERRIDE_KEYS = ['gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya', 'embeddings', 'compression', 'chat_compression', 'chat_compression_uncensored', 'tool_calling', 'image_gen'] as const;
 	type OverrideKey = typeof OVERRIDE_KEYS[number];
 
 	// Persona names for uncensored compression flags
@@ -43,7 +43,9 @@
 		embeddings: '',
 		compression: '',
 		chat_compression: '',
-		chat_compression_uncensored: ''
+		chat_compression_uncensored: '',
+		tool_calling: '',
+		image_gen: ''
 	});
 
 	// Per-persona uncensored compression flags
@@ -148,7 +150,9 @@
 				embeddings: '',
 				compression: '',
 				chat_compression: '',
-				chat_compression_uncensored: ''
+				chat_compression_uncensored: '',
+				tool_calling: '',
+				image_gen: ''
 			};
 
 			// Load model overrides from settings - use exact DB values, no fallbacks
@@ -338,6 +342,52 @@
 		}));
 	});
 
+	// Group tool calling models by provider
+	const toolCallingModelsByProvider = $derived.by(() => {
+		const toolModels = models.filter((m) => m.model_type === 'tool_calling');
+
+		const grouped = toolModels.reduce((acc, model) => {
+			const provider = model.provider;
+			if (!acc[provider]) acc[provider] = [];
+			acc[provider].push(model);
+			return acc;
+		}, {} as Record<string, Model[]>);
+
+		for (const provider of Object.keys(grouped)) {
+			grouped[provider].sort((a, b) => a.model_name.localeCompare(b.model_name));
+		}
+
+		const providers = Object.keys(grouped).sort();
+		return providers.map(provider => ({
+			provider,
+			label: provider.charAt(0).toUpperCase() + provider.slice(1),
+			models: grouped[provider]
+		}));
+	});
+
+	// Group image generation models by provider
+	const imageGenModelsByProvider = $derived.by(() => {
+		const imgModels = models.filter((m) => m.model_type === 'image_generation');
+
+		const grouped = imgModels.reduce((acc, model) => {
+			const provider = model.provider;
+			if (!acc[provider]) acc[provider] = [];
+			acc[provider].push(model);
+			return acc;
+		}, {} as Record<string, Model[]>);
+
+		for (const provider of Object.keys(grouped)) {
+			grouped[provider].sort((a, b) => a.model_name.localeCompare(b.model_name));
+		}
+
+		const providers = Object.keys(grouped).sort();
+		return providers.map(provider => ({
+			provider,
+			label: provider.charAt(0).toUpperCase() + provider.slice(1),
+			models: grouped[provider]
+		}));
+	});
+
 	// Group ALL models by provider (for All Models list)
 	const allModelsByProvider = $derived.by(() => {
 		// Group by provider
@@ -514,6 +564,30 @@
 								<label for="chat-compression-uncensored-select">Chat artisan cut (uncensored)</label>
 								<select id="chat-compression-uncensored-select" value={modelOverrides.chat_compression_uncensored} onchange={(e) => handleOverrideChange('chat_compression_uncensored', e)}>
 									{#each modelsByProvider as group}
+										<optgroup label={group.label}>
+											{#each group.models as model}
+												<option value={model.model_identifier}>{model.model_name}</option>
+											{/each}
+										</optgroup>
+									{/each}
+								</select>
+							</div>
+							<div class="dropdown-row">
+								<label for="tool-calling-select">Tool calling</label>
+								<select id="tool-calling-select" value={modelOverrides.tool_calling} onchange={(e) => handleOverrideChange('tool_calling', e)}>
+									{#each toolCallingModelsByProvider as group}
+										<optgroup label={group.label}>
+											{#each group.models as model}
+												<option value={model.model_identifier}>{model.model_name}</option>
+											{/each}
+										</optgroup>
+									{/each}
+								</select>
+							</div>
+							<div class="dropdown-row">
+								<label for="image-gen-select">Image generation</label>
+								<select id="image-gen-select" value={modelOverrides.image_gen} onchange={(e) => handleOverrideChange('image_gen', e)}>
+									{#each imageGenModelsByProvider as group}
 										<optgroup label={group.label}>
 											{#each group.models as model}
 												<option value={model.model_identifier}>{model.model_name}</option>
@@ -956,7 +1030,7 @@
 	 */
 	.all-models-list {
 		--personas-count: 6;      /* Gunnar, Kirby, Samara, Alicja, Eva, Ananya */
-		--processes-count: 4;     /* Embeddings, File artisan cut, Chat artisan cut, Chat artisan cut (uncensored) */
+		--processes-count: 6;     /* Embeddings, File artisan cut, Chat artisan cut, Chat artisan cut (uncensored), Tool calling, Image generation */
 		--dropdown-height: 24px;
 		--dropdown-gap: 6px;
 		--section-gap: 51px;      /* 20px + 23px + 8px */

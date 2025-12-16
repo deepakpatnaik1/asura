@@ -63,7 +63,9 @@ export type ToolName =
 	| 'delete_canvas'
 	| 'open_canvas'
 	| 'list_canvases'
-	| 'update_canvas';
+	| 'update_canvas'
+	// Image generation (Eva)
+	| 'generate_image';
 
 /**
  * Persona configuration interface
