@@ -54,7 +54,7 @@ import {
 	type CanvasMutations,
 	type CanvasState
 } from '$lib/api/canvas-tools';
-import { IMAGE_GEN_TOOL, CAPTION_TOOL, executeImageGen, executeCaptionImage, storeImageAndUpdateCanvas, type ImageGenContext } from '$lib/api/image-gen-tools';
+import { IMAGE_GEN_TOOL, CAPTION_TOOL, EDIT_IMAGE_TOOL, executeImageGen, executeCaptionImage, executeEditImage, storeImageAndUpdateCanvas, resolveImageCode, type ImageGenContext, type ImageEditContext } from '$lib/api/image-gen-tools';
 import { refreshAccessToken } from '$lib/api/google-calendar';
 import { BRAVE_SEARCH_TOOL, executeBraveSearch } from '$lib/api/brave-search';
 import { parseToolIntents, hasToolIntents } from '$lib/api/tool-intent-parser';
@@ -107,7 +107,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			.from('user_settings')
 			.select(`selected_persona, default_model,
 				model_gunnar, model_kirby, model_samara, model_alicja, model_eva, model_ananya,
-				model_tool_calling, model_image_gen`)
+				model_tool_calling, model_image_gen, model_image_edit`)
 			.eq('user_id', userId)
 			.single();
 
@@ -215,6 +215,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		let whiteboardContext: WhiteboardToolContext | null = null;
 		let canvasContext: CanvasToolContext | null = null;
 		let imageGenContext: ImageGenContext | null = null;
+		let imageEditContext: ImageEditContext | null = null;
 
 		if (personaTools.length > 0) {
 			// Persona has tools configured
@@ -225,6 +226,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			const hasWhiteboardTools = personaTools.some(t => isWhiteboardTool(t));
 			const hasCanvasTools = personaTools.some(t => isCanvasTool(t));
 			const hasImageGen = personaTools.includes('generate_image');
+			const hasImageEdit = personaTools.includes('edit_image');
 
 			log.info('Tool setup', {
 				persona,
@@ -295,6 +297,14 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			if (hasImageGen && imageGenModel) {
 				imageGenContext = { supabase, model: imageGenModel };
 				allTools.push(IMAGE_GEN_TOOL as Anthropic.Tool);
+			}
+
+			// Set up image editing tool (Eva)
+			const imageEditModel = settings?.model_image_edit as string | undefined;
+
+			if (hasImageEdit && imageEditModel) {
+				imageEditContext = { supabase, model: imageEditModel };
+				allTools.push(EDIT_IMAGE_TOOL as Anthropic.Tool);
 			}
 
 			// Only pass tools to model if it supports native tool calling
@@ -381,7 +391,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 							}
 
 							// Auto-caption the generated image so Eva can "see" what was created
-							log.info('Auto-captioning generated image', { imageUrl: storeResult.imageUrl });
+							log.info('Auto-captioning generated image', { imageUrl: storeResult.imageUrl, code: storeResult.imageCode });
 							const captionResult = await executeCaptionImage({
 								image_url: storeResult.imageUrl,
 								detail_level: 'character'
@@ -393,13 +403,13 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 
 							return {
 								success: true,
-								message: `Image generated and added to canvas. URL: ${storeResult.imageUrl}, seed: ${result.seed}${caption}`
+								message: `Image generated: ${storeResult.imageCode}. Seed: ${result.seed}${caption}`
 							};
 						} else if (storeResult.success) {
 							// Stored but no newState (edge case)
 							return {
 								success: true,
-								message: `Image generated and stored. URL: ${storeResult.imageUrl}, seed: ${result.seed}`
+								message: `Image generated: ${storeResult.imageCode}. Seed: ${result.seed}`
 							};
 						} else {
 							return {
@@ -435,6 +445,105 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 					return {
 						success: false,
 						message: result.error || 'Captioning failed'
+					};
+				}
+			} else if (toolName === 'edit_image' && imageEditContext) {
+				const params = input as {
+					source_code: string;
+					instruction: string;
+					strength?: number;
+					seed?: number;
+					canvas_id?: string;
+				};
+
+				// Resolve source_code to URL
+				const resolved = await resolveImageCode(supabaseStorage, params.source_code);
+				if (!resolved) {
+					return {
+						success: false,
+						message: `Image code "${params.source_code}" not found. Check the code shown at bottom-left of the image.`
+					};
+				}
+
+				// Use canvas_id from params, or fall back to the source image's canvas
+				const targetCanvasId = params.canvas_id || resolved.canvasId;
+
+				log.info('Editing image', {
+					sourceCode: params.source_code,
+					sourceUrl: resolved.imageUrl.substring(0, 50),
+					instruction: params.instruction?.substring(0, 100),
+					model: imageEditContext.model,
+					strength: params.strength
+				});
+
+				const result = await executeEditImage(
+					{
+						source_image_url: resolved.imageUrl,
+						instruction: params.instruction,
+						strength: params.strength,
+						seed: params.seed,
+						canvas_id: targetCanvasId
+					},
+					imageEditContext
+				);
+
+				if (result.success && result.imageBase64) {
+					// Store image and update canvas
+					if (targetCanvasId) {
+						// For edited images, we don't know exact dimensions, use default
+						const dims = { width: 1024, height: 1024 };
+
+						const storeResult = await storeImageAndUpdateCanvas(
+							supabaseStorage,
+							result.imageBase64,
+							targetCanvasId,
+							dims
+						);
+
+						if (storeResult.success && storeResult.newState && storeResult.imageUrl) {
+							// Track canvas mutation so client refreshes
+							if (canvasMutations) {
+								canvasMutations.updated_canvases.push({
+									id: targetCanvasId,
+									state: storeResult.newState as CanvasState
+								});
+							}
+
+							// Auto-caption the edited image so Eva can "see" what was created
+							log.info('Auto-captioning edited image', { imageUrl: storeResult.imageUrl });
+							const captionResult = await executeCaptionImage({
+								image_url: storeResult.imageUrl,
+								detail_level: 'character'
+							});
+
+							const caption = captionResult.success
+								? `\n\nWhat I see: ${captionResult.caption}`
+								: '\n\n(Auto-caption failed - use caption_image tool to see the image)';
+
+							return {
+								success: true,
+								message: `Image edited from ${params.source_code} → new image ${storeResult.imageCode}. Seed: ${result.seed}${caption}`
+							};
+						} else if (storeResult.success) {
+							return {
+								success: true,
+								message: `Image edited and stored. Code: ${storeResult.imageCode}, seed: ${result.seed}`
+							};
+						} else {
+							return {
+								success: false,
+								message: `Image edited but storage failed: ${storeResult.error}`
+							};
+						}
+					}
+					return {
+						success: true,
+						message: `Image edited successfully (no canvas target). Seed: ${result.seed}`
+					};
+				} else {
+					return {
+						success: false,
+						message: result.error || 'Image editing failed'
 					};
 				}
 			} else if (isTodoTool(toolName) && todoContext) {

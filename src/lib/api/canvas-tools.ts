@@ -206,6 +206,7 @@ export type RenderElement = {
 	seed?: number; // For consistent generations
 	model?: string; // Which model generated it
 	role?: string; // 'hero' | 'gallery' | 'expression' etc.
+	code?: string; // 3-char alphanumeric reference code (e.g., "A7K")
 };
 
 /**

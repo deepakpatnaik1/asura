@@ -64,6 +64,21 @@
 	// Selection state
 	let selectedId = $state<string | null>(null);
 
+	// Text styling - zoom-invariant (constant visual size regardless of canvas zoom)
+	// Base values match chat code blocks: SF Mono font, 9px size, 1.5 line-height
+	const BASE_FONT_SIZE = 9;
+	const BASE_LINE_HEIGHT = 1.5;
+	const BASE_PADDING = 8;
+	const BASE_WIDTH = 426; // matches code block content width (450 - 24px padding)
+
+	// Inverse scale: multiply by this to keep visual size constant
+	// When zoomed out (stageScale=0.5), inverseScale=2, so fontSize=22 renders as 11px visually
+	let inverseScale = $derived(1 / stageScale);
+	let fixedFontSize = $derived(BASE_FONT_SIZE * inverseScale);
+	let fixedLineHeight = BASE_LINE_HEIGHT; // line-height is a ratio, doesn't need scaling
+	let fixedPadding = $derived(BASE_PADDING * inverseScale);
+	let fixedWidth = $derived(BASE_WIDTH * inverseScale);
+
 	// Konva components (loaded dynamically)
 	let Stage: any;
 	let Layer: any;
@@ -359,7 +374,9 @@
 						<svelte:component this={Layer}>
 							{#each elements as element (element.id)}
 								{#if element.type === 'note'}
-									<!-- Note: card with text -->
+									<!-- Note: card with text - zoom-invariant -->
+									{@const boxWidth = fixedWidth}
+									{@const boxHeight = Math.max(100 * inverseScale, (element.text?.length || 0) * 0.4 * inverseScale)}
 									<svelte:component
 										this={Group}
 										x={element.x}
@@ -370,8 +387,8 @@
 									>
 										<svelte:component
 											this={Rect}
-											width={element.width || 150}
-											height={element.height || 100}
+											width={boxWidth}
+											height={boxHeight}
 											fill={element.fill || '#4a3a5a'}
 											cornerRadius={4}
 											shadowColor="black"
@@ -386,26 +403,27 @@
 										<svelte:component
 											this={Text}
 											text={element.text || ''}
-											x={10}
-											y={10}
-											width={(element.width || 150) - 20}
-											height={(element.height || 100) - 20}
-											fontSize={11}
-											fontFamily="iA Writer Quattro V, system-ui, -apple-system, sans-serif"
-											fill="#d9d9d9"
+											x={fixedPadding}
+											y={fixedPadding}
+											width={boxWidth - fixedPadding * 2}
+											fontSize={fixedFontSize}
+											lineHeight={fixedLineHeight}
+											fontFamily="'SF Mono', Monaco, 'Cascadia Code', monospace"
+											fill="#ebe5db"
 											wrap="word"
 										/>
 									</svelte:component>
 								{:else if element.type === 'label'}
-									<!-- Label: standalone text -->
+									<!-- Label: standalone text - zoom-invariant -->
 									<svelte:component
 										this={Text}
 										x={element.x}
 										y={element.y}
 										text={element.text || ''}
-										fontSize={element.fontSize || 14}
-										fontFamily="iA Writer Quattro V, system-ui, -apple-system, sans-serif"
-										fill={element.fill || '#d9d9d9'}
+										fontSize={fixedFontSize}
+										lineHeight={fixedLineHeight}
+										fontFamily="'SF Mono', Monaco, 'Cascadia Code', monospace"
+										fill={element.fill || '#ebe5db'}
 										draggable={true}
 										ondragend={(e: any) => handleDragEnd(element.id, e)}
 										onclick={() => handleSelect(element.id)}
@@ -442,7 +460,7 @@
 										onclick={() => handleSelect(element.id)}
 									/>
 								{:else if element.type === 'group'}
-									<!-- Group: outline style with colored border + translucent fill -->
+									<!-- Group: outline style - fixed visual size -->
 									<svelte:component
 										this={Group}
 										x={element.x}
@@ -453,7 +471,7 @@
 									>
 										<svelte:component
 											this={Rect}
-											width={element.width || 200}
+											width={element.width || 426}
 											height={element.height || 150}
 											fill={element.fill || 'rgba(20,20,20,0.8)'}
 											stroke={selectedId === element.id
@@ -465,17 +483,18 @@
 										{#if element.label}
 											<svelte:component
 												this={Text}
-												x={8}
-												y={-18}
+												x={fixedPadding}
+												y={-18 * inverseScale}
 												text={element.label}
-												fontSize={11}
-												fontFamily="iA Writer Quattro V, system-ui, -apple-system, sans-serif"
+												fontSize={fixedFontSize}
+												lineHeight={fixedLineHeight}
+												fontFamily="'SF Mono', Monaco, 'Cascadia Code', monospace"
 												fill={element.stroke || '#5a5a5a'}
 											/>
 										{/if}
 									</svelte:component>
 								{:else if element.type === 'image' && element.src && imageCache.has(element.src)}
-									<!-- Image: displays loaded image with optional selection border -->
+									<!-- Image: displays loaded image with code label and optional selection border -->
 									<svelte:component
 										this={Group}
 										x={element.x}
@@ -487,22 +506,50 @@
 										<svelte:component
 											this={Image}
 											image={imageCache.get(element.src)}
-											width={element.width || 200}
+											width={element.width || 426}
 											height={element.height || 200}
 										/>
 										{#if selectedId === element.id}
 											<svelte:component
 												this={Rect}
-												width={element.width || 200}
+												width={element.width || 426}
 												height={element.height || 200}
 												stroke="#fff"
 												strokeWidth={2}
 												cornerRadius={4}
 											/>
 										{/if}
+										<!-- Image code ribbon at bottom - zoom-invariant -->
+										{#if element.code}
+											{@const ribbonHeight = 14 * inverseScale}
+											<svelte:component
+												this={Rect}
+												x={0}
+												y={(element.height || 200) - ribbonHeight}
+												width={element.width || 426}
+												height={ribbonHeight}
+												fill="rgba(0,0,0,0.5)"
+											/>
+											<svelte:component
+												this={Text}
+												x={0}
+												y={(element.height || 200) - ribbonHeight}
+												width={element.width || 426}
+												height={ribbonHeight}
+												text={element.code}
+												fontSize={fixedFontSize}
+												fontFamily="'SF Mono', Monaco, 'Cascadia Code', monospace"
+												fill="#ebe5db"
+												fontStyle="bold"
+												align="center"
+												verticalAlign="middle"
+											/>
+										{/if}
 									</svelte:component>
 								{:else if element.type === 'text'}
-									<!-- Text: plain text block (like a note without explicit dimensions) -->
+									<!-- Text: plain text block - zoom-invariant -->
+									{@const boxWidth = fixedWidth}
+									{@const boxHeight = Math.max(200 * inverseScale, (element.text?.length || 0) * 0.4 * inverseScale)}
 									<svelte:component
 										this={Group}
 										x={element.x}
@@ -513,8 +560,8 @@
 									>
 										<svelte:component
 											this={Rect}
-											width={element.width || 400}
-											height={element.height || 250}
+											width={boxWidth}
+											height={boxHeight}
 											fill="#1a1a1a"
 											stroke={selectedId === element.id ? '#fff' : '#3a3a3a'}
 											strokeWidth={selectedId === element.id ? 2 : 1}
@@ -523,13 +570,13 @@
 										<svelte:component
 											this={Text}
 											text={element.text || ''}
-											x={12}
-											y={12}
-											width={(element.width || 400) - 24}
-											height={(element.height || 250) - 24}
-											fontSize={11}
-											fontFamily="iA Writer Quattro V, system-ui, -apple-system, sans-serif"
-											fill="#d9d9d9"
+											x={fixedPadding}
+											y={fixedPadding}
+											width={boxWidth - fixedPadding * 2}
+											fontSize={fixedFontSize}
+											lineHeight={fixedLineHeight}
+											fontFamily="'SF Mono', Monaco, 'Cascadia Code', monospace"
+											fill="#ebe5db"
 											wrap="word"
 										/>
 									</svelte:component>

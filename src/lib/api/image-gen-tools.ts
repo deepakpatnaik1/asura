@@ -7,8 +7,82 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ToolName } from '$lib/config/personas';
-import { generateImage, type ImageGenParams } from '$lib/calls/image';
+import { generateImage, editImage, type ImageGenParams, type ImageEditParams } from '$lib/calls/image';
 import { captionImage } from '$lib/calls/caption-hf-space';
+
+// Character set for image codes: 0-9, A-Z (uppercase only for clarity)
+const CODE_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+/**
+ * Generate a random 3-character alphanumeric code
+ */
+function generateRandomCode(): string {
+	let code = '';
+	for (let i = 0; i < 3; i++) {
+		code += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
+	}
+	return code;
+}
+
+/**
+ * Generate a unique image code, checking for collisions
+ * Returns the code and inserts it into the image_codes table
+ */
+export async function generateImageCode(
+	supabase: SupabaseClient,
+	canvasId: string,
+	imageId: string,
+	imageUrl: string
+): Promise<string> {
+	const maxAttempts = 10;
+
+	for (let attempt = 0; attempt < maxAttempts; attempt++) {
+		const code = generateRandomCode();
+
+		// Try to insert - will fail if code already exists (primary key constraint)
+		const { error } = await supabase
+			.from('image_codes')
+			.insert({ code, canvas_id: canvasId, image_id: imageId, image_url: imageUrl });
+
+		if (!error) {
+			return code;
+		}
+
+		// If it's a unique violation, try again
+		if (error.code === '23505') {
+			continue;
+		}
+
+		// Other error - throw
+		throw new Error(`Failed to generate image code: ${error.message}`);
+	}
+
+	throw new Error('Failed to generate unique image code after max attempts');
+}
+
+/**
+ * Look up an image URL by its code
+ */
+export async function resolveImageCode(
+	supabase: SupabaseClient,
+	code: string
+): Promise<{ imageUrl: string; canvasId: string; imageId: string } | null> {
+	const { data, error } = await supabase
+		.from('image_codes')
+		.select('image_url, canvas_id, image_id')
+		.eq('code', code.toUpperCase())
+		.single();
+
+	if (error || !data) {
+		return null;
+	}
+
+	return {
+		imageUrl: data.image_url,
+		canvasId: data.canvas_id,
+		imageId: data.image_id
+	};
+}
 
 // Tool schema for Claude's tool_use
 export const IMAGE_GEN_TOOL = {
@@ -82,14 +156,14 @@ export interface ImageGenContext {
 
 /**
  * Store generated image to Supabase storage and update canvas
- * Returns the public URL of the stored image
+ * Returns the public URL and code of the stored image
  */
 export async function storeImageAndUpdateCanvas(
 	supabase: SupabaseClient,
 	imageBase64: string,
 	canvasId: string,
 	dimensions: { width: number; height: number }
-): Promise<{ success: boolean; imageUrl?: string; newState?: unknown; error?: string }> {
+): Promise<{ success: boolean; imageUrl?: string; imageCode?: string; newState?: unknown; error?: string }> {
 	try {
 		// Generate unique filename
 		const imageId = crypto.randomUUID();
@@ -115,11 +189,15 @@ export async function storeImageAndUpdateCanvas(
 		const { data: urlData } = supabase.storage.from('content').getPublicUrl(filename);
 		const imageUrl = urlData.publicUrl;
 
+		// Generate unique 3-character code for this image
+		const imageCode = await generateImageCode(supabase, canvasId, imageId, imageUrl);
+
 		// Create image element for canvas render array (original dimensions)
 		const imageElement = {
 			id: imageId,
 			type: 'image',
 			src: imageUrl,
+			code: imageCode,
 			x: 50,
 			y: 50,
 			width: dimensions.width,
@@ -156,7 +234,7 @@ export async function storeImageAndUpdateCanvas(
 			return { success: false, error: `Canvas update failed: ${updateError.message}` };
 		}
 
-		return { success: true, imageUrl, newState };
+		return { success: true, imageUrl, imageCode, newState };
 	} catch (error) {
 		console.error('[ImageGen] storeImageAndUpdateCanvas error:', error);
 		return {
@@ -277,6 +355,85 @@ export async function executeCaptionImage(
 		};
 	} catch (error) {
 		console.error('[Caption] Error:', error);
+		return {
+			success: false,
+			error: error instanceof Error ? error.message : String(error)
+		};
+	}
+}
+
+// Edit image tool schema
+export const EDIT_IMAGE_TOOL = {
+	name: 'edit_image' as ToolName,
+	description: 'Edit an existing image using instruction-based transformation. Use this to modify a character image while preserving their identity (e.g., change outfit, pose, background, lighting). Reference the source image by its 3-character code (shown at bottom-left of each image).',
+	input_schema: {
+		type: 'object',
+		properties: {
+			source_code: {
+				type: 'string',
+				description: '3-character alphanumeric code of the source image (e.g., "A7K"). Shown at bottom-left of each image in canvas.'
+			},
+			instruction: {
+				type: 'string',
+				description: 'What to change about the image (e.g., "Put her in a red dress", "Change the background to a beach", "Make it night time")'
+			},
+			strength: {
+				type: 'number',
+				description: 'How much to change (0.3 = subtle, 0.5 = moderate, 0.75 = significant, 0.9 = major). Lower values preserve more of the original.'
+			},
+			seed: {
+				type: 'number',
+				description: 'Random seed for reproducible edits'
+			},
+			canvas_id: {
+				type: 'string',
+				description: 'ID of the designer canvas to add the edited image to'
+			}
+		},
+		required: ['source_code', 'instruction']
+	}
+};
+
+/**
+ * Context for image editing execution
+ */
+export interface ImageEditContext {
+	supabase: SupabaseClient;
+	model: string; // model_image_edit from settings
+}
+
+/**
+ * Execute image editing using the configured model and provider
+ */
+export async function executeEditImage(
+	params: {
+		source_image_url: string;
+		instruction: string;
+		strength?: number;
+		seed?: number;
+		canvas_id?: string;
+	},
+	context: ImageEditContext
+): Promise<{ success: boolean; imageBase64?: string; seed?: number; canvas_id?: string; error?: string }> {
+	try {
+		const editParams: ImageEditParams = {
+			sourceImageUrl: params.source_image_url,
+			prompt: params.instruction,
+			model: context.model,
+			strength: params.strength ?? 0.75,
+			seed: params.seed
+		};
+
+		const result = await editImage(context.supabase, editParams);
+
+		return {
+			success: true,
+			imageBase64: result.imageBase64,
+			seed: result.seed,
+			canvas_id: params.canvas_id
+		};
+	} catch (error) {
+		console.error('[ImageEdit] Error:', error);
 		return {
 			success: false,
 			error: error instanceof Error ? error.message : String(error)

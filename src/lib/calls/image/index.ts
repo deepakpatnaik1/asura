@@ -12,6 +12,7 @@ import { generateWithModelsLab } from './generate-modelslab';
 import { generateWithFireworks } from './generate-fireworks';
 import { generateWithOpenRouter } from './generate-openrouter';
 import { generateWithVenice } from './generate-venice';
+import { editWithFal } from './edit-fal';
 
 /**
  * Parameters for generating an image
@@ -103,9 +104,74 @@ export async function generateImage(
 	};
 }
 
+/**
+ * Parameters for editing an image
+ */
+export interface ImageEditParams {
+	/** URL of the source image to edit */
+	sourceImageUrl: string;
+	/** Instruction describing what to change */
+	prompt: string;
+	/** Model identifier (looked up in database) */
+	model: string;
+	/** How much to change (0 = no change, 1 = complete regeneration) */
+	strength?: number;
+	/** Seed for reproducible edits */
+	seed?: number;
+	/** Inference steps */
+	steps?: number;
+	/** Prompt adherence/guidance scale */
+	cfgScale?: number;
+}
+
+/**
+ * Result from image editing
+ */
+export interface ImageEditResult {
+	/** Base64-encoded image data */
+	imageBase64: string;
+	/** Seed used for generation (for reproducibility) */
+	seed: number;
+	/** Model used */
+	model: string;
+}
+
+/**
+ * Edit an image using the appropriate provider.
+ *
+ * Currently only Fal.ai supports image editing.
+ *
+ * @param supabase - Supabase client for provider lookup
+ * @param params - Image editing parameters
+ * @returns Edited image result
+ */
+export async function editImage(
+	supabase: SupabaseClient,
+	params: ImageEditParams
+): Promise<ImageEditResult> {
+	const provider = await getModelProvider(supabase, params.model);
+
+	let result: { imageBase64: string; seed: number };
+
+	switch (provider) {
+		case 'fal':
+			result = await editWithFal(params);
+			break;
+
+		default:
+			throw new Error(`Image editing not supported for provider: ${provider}`);
+	}
+
+	return {
+		...result,
+		model: params.model
+	};
+}
+
 // Re-export individual generators for direct use
 export { generateWithFal } from './generate-fal';
 export { generateWithModelsLab } from './generate-modelslab';
 export { generateWithFireworks } from './generate-fireworks';
 export { generateWithOpenRouter } from './generate-openrouter';
 export { generateWithVenice } from './generate-venice';
+export { editWithFal } from './edit-fal';
