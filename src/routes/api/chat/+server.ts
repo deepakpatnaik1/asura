@@ -51,9 +51,10 @@ import {
 	isCanvasTool,
 	createEmptyCanvasMutations,
 	type CanvasToolContext,
-	type CanvasMutations
+	type CanvasMutations,
+	type CanvasState
 } from '$lib/api/canvas-tools';
-import { IMAGE_GEN_TOOL, executeImageGen, type ImageGenContext } from '$lib/api/image-gen-tools';
+import { IMAGE_GEN_TOOL, executeImageGen, storeImageAndUpdateCanvas, type ImageGenContext } from '$lib/api/image-gen-tools';
 import { refreshAccessToken } from '$lib/api/google-calendar';
 import { BRAVE_SEARCH_TOOL, executeBraveSearch } from '$lib/api/brave-search';
 import { parseToolIntents, hasToolIntents } from '$lib/api/tool-intent-parser';
@@ -338,17 +339,60 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 					framing?: string;
 					mood?: string;
 					aspect_ratio?: string;
+					steps?: number;
+					cfg_scale?: number;
+					seed?: number;
 					canvas_id?: string;
 				};
 				log.info('Generating image', {
 					prompt: params.prompt?.substring(0, 100),
-					model: imageGenContext.model
+					model: imageGenContext.model,
+					canvas_id: params.canvas_id
 				});
 				const result = await executeImageGen(params, imageGenContext);
 				if (result.success && result.imageBase64) {
+					// If canvas_id provided, store image and update canvas
+					if (params.canvas_id) {
+						// Get dimensions from aspect ratio
+						const dimensions: Record<string, { width: number; height: number }> = {
+							'1:1': { width: 1024, height: 1024 },
+							'3:4': { width: 768, height: 1024 },
+							'4:3': { width: 1024, height: 768 },
+							'16:9': { width: 1024, height: 576 },
+							'9:16': { width: 576, height: 1024 },
+							'21:9': { width: 1344, height: 576 }
+						};
+						const dims = dimensions[params.aspect_ratio || '3:4'] || dimensions['3:4'];
+
+						const storeResult = await storeImageAndUpdateCanvas(
+							supabaseStorage,
+							result.imageBase64,
+							params.canvas_id,
+							dims
+						);
+
+						if (storeResult.success && storeResult.newState) {
+							// Track canvas mutation so client refreshes
+							if (canvasMutations) {
+								canvasMutations.updated_canvases.push({
+									id: params.canvas_id,
+									state: storeResult.newState as CanvasState
+								});
+							}
+							return {
+								success: true,
+								message: `Image generated and added to canvas. URL: ${storeResult.imageUrl}, seed: ${result.seed}`
+							};
+						} else {
+							return {
+								success: false,
+								message: `Image generated but storage failed: ${storeResult.error}`
+							};
+						}
+					}
 					return {
 						success: true,
-						message: `Image generated successfully. Base64 length: ${result.imageBase64.length}, seed: ${result.seed}`
+						message: `Image generated successfully (no canvas target). Seed: ${result.seed}`
 					};
 				} else {
 					return {

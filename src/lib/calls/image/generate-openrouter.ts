@@ -3,6 +3,12 @@
  *
  * Handles image generation via OpenRouter API.
  * Supports FLUX, Stable Diffusion, and other models.
+ *
+ * NSFW Note: OpenRouter follows strict content policies and does NOT provide
+ * a direct API parameter to disable safety filters. The underlying model's
+ * behavior applies. For NSFW content, use Venice or Fal.ai instead.
+ *
+ * Docs: https://openrouter.ai/docs/guides/overview/multimodal/image-generation
  */
 
 import { OPENROUTER_API_KEY } from '$env/static/private';
@@ -16,10 +22,23 @@ export async function generateWithOpenRouter(params: ImageGenParams): Promise<{ 
 		throw new Error('OPENROUTER_API_KEY not configured');
 	}
 
-	const { prompt, negativePrompt, model, seed: inputSeed, width = 1024, height = 1024 } = params;
+	const { prompt, negativePrompt, model, seed: inputSeed, width = 1024, height = 1024, steps, cfgScale } = params;
 
 	// Generate seed if not provided
 	const seed = inputSeed ?? Math.floor(Math.random() * 2147483647);
+
+	// Build request body - only include optional params if provided
+	const body: Record<string, unknown> = {
+		model,
+		prompt,
+		negative_prompt: negativePrompt || 'bad hands, deformed, blurry, watermark, text',
+		width,
+		height,
+		seed,
+		n: 1
+	};
+	if (steps) body.num_inference_steps = steps;
+	if (cfgScale) body.guidance_scale = cfgScale;
 
 	const response = await fetch('https://openrouter.ai/api/v1/images/generations', {
 		method: 'POST',
@@ -29,15 +48,7 @@ export async function generateWithOpenRouter(params: ImageGenParams): Promise<{ 
 			'HTTP-Referer': 'https://asura.app',
 			'X-Title': 'Asura'
 		},
-		body: JSON.stringify({
-			model,
-			prompt,
-			negative_prompt: negativePrompt || 'bad hands, deformed, blurry, watermark, text',
-			width,
-			height,
-			seed,
-			n: 1
-		})
+		body: JSON.stringify(body)
 	});
 
 	if (!response.ok) {

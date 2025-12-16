@@ -56,13 +56,13 @@ export const PUT: RequestHandler = async ({ params, request, locals: { safeGetSe
 	}
 
 	// Parse request body
-	const parseResult = await parseRequestJson<{ title?: string; state?: unknown }>(request);
+	const parseResult = await parseRequestJson<{ title?: string; state?: unknown; is_selected?: boolean }>(request);
 	if (!parseResult.success) return parseResult.error;
 
-	const { title, state } = parseResult.data;
+	const { title, state, is_selected } = parseResult.data;
 
 	// Build update object with only provided fields
-	const updateData: { title?: string; state?: unknown; updated_at: string } = {
+	const updateData: { title?: string; state?: unknown; is_selected?: boolean; updated_at: string } = {
 		updated_at: new Date().toISOString()
 	};
 
@@ -85,9 +85,13 @@ export const PUT: RequestHandler = async ({ params, request, locals: { safeGetSe
 		updateData.state = state;
 	}
 
+	if (typeof is_selected === 'boolean') {
+		updateData.is_selected = is_selected;
+	}
+
 	// Must have at least one field to update
-	if (updateData.title === undefined && updateData.state === undefined) {
-		return validationError('Must provide title or state to update', 'body');
+	if (updateData.title === undefined && updateData.state === undefined && updateData.is_selected === undefined) {
+		return validationError('Must provide title, state, or is_selected to update', 'body');
 	}
 
 	const { data, error } = await supabase

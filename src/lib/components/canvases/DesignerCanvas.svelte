@@ -411,6 +411,38 @@
 											/>
 										{/if}
 									</svelte:component>
+								{:else if element.type === 'text'}
+									<!-- Text: plain text block (like a note without explicit dimensions) -->
+									<svelte:component
+										this={Group}
+										x={element.x}
+										y={element.y}
+										draggable={true}
+										ondragend={(e: any) => handleDragEnd(element.id, e)}
+										onclick={() => handleSelect(element.id)}
+									>
+										<svelte:component
+											this={Rect}
+											width={element.width || 400}
+											height={element.height || 250}
+											fill="#1a1a1a"
+											stroke={selectedId === element.id ? '#fff' : '#3a3a3a'}
+											strokeWidth={selectedId === element.id ? 2 : 1}
+											cornerRadius={6}
+										/>
+										<svelte:component
+											this={Text}
+											text={element.text || ''}
+											x={12}
+											y={12}
+											width={(element.width || 400) - 24}
+											height={(element.height || 250) - 24}
+											fontSize={11}
+											fontFamily="iA Writer Quattro V, system-ui, -apple-system, sans-serif"
+											fill="#d9d9d9"
+											wrap="word"
+										/>
+									</svelte:component>
 								{/if}
 							{/each}
 						</svelte:component>

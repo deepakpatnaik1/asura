@@ -18,14 +18,14 @@ export async function generateWithFal(params: ImageGenParams): Promise<{ imageBa
 		throw new Error('FAL_API_KEY not configured');
 	}
 
-	const { prompt, negativePrompt, model, seed: inputSeed, width = 1024, height = 1024 } = params;
+	const { prompt, negativePrompt, model, seed: inputSeed, width = 1024, height = 1024, steps, cfgScale = 3.5 } = params;
 
 	// Generate seed if not provided
 	const seed = inputSeed ?? Math.floor(Math.random() * 2147483647);
 
-	// Determine inference steps based on model
+	// Determine inference steps based on model (if not provided)
 	const isSchnell = model.includes('schnell');
-	const numInferenceSteps = isSchnell ? 4 : 28;
+	const numInferenceSteps = steps ?? (isSchnell ? 4 : 28);
 
 	// Fal.ai REST API: https://fal.run/{model_id}
 	const url = `https://fal.run/${model}`;
@@ -42,7 +42,7 @@ export async function generateWithFal(params: ImageGenParams): Promise<{ imageBa
 			image_size: { width, height },
 			num_inference_steps: numInferenceSteps,
 			seed,
-			guidance_scale: 3.5,
+			guidance_scale: cfgScale,
 			num_images: 1,
 			enable_safety_checker: false // NSFW capable
 		})

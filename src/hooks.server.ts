@@ -115,15 +115,17 @@ export const handle: Handle = async ({ event, resolve }) => {
 	// Content Security Policy
 	// Note: Inline scripts/styles are allowed for SvelteKit compatibility
 	// In production, consider using nonces or hashes for stricter CSP
+	const isLocalDev = PUBLIC_SUPABASE_URL.includes('localhost');
 	response.headers.set(
 		'Content-Security-Policy',
 		[
 			"default-src 'self'",
 			"script-src 'self' 'unsafe-inline' https://accounts.google.com",
 			"style-src 'self' 'unsafe-inline'",
-			"img-src 'self' data: https: blob:",
+			// Allow local Supabase storage in dev, HTTPS in prod
+			`img-src 'self' data: https: blob:${isLocalDev ? ' http://localhost:54321' : ''}`,
 			"font-src 'self'",
-			"connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.anthropic.com https://api.voyageai.com",
+			`connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.anthropic.com https://api.voyageai.com${isLocalDev ? ' http://localhost:54321' : ''}`,
 			"frame-src https://accounts.google.com",
 			"frame-ancestors 'none'",
 			"form-action 'self'",

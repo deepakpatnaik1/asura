@@ -56,6 +56,7 @@
 	interface Whiteboard {
 		id: string;
 		title: string;
+		is_selected: boolean;
 		state?: {
 			notes: Array<{ id: string; x: number; y: number; text: string; fill: string; width: number; height: number }>;
 			viewport: { x: number; y: number; scale: number };
@@ -64,21 +65,26 @@
 		updated_at: string;
 	}
 	let whiteboards = $state<Whiteboard[]>([]);
-	let selectedWhiteboardIds = $state<string[]>([]); // Whiteboards selected for context injection
 	let viewingWhiteboardId = $state<string | null>(null); // Currently displayed in canvas
+
+	// Derived: selected whiteboard IDs from is_selected field
+	const selectedWhiteboardIds = $derived(whiteboards.filter(wb => wb.is_selected).map(wb => wb.id));
 
 	// Designer canvas state for Eva
 	import type { CanvasState } from '$lib/api/canvas-tools';
 	interface DesignerCanvasData {
 		id: string;
 		title: string;
+		is_selected: boolean;
 		state?: CanvasState;
 		created_at: string;
 		updated_at: string;
 	}
 	let designerCanvases = $state<DesignerCanvasData[]>([]);
-	let selectedDesignerCanvasIds = $state<string[]>([]); // Canvases selected for context injection
 	let viewingDesignerCanvasId = $state<string | null>(null); // Currently displayed in canvas
+
+	// Derived: selected designer canvas IDs from is_selected field
+	const selectedDesignerCanvasIds = $derived(designerCanvases.filter(c => c.is_selected).map(c => c.id));
 	let designerCanvasRefreshTrigger = $state(0);
 
 	// Refresh calendar when any Alicja mutations occur (todos, tags, diary, calendar)
@@ -116,12 +122,10 @@
 				}
 			}
 
-			// Handle deleted whiteboards - remove from list and selection
+			// Handle deleted whiteboards - remove from list (selection auto-updates via derived)
 			if (mutations.deleted_whiteboards && mutations.deleted_whiteboards.length > 0) {
 				const deletedIds = new Set(mutations.deleted_whiteboards);
 				whiteboards = whiteboards.filter(wb => !deletedIds.has(wb.id));
-				// Remove deleted from selection
-				selectedWhiteboardIds = selectedWhiteboardIds.filter(id => !deletedIds.has(id));
 				// Clear viewing if it was deleted
 				if (viewingWhiteboardId && deletedIds.has(viewingWhiteboardId)) {
 					viewingWhiteboardId = whiteboards.length > 0 ? whiteboards[0].id : null;
@@ -131,9 +135,18 @@
 			// Handle opened whiteboard - select it, view it, and switch canvas
 			if (mutations.opened_whiteboard) {
 				const openedId = mutations.opened_whiteboard;
-				// Add to selection if not already selected
-				if (!selectedWhiteboardIds.includes(openedId)) {
-					selectedWhiteboardIds = [...selectedWhiteboardIds, openedId];
+				// Add to selection if not already selected (persist to DB)
+				const wb = whiteboards.find(w => w.id === openedId);
+				if (wb && !wb.is_selected) {
+					whiteboards = whiteboards.map(w =>
+						w.id === openedId ? { ...w, is_selected: true } : w
+					);
+					// Persist selection
+					fetch(`/api/whiteboards/${openedId}`, {
+						method: 'PUT',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({ is_selected: true })
+					}).catch(err => console.error('Failed to persist whiteboard selection:', err));
 				}
 				viewingWhiteboardId = openedId;
 				forceCanvas = 'notes'; // Switch to notes canvas when whiteboard is opened
@@ -172,12 +185,10 @@
 				}
 			}
 
-			// Handle deleted canvases - remove from list and selection
+			// Handle deleted canvases - remove from list (selection auto-updates via derived)
 			if (mutations.deleted_canvases && mutations.deleted_canvases.length > 0) {
 				const deletedIds = new Set(mutations.deleted_canvases);
 				designerCanvases = designerCanvases.filter(c => !deletedIds.has(c.id));
-				// Remove deleted from selection
-				selectedDesignerCanvasIds = selectedDesignerCanvasIds.filter(id => !deletedIds.has(id));
 				// Clear viewing if it was deleted
 				if (viewingDesignerCanvasId && deletedIds.has(viewingDesignerCanvasId)) {
 					viewingDesignerCanvasId = designerCanvases.length > 0 ? designerCanvases[0].id : null;
@@ -187,9 +198,18 @@
 			// Handle opened canvas - select it, view it, and switch canvas
 			if (mutations.opened_canvas) {
 				const openedId = mutations.opened_canvas;
-				// Add to selection if not already selected
-				if (!selectedDesignerCanvasIds.includes(openedId)) {
-					selectedDesignerCanvasIds = [...selectedDesignerCanvasIds, openedId];
+				// Add to selection if not already selected (persist to DB)
+				const canvas = designerCanvases.find(c => c.id === openedId);
+				if (canvas && !canvas.is_selected) {
+					designerCanvases = designerCanvases.map(c =>
+						c.id === openedId ? { ...c, is_selected: true } : c
+					);
+					// Persist selection
+					fetch(`/api/canvases/${openedId}`, {
+						method: 'PUT',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({ is_selected: true })
+					}).catch(err => console.error('Failed to persist canvas selection:', err));
 				}
 				viewingDesignerCanvasId = openedId;
 				forceCanvas = 'designer'; // Switch to designer canvas when canvas is opened
@@ -298,8 +318,7 @@
 			if (response.ok) {
 				const data = await response.json();
 				whiteboards = data.whiteboards || [];
-				// Auto-select all whiteboards for context injection (Gunnar should see what he created)
-				selectedWhiteboardIds = whiteboards.map(wb => wb.id);
+				// Selection state comes from is_selected field (persisted in DB)
 				// Auto-view first whiteboard (most recently updated) and fetch its full state
 				if (whiteboards.length > 0 && !viewingWhiteboardId) {
 					const firstId = whiteboards[0].id;
@@ -326,8 +345,7 @@
 			if (response.ok) {
 				const data = await response.json();
 				designerCanvases = data.canvases || [];
-				// Auto-select all canvases for context injection
-				selectedDesignerCanvasIds = designerCanvases.map(c => c.id);
+				// Selection state comes from is_selected field (persisted in DB)
 				// Auto-view first canvas (most recently updated) and fetch its full state
 				if (designerCanvases.length > 0 && !viewingDesignerCanvasId) {
 					const firstId = designerCanvases[0].id;
@@ -347,12 +365,31 @@
 		}
 	}
 
-	// Toggle designer canvas selection for context injection
-	function toggleDesignerCanvasSelection(id: string) {
-		if (selectedDesignerCanvasIds.includes(id)) {
-			selectedDesignerCanvasIds = selectedDesignerCanvasIds.filter(cid => cid !== id);
-		} else {
-			selectedDesignerCanvasIds = [...selectedDesignerCanvasIds, id];
+	// Toggle designer canvas selection for context injection (persists to DB)
+	async function toggleDesignerCanvasSelection(id: string) {
+		const canvas = designerCanvases.find(c => c.id === id);
+		if (!canvas) return;
+
+		const newSelected = !canvas.is_selected;
+
+		// Optimistic update
+		designerCanvases = designerCanvases.map(c =>
+			c.id === id ? { ...c, is_selected: newSelected } : c
+		);
+
+		// Persist to database
+		try {
+			await fetch(`/api/canvases/${id}`, {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ is_selected: newSelected })
+			});
+		} catch (error) {
+			// Revert on failure
+			designerCanvases = designerCanvases.map(c =>
+				c.id === id ? { ...c, is_selected: !newSelected } : c
+			);
+			console.error('Failed to update canvas selection:', error);
 		}
 	}
 
@@ -397,9 +434,30 @@
 		}, 500);
 	}
 
-	// Clear all designer canvas selections
-	function clearDesignerCanvasSelection() {
-		selectedDesignerCanvasIds = [];
+	// Clear all designer canvas selections (persists to DB)
+	async function clearDesignerCanvasSelection() {
+		const selectedCanvases = designerCanvases.filter(c => c.is_selected);
+		if (selectedCanvases.length === 0) return;
+
+		// Optimistic update
+		designerCanvases = designerCanvases.map(c => ({ ...c, is_selected: false }));
+
+		// Persist all changes
+		try {
+			await Promise.all(
+				selectedCanvases.map(c =>
+					fetch(`/api/canvases/${c.id}`, {
+						method: 'PUT',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({ is_selected: false })
+					})
+				)
+			);
+		} catch (error) {
+			console.error('Failed to clear canvas selections:', error);
+			// Reload to get correct state
+			await loadDesignerCanvases();
+		}
 	}
 
 	// Open designer canvas from library
@@ -409,12 +467,31 @@
 		showLibrary = false;
 	}
 
-	// Toggle whiteboard selection for context injection
-	function toggleWhiteboardSelection(id: string) {
-		if (selectedWhiteboardIds.includes(id)) {
-			selectedWhiteboardIds = selectedWhiteboardIds.filter(wid => wid !== id);
-		} else {
-			selectedWhiteboardIds = [...selectedWhiteboardIds, id];
+	// Toggle whiteboard selection for context injection (persists to DB)
+	async function toggleWhiteboardSelection(id: string) {
+		const whiteboard = whiteboards.find(wb => wb.id === id);
+		if (!whiteboard) return;
+
+		const newSelected = !whiteboard.is_selected;
+
+		// Optimistic update
+		whiteboards = whiteboards.map(wb =>
+			wb.id === id ? { ...wb, is_selected: newSelected } : wb
+		);
+
+		// Persist to database
+		try {
+			await fetch(`/api/whiteboards/${id}`, {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ is_selected: newSelected })
+			});
+		} catch (error) {
+			// Revert on failure
+			whiteboards = whiteboards.map(wb =>
+				wb.id === id ? { ...wb, is_selected: !newSelected } : wb
+			);
+			console.error('Failed to update whiteboard selection:', error);
 		}
 	}
 
@@ -769,8 +846,30 @@
 		}
 	}
 
-	function clearWhiteboardSelection() {
-		selectedWhiteboardIds = [];
+	// Clear all whiteboard selections (persists to DB)
+	async function clearWhiteboardSelection() {
+		const selectedWbs = whiteboards.filter(wb => wb.is_selected);
+		if (selectedWbs.length === 0) return;
+
+		// Optimistic update
+		whiteboards = whiteboards.map(wb => ({ ...wb, is_selected: false }));
+
+		// Persist all changes
+		try {
+			await Promise.all(
+				selectedWbs.map(wb =>
+					fetch(`/api/whiteboards/${wb.id}`, {
+						method: 'PUT',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({ is_selected: false })
+					})
+				)
+			);
+		} catch (error) {
+			console.error('Failed to clear whiteboard selections:', error);
+			// Reload to get correct state
+			await loadWhiteboards();
+		}
 	}
 
 	function handleOpenWhiteboard(id: string) {
@@ -785,7 +884,7 @@
 			isDeletingWhiteboard = true;
 			const originalWhiteboards = whiteboards;
 			whiteboards = whiteboards.filter(wb => wb.id !== whiteboardId);
-			selectedWhiteboardIds = selectedWhiteboardIds.filter(id => id !== whiteboardId);
+			// Selection auto-updates via derived when whiteboard is removed from array
 			if (viewingWhiteboardId === whiteboardId) {
 				viewingWhiteboardId = whiteboards.length > 0 ? whiteboards[0].id : null;
 			}

@@ -29,6 +29,10 @@ export interface ImageGenParams {
 	width?: number;
 	/** Image height in pixels */
 	height?: number;
+	/** Inference steps (20-50 typical) */
+	steps?: number;
+	/** Prompt adherence/guidance scale (5-15 typical) */
+	cfgScale?: number;
 }
 
 /**

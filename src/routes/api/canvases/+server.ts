@@ -23,7 +23,7 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 
 	const { data: canvases, error } = await supabase
 		.from('canvas_designer')
-		.select('id, title, created_at, updated_at')
+		.select('id, title, is_selected, created_at, updated_at')
 		.eq('user_id', userId)
 		.order('updated_at', { ascending: false });
 

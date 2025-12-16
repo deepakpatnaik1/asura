@@ -586,8 +586,21 @@ async function executeUpdateCanvas(
 	try {
 		const { supabase, userId } = context;
 		const canvasId = input.canvas_id as string;
-		const render = input.render as RenderElement[];
-		const semantic = input.semantic as Record<string, unknown>;
+
+		// Validate required params
+		if (!canvasId) {
+			return {
+				success: false,
+				message: 'Missing canvas_id. Use: { "canvas_id": "uuid", "render": [...], "semantic": {...} }'
+			};
+		}
+
+		// Default to empty array/object if not provided
+		// Accept 'content' as alias for 'semantic' (common LLM mistake)
+		const render = Array.isArray(input.render) ? (input.render as RenderElement[]) : [];
+		const semantic = (input.semantic as Record<string, unknown>)
+			|| (input.content as Record<string, unknown>)
+			|| {};
 
 		// Verify canvas exists and belongs to user
 		const { data: existing, error: fetchError } = await supabase

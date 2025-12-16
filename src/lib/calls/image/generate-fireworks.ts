@@ -3,6 +3,10 @@
  *
  * Handles image generation via Fireworks AI FLUX models.
  *
+ * NSFW Note: Fireworks does NOT allow disabling safety filters via API.
+ * Per their FAQ, "original model behaviors cannot be modified via API parameters."
+ * For NSFW content, use Venice or Fal.ai instead.
+ *
  * Docs: https://docs.fireworks.ai/api-reference/generate-a-new-image-from-a-text-prompt
  */
 
@@ -17,12 +21,12 @@ export async function generateWithFireworks(params: ImageGenParams): Promise<{ i
 		throw new Error('FIREWORKS_API_KEY not configured');
 	}
 
-	const { prompt, model, seed: inputSeed, width = 1024, height = 1024 } = params;
+	const { prompt, model, seed: inputSeed, width = 1024, height = 1024, steps: inputSteps, cfgScale = 3.5 } = params;
 
-	// Set inference steps based on model
+	// Set inference steps based on model (if not provided)
 	const isSchnell = model.includes('schnell');
 	const isDev = model.includes('dev');
-	const steps = isSchnell ? 4 : isDev ? 28 : 25;
+	const steps = inputSteps ?? (isSchnell ? 4 : isDev ? 28 : 25);
 
 	// Generate seed if not provided
 	const seed = inputSeed ?? Math.floor(Math.random() * 2147483647);
@@ -39,7 +43,7 @@ export async function generateWithFireworks(params: ImageGenParams): Promise<{ i
 		},
 		body: JSON.stringify({
 			prompt,
-			guidance_scale: 3.5,
+			guidance_scale: cfgScale,
 			num_inference_steps: steps,
 			seed,
 			height,

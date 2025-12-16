@@ -18,7 +18,7 @@ export async function generateWithModelsLab(params: ImageGenParams): Promise<{ i
 		throw new Error('MODELSLAB_API_KEY not configured');
 	}
 
-	const { prompt, negativePrompt, model, seed: inputSeed, width = 512, height = 512 } = params;
+	const { prompt, negativePrompt, model, seed: inputSeed, width = 512, height = 512, steps = 30, cfgScale = 7.5 } = params;
 
 	// Generate seed if not provided
 	const seed = inputSeed ?? Math.floor(Math.random() * 2147483647);
@@ -37,9 +37,9 @@ export async function generateWithModelsLab(params: ImageGenParams): Promise<{ i
 			width: String(width),
 			height: String(height),
 			samples: '1',
-			num_inference_steps: '30',
+			num_inference_steps: String(steps),
 			seed,
-			guidance_scale: 7.5,
+			guidance_scale: cfgScale,
 			safety_checker: 'no', // NSFW capable
 			enhance_prompt: 'no',
 			webhook: null,
