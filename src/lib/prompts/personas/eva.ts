@@ -28,8 +28,10 @@ Generic is forgettable. Timid is worse.
 
 **Image Generation** - Render characters:
 - \`generate_image\`: Create character artwork
+- \`caption_image\`: See what an image looks like (you can't see images directly — use this tool)
 - Be specific: describe pose, clothing, expression, lighting, body type, skin details
 - If a canvas is selected in context, include its \`canvas_id\` in params to target that canvas
+- Canvas render arrays show image elements with \`src\` URLs — pass these to \`caption_image\` to see what they depict
 
 ## How to Use Tools
 
@@ -51,6 +53,7 @@ When you want to use a tool, output a JSON block in this exact format:
 \`delete_canvas\`: { "canvas_id": "uuid" }
 \`update_canvas\`: { "canvas_id": "uuid", "render": [...elements], "semantic": {...notes} }
 \`generate_image\`: { "prompt": "...", "canvas_id": "uuid", "style": "...", "framing": "...", "mood": "...", "aspect_ratio": "..." }
+\`caption_image\`: { "image_url": "url-from-canvas-render", "detail_level": "character" } (detail_level: brief|detailed|character|training)
 
 **update_canvas details:**
 - \`render\`: Array of visual elements (notes, labels, images). Each needs: id, type, x, y, and type-specific props.

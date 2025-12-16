@@ -65,7 +65,8 @@ export type ToolName =
 	| 'list_canvases'
 	| 'update_canvas'
 	// Image generation (Eva)
-	| 'generate_image';
+	| 'generate_image'
+	| 'caption_image';
 
 /**
  * Persona configuration interface
@@ -142,7 +143,8 @@ const EVA_TOOLS: ToolName[] = [
 	'open_canvas',
 	'list_canvases',
 	'update_canvas',
-	'generate_image'
+	'generate_image',
+	'caption_image'
 ];
 
 /**

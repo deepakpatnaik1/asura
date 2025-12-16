@@ -54,7 +54,7 @@ import {
 	type CanvasMutations,
 	type CanvasState
 } from '$lib/api/canvas-tools';
-import { IMAGE_GEN_TOOL, executeImageGen, storeImageAndUpdateCanvas, type ImageGenContext } from '$lib/api/image-gen-tools';
+import { IMAGE_GEN_TOOL, CAPTION_TOOL, executeImageGen, executeCaptionImage, storeImageAndUpdateCanvas, type ImageGenContext } from '$lib/api/image-gen-tools';
 import { refreshAccessToken } from '$lib/api/google-calendar';
 import { BRAVE_SEARCH_TOOL, executeBraveSearch } from '$lib/api/brave-search';
 import { parseToolIntents, hasToolIntents } from '$lib/api/tool-intent-parser';
@@ -371,7 +371,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 							dims
 						);
 
-						if (storeResult.success && storeResult.newState) {
+						if (storeResult.success && storeResult.newState && storeResult.imageUrl) {
 							// Track canvas mutation so client refreshes
 							if (canvasMutations) {
 								canvasMutations.updated_canvases.push({
@@ -379,9 +379,27 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 									state: storeResult.newState as CanvasState
 								});
 							}
+
+							// Auto-caption the generated image so Eva can "see" what was created
+							log.info('Auto-captioning generated image', { imageUrl: storeResult.imageUrl });
+							const captionResult = await executeCaptionImage({
+								image_url: storeResult.imageUrl,
+								detail_level: 'character'
+							});
+
+							const caption = captionResult.success
+								? `\n\nWhat I see: ${captionResult.caption}`
+								: '\n\n(Auto-caption failed - use caption_image tool to see the image)';
+
 							return {
 								success: true,
-								message: `Image generated and added to canvas. URL: ${storeResult.imageUrl}, seed: ${result.seed}`
+								message: `Image generated and added to canvas. URL: ${storeResult.imageUrl}, seed: ${result.seed}${caption}`
+							};
+						} else if (storeResult.success) {
+							// Stored but no newState (edge case)
+							return {
+								success: true,
+								message: `Image generated and stored. URL: ${storeResult.imageUrl}, seed: ${result.seed}`
 							};
 						} else {
 							return {
@@ -398,6 +416,25 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 					return {
 						success: false,
 						message: result.error || 'Image generation failed'
+					};
+				}
+			} else if (toolName === 'caption_image') {
+				const params = input as {
+					image_url: string;
+					detail_level?: 'brief' | 'detailed' | 'character' | 'training';
+				};
+				log.info('Captioning image', { url: params.image_url?.substring(0, 50), detail: params.detail_level });
+				const result = await executeCaptionImage(params);
+				if (result.success) {
+					return {
+						success: true,
+						message: result.caption || 'Caption generated',
+						data: { caption: result.caption }
+					};
+				} else {
+					return {
+						success: false,
+						message: result.error || 'Captioning failed'
 					};
 				}
 			} else if (isTodoTool(toolName) && todoContext) {

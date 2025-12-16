@@ -8,6 +8,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ToolName } from '$lib/config/personas';
 import { generateImage, type ImageGenParams } from '$lib/calls/image';
+import { captionImage } from '$lib/calls/caption-hf-space';
 
 // Tool schema for Claude's tool_use
 export const IMAGE_GEN_TOOL = {
@@ -224,6 +225,58 @@ export async function executeImageGen(
 		};
 	} catch (error) {
 		console.error('[ImageGen] Error:', error);
+		return {
+			success: false,
+			error: error instanceof Error ? error.message : String(error)
+		};
+	}
+}
+
+// Caption tool schema
+export const CAPTION_TOOL = {
+	name: 'caption_image' as ToolName,
+	description: 'Describe an image from the canvas. Use this to see what an image looks like so you can suggest improvements or iterations.',
+	input_schema: {
+		type: 'object',
+		properties: {
+			image_url: {
+				type: 'string',
+				description: 'URL of the image to caption (from canvas render array)'
+			},
+			detail_level: {
+				type: 'string',
+				enum: ['brief', 'detailed', 'character', 'training'],
+				description: 'Level of detail: brief (1 sentence), detailed (comprehensive), character (focus on character traits), training (for diffusion model prompts)'
+			}
+		},
+		required: ['image_url']
+	}
+};
+
+/**
+ * Execute image captioning using JoyCaption via HuggingFace Space
+ * Tries Alpha Two first (faster), falls back to Beta One
+ */
+export async function executeCaptionImage(
+	params: {
+		image_url: string;
+		detail_level?: 'brief' | 'detailed' | 'character' | 'training';
+	}
+): Promise<{ success: boolean; caption?: string; model?: string; error?: string }> {
+	try {
+		const result = await captionImage({
+			imageUrl: params.image_url,
+			detailLevel: params.detail_level || 'character',
+			maxTokens: params.detail_level === 'brief' ? 64 : 512
+		});
+
+		return {
+			success: true,
+			caption: result.caption,
+			model: result.model
+		};
+	} catch (error) {
+		console.error('[Caption] Error:', error);
 		return {
 			success: false,
 			error: error instanceof Error ? error.message : String(error)
