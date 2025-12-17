@@ -26,6 +26,7 @@
 		selectedCanvasIds?: string[]; // Which canvases are selected for context injection
 		onSelect?: (id: string) => void;
 		onStateChange?: (id: string, state: CanvasState) => void;
+		onImagePaste?: (code: string, url: string) => void; // Called after successful paste
 		refreshTrigger?: number; // Increment to force re-render after mutations
 	}
 
@@ -35,8 +36,12 @@
 		selectedCanvasIds = [],
 		onSelect,
 		onStateChange,
+		onImagePaste,
 		refreshTrigger = 0
 	}: Props = $props();
+
+	// Paste state
+	let isPasting = $state(false);
 
 	// Track refresh trigger to force re-read of canvas state
 	$effect(() => {
@@ -167,6 +172,79 @@
 				semantic: canvas.state?.semantic || {},
 				viewport: { x: stageX, y: stageY, scale: stageScale }
 			});
+		}
+	}
+
+	// Handle drag over - allow drop
+	function handleDragOver(e: DragEvent) {
+		if (!canvas) return;
+		e.preventDefault();
+		if (e.dataTransfer) {
+			e.dataTransfer.dropEffect = 'copy';
+		}
+	}
+
+	// Handle drop - upload image from Yoink or file system
+	async function handleDrop(e: DragEvent) {
+		if (!canvas || isPasting) return;
+		e.preventDefault();
+
+		const files = e.dataTransfer?.files;
+		if (!files || files.length === 0) return;
+
+		// Find first image file
+		let imageFile: File | null = null;
+		for (const file of files) {
+			if (file.type.startsWith('image/')) {
+				imageFile = file;
+				break;
+			}
+		}
+
+		if (!imageFile) return;
+
+		isPasting = true;
+
+		try {
+			// Convert to base64
+			const reader = new FileReader();
+			const base64Promise = new Promise<string>((resolve, reject) => {
+				reader.onload = () => resolve(reader.result as string);
+				reader.onerror = reject;
+			});
+			reader.readAsDataURL(imageFile);
+			const imageData = await base64Promise;
+
+			// Send to paste API (reusing same endpoint)
+			const response = await fetch(`/api/canvases/${canvas.id}/paste`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ imageData })
+			});
+
+			if (!response.ok) {
+				const error = await response.json();
+				console.error('[Drop] API error:', error);
+				return;
+			}
+
+			const result = await response.json();
+
+			// Update local state with new canvas state
+			if (result.newState) {
+				elements = result.newState.render || [];
+			}
+
+			// Notify parent
+			if (onImagePaste && result.imageCode && result.imageUrl) {
+				onImagePaste(result.imageCode, result.imageUrl);
+			}
+
+			console.log(`[Drop] Image added with code: ${result.imageCode}`);
+		} catch (error) {
+			console.error('[Drop] Error:', error);
+		} finally {
+			isPasting = false;
 		}
 	}
 
@@ -354,7 +432,7 @@
 
 <CanvasFrame>
 	{#snippet content()}
-		<div class="canvas-container" bind:this={containerEl}>
+		<div class="canvas-container" bind:this={containerEl} ondragover={handleDragOver} ondrop={handleDrop}>
 			{#if mounted && Stage}
 				{#if canvas}
 					<svelte:component
@@ -519,9 +597,33 @@
 												cornerRadius={4}
 											/>
 										{/if}
-										<!-- Image code ribbon at bottom - zoom-invariant -->
+										<!-- Image code ribbons - top and bottom, zoom-invariant -->
 										{#if element.code}
 											{@const ribbonHeight = 14 * inverseScale}
+											<!-- Top ribbon -->
+											<svelte:component
+												this={Rect}
+												x={0}
+												y={0}
+												width={element.width || 426}
+												height={ribbonHeight}
+												fill="rgba(0,0,0,0.5)"
+											/>
+											<svelte:component
+												this={Text}
+												x={0}
+												y={0}
+												width={element.width || 426}
+												height={ribbonHeight}
+												text={element.code}
+												fontSize={fixedFontSize}
+												fontFamily="'SF Mono', Monaco, 'Cascadia Code', monospace"
+												fill="#ebe5db"
+												fontStyle="bold"
+												align="center"
+												verticalAlign="middle"
+											/>
+											<!-- Bottom ribbon -->
 											<svelte:component
 												this={Rect}
 												x={0}

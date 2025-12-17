@@ -519,6 +519,9 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 									id: targetCanvasId,
 									state: storeResult.newState as CanvasState
 								});
+								log.info('Canvas mutation pushed for edit_image', { canvasId: targetCanvasId, mutationCount: canvasMutations.updated_canvases.length });
+							} else {
+								log.warn('canvasMutations is null - edit will not trigger refresh', { targetCanvasId });
 							}
 
 							// Fire-and-forget: Auto-caption in background (don't block the response)
@@ -637,8 +640,22 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 							const toolIndicator = `\n⟨${intent.tool}⟩\n`;
 							controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'chunk', content: toolIndicator })}\n\n`));
 
+							// Start keep-alive pings to prevent stream timeout during long operations
+							const keepAliveInterval = setInterval(() => {
+								try {
+									controller.enqueue(encoder.encode(`: keep-alive\n\n`));
+								} catch {
+									// Controller may already be closed
+								}
+							}, 5000);
+
 							// Execute the tool
-							const toolResult = await executeToolByName(intent.tool, intent.params);
+							let toolResult;
+							try {
+								toolResult = await executeToolByName(intent.tool, intent.params);
+							} finally {
+								clearInterval(keepAliveInterval);
+							}
 							log.info('Tool intent executed', { tool: intent.tool, success: toolResult.success });
 
 							// Emit result indicator
@@ -661,6 +678,9 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 					});
 
 					// Send completion event with real superjournal ID and mutations
+					if (canvasMutations?.updated_canvases?.length) {
+						log.info('Sending canvas_mutations in done event', { count: canvasMutations.updated_canvases.length });
+					}
 					const doneData = JSON.stringify({
 						type: 'done',
 						timestamp: new Date().toISOString(),
