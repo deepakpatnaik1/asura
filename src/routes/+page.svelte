@@ -354,16 +354,22 @@
 				const data = await response.json();
 				designerCanvases = data.canvases || [];
 				// Selection state comes from is_selected field (persisted in DB)
-				// Auto-view first canvas (most recently updated) and fetch its full state
+				// Restore last viewed canvas from localStorage, or default to first
 				if (designerCanvases.length > 0 && !viewingDesignerCanvasId) {
-					const firstId = designerCanvases[0].id;
-					viewingDesignerCanvasId = firstId;
+					const savedId = typeof localStorage !== 'undefined'
+						? localStorage.getItem(ACTIVE_CANVAS_KEY)
+						: null;
+					// Use saved ID if it exists in the list, otherwise use first
+					const targetId = savedId && designerCanvases.some(c => c.id === savedId)
+						? savedId
+						: designerCanvases[0].id;
+					viewingDesignerCanvasId = targetId;
 					// Fetch full state for the viewing canvas
-					const stateResponse = await fetch(`/api/canvases/${firstId}`);
+					const stateResponse = await fetch(`/api/canvases/${targetId}`);
 					if (stateResponse.ok) {
 						const stateData = await stateResponse.json();
 						designerCanvases = designerCanvases.map(c =>
-							c.id === firstId ? stateData.canvas : c
+							c.id === targetId ? stateData.canvas : c
 						);
 					}
 				}
