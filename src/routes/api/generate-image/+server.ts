@@ -126,8 +126,8 @@ async function uploadToStorage(
 		throw new Error(`Storage upload failed: ${error.message}`);
 	}
 
-	// Return public URL
-	return `${PUBLIC_SUPABASE_URL}/storage/v1/object/public/content/${storagePath}`;
+	// Return public URL (relative to go through Vite proxy in dev)
+	return `/storage/v1/object/public/content/${storagePath}`;
 }
 
 export const POST: RequestHandler = async ({ request, locals: { safeGetSession } }) => {

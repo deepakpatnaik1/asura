@@ -8,7 +8,6 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { requireAuth } from '$lib/api/require-auth';
 import { databaseError } from '$lib/api/errors';
-import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 
 /**
  * GET /api/chat/files/charts
@@ -63,7 +62,7 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supab
 		return databaseError('Failed to fetch file charts');
 	}
 
-	// Transform to public URLs
+	// Transform to public URLs (use relative URLs to go through Vite proxy in dev)
 	const charts = (data || []).map((chart) => {
 		// canvas_gallery_content is a single object when using !inner join
 		const content = chart.canvas_gallery_content as unknown as { title: string } | null;
@@ -71,8 +70,8 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supab
 			id: chart.id,
 			file_id: chart.content_id, // Keep API response naming for backwards compatibility
 			chart_index: chart.chart_index,
-			thumbnail_url: `${PUBLIC_SUPABASE_URL}/storage/v1/object/public/content/${chart.thumbnail_path}`,
-			full_url: `${PUBLIC_SUPABASE_URL}/storage/v1/object/public/content/${chart.storage_path}`,
+			thumbnail_url: `/storage/v1/object/public/content/${chart.thumbnail_path}`,
+			full_url: `/storage/v1/object/public/content/${chart.storage_path}`,
 			alt: chart.alt_text,
 			is_pinned: chart.is_pinned,
 			source: 'file' as const,

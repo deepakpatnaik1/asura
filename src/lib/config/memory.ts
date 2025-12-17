@@ -7,11 +7,11 @@
 
 export const MEMORY = {
 	/**
-	 * Context window usage cap (40%)
-	 * Ensures we never use more than 40% of the model's context window
-	 * for injected memory, leaving 60% for user input and AI response.
+	 * Context window usage cap (100%)
+	 * Uses full model context window for injected memory.
+	 * Model handles its own context limits.
 	 */
-	contextWindowCap: 0.4,
+	contextWindowCap: 1.0,
 
 	/**
 	 * Number of most recent journal entries to load before activating vector search

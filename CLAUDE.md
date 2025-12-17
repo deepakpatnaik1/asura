@@ -9,17 +9,19 @@ Read the file.
 Then find the open docs in /Users/d.patnaik/code/vault/docs/asura.
 We will work on the open docs.
 
-**Reference:** [asura-workflows.md](/Users/d.patnaik/code/vault/docs/asura/asura-workflows.md) - comprehensive workflow documentation
+**Reference:** [aether-workflows.md](/Users/d.patnaik/code/vault/docs/aether/aether-workflows.md) - comprehensive workflow documentation
 
 ---
 
 ## What Is Asura?
 
-AI mentor toolkit. Single unified interface at `/` with 4 personas sharing one conversation thread:
+AI mentor toolkit. Single unified interface at `/` with 6 personas sharing one conversation thread:
 - **Gunnar**: Startup mentor - finance, bootstrapping, strategy (6 whiteboard tools)
 - **Kirby**: Guerrilla marketer - bold ideas, different mindspace
 - **Samara**: Reading teacher - deep reading, pattern recognition
-- **Alicja**: Productivity collector - todos, calendar, founder diary (14 tools)
+- **Alicja**: Chief of staff - todos, calendar, founder diary (17 productivity tools)
+- **Eva**: Character designer - image generation/editing (9 canvas/image tools)
+- **Ananya**: Community manager - Reddit engagement (pending)
 
 Persona dropdown switches who you talk to next. History shows all personas interleaved.
 

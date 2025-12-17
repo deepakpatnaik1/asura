@@ -248,28 +248,28 @@
 		return persona ? `${persona.displayName}, ` : '';
 	}
 
-	// File paste and library state
+	// Article paste and library state
 	let showFilePaste = $state(false);
 	let showLibrary = $state(false);
-		interface FileItem {
+		interface Article {
 		id: string;
 		title: string;
 		is_enabled: boolean;
 		created_at: string;
 	}
-	let files = $state<FileItem[]>([]);
-	let isDeletingFile = $state(false);
+	let articles = $state<Article[]>([]);
+	let isDeletingArticle = $state(false);
 
 	// Confirmation composables
 	const deleteConfirm = createConfirmation();
-	const fileDeleteConfirm = createConfirmation();
+	const articleDeleteConfirm = createConfirmation();
 	const chartDeleteConfirm = createConfirmation();
 	const whiteboardDeleteConfirm = createConfirmation();
 	let isDeletingWhiteboard = $state(false);
 
 	// Total selections for library badge
 	const totalLibrarySelections = $derived(
-		files.filter(f => f.is_enabled).length + selectedWhiteboardIds.length + selectedDesignerCanvasIds.length
+		articles.filter(a => a.is_enabled).length + selectedWhiteboardIds.length + selectedDesignerCanvasIds.length
 	);
 
 	let pendingTimeouts: number[] = [];
@@ -509,6 +509,44 @@
 		}
 	}
 
+	// Rename whiteboard
+	async function renameWhiteboard(id: string, newTitle: string) {
+		const oldTitle = whiteboards.find(wb => wb.id === id)?.title;
+		whiteboards = whiteboards.map(wb => wb.id === id ? { ...wb, title: newTitle } : wb);
+
+		try {
+			const response = await fetch(`/api/whiteboards/${id}`, {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ title: newTitle })
+			});
+			if (!response.ok) {
+				whiteboards = whiteboards.map(wb => wb.id === id ? { ...wb, title: oldTitle || '' } : wb);
+			}
+		} catch (error) {
+			whiteboards = whiteboards.map(wb => wb.id === id ? { ...wb, title: oldTitle || '' } : wb);
+		}
+	}
+
+	// Rename designer canvas
+	async function renameDesignerCanvas(id: string, newTitle: string) {
+		const oldTitle = designerCanvases.find(c => c.id === id)?.title;
+		designerCanvases = designerCanvases.map(c => c.id === id ? { ...c, title: newTitle } : c);
+
+		try {
+			const response = await fetch(`/api/canvases/${id}`, {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ title: newTitle })
+			});
+			if (!response.ok) {
+				designerCanvases = designerCanvases.map(c => c.id === id ? { ...c, title: oldTitle || '' } : c);
+			}
+		} catch (error) {
+			designerCanvases = designerCanvases.map(c => c.id === id ? { ...c, title: oldTitle || '' } : c);
+		}
+	}
+
 	// Handle whiteboard click from carousel - toggle selection AND view it
 	async function handleWhiteboardSelect(id: string) {
 		// Toggle selection
@@ -577,7 +615,7 @@
 			pendingTimeouts = [];
 			if (whiteboardSaveTimeout) clearTimeout(whiteboardSaveTimeout);
 			deleteConfirm.cleanup();
-			fileDeleteConfirm.cleanup();
+			articleDeleteConfirm.cleanup();
 			chartDeleteConfirm.cleanup();
 			whiteboardDeleteConfirm.cleanup();
 			window.removeEventListener('nuke-complete', handleNukeEvent as EventListener);
@@ -702,12 +740,14 @@
 			chartSource = selectedChart.source;
 		}
 
+		const enabledArticleIds = articles.filter(a => a.is_enabled).map(a => a.id);
+
 		await sendMessage(
 			message,
 			selectedPersona,
 			chartId,
 			chartSource,
-			undefined,
+			enabledArticleIds.length > 0 ? enabledArticleIds : undefined,
 			selectedWhiteboardIds.length > 0 ? selectedWhiteboardIds : undefined,
 			selectedDesignerCanvasIds.length > 0 ? selectedDesignerCanvasIds : undefined
 		);
@@ -824,8 +864,8 @@
 				loadSuperjournalCharts();
 				break;
 			case 'content':
-				// Reload files and file charts
-				loadFiles();
+				// Reload articles and file charts
+				loadArticles();
 				loadFileCharts();
 				break;
 			case 'productivity':
@@ -836,7 +876,7 @@
 				allMessages = [];
 				superjournalCharts = [];
 				fileCharts = [];
-				files = [];
+				articles = [];
 				currentMessage.set(null);
 		}
 	}
@@ -856,7 +896,7 @@
 		showFilePaste = false;
 		showLibrary = !showLibrary;
 		if (showLibrary) {
-			await loadFiles();
+			await loadArticles();
 		}
 	}
 
@@ -916,26 +956,26 @@
 		});
 	}
 
-	async function loadFiles() {
+	async function loadArticles() {
 		try {
 			const response = await fetch('/api/chat/files');
 			if (response.ok) {
 				const data = await response.json();
-				files = data.files || [];
+				articles = data.files || [];
 			}
 		} catch (error) {
-			console.error('Failed to load files:', error);
+			console.error('Failed to load articles:', error);
 		}
 	}
 
-	async function toggleFile(fileId: string, currentState: boolean) {
-		files = files.map((f) => f.id === fileId ? { ...f, is_enabled: !currentState } : f);
+	async function toggleArticle(articleId: string, currentState: boolean) {
+		articles = articles.map((a) => a.id === articleId ? { ...a, is_enabled: !currentState } : a);
 
 		try {
 			if (!currentState) {
-				const response = await fetch(`/api/chat/files/${fileId}/open`, { method: 'POST' });
+				const response = await fetch(`/api/chat/files/${articleId}/open`, { method: 'POST' });
 				if (!response.ok) {
-					files = files.map((f) => f.id === fileId ? { ...f, is_enabled: currentState } : f);
+					articles = articles.map((a) => a.id === articleId ? { ...a, is_enabled: currentState } : a);
 				} else {
 					const data = await response.json();
 					allMessages = [...allMessages, data.message];
@@ -945,32 +985,32 @@
 					scrollToLastTurn(CHAT_CONFIG);
 				}
 			} else {
-				const response = await fetch(`/api/chat/files/${fileId}`, {
+				const response = await fetch(`/api/chat/files/${articleId}`, {
 					method: 'PUT',
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify({ is_enabled: false })
 				});
 				if (!response.ok) {
-					files = files.map((f) => f.id === fileId ? { ...f, is_enabled: currentState } : f);
+					articles = articles.map((a) => a.id === articleId ? { ...a, is_enabled: currentState } : a);
 				} else {
 					await loadFileCharts();
 				}
 			}
 		} catch (error) {
-			files = files.map((f) => f.id === fileId ? { ...f, is_enabled: currentState } : f);
+			articles = articles.map((a) => a.id === articleId ? { ...a, is_enabled: currentState } : a);
 		}
 	}
 
-	async function clearAllFiles() {
-		const enabledFiles = files.filter(f => f.is_enabled);
-		if (enabledFiles.length === 0) return;
+	async function clearAllArticles() {
+		const enabledArticles = articles.filter(a => a.is_enabled);
+		if (enabledArticles.length === 0) return;
 
-		files = files.map(f => ({ ...f, is_enabled: false }));
+		articles = articles.map(a => ({ ...a, is_enabled: false }));
 
 		try {
 			await Promise.all(
-				enabledFiles.map(f =>
-					fetch(`/api/chat/files/${f.id}`, {
+				enabledArticles.map(a =>
+					fetch(`/api/chat/files/${a.id}`, {
 						method: 'PUT',
 						headers: { 'Content-Type': 'application/json' },
 						body: JSON.stringify({ is_enabled: false })
@@ -979,48 +1019,48 @@
 			);
 			await loadFileCharts();
 		} catch (error) {
-			console.error('Failed to clear files:', error);
-			await loadFiles();
+			console.error('Failed to clear articles:', error);
+			await loadArticles();
 		}
 	}
 
-	async function renameFile(fileId: string, newTitle: string) {
-		const oldTitle = files.find((f) => f.id === fileId)?.title;
-		files = files.map((f) => f.id === fileId ? { ...f, title: newTitle } : f);
+	async function renameArticle(articleId: string, newTitle: string) {
+		const oldTitle = articles.find((a) => a.id === articleId)?.title;
+		articles = articles.map((a) => a.id === articleId ? { ...a, title: newTitle } : a);
 
 		try {
-			const response = await fetch(`/api/chat/files/${fileId}`, {
+			const response = await fetch(`/api/chat/files/${articleId}`, {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ title: newTitle })
 			});
 			if (!response.ok) {
-				files = files.map((f) => f.id === fileId ? { ...f, title: oldTitle || '' } : f);
+				articles = articles.map((a) => a.id === articleId ? { ...a, title: oldTitle || '' } : a);
 			}
 		} catch (error) {
-			files = files.map((f) => f.id === fileId ? { ...f, title: oldTitle || '' } : f);
+			articles = articles.map((a) => a.id === articleId ? { ...a, title: oldTitle || '' } : a);
 		}
 	}
 
-	function handleFileDeleteClick(fileId: string, event: MouseEvent) {
+	function handleArticleDeleteClick(articleId: string, event: MouseEvent) {
 		event.stopPropagation();
-		fileDeleteConfirm.start(fileId, async () => {
-			isDeletingFile = true;
-			const originalFiles = files;
-			files = files.filter((f) => f.id !== fileId);
+		articleDeleteConfirm.start(articleId, async () => {
+			isDeletingArticle = true;
+			const originalArticles = articles;
+			articles = articles.filter((a) => a.id !== articleId);
 
 			try {
-				const response = await fetch(`/api/chat/files/${fileId}`, { method: 'DELETE' });
+				const response = await fetch(`/api/chat/files/${articleId}`, { method: 'DELETE' });
 				if (!response.ok) {
-					files = originalFiles;
+					articles = originalArticles;
 				} else {
-					allMessages = allMessages.filter(m => !m.ai_response?.startsWith(`<!--content:${fileId}-->`));
+					allMessages = allMessages.filter(m => !m.ai_response?.startsWith(`<!--content:${articleId}-->`));
 					await loadFileCharts();
 				}
 			} catch (error) {
-				files = originalFiles;
+				articles = originalArticles;
 			} finally {
-				isDeletingFile = false;
+				isDeletingArticle = false;
 			}
 		});
 	}
@@ -1044,7 +1084,7 @@
 			setTimeout(() => scrollToLastTurn(CHAT_CONFIG), 100);
 		}
 
-		if (showLibrary) loadFiles();
+		if (showLibrary) loadArticles();
 		await loadFileCharts();
 		forceCanvas = 'carousel'; // Switch to carousel when content is pasted
 	}
@@ -1197,17 +1237,18 @@
 						</button>
 						{#if showLibrary}
 							<UnifiedLibrary
-								{files}
-								onFileToggle={toggleFile}
-								onFileRename={renameFile}
-								onFileDelete={handleFileDeleteClick}
-								onFileClear={clearAllFiles}
-								isDeletingFile={isDeletingFile}
+								{articles}
+								onArticleToggle={toggleArticle}
+								onArticleRename={renameArticle}
+								onArticleDelete={handleArticleDeleteClick}
+								onArticleClear={clearAllArticles}
+								isDeletingArticle={isDeletingArticle}
 
 								{whiteboards}
 								selectedWhiteboardIds={selectedWhiteboardIds}
 								onWhiteboardToggle={toggleWhiteboardSelection}
 								onWhiteboardOpen={handleOpenWhiteboard}
+								onWhiteboardRename={renameWhiteboard}
 								onWhiteboardDelete={handleWhiteboardDeleteClick}
 								onWhiteboardClear={clearWhiteboardSelection}
 								isDeletingWhiteboard={isDeletingWhiteboard}
@@ -1216,6 +1257,7 @@
 								selectedDesignerCanvasIds={selectedDesignerCanvasIds}
 								onDesignerCanvasToggle={toggleDesignerCanvasSelection}
 								onDesignerCanvasOpen={handleOpenDesignerCanvas}
+								onDesignerCanvasRename={renameDesignerCanvas}
 								onDesignerCanvasClear={clearDesignerCanvasSelection}
 							/>
 						{/if}
@@ -1266,9 +1308,9 @@
 
 
 	<ConfirmationModal
-		isOpen={fileDeleteConfirm.isActive}
-		progress={fileDeleteConfirm.progress}
-		onCancel={() => fileDeleteConfirm.cancel()}
+		isOpen={articleDeleteConfirm.isActive}
+		progress={articleDeleteConfirm.progress}
+		onCancel={() => articleDeleteConfirm.cancel()}
 	/>
 
 	<ConfirmationModal

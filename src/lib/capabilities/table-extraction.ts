@@ -278,7 +278,27 @@ export async function renderTableToSvg(
 	const tableJsx = buildTableJsx(headers, rows);
 	const colWidths = calculateColumnWidths(headers, rows);
 	const width = colWidths.reduce((sum, w) => sum + w, 0) + 4;
-	const height = (rows.length + 1) * 36 + 4;
+
+	// Calculate height accounting for text wrapping
+	// Each character is roughly 8px wide at 14px font size
+	const CHAR_WIDTH = 8;
+	const LINE_HEIGHT = 20;
+	const CELL_PADDING = 16; // 8px top + 8px bottom
+
+	const calculateRowHeight = (row: string[]) => {
+		let maxLines = 1;
+		row.forEach((cell, idx) => {
+			const cellWidth = colWidths[idx] - 24; // subtract horizontal padding
+			const textWidth = cell.length * CHAR_WIDTH;
+			const lines = Math.ceil(textWidth / cellWidth);
+			maxLines = Math.max(maxLines, lines);
+		});
+		return maxLines * LINE_HEIGHT + CELL_PADDING;
+	};
+
+	const headerHeight = calculateRowHeight(headers);
+	const rowHeights = rows.map(calculateRowHeight);
+	const height = headerHeight + rowHeights.reduce((sum, h) => sum + h, 0) + 4;
 
 	const font = loadFont();
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -1,5 +1,4 @@
 import { json } from '@sveltejs/kit';
-import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 import type { RequestHandler } from './$types';
 import { requireAuth } from '$lib/api/require-auth';
 
@@ -73,8 +72,8 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supab
 		}
 		chartsBySuperjournalId[sjId].push({
 			id: chart.id,
-			thumbnail_url: `${PUBLIC_SUPABASE_URL}/storage/v1/object/public/content/${chart.thumbnail_path}`,
-			full_url: `${PUBLIC_SUPABASE_URL}/storage/v1/object/public/content/${chart.storage_path}`,
+			thumbnail_url: `/storage/v1/object/public/content/${chart.thumbnail_path}`,
+			full_url: `/storage/v1/object/public/content/${chart.storage_path}`,
 			alt: chart.alt_text || `Table ${chart.chart_index}`,
 			is_pinned: chart.is_pinned
 		});

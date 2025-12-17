@@ -123,7 +123,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 			"script-src 'self' 'unsafe-inline' https://accounts.google.com",
 			"style-src 'self' 'unsafe-inline'",
 			// Allow local Supabase storage in dev, HTTPS in prod
-			`img-src 'self' data: https: blob:${isLocalDev ? ' http://localhost:54321' : ''}`,
+			`img-src 'self' data: https: blob:${isLocalDev ? ' http://localhost:54321 http://localhost:* http://127.0.0.1:*' : ''}`,
 			"font-src 'self'",
 			`connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.anthropic.com https://api.voyageai.com${isLocalDev ? ' http://localhost:54321' : ''}`,
 			"frame-src https://accounts.google.com",

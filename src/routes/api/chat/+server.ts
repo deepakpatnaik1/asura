@@ -101,7 +101,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		const validation = validateSchema(chatMessageSchema, parseResult.data);
 		if (!validation.success) return validation.error;
 
-		const { message, persona: requestPersona, chart_id, chart_source, content_ids, whiteboard_ids, canvas_ids } = validation.data;
+		const { message, persona: requestPersona, chart_id, chart_source, article_ids, whiteboard_ids, canvas_ids } = validation.data;
 
 		// 4. Load user settings (persona and all model overrides in one query)
 		const { data: settings } = await supabase
@@ -189,7 +189,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			persona,
 			conversationModel,
 			message,
-			content_ids,
+			article_ids,
 			whiteboard_ids,
 			canvas_ids
 		);
@@ -617,7 +617,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 						aiResponse,
 						conversationModel,
 						persona,
-						contentId: content_ids?.[0]
+						contentId: article_ids?.[0]
 					});
 
 					// Send completion event with real superjournal ID and mutations

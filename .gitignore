@@ -31,3 +31,4 @@ vite.config.ts.timestamp-*
 # Documentation directory (preserved across branch operations)
 docs/
 logs/
+access_token
