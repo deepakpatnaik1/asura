@@ -13,6 +13,42 @@ import { FAL_API_KEY } from '$env/static/private';
 import type { ImageEditParams } from './index';
 
 /**
+ * Convert a local URL to base64 data URI
+ * Fal.ai cannot access localhost URLs, so we fetch and convert to data URI
+ */
+async function toDataUri(imageUrl: string): Promise<string> {
+	// Check if it's a local URL that Fal.ai can't access
+	const isLocalUrl = imageUrl.includes('localhost') || imageUrl.includes('127.0.0.1');
+
+	if (!isLocalUrl) {
+		// Public URL - Fal.ai can access it directly
+		return imageUrl;
+	}
+
+	// Fetch the image ourselves
+	const response = await fetch(imageUrl);
+	if (!response.ok) {
+		throw new Error(`Failed to fetch source image: ${response.status}`);
+	}
+
+	const buffer = await response.arrayBuffer();
+	const base64 = Buffer.from(buffer).toString('base64');
+
+	// Determine mime type from URL or default to webp
+	const ext = imageUrl.split('.').pop()?.toLowerCase() || 'webp';
+	const mimeTypes: Record<string, string> = {
+		jpg: 'image/jpeg',
+		jpeg: 'image/jpeg',
+		png: 'image/png',
+		webp: 'image/webp',
+		gif: 'image/gif'
+	};
+	const mimeType = mimeTypes[ext] || 'image/webp';
+
+	return `data:${mimeType};base64,${base64}`;
+}
+
+/**
  * Edit an image using Fal.ai
  */
 export async function editWithFal(params: ImageEditParams): Promise<{ imageBase64: string; seed: number }> {
@@ -33,6 +69,9 @@ export async function editWithFal(params: ImageEditParams): Promise<{ imageBase6
 	// Generate seed if not provided
 	const seed = inputSeed ?? Math.floor(Math.random() * 2147483647);
 
+	// Convert local URLs to data URIs so Fal.ai can access them
+	const imageInput = await toDataUri(sourceImageUrl);
+
 	// Determine if this is a Kontext model (different API shape)
 	const isKontext = model.includes('kontext');
 	const isZImage = model.includes('z-image');
@@ -50,7 +89,7 @@ export async function editWithFal(params: ImageEditParams): Promise<{ imageBase6
 		// Kontext models use image_url as reference for character consistency
 		body = {
 			prompt,
-			image_url: sourceImageUrl,
+			image_url: imageInput,
 			num_inference_steps: numInferenceSteps,
 			seed,
 			guidance_scale: cfgScale,
@@ -61,7 +100,7 @@ export async function editWithFal(params: ImageEditParams): Promise<{ imageBase6
 		// Standard img2img models
 		body = {
 			prompt,
-			image_url: sourceImageUrl,
+			image_url: imageInput,
 			strength, // How much to change (0 = no change, 1 = complete regeneration)
 			num_inference_steps: numInferenceSteps,
 			seed,
@@ -70,6 +109,13 @@ export async function editWithFal(params: ImageEditParams): Promise<{ imageBase6
 			enable_safety_checker: false
 		};
 	}
+
+	// Log request details for debugging
+	const isDataUri = imageInput.startsWith('data:');
+	console.log(`[edit-fal] Model: ${model}`);
+	console.log(`[edit-fal] Prompt: ${prompt}`);
+	console.log(`[edit-fal] Image input: ${isDataUri ? `data URI (${Math.round(imageInput.length / 1024)}KB)` : imageInput}`);
+	console.log(`[edit-fal] Params: seed=${seed}, steps=${numInferenceSteps}, cfg=${cfgScale}${!isKontext ? `, strength=${strength}` : ''}`);
 
 	const response = await fetch(url, {
 		method: 'POST',
@@ -82,13 +128,16 @@ export async function editWithFal(params: ImageEditParams): Promise<{ imageBase6
 
 	if (!response.ok) {
 		const error = await response.text();
+		console.error(`[edit-fal] API error: ${response.status} - ${error}`);
 		throw new Error(`Fal.ai API error: ${response.status} - ${error}`);
 	}
 
 	const data = await response.json();
+	console.log(`[edit-fal] Response:`, JSON.stringify(data, null, 2).slice(0, 500));
 
 	// Fal.ai returns images array with url
 	if (!data.images || !data.images[0] || !data.images[0].url) {
+		console.error(`[edit-fal] Invalid response - no images:`, data);
 		throw new Error('Invalid response from Fal.ai API - no image URL');
 	}
 

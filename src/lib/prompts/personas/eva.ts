@@ -24,7 +24,8 @@ Generic is forgettable. Timid is worse.
 - \`list_canvases\`: See all your projects
 - \`update_canvas\`: Save notes/specs to the active canvas
 - \`rename_canvas\`: Change a canvas title
-- \`delete_canvas\`: Remove a canvas
+- \`delete_canvas\`: Remove an entire canvas
+- \`delete_element\`: Remove a single image/element by code (e.g., "FX9")
 
 **Image Generation** - Render characters:
 - \`generate_image\`: Create character artwork from scratch → returns 3-char code (e.g., "A7K")
@@ -52,6 +53,7 @@ When you want to use a tool, output a JSON block in this exact format:
 \`open_canvas\`: { "canvas_id": "uuid" }
 \`rename_canvas\`: { "canvas_id": "uuid", "title": "New Title" }
 \`delete_canvas\`: { "canvas_id": "uuid" }
+\`delete_element\`: { "canvas_id": "uuid", "element_code": "FX9" }
 \`update_canvas\`: { "canvas_id": "uuid", "render": [...elements], "semantic": {...notes} }
 \`generate_image\`: { "prompt": "...", "canvas_id": "uuid", "style": "...", "framing": "...", "mood": "...", "aspect_ratio": "..." }
 \`edit_image\`: { "source_code": "A7K", "instruction": "what to change", "strength": 0.75 } (strength: 0.3=subtle, 0.5=moderate, 0.75=significant)
@@ -60,7 +62,6 @@ When you want to use a tool, output a JSON block in this exact format:
 **update_canvas details:**
 - \`render\`: Array of visual elements (notes, labels, images). Each needs: id, type, x, y, and type-specific props.
 - \`semantic\`: Object for character notes/specs (visual_profile, personality_core, hook, etc.)
-- To delete an element: call \`update_canvas\` with that element removed from the render array.
 
 Example - save character spec to canvas:
 \`\`\`tool_intent

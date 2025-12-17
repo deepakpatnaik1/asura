@@ -8,7 +8,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ToolName } from '$lib/config/personas';
 import { generateImage, editImage, type ImageGenParams, type ImageEditParams } from '$lib/calls/image';
-import { captionImage } from '$lib/calls/caption-hf-space';
+import { captionReplicate } from '$lib/calls/caption/caption-replicate';
 
 // Character set for image codes: 0-9, A-Z (uppercase only for clarity)
 const CODE_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -82,6 +82,27 @@ export async function resolveImageCode(
 		canvasId: data.canvas_id,
 		imageId: data.image_id
 	};
+}
+
+/**
+ * Update the caption for an existing image code
+ * Called after auto-captioning succeeds
+ */
+export async function updateImageCodeCaption(
+	supabase: SupabaseClient,
+	code: string,
+	caption: string
+): Promise<boolean> {
+	const { error } = await supabase
+		.from('image_codes')
+		.update({ caption })
+		.eq('code', code.toUpperCase());
+
+	if (error) {
+		console.error('[ImageGen] Failed to update caption for code', code, error);
+		return false;
+	}
+	return true;
 }
 
 // Tool schema for Claude's tool_use
@@ -332,8 +353,8 @@ export const CAPTION_TOOL = {
 };
 
 /**
- * Execute image captioning using JoyCaption via HuggingFace Space
- * Tries Alpha Two first (faster), falls back to Beta One
+ * Execute image captioning using JoyCaption Pre-Alpha via Replicate
+ * Uncensored captioning suitable for NSFW content (~$0.002/image)
  */
 export async function executeCaptionImage(
 	params: {
@@ -342,10 +363,10 @@ export async function executeCaptionImage(
 	}
 ): Promise<{ success: boolean; caption?: string; model?: string; error?: string }> {
 	try {
-		const result = await captionImage({
+		// Use Replicate JoyCaption Pre-Alpha (uncensored, paid API)
+		const result = await captionReplicate({
 			imageUrl: params.image_url,
-			detailLevel: params.detail_level || 'character',
-			maxTokens: params.detail_level === 'brief' ? 64 : 512
+			model: 'joycaption-pre-alpha' // Not used by pre-alpha but kept for interface compatibility
 		});
 
 		return {

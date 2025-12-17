@@ -90,6 +90,26 @@ export const LIST_CANVASES_TOOL: Anthropic.Tool = {
 	}
 };
 
+export const DELETE_ELEMENT_TOOL: Anthropic.Tool = {
+	name: 'delete_element',
+	description:
+		'Delete a single element from a canvas by its code. Use this when the user wants to remove a specific image or element.',
+	input_schema: {
+		type: 'object',
+		properties: {
+			canvas_id: {
+				type: 'string',
+				description: 'The UUID of the canvas containing the element'
+			},
+			element_code: {
+				type: 'string',
+				description: 'The 3-character code of the element to delete (e.g., "FX9", "MLF")'
+			}
+		},
+		required: ['canvas_id', 'element_code']
+	}
+};
+
 export const UPDATE_CANVAS_TOOL: Anthropic.Tool = {
 	name: 'update_canvas',
 	description:
@@ -151,7 +171,8 @@ export const CANVAS_TOOLS: Anthropic.Tool[] = [
 	DELETE_CANVAS_TOOL,
 	OPEN_CANVAS_TOOL,
 	LIST_CANVASES_TOOL,
-	UPDATE_CANVAS_TOOL
+	UPDATE_CANVAS_TOOL,
+	DELETE_ELEMENT_TOOL
 ];
 
 /**
@@ -269,6 +290,9 @@ export async function executeCanvasTool(
 
 		case 'update_canvas':
 			return executeUpdateCanvas(input, context, mutations);
+
+		case 'delete_element':
+			return executeDeleteElement(input, context, mutations);
 
 		default:
 			return {
@@ -677,6 +701,96 @@ async function executeUpdateCanvas(
 }
 
 /**
+ * Delete Element Executor
+ */
+async function executeDeleteElement(
+	input: Record<string, unknown>,
+	context: CanvasToolContext,
+	mutations: CanvasMutations
+): Promise<ToolExecutionResult> {
+	try {
+		const { supabase, userId } = context;
+		const canvasId = input.canvas_id as string;
+		const elementCode = (input.element_code as string)?.toUpperCase();
+
+		if (!canvasId || !elementCode) {
+			return {
+				success: false,
+				message: 'Missing canvas_id or element_code'
+			};
+		}
+
+		// Get current canvas state
+		const { data: canvas, error: fetchError } = await supabase
+			.from('canvas_designer')
+			.select('title, state')
+			.eq('id', canvasId)
+			.eq('user_id', userId)
+			.single();
+
+		if (fetchError || !canvas) {
+			return {
+				success: false,
+				message: 'Canvas not found'
+			};
+		}
+
+		const currentState = canvas.state as CanvasState | null;
+		const currentRender = currentState?.render || [];
+
+		// Find the element by code
+		const elementIndex = currentRender.findIndex(
+			(el) => el.code?.toUpperCase() === elementCode
+		);
+
+		if (elementIndex === -1) {
+			return {
+				success: false,
+				message: `Element with code "${elementCode}" not found in canvas`
+			};
+		}
+
+		// Remove the element
+		const newRender = [
+			...currentRender.slice(0, elementIndex),
+			...currentRender.slice(elementIndex + 1)
+		];
+
+		const newState: CanvasState = {
+			render: newRender,
+			semantic: currentState?.semantic || {},
+			viewport: currentState?.viewport || { x: 0, y: 0, scale: 1 }
+		};
+
+		// Save updated state
+		const { error: updateError } = await supabase
+			.from('canvas_designer')
+			.update({
+				state: newState,
+				updated_at: new Date().toISOString()
+			})
+			.eq('id', canvasId)
+			.eq('user_id', userId);
+
+		if (updateError) throw updateError;
+
+		// Add to mutations for UI update
+		mutations.updated_canvases.push({ id: canvasId, state: newState });
+
+		return {
+			success: true,
+			message: `Deleted element ${elementCode} from canvas "${canvas.title}"`,
+			data: { canvas_id: canvasId, deleted_code: elementCode, remaining_elements: newRender.length }
+		};
+	} catch (error) {
+		return {
+			success: false,
+			message: `Failed to delete element: ${error instanceof Error ? error.message : 'Unknown error'}`
+		};
+	}
+}
+
+/**
  * Check if a tool name is a canvas tool
  */
 export function isCanvasTool(toolName: string): boolean {
@@ -686,6 +800,7 @@ export function isCanvasTool(toolName: string): boolean {
 		'delete_canvas',
 		'open_canvas',
 		'list_canvases',
-		'update_canvas'
+		'update_canvas',
+		'delete_element'
 	].includes(toolName);
 }

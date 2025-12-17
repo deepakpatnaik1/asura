@@ -25,7 +25,7 @@
 	}
 
 	// All override keys (personas + processors)
-	const OVERRIDE_KEYS = ['gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya', 'embeddings', 'compression', 'chat_compression', 'chat_compression_uncensored', 'tool_calling', 'image_gen'] as const;
+	const OVERRIDE_KEYS = ['gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya', 'embeddings', 'compression', 'chat_compression', 'chat_compression_uncensored', 'tool_calling', 'image_gen', 'image_edit'] as const;
 	type OverrideKey = typeof OVERRIDE_KEYS[number];
 
 	// Persona names for uncensored compression flags
@@ -152,7 +152,8 @@
 				chat_compression: '',
 				chat_compression_uncensored: '',
 				tool_calling: '',
-				image_gen: ''
+				image_gen: '',
+				image_edit: ''
 			};
 
 			// Load model overrides from settings - use exact DB values, no fallbacks

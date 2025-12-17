@@ -54,13 +54,14 @@ import {
 	type CanvasMutations,
 	type CanvasState
 } from '$lib/api/canvas-tools';
-import { IMAGE_GEN_TOOL, CAPTION_TOOL, EDIT_IMAGE_TOOL, executeImageGen, executeCaptionImage, executeEditImage, storeImageAndUpdateCanvas, resolveImageCode, type ImageGenContext, type ImageEditContext } from '$lib/api/image-gen-tools';
+import { IMAGE_GEN_TOOL, CAPTION_TOOL, EDIT_IMAGE_TOOL, executeImageGen, executeCaptionImage, executeEditImage, storeImageAndUpdateCanvas, resolveImageCode, updateImageCodeCaption, type ImageGenContext, type ImageEditContext } from '$lib/api/image-gen-tools';
 import { refreshAccessToken } from '$lib/api/google-calendar';
 import { BRAVE_SEARCH_TOOL, executeBraveSearch } from '$lib/api/brave-search';
 import { parseToolIntents, hasToolIntents } from '$lib/api/tool-intent-parser';
 import { createClient } from '@supabase/supabase-js';
 import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
+import sharp from 'sharp';
 
 // Service role client for storage operations
 const supabaseStorage = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -390,20 +391,29 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 								});
 							}
 
-							// Auto-caption the generated image so Eva can "see" what was created
-							log.info('Auto-captioning generated image', { imageUrl: storeResult.imageUrl, code: storeResult.imageCode });
-							const captionResult = await executeCaptionImage({
-								image_url: storeResult.imageUrl,
-								detail_level: 'character'
-							});
-
-							const caption = captionResult.success
-								? `\n\nWhat I see: ${captionResult.caption}`
-								: '\n\n(Auto-caption failed - use caption_image tool to see the image)';
+							// Fire-and-forget: Auto-caption in background (don't block the response)
+							// Caption will be persisted to image_codes table for future reference
+							const imageCode = storeResult.imageCode;
+							const imageUrl = storeResult.imageUrl;
+							if (imageCode && imageUrl) {
+								log.info('Auto-captioning generated image (async)', { imageUrl, code: imageCode });
+								// Don't await - let it run in background
+								executeCaptionImage({
+									image_url: imageUrl,
+									detail_level: 'character'
+								}).then(async (captionResult) => {
+									if (captionResult.success && captionResult.caption) {
+										await updateImageCodeCaption(supabaseStorage, imageCode, captionResult.caption);
+										log.info('Caption persisted to image_codes', { code: imageCode });
+									}
+								}).catch((err) => {
+									log.error('Background captioning failed', { code: imageCode, error: String(err) });
+								});
+							}
 
 							return {
 								success: true,
-								message: `Image generated: ${storeResult.imageCode}. Seed: ${result.seed}${caption}`
+								message: `Image generated: ${storeResult.imageCode}. Seed: ${result.seed}`
 							};
 						} else if (storeResult.success) {
 							// Stored but no newState (edge case)
@@ -490,8 +500,10 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				if (result.success && result.imageBase64) {
 					// Store image and update canvas
 					if (targetCanvasId) {
-						// For edited images, we don't know exact dimensions, use default
-						const dims = { width: 1024, height: 1024 };
+						// Get actual dimensions from the returned image
+						const imageBuffer = Buffer.from(result.imageBase64, 'base64');
+						const metadata = await sharp(imageBuffer).metadata();
+						const dims = { width: metadata.width || 1024, height: metadata.height || 1024 };
 
 						const storeResult = await storeImageAndUpdateCanvas(
 							supabaseStorage,
@@ -509,20 +521,27 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 								});
 							}
 
-							// Auto-caption the edited image so Eva can "see" what was created
-							log.info('Auto-captioning edited image', { imageUrl: storeResult.imageUrl });
-							const captionResult = await executeCaptionImage({
-								image_url: storeResult.imageUrl,
-								detail_level: 'character'
-							});
-
-							const caption = captionResult.success
-								? `\n\nWhat I see: ${captionResult.caption}`
-								: '\n\n(Auto-caption failed - use caption_image tool to see the image)';
+							// Fire-and-forget: Auto-caption in background (don't block the response)
+							const imageCode = storeResult.imageCode;
+							const imageUrl = storeResult.imageUrl;
+							if (imageCode && imageUrl) {
+								log.info('Auto-captioning edited image (async)', { imageUrl, code: imageCode });
+								executeCaptionImage({
+									image_url: imageUrl,
+									detail_level: 'character'
+								}).then(async (captionResult) => {
+									if (captionResult.success && captionResult.caption) {
+										await updateImageCodeCaption(supabaseStorage, imageCode, captionResult.caption);
+										log.info('Caption persisted to image_codes', { code: imageCode });
+									}
+								}).catch((err) => {
+									log.error('Background captioning failed', { code: imageCode, error: String(err) });
+								});
+							}
 
 							return {
 								success: true,
-								message: `Image edited from ${params.source_code} → new image ${storeResult.imageCode}. Seed: ${result.seed}${caption}`
+								message: `Image edited from ${params.source_code} → new image ${storeResult.imageCode}. Seed: ${result.seed}`
 							};
 						} else if (storeResult.success) {
 							return {

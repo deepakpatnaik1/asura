@@ -81,6 +81,7 @@ export const settingsUpdateSchema = z.object({
 	model_chat_compression_uncensored: z.string().nullable().optional(),
 	model_tool_calling: z.string().nullable().optional(),
 	model_image_gen: z.string().nullable().optional(),
+	model_image_edit: z.string().nullable().optional(),
 
 	// Per-persona uncensored compression flags
 	compression_uncensored_gunnar: z.boolean().optional(),
