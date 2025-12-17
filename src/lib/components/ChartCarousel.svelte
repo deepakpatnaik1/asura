@@ -170,7 +170,7 @@
 		flex-direction: row;
 		gap: 10px;
 		width: 100%;
-		padding: 0 10px 0 44px; /* Extra left padding for canvas switcher */
+		padding: 0 10px 0 100px; /* Extra left padding for canvas switcher labels */
 		justify-content: center;
 		flex-wrap: nowrap;
 		overflow-x: auto;

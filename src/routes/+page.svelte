@@ -1259,6 +1259,8 @@
 								onDesignerCanvasOpen={handleOpenDesignerCanvas}
 								onDesignerCanvasRename={renameDesignerCanvas}
 								onDesignerCanvasClear={clearDesignerCanvasSelection}
+
+								onClose={() => showLibrary = false}
 							/>
 						{/if}
 					</div>

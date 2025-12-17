@@ -66,6 +66,9 @@
 		onDesignerCanvasDelete?: (id: string, event: MouseEvent) => void;
 		onDesignerCanvasClear?: () => void;
 		isDeletingDesignerCanvas?: boolean;
+
+		// Close handler for click-outside
+		onClose?: () => void;
 	}
 
 	let {
@@ -92,7 +95,8 @@
 		onDesignerCanvasRename,
 		onDesignerCanvasDelete,
 		onDesignerCanvasClear,
-		isDeletingDesignerCanvas = false
+		isDeletingDesignerCanvas = false,
+		onClose
 	}: Props = $props();
 
 	// Derived state
@@ -254,6 +258,11 @@
 		editingDesignerCanvasTitle = '';
 	}
 </script>
+
+<!-- Invisible backdrop to catch outside clicks -->
+{#if onClose}
+	<button class="library-backdrop" onclick={onClose} aria-label="Close library"></button>
+{/if}
 
 <div class="unified-library-dropdown">
 	{#if hasAnySelection}
@@ -437,6 +446,15 @@
 </div>
 
 <style>
+	.library-backdrop {
+		position: fixed;
+		inset: 0;
+		z-index: 99998;
+		background: transparent;
+		border: none;
+		cursor: default;
+	}
+
 	.unified-library-dropdown {
 		position: fixed;
 		bottom: 80px;

@@ -96,14 +96,24 @@
 		forceCanvas = $bindable(null)
 	}: Props = $props();
 
-	// Get active whiteboard data
-	const activeWhiteboard = $derived(
-		whiteboards.find(wb => wb.id === activeWhiteboardId) ?? null
+	// Filter to only selected whiteboards (similar to enabled articles)
+	const selectedWhiteboards = $derived(
+		whiteboards.filter(wb => selectedWhiteboardIds.includes(wb.id))
 	);
 
-	// Get active designer canvas data
+	// Get active whiteboard data (only if it's in the selected list)
+	const activeWhiteboard = $derived(
+		selectedWhiteboards.find(wb => wb.id === activeWhiteboardId) ?? null
+	);
+
+	// Filter to only selected designer canvases (similar to enabled articles)
+	const selectedDesignerCanvases = $derived(
+		designerCanvases.filter(c => selectedDesignerCanvasIds.includes(c.id))
+	);
+
+	// Get active designer canvas data (only if it's in the selected list)
 	const activeDesignerCanvas = $derived(
-		designerCanvases.find(c => c.id === activeDesignerCanvasId) ?? null
+		selectedDesignerCanvases.find(c => c.id === activeDesignerCanvasId) ?? null
 	);
 
 	let activeCanvas = $state<CanvasType>(DEFAULT_CANVAS);
@@ -137,7 +147,7 @@
 			<CalendarCanvas {persona} refreshTrigger={calendarRefreshTrigger} />
 		{:else if activeCanvas === 'notes'}
 			<NotesCanvas
-				{whiteboards}
+				whiteboards={selectedWhiteboards}
 				whiteboard={activeWhiteboard}
 				{selectedWhiteboardIds}
 				onSelect={onWhiteboardSelect}
@@ -146,7 +156,7 @@
 			/>
 		{:else if activeCanvas === 'designer'}
 			<DesignerCanvas
-				canvases={designerCanvases}
+				canvases={selectedDesignerCanvases}
 				canvas={activeDesignerCanvas}
 				selectedCanvasIds={selectedDesignerCanvasIds}
 				onSelect={onDesignerCanvasSelect}
