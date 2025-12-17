@@ -6,7 +6,7 @@
  * across modes, but takes on mode-specific styling and data sources.
  */
 
-export const CANVAS_TYPES = ['carousel', 'notes', 'calendar', 'designer'] as const;
+export const CANVAS_TYPES = ['carousel', 'notes', 'designer', 'calendar'] as const;
 export type CanvasType = (typeof CANVAS_TYPES)[number];
 
 export const DEFAULT_CANVAS: CanvasType = 'carousel';
