@@ -83,6 +83,14 @@
 	let designerCanvases = $state<DesignerCanvasData[]>([]);
 	let viewingDesignerCanvasId = $state<string | null>(null); // Currently displayed in canvas
 
+	// Persist active designer canvas to localStorage
+	const ACTIVE_CANVAS_KEY = 'asura:activeDesignerCanvasId';
+	$effect(() => {
+		if (viewingDesignerCanvasId && typeof localStorage !== 'undefined') {
+			localStorage.setItem(ACTIVE_CANVAS_KEY, viewingDesignerCanvasId);
+		}
+	});
+
 	// Derived: selected designer canvas IDs from is_selected field
 	const selectedDesignerCanvasIds = $derived(designerCanvases.filter(c => c.is_selected).map(c => c.id));
 	let designerCanvasRefreshTrigger = $state(0);
