@@ -313,6 +313,15 @@ async function executeCreateWhiteboard(
 
 		if (error) throw error;
 
+		// Verify the created whiteboard matches what was requested
+		if (data.title !== title) {
+			return {
+				success: false,
+				message: `Create failed: whiteboard title "${data.title}" does not match requested "${title}".`,
+				data: { id: data.id, title: data.title }
+			};
+		}
+
 		const whiteboard: Whiteboard = {
 			id: data.id,
 			title: data.title,

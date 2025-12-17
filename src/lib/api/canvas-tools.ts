@@ -774,6 +774,32 @@ async function executeDeleteElement(
 
 		if (updateError) throw updateError;
 
+		// Verify the element was actually removed
+		const { data: verifyCanvas, error: verifyError } = await supabase
+			.from('canvas_designer')
+			.select('state')
+			.eq('id', canvasId)
+			.eq('user_id', userId)
+			.single();
+
+		if (verifyError || !verifyCanvas) {
+			return {
+				success: false,
+				message: `Delete verification failed: could not re-fetch canvas`
+			};
+		}
+
+		const verifyState = verifyCanvas.state as CanvasState | null;
+		const verifyRender = verifyState?.render || [];
+		const stillExists = verifyRender.some((el) => el.code?.toUpperCase() === elementCode);
+
+		if (stillExists) {
+			return {
+				success: false,
+				message: `Delete failed: element ${elementCode} still exists. Check database permissions.`
+			};
+		}
+
 		// Add to mutations for UI update
 		mutations.updated_canvases.push({ id: canvasId, state: newState });
 
