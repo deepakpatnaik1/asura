@@ -58,7 +58,7 @@ export const PALETTES: Record<string, Palette> = {
 		kirby: 'rgb(255, 50, 180)', // neon pink
 		samara: 'rgb(0, 255, 150)', // neon green
 		alicja: 'rgb(50, 150, 255)', // neon blue
-		eva: 'rgb(255, 130, 170)', // neon sakura
+		eva: 'rgb(255, 130, 170)', // neon coral pink
 		ananya: 'rgb(196, 130, 255)' // neon violet
 	},
 	mono: {
