@@ -41,7 +41,7 @@ export const CANVAS_META: Record<CanvasType, { icon: string; label: string; desc
 	},
 	calendar: {
 		icon: 'LuCalendar',
-		label: 'Planner',
+		label: 'Calendar',
 		description: 'Calendar, Todo, Done'
 	},
 	notes: {
