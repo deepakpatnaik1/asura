@@ -54,7 +54,7 @@ import {
 	type CanvasMutations,
 	type CanvasState
 } from '$lib/api/canvas-tools';
-import { IMAGE_GEN_TOOL, CAPTION_TOOL, EDIT_IMAGE_TOOL, executeImageGen, executeCaptionImage, executeEditImage, storeImageAndUpdateCanvas, resolveImageCode, updateImageCodeCaption, type ImageGenContext, type ImageEditContext } from '$lib/api/image-gen-tools';
+import { IMAGE_GEN_TOOL, EDIT_IMAGE_TOOL, executeImageGen, executeEditImage, storeImageAndUpdateCanvas, resolveImageCode, type ImageGenContext, type ImageEditContext } from '$lib/api/image-gen-tools';
 import { refreshAccessToken } from '$lib/api/google-calendar';
 import { BRAVE_SEARCH_TOOL, executeBraveSearch } from '$lib/api/brave-search';
 import { parseToolIntents, hasToolIntents } from '$lib/api/tool-intent-parser';
@@ -391,26 +391,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 								});
 							}
 
-							// Fire-and-forget: Auto-caption in background (don't block the response)
-							// Caption will be persisted to image_codes table for future reference
-							const imageCode = storeResult.imageCode;
-							const imageUrl = storeResult.imageUrl;
-							if (imageCode && imageUrl) {
-								log.info('Auto-captioning generated image (async)', { imageUrl, code: imageCode });
-								// Don't await - let it run in background
-								executeCaptionImage({
-									image_url: imageUrl,
-									detail_level: 'character'
-								}).then(async (captionResult) => {
-									if (captionResult.success && captionResult.caption) {
-										await updateImageCodeCaption(supabaseStorage, imageCode, captionResult.caption);
-										log.info('Caption persisted to image_codes', { code: imageCode });
-									}
-								}).catch((err) => {
-									log.error('Background captioning failed', { code: imageCode, error: String(err) });
-								});
-							}
-
 							return {
 								success: true,
 								message: `Image generated: ${storeResult.imageCode}. Seed: ${result.seed}`
@@ -436,25 +416,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 					return {
 						success: false,
 						message: result.error || 'Image generation failed'
-					};
-				}
-			} else if (toolName === 'caption_image') {
-				const params = input as {
-					image_url: string;
-					detail_level?: 'brief' | 'detailed' | 'character' | 'training';
-				};
-				log.info('Captioning image', { url: params.image_url?.substring(0, 50), detail: params.detail_level });
-				const result = await executeCaptionImage(params);
-				if (result.success) {
-					return {
-						success: true,
-						message: result.caption || 'Caption generated',
-						data: { caption: result.caption }
-					};
-				} else {
-					return {
-						success: false,
-						message: result.error || 'Captioning failed'
 					};
 				}
 			} else if (toolName === 'edit_image' && imageEditContext) {
@@ -522,24 +483,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 								log.info('Canvas mutation pushed for edit_image', { canvasId: targetCanvasId, mutationCount: canvasMutations.updated_canvases.length });
 							} else {
 								log.warn('canvasMutations is null - edit will not trigger refresh', { targetCanvasId });
-							}
-
-							// Fire-and-forget: Auto-caption in background (don't block the response)
-							const imageCode = storeResult.imageCode;
-							const imageUrl = storeResult.imageUrl;
-							if (imageCode && imageUrl) {
-								log.info('Auto-captioning edited image (async)', { imageUrl, code: imageCode });
-								executeCaptionImage({
-									image_url: imageUrl,
-									detail_level: 'character'
-								}).then(async (captionResult) => {
-									if (captionResult.success && captionResult.caption) {
-										await updateImageCodeCaption(supabaseStorage, imageCode, captionResult.caption);
-										log.info('Caption persisted to image_codes', { code: imageCode });
-									}
-								}).catch((err) => {
-									log.error('Background captioning failed', { code: imageCode, error: String(err) });
-								});
 							}
 
 							return {

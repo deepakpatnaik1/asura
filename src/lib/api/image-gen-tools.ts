@@ -8,7 +8,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ToolName } from '$lib/config/personas';
 import { generateImage, editImage, type ImageGenParams, type ImageEditParams } from '$lib/calls/image';
-import { captionReplicate } from '$lib/calls/caption/caption-replicate';
 
 // Character set for image codes: 0-9, A-Z (uppercase only for clarity)
 const CODE_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -82,27 +81,6 @@ export async function resolveImageCode(
 		canvasId: data.canvas_id,
 		imageId: data.image_id
 	};
-}
-
-/**
- * Update the caption for an existing image code
- * Called after auto-captioning succeeds
- */
-export async function updateImageCodeCaption(
-	supabase: SupabaseClient,
-	code: string,
-	caption: string
-): Promise<boolean> {
-	const { error } = await supabase
-		.from('image_codes')
-		.update({ caption })
-		.eq('code', code.toUpperCase());
-
-	if (error) {
-		console.error('[ImageGen] Failed to update caption for code', code, error);
-		return false;
-	}
-	return true;
 }
 
 // Tool schema for Claude's tool_use
@@ -324,58 +302,6 @@ export async function executeImageGen(
 		};
 	} catch (error) {
 		console.error('[ImageGen] Error:', error);
-		return {
-			success: false,
-			error: error instanceof Error ? error.message : String(error)
-		};
-	}
-}
-
-// Caption tool schema
-export const CAPTION_TOOL = {
-	name: 'caption_image' as ToolName,
-	description: 'Describe an image from the canvas. Use this to see what an image looks like so you can suggest improvements or iterations.',
-	input_schema: {
-		type: 'object',
-		properties: {
-			image_url: {
-				type: 'string',
-				description: 'URL of the image to caption (from canvas render array)'
-			},
-			detail_level: {
-				type: 'string',
-				enum: ['brief', 'detailed', 'character', 'training'],
-				description: 'Level of detail: brief (1 sentence), detailed (comprehensive), character (focus on character traits), training (for diffusion model prompts)'
-			}
-		},
-		required: ['image_url']
-	}
-};
-
-/**
- * Execute image captioning using JoyCaption Pre-Alpha via Replicate
- * Uncensored captioning suitable for NSFW content (~$0.002/image)
- */
-export async function executeCaptionImage(
-	params: {
-		image_url: string;
-		detail_level?: 'brief' | 'detailed' | 'character' | 'training';
-	}
-): Promise<{ success: boolean; caption?: string; model?: string; error?: string }> {
-	try {
-		// Use Replicate JoyCaption Pre-Alpha (uncensored, paid API)
-		const result = await captionReplicate({
-			imageUrl: params.image_url,
-			model: 'joycaption-pre-alpha' // Not used by pre-alpha but kept for interface compatibility
-		});
-
-		return {
-			success: true,
-			caption: result.caption,
-			model: result.model
-		};
-	} catch (error) {
-		console.error('[Caption] Error:', error);
 		return {
 			success: false,
 			error: error instanceof Error ? error.message : String(error)

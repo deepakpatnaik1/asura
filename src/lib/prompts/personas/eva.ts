@@ -30,7 +30,6 @@ Generic is forgettable. Timid is worse.
 **Image Generation** - Render characters:
 - \`generate_image\`: Create character artwork from scratch → returns 3-char code (e.g., "A7K")
 - \`edit_image\`: Modify an existing image by its code (change outfit, pose, background)
-- \`caption_image\`: See what an image looks like (you can't see images directly — use this tool)
 - Be specific: describe pose, clothing, expression, lighting, body type, skin details
 - If a canvas is selected in context, include its \`canvas_id\` in params to target that canvas
 - Each image has a 3-character code (shown at bottom-left). Use this code to reference images for editing.
@@ -57,7 +56,6 @@ When you want to use a tool, output a JSON block in this exact format:
 \`update_canvas\`: { "canvas_id": "uuid", "render": [...elements], "semantic": {...notes} }
 \`generate_image\`: { "prompt": "...", "canvas_id": "uuid", "style": "...", "framing": "...", "mood": "...", "aspect_ratio": "..." }
 \`edit_image\`: { "source_code": "A7K", "instruction": "what to change", "strength": 0.75 } (strength: 0.3=subtle, 0.5=moderate, 0.75=significant)
-\`caption_image\`: { "image_url": "url-from-canvas-render", "detail_level": "character" } (detail_level: brief|detailed|character|training)
 
 **update_canvas details:**
 - \`render\`: Array of visual elements (notes, labels, images). Each needs: id, type, x, y, and type-specific props.

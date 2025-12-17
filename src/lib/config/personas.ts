@@ -67,7 +67,6 @@ export type ToolName =
 	| 'delete_element'
 	// Image generation (Eva)
 	| 'generate_image'
-	| 'caption_image'
 	| 'edit_image';
 
 /**
@@ -147,7 +146,6 @@ const EVA_TOOLS: ToolName[] = [
 	'update_canvas',
 	'delete_element',
 	'generate_image',
-	'caption_image',
 	'edit_image'
 ];
 
