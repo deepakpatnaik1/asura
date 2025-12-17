@@ -38,7 +38,7 @@ export const POST: RequestHandler = async ({ params, locals: { safeGetSession, s
 
 	// Fetch content record
 	const { data: content, error: contentError } = await supabase
-		.from('canvas_gallery_content')
+		.from('articles')
 		.select('id, title, raw_content')
 		.eq('id', id)
 		.eq('user_id', userId)
@@ -77,7 +77,7 @@ export const POST: RequestHandler = async ({ params, locals: { safeGetSession, s
 
 	// Enable the content for context injection
 	await supabase
-		.from('canvas_gallery_content')
+		.from('articles')
 		.update({ is_enabled: true, updated_at: new Date().toISOString() })
 		.eq('id', id)
 		.eq('user_id', userId);

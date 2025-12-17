@@ -64,7 +64,7 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 	const { userId } = auth;
 
 	const { data, error } = await supabase
-		.from('canvas_gallery_content')
+		.from('articles')
 		.select('id, title, is_enabled, is_canon, created_at')
 		.eq('user_id', userId)
 		.order('is_canon', { ascending: true }) // Non-canon first, canon at bottom
@@ -196,7 +196,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 
 		// Save to database (store readable text, not raw HTML)
 		const { data: file, error: insertError } = await supabase
-			.from('canvas_gallery_content')
+			.from('articles')
 			.insert({
 				user_id: userId,
 				title: title.slice(0, 255),

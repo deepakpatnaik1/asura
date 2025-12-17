@@ -39,7 +39,7 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supab
 
 	// 3. FETCH CHARTS FROM DATABASE (excluding dismissed)
 	const { data: charts, error: fetchError } = await supabase
-		.from('canvas_gallery_charts')
+		.from('article_charts')
 		.select('id, superjournal_id, chart_index, storage_path, thumbnail_path, alt_text, is_pinned')
 		.in('superjournal_id', superjournalIds)
 		.eq('user_id', userId)

@@ -36,8 +36,8 @@ export function getDefaultCanvasForPersona(persona: string): CanvasType {
 export const CANVAS_META: Record<CanvasType, { icon: string; label: string; description: string }> = {
 	carousel: {
 		icon: 'LuLayoutGrid',
-		label: 'Gallery',
-		description: 'Images and tables from content'
+		label: 'Articles',
+		description: 'Images and tables from articles'
 	},
 	calendar: {
 		icon: 'LuCalendar',

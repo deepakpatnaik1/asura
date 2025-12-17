@@ -130,7 +130,7 @@ export async function buildContext(
 	// Priority 0: Canon content (always injected if persona has 'canon' chunk)
 	if (hasChunk('canon')) {
 		const { data: canonData } = await supabase
-			.from('canvas_gallery_content')
+			.from('articles')
 			.select('title, artisan_cut, raw_content, created_at')
 			.eq('user_id', userId)
 			.eq('is_canon', true)
@@ -148,7 +148,7 @@ export async function buildContext(
 		// Load selected content (articles)
 		if (contentIds && contentIds.length > 0) {
 			const { data: contentData } = await supabase
-				.from('canvas_gallery_content')
+				.from('articles')
 				.select('title, raw_content, artisan_cut')
 				.in('id', contentIds)
 				.eq('user_id', userId);

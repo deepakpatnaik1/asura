@@ -39,7 +39,7 @@ export const PUT: RequestHandler = async ({ params, request, locals: { safeGetSe
 
 	// 3. UPDATE CHART
 	const { error: updateError } = await supabase
-		.from('canvas_gallery_charts')
+		.from('article_charts')
 		.update({ is_pinned })
 		.eq('id', chartId)
 		.eq('user_id', userId);
@@ -69,7 +69,7 @@ export const DELETE: RequestHandler = async ({ params, locals: { safeGetSession,
 
 	// 2. FETCH CHART TO GET STORAGE PATHS AND CONTENT_ID
 	const { data: chart, error: fetchError } = await supabase
-		.from('canvas_gallery_charts')
+		.from('article_charts')
 		.select('storage_path, thumbnail_path, content_id')
 		.eq('id', chartId)
 		.eq('user_id', userId)
@@ -94,7 +94,7 @@ export const DELETE: RequestHandler = async ({ params, locals: { safeGetSession,
 	}
 
 	const { error: storageError } = await supabase.storage
-		.from('canvas_gallery_content')
+		.from('articles')
 		.remove(filesToDelete);
 
 	if (storageError) {
@@ -104,7 +104,7 @@ export const DELETE: RequestHandler = async ({ params, locals: { safeGetSession,
 
 	// 4. DELETE DATABASE RECORD
 	const { error: deleteError } = await supabase
-		.from('canvas_gallery_charts')
+		.from('article_charts')
 		.delete()
 		.eq('id', chartId)
 		.eq('user_id', userId);
@@ -126,7 +126,7 @@ export const DELETE: RequestHandler = async ({ params, locals: { safeGetSession,
 	// and no other charts reference this content
 	if (chart.content_id) {
 		const { data: content } = await supabase
-			.from('canvas_gallery_content')
+			.from('articles')
 			.select('raw_content')
 			.eq('id', chart.content_id)
 			.single();
@@ -134,12 +134,12 @@ export const DELETE: RequestHandler = async ({ params, locals: { safeGetSession,
 		if (content?.raw_content?.startsWith('[Uploaded image:')) {
 			// Check if any other charts reference this content
 			const { count } = await supabase
-				.from('canvas_gallery_charts')
+				.from('article_charts')
 				.select('id', { count: 'exact', head: true })
 				.eq('content_id', chart.content_id);
 
 			if (count === 0) {
-				await supabase.from('canvas_gallery_content').delete().eq('id', chart.content_id);
+				await supabase.from('articles').delete().eq('id', chart.content_id);
 			}
 		}
 	}

@@ -81,7 +81,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 
 		// 1. Create a minimal content entry (required for the charts FK)
 		const { data: contentData, error: contentError } = await supabase
-			.from('canvas_gallery_content')
+			.from('articles')
 			.insert({
 				user_id: userId,
 				title: altText,
@@ -121,7 +121,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		}
 
 		// 4. Create chart record
-		const { error: chartError } = await supabase.from('canvas_gallery_charts').insert({
+		const { error: chartError } = await supabase.from('article_charts').insert({
 			content_id: contentId,
 			user_id: userId,
 			chart_index: 1,
@@ -133,7 +133,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		if (chartError) {
 			console.error('Chart insert error:', chartError);
 			// Clean up - delete the content entry
-			await supabase.from('canvas_gallery_content').delete().eq('id', contentId);
+			await supabase.from('articles').delete().eq('id', contentId);
 			return databaseError('Failed to create chart entry');
 		}
 

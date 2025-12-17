@@ -127,7 +127,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				const bucket = 'content';
 
 				const { data: chartData, error: chartError } = await supabase
-					.from('canvas_gallery_charts')
+					.from('article_charts')
 					.select('storage_path')
 					.eq('id', chart_id)
 					.eq('user_id', userId)

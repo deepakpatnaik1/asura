@@ -67,7 +67,7 @@ export const GET: RequestHandler = async ({ request }) => {
 					.eq('user_id', userId)
 					.order('created_at', { ascending: false }),
 				supabase
-					.from('canvas_gallery_charts')
+					.from('article_charts')
 					.select('*')
 					.eq('user_id', userId)
 					.order('created_at', { ascending: false }),
@@ -77,7 +77,7 @@ export const GET: RequestHandler = async ({ request }) => {
 					.eq('user_id', userId)
 					.order('created_at', { ascending: false }),
 				supabase
-					.from('canvas_gallery_content')
+					.from('articles')
 					.select('*')
 					.eq('user_id', userId)
 					.order('created_at', { ascending: false }),

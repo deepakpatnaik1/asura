@@ -26,7 +26,7 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supab
 
 	// Build query - join to content table for file charts
 	let query = supabase
-		.from('canvas_gallery_charts')
+		.from('article_charts')
 		.select(`
 			id,
 			content_id,
@@ -36,7 +36,7 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supab
 			alt_text,
 			is_pinned,
 			created_at,
-			canvas_gallery_content!inner(id, title, is_enabled)
+			articles!inner(id, title, is_enabled)
 		`)
 		.eq('user_id', userId)
 		.not('content_id', 'is', null)
@@ -53,7 +53,7 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supab
 
 	// Filter by enabled content only
 	if (enabledOnly) {
-		query = query.eq('canvas_gallery_content.is_enabled', true);
+		query = query.eq('articles.is_enabled', true);
 	}
 
 	const { data, error } = await query;
@@ -64,8 +64,8 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supab
 
 	// Transform to public URLs (use relative URLs to go through Vite proxy in dev)
 	const charts = (data || []).map((chart) => {
-		// canvas_gallery_content is a single object when using !inner join
-		const content = chart.canvas_gallery_content as unknown as { title: string } | null;
+		// articles is a single object when using !inner join
+		const content = chart.articles as unknown as { title: string } | null;
 		return {
 			id: chart.id,
 			file_id: chart.content_id, // Keep API response naming for backwards compatibility
