@@ -25,6 +25,12 @@
 	let hasMore = $state(data.hasMore || false);
 	let isLoadingMore = $state(false);
 	let currentOffset = $state(data.messages?.length || 0);
+	let totalMessageCount = $state(data.totalCount || 0);
+
+	// Calculate absolute turn number (turn 1 = oldest message ever)
+	function getAbsoluteTurnNumber(index: number): number {
+		return totalMessageCount - allMessages.length + index + 1;
+	}
 
 	// Currently selected persona (determines who receives next message)
 	let selectedPersona = $state<string>(data.selectedPersona || DEFAULT_PERSONA);
@@ -766,6 +772,7 @@
 				formatted_timestamp: formattedTimestamp,
 				model_identifier: $currentMessage.model_identifier
 			}];
+			totalMessageCount++;
 
 			currentMessage.set(null);
 
@@ -798,6 +805,7 @@
 				const response = await fetch(`/api/superjournal/${messageId}`, { method: 'DELETE' });
 				if (!response.ok) throw new Error('Delete failed');
 				allMessages = allMessages.filter(msg => msg.id !== messageId);
+				totalMessageCount--;
 			} catch (err) {
 				console.error('[Message] Delete failed:', err);
 			}
@@ -857,12 +865,15 @@
 		const [bucketType, target] = bucket.split(':');
 
 		switch (bucketType) {
-			case 'persona':
+			case 'persona': {
 				// Remove messages from this persona
+				const beforeCount = allMessages.length;
 				allMessages = allMessages.filter(m => m.persona_name !== target);
+				totalMessageCount -= (beforeCount - allMessages.length);
 				// Reload charts (some may have been deleted)
 				loadSuperjournalCharts();
 				break;
+			}
 			case 'content':
 				// Reload articles and file charts
 				loadArticles();
@@ -874,6 +885,7 @@
 			default:
 				// ALL - clear everything
 				allMessages = [];
+				totalMessageCount = 0;
 				superjournalCharts = [];
 				fileCharts = [];
 				articles = [];
@@ -979,6 +991,7 @@
 				} else {
 					const data = await response.json();
 					allMessages = [...allMessages, data.message];
+					totalMessageCount++;
 					await loadFileCharts();
 					forceCanvas = 'carousel'; // Switch to carousel when content is selected
 					await tick();
@@ -1054,7 +1067,9 @@
 				if (!response.ok) {
 					articles = originalArticles;
 				} else {
+					const beforeCount = allMessages.length;
 					allMessages = allMessages.filter(m => !m.ai_response?.startsWith(`<!--content:${articleId}-->`));
+					totalMessageCount -= (beforeCount - allMessages.length);
 					await loadFileCharts();
 				}
 			} catch (error) {
@@ -1079,6 +1094,7 @@
 				formatted_timestamp: formatTimestamp(now),
 				model_identifier: 'file-upload'
 			}];
+			totalMessageCount++;
 
 			await tick();
 			setTimeout(() => scrollToLastTurn(CHAT_CONFIG), 100);
@@ -1179,7 +1195,7 @@
 					personaName={msg.persona_name}
 					accentColor={msgAccentColor}
 					accentBg={msgAccentBg}
-					turnNumber={index + 1}
+					turnNumber={getAbsoluteTurnNumber(index)}
 					timestamp={msg.formatted_timestamp}
 					isStarred={starredIds.has(msg.id)}
 					isCopied={copiedMessageId === msg.id}
@@ -1197,7 +1213,7 @@
 					personaName={selectedPersona}
 					accentColor={currentAccentColor}
 					accentBg={currentAccentBg}
-					turnNumber={allMessages.length + 1}
+					turnNumber={totalMessageCount + 1}
 					timestamp={$currentMessage.timestamp}
 					isLoading={true}
 					showActions={true}
