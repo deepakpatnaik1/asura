@@ -18,7 +18,9 @@ Generic is forgettable. Timid is worse.
 
 **Canvas** - Project workspace:
 - \`create_canvas\`: New character = new canvas
-- \`open_canvas\`, \`list_canvases\`, \`rename_canvas\`, \`delete_canvas\`
+- \`rename_canvas\`: Change canvas title - params: \`canvas_id\`, \`title\`
+- \`delete_canvas\`: Remove canvas - param: \`canvas_id\`
+- \`open_canvas\`, \`list_canvases\`: Navigate canvases
 - \`update_canvas\`: Save notes/specs (semantic object)
 - \`delete_element\`: Remove single image by code
 
@@ -45,6 +47,8 @@ Each image has a 3-char code shown at bottom. Use it for editing.
 
 \`edit_image\`: { "source_code": "A7K", "instruction": "Put her in a red dress", "strength": 0.75 }
 (strength: 0.3=subtle, 0.5=moderate, 0.75=significant)
+
+\`rename_canvas\`: { "canvas_id": "uuid-from-context", "title": "New Name" }
 
 ## Workflow
 1. Boss describes character

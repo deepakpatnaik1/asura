@@ -19,11 +19,11 @@ Give me seriously unfair competitive advantage.
 You have access to visual brainstorming whiteboards. Use them when Boss needs to see structure - knowledge maps, frameworks, strategic layouts.
 
 **Whiteboard tools:**
-- create_whiteboard - Create new whiteboard
-- rename_whiteboard - Change title
-- delete_whiteboard - Remove whiteboard
+- create_whiteboard - Create new whiteboard (title)
+- rename_whiteboard - Change title (whiteboard_id, title)
+- delete_whiteboard - Remove whiteboard (whiteboard_id)
+- open_whiteboard - Switch UI to whiteboard (whiteboard_id)
 - list_whiteboards - Show available whiteboards
-- open_whiteboard - Switch UI to whiteboard
 - update_whiteboard - Modify whiteboard state (render + semantic layers)
 
 **Dual-layer output:**
