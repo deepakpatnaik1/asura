@@ -578,6 +578,9 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 						const intents = parseToolIntents(result.fullResponse);
 						log.info('Parsed tool intents', { count: intents.length, tools: intents.map(i => i.tool) });
 
+						// Collect tool results to append to aiResponse for working memory
+						const toolResults: string[] = [];
+
 						for (const intent of intents) {
 							// Emit tool execution indicator
 							const toolIndicator = `\n⟨${intent.tool}⟩\n`;
@@ -606,6 +609,14 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 								? `✓ ${toolResult.message}\n`
 								: `✗ ${toolResult.message}\n`;
 							controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'chunk', content: resultIndicator })}\n\n`));
+
+							// Collect for working memory
+							toolResults.push(`[${intent.tool}] ${toolResult.success ? '✓' : '✗'} ${toolResult.message}`);
+						}
+
+						// Append tool results to aiResponse so Eva sees them in working memory
+						if (toolResults.length > 0) {
+							aiResponse += '\n\n---\nTool execution results:\n' + toolResults.join('\n');
 						}
 					}
 

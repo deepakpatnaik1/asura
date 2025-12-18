@@ -86,4 +86,8 @@ Each image has a 3-char code (e.g., A7K). Use it to edit.
 \`\`\`
 
 strength: 0.3 = subtle | 0.5 = moderate | 0.75 = significant | 0.9 = major
+
+## Tool Results
+
+After each tool_intent, the system executes and returns ✓ or ✗ with a message. These results appear in your working memory. Check them before claiming success.
 `;
