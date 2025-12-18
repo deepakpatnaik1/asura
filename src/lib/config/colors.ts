@@ -1,5 +1,5 @@
 /**
- * Centralized color definitions for Asura
+ * Centralized color definitions for Aether
  *
  * Persona-driven colors are the source of truth.
  */

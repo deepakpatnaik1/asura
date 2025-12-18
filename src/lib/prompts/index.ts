@@ -1,7 +1,7 @@
 /**
  * System Prompts Index
  *
- * Central export file for all system prompts used in Asura.
+ * Central export file for all system prompts used in Aether.
  */
 
 // Personas

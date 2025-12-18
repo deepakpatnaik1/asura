@@ -34,14 +34,14 @@ describe('versioning module', () => {
 
 		it('extracts version 1 from Accept header', () => {
 			const request = new Request('http://test.com/api/chat', {
-				headers: { Accept: 'application/vnd.asura.v1+json' }
+				headers: { Accept: 'application/vnd.aether.v1+json' }
 			});
 			expect(getApiVersion(request)).toBe(1);
 		});
 
 		it('extracts version 2 from Accept header (clamped to max)', () => {
 			const request = new Request('http://test.com/api/chat', {
-				headers: { Accept: 'application/vnd.asura.v2+json' }
+				headers: { Accept: 'application/vnd.aether.v2+json' }
 			});
 			// Should be clamped to MAX_SUPPORTED_VERSION
 			expect(getApiVersion(request)).toBe(MAX_SUPPORTED_VERSION);
@@ -49,7 +49,7 @@ describe('versioning module', () => {
 
 		it('clamps version 0 to minimum', () => {
 			const request = new Request('http://test.com/api/chat', {
-				headers: { Accept: 'application/vnd.asura.v0+json' }
+				headers: { Accept: 'application/vnd.aether.v0+json' }
 			});
 			expect(getApiVersion(request)).toBe(MIN_SUPPORTED_VERSION);
 		});

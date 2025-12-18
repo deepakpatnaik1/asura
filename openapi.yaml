@@ -1,9 +1,9 @@
 openapi: 3.0.3
 info:
-  title: Asura API
+  title: Aether API
   version: 1.0.0
   description: |
-    Asura is an AI-powered journaling and article reading application.
+    Aether is an AI-powered journaling and article reading application.
     This API provides endpoints for chat conversations, article processing,
     and user settings management.
 

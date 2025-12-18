@@ -45,8 +45,8 @@ export async function generateWithOpenRouter(params: ImageGenParams): Promise<{ 
 		headers: {
 			'Content-Type': 'application/json',
 			Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-			'HTTP-Referer': 'https://asura.app',
-			'X-Title': 'Asura'
+			'HTTP-Referer': 'https://aether.app',
+			'X-Title': 'Aether'
 		},
 		body: JSON.stringify(body)
 	});

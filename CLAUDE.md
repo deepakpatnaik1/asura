@@ -6,14 +6,14 @@
 
 Go to /Users/d.patnaik/code/vault/Welcome.md.
 Read the file.
-Then find the open docs in /Users/d.patnaik/code/vault/docs/asura.
+Then find the open docs in /Users/d.patnaik/code/vault/docs/aether.
 We will work on the open docs.
 
 **Reference:** [aether-workflows.md](/Users/d.patnaik/code/vault/docs/aether/aether-workflows.md) - comprehensive workflow documentation
 
 ---
 
-## What Is Asura?
+## What Is Aether?
 
 AI mentor toolkit. Single unified interface at `/` with 6 personas sharing one conversation thread:
 - **Gunnar**: Startup mentor - finance, bootstrapping, strategy (6 whiteboard tools)

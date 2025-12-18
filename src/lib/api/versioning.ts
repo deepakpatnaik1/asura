@@ -4,7 +4,7 @@
  * Provides utilities for API versioning to prepare for future breaking changes.
  *
  * Versioning approaches supported:
- * 1. Header-based: Accept: application/vnd.asura.v1+json
+ * 1. Header-based: Accept: application/vnd.aether.v1+json
  * 2. URL-based: /api/v1/chat (future consideration)
  *
  * Current version: 1 (no version header = v1)
@@ -29,8 +29,8 @@ export const MAX_SUPPORTED_VERSION = 1;
  * Extract API version from request headers.
  *
  * Looks for version in Accept header:
- * - `application/vnd.asura.v1+json` -> version 1
- * - `application/vnd.asura.v2+json` -> version 2
+ * - `application/vnd.aether.v1+json` -> version 1
+ * - `application/vnd.aether.v2+json` -> version 2
  *
  * If no version specified, returns CURRENT_API_VERSION.
  *
@@ -47,7 +47,7 @@ export const MAX_SUPPORTED_VERSION = 1;
  */
 export function getApiVersion(request: Request): number {
 	const accept = request.headers.get('accept') || '';
-	const match = accept.match(/vnd\.asura\.v(\d+)/);
+	const match = accept.match(/vnd\.aether\.v(\d+)/);
 
 	if (match) {
 		const requestedVersion = parseInt(match[1], 10);

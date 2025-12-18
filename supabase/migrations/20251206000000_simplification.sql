@@ -1,4 +1,4 @@
--- ASURA SIMPLIFICATION MIGRATION
+-- AETHER SIMPLIFICATION MIGRATION
 -- Run in Supabase SQL Editor
 
 -- STEP 1: (Data cleanup was performed once on 2025-12-06, statements removed for safety)

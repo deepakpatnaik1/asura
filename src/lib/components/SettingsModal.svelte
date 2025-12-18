@@ -257,7 +257,7 @@
 			const filenameMatch = contentDisposition?.match(/filename="(.+)"/);
 			const filename = filenameMatch
 				? filenameMatch[1]
-				: `asura-export-${new Date().toISOString().split('T')[0]}.json`;
+				: `aether-export-${new Date().toISOString().split('T')[0]}.json`;
 
 			// Download the file
 			const blob = await response.blob();

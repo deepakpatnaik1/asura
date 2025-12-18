@@ -1,5 +1,5 @@
 -- ============================================================================
--- ASURA DATABASE SCHEMA REFERENCE
+-- AETHER DATABASE SCHEMA REFERENCE
 -- ============================================================================
 -- This is a REFERENCE DOCUMENT, not an executable migration.
 -- Use this to understand the current database structure.

@@ -55,9 +55,9 @@ export default defineConfig({
 
 	resolve: {
 		alias: {
-			'$lib': '/Users/d.patnaik/code/asura/src/lib',
-			'$env/static/public': '/Users/d.patnaik/code/asura/tests/mocks/env-public.mock.ts',
-			'$env/static/private': '/Users/d.patnaik/code/asura/tests/mocks/env-private.mock.ts'
+			'$lib': '/Users/d.patnaik/obsidian/aether-code/src/lib',
+			'$env/static/public': '/Users/d.patnaik/obsidian/aether-code/tests/mocks/env-public.mock.ts',
+			'$env/static/private': '/Users/d.patnaik/obsidian/aether-code/tests/mocks/env-private.mock.ts'
 		}
 	}
 });

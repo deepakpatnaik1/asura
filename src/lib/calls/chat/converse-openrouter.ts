@@ -105,8 +105,8 @@ export async function* converseStreamOpenRouter(
 			headers: {
 				'Content-Type': 'application/json',
 				Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-				'HTTP-Referer': 'https://asura.vercel.app',
-				'X-Title': 'Asura'
+				'HTTP-Referer': 'https://aether.vercel.app',
+				'X-Title': 'Aether'
 			},
 			body: JSON.stringify({
 				model,
@@ -130,8 +130,8 @@ export async function* converseStreamOpenRouter(
 					headers: {
 						'Content-Type': 'application/json',
 						Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-						'HTTP-Referer': 'https://asura.vercel.app',
-						'X-Title': 'Asura'
+						'HTTP-Referer': 'https://aether.vercel.app',
+						'X-Title': 'Aether'
 					},
 					body: JSON.stringify({
 						model,

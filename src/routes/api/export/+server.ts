@@ -104,7 +104,7 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 			status: 200,
 			headers: {
 				'Content-Type': 'application/json',
-				'Content-Disposition': `attachment; filename="asura-export-${new Date().toISOString().split('T')[0]}.json"`
+				'Content-Disposition': `attachment; filename="aether-export-${new Date().toISOString().split('T')[0]}.json"`
 			}
 		});
 	} catch (error) {

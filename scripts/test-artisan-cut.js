@@ -264,8 +264,8 @@ async function callOpenRouter(modelId) {
 		headers: {
 			'Content-Type': 'application/json',
 			'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-			'HTTP-Referer': 'https://asura.vercel.app',
-			'X-Title': 'Asura - Artisan Cut Test'
+			'HTTP-Referer': 'https://aether.vercel.app',
+			'X-Title': 'Aether - Artisan Cut Test'
 		},
 		body: JSON.stringify({
 			model: modelId,
@@ -378,7 +378,7 @@ Gunnar: ${PERSONA_RESPONSE}
 	}
 
 	// Write to file
-	const outputPath = '/Users/d.patnaik/code/vault/docs/asura/artisan-cut-test.md';
+	const outputPath = '/Users/d.patnaik/code/vault/docs/aether/artisan-cut-test.md';
 	fs.writeFileSync(outputPath, markdown);
 
 	console.log('\n' + '='.repeat(60));

@@ -5,7 +5,7 @@
  * - Tables and columns (from existing tables-and-columns.txt)
  * - Storage buckets (live query)
  *
- * Outputs to: /Users/d.patnaik/code/vault/docs/asura/schema.json
+ * Outputs to: /Users/d.patnaik/code/vault/docs/aether/schema.json
  * Deletes any older schema*.json files in that directory
  *
  * Usage: npx tsx scripts/export-schema.ts
@@ -15,7 +15,7 @@ import { createClient } from '@supabase/supabase-js';
 import { writeFileSync, readFileSync, readdirSync, unlinkSync } from 'fs';
 import { join } from 'path';
 
-const DOCS_DIR = '/Users/d.patnaik/code/vault/docs/asura';
+const DOCS_DIR = '/Users/d.patnaik/code/vault/docs/aether';
 const OUTPUT_FILE = join(DOCS_DIR, 'schema.json');
 const TABLES_FILE = join(DOCS_DIR, 'tables-and-columns.txt');
 

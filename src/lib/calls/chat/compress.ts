@@ -89,8 +89,8 @@ async function compressWithOpenRouter(params: CompressParams): Promise<string> {
 		headers: {
 			'Content-Type': 'application/json',
 			Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-			'HTTP-Referer': 'https://asura.vercel.app',
-			'X-Title': 'Asura - Compression'
+			'HTTP-Referer': 'https://aether.vercel.app',
+			'X-Title': 'Aether - Compression'
 		},
 		body: JSON.stringify({
 			model,

@@ -1,7 +1,7 @@
 /**
  * Model Configuration
  *
- * Centralized model identifier defaults for Asura.
+ * Centralized model identifier defaults for Aether.
  *
  * - DEFAULT_MODEL: Default model for all personas (can be overridden per-persona)
  * - EMBEDDING_MODEL: Used for vector embeddings

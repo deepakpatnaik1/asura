@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Restore backup data to Supabase
- * Usage: node scripts/restore-backup.mjs ~/Downloads/asura-export-2025-12-01.json
+ * Usage: node scripts/restore-backup.mjs ~/Downloads/aether-export-2025-12-01.json
  */
 
 import { createClient } from '@supabase/supabase-js';

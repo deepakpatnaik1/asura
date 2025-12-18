@@ -122,14 +122,14 @@
 	$effect(() => {
 		if (forceCanvas) {
 			activeCanvas = forceCanvas;
-			localStorage.setItem(`asura_canvas_${persona}`, forceCanvas);
+			localStorage.setItem(`aether_canvas_${persona}`, forceCanvas);
 			forceCanvas = null; // Reset after handling
 		}
 	});
 
 	function handleCanvasSelect(canvas: CanvasType) {
 		activeCanvas = canvas;
-		localStorage.setItem(`asura_canvas_${persona}`, canvas);
+		localStorage.setItem(`aether_canvas_${persona}`, canvas);
 	}
 </script>
 

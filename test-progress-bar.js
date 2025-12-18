@@ -51,7 +51,7 @@ async function testProgressBar() {
     });
 
     // Upload the file
-    await fileInput.setInputFiles('/Users/d.patnaik/code/asura/test-files/gettysburg.txt');
+    await fileInput.setInputFiles('/Users/d.patnaik/obsidian/aether-code/test-files/gettysburg.txt');
 
     console.log('[Test] File selected, waiting for upload to start...');
     await page.waitForTimeout(1000);

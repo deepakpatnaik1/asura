@@ -1,5 +1,5 @@
 -- ============================================================================
--- BASELINE MIGRATION: Asura Database Schema
+-- BASELINE MIGRATION: Aether Database Schema
 -- ============================================================================
 -- Generated: 2025-11-27
 -- This migration consolidates 40 incremental migrations into a single baseline.

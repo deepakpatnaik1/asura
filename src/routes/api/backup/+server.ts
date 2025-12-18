@@ -140,7 +140,7 @@ export const GET: RequestHandler = async ({ request }) => {
 			status: 200,
 			headers: {
 				'Content-Type': 'application/json',
-				'Content-Disposition': `attachment; filename="asura-backup-${new Date().toISOString().split('T')[0]}.json"`
+				'Content-Disposition': `attachment; filename="aether-backup-${new Date().toISOString().split('T')[0]}.json"`
 			}
 		});
 	} catch (error) {

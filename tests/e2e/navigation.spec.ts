@@ -21,7 +21,7 @@ test.describe('Navigation', () => {
 	test('login page loads', async ({ page }) => {
 		await page.goto('/login');
 
-		await expect(page).toHaveTitle(/Asura|Login/i);
+		await expect(page).toHaveTitle(/Aether|Login/i);
 		// Should have some login UI element
 		await expect(page.locator('body')).toBeVisible();
 	});

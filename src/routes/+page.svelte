@@ -90,7 +90,7 @@
 	let viewingDesignerCanvasId = $state<string | null>(null); // Currently displayed in canvas
 
 	// Persist active designer canvas to localStorage
-	const ACTIVE_CANVAS_KEY = 'asura:activeDesignerCanvasId';
+	const ACTIVE_CANVAS_KEY = 'aether:activeDesignerCanvasId';
 	$effect(() => {
 		if (viewingDesignerCanvasId && typeof localStorage !== 'undefined') {
 			localStorage.setItem(ACTIVE_CANVAS_KEY, viewingDesignerCanvasId);
@@ -397,6 +397,24 @@
 			c.id === id ? { ...c, is_selected: newSelected } : c
 		);
 
+		// When selecting, also switch to designer canvas and view it
+		if (newSelected) {
+			viewingDesignerCanvasId = id;
+			forceCanvas = 'designer';
+			// Fetch full canvas state (preserve is_selected since we just set it)
+			try {
+				const response = await fetch(`/api/canvases/${id}`);
+				if (response.ok) {
+					const data = await response.json();
+					designerCanvases = designerCanvases.map(c =>
+						c.id === id ? { ...data.canvas, is_selected: true } : c
+					);
+				}
+			} catch (error) {
+				console.error('Failed to fetch designer canvas:', error);
+			}
+		}
+
 		// Persist to database
 		try {
 			await fetch(`/api/canvases/${id}`, {
@@ -498,6 +516,24 @@
 		whiteboards = whiteboards.map(wb =>
 			wb.id === id ? { ...wb, is_selected: newSelected } : wb
 		);
+
+		// When selecting, also switch to notes canvas and view the whiteboard
+		if (newSelected) {
+			viewingWhiteboardId = id;
+			forceCanvas = 'notes';
+			// Fetch full whiteboard state (preserve is_selected since we just set it)
+			try {
+				const response = await fetch(`/api/whiteboards/${id}`);
+				if (response.ok) {
+					const data = await response.json();
+					whiteboards = whiteboards.map(wb =>
+						wb.id === id ? { ...data.whiteboard, is_selected: true } : wb
+					);
+				}
+			} catch (error) {
+				console.error('Failed to fetch whiteboard:', error);
+			}
+		}
 
 		// Persist to database
 		try {

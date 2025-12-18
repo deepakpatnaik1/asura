@@ -135,7 +135,7 @@ export const IMAGE_GEN_TOOL = {
 				type: 'number',
 				description: 'Random seed for reproducible generations'
 			},
-			// Asura-specific
+			// Aether-specific
 			canvas_id: {
 				type: 'string',
 				description: 'ID of the designer canvas to add this image to (from context injection)'
