@@ -20,32 +20,56 @@ export interface ToolIntent {
 
 /**
  * Parse all tool_intent blocks from a response
+ *
+ * Handles multiple formats:
+ * 1. ```tool_intent {...} ``` (canonical)
+ * 2. ```json {"tool": ...} ``` (common LLM fallback)
+ * 3. ```Tool_Intent {...} ``` (case variations)
+ * 4. Inline JSON with "tool" key after tool_intent mention
  */
 export function parseToolIntents(response: string): ToolIntent[] {
 	const intents: ToolIntent[] = [];
 
-	// Match ```tool_intent ... ``` blocks
-	const regex = /```tool_intent\s*([\s\S]*?)```/g;
+	// Pattern 1: Canonical ```tool_intent ... ``` blocks (case-insensitive)
+	const canonicalRegex = /```\s*tool_intent\s*([\s\S]*?)```/gi;
 	let match;
 
-	while ((match = regex.exec(response)) !== null) {
-		try {
-			const jsonStr = match[1].trim();
-			const parsed = JSON.parse(jsonStr);
+	while ((match = canonicalRegex.exec(response)) !== null) {
+		const parsed = tryParseIntent(match[1]);
+		if (parsed) intents.push(parsed);
+	}
 
-			if (parsed.tool && typeof parsed.tool === 'string') {
-				intents.push({
-					tool: parsed.tool,
-					params: parsed.params || {}
-				});
-			}
-		} catch (e) {
-			// Skip malformed JSON blocks
-			console.warn('[ToolIntentParser] Failed to parse tool_intent block:', e);
+	// Pattern 2: ```json blocks containing tool intents
+	// Only if we didn't find canonical blocks (avoid double-parsing)
+	if (intents.length === 0) {
+		const jsonBlockRegex = /```(?:json)?\s*(\{[\s\S]*?"tool"\s*:\s*"[^"]+[\s\S]*?\})\s*```/gi;
+		while ((match = jsonBlockRegex.exec(response)) !== null) {
+			const parsed = tryParseIntent(match[1]);
+			if (parsed) intents.push(parsed);
 		}
 	}
 
 	return intents;
+}
+
+/**
+ * Try to parse a JSON string as a tool intent
+ */
+function tryParseIntent(jsonStr: string): ToolIntent | null {
+	try {
+		const trimmed = jsonStr.trim();
+		const parsed = JSON.parse(trimmed);
+
+		if (parsed.tool && typeof parsed.tool === 'string') {
+			return {
+				tool: parsed.tool,
+				params: parsed.params || {}
+			};
+		}
+	} catch (e) {
+		console.warn('[ToolIntentParser] Failed to parse tool_intent block:', e);
+	}
+	return null;
 }
 
 /**
