@@ -273,9 +273,9 @@
 	const whiteboardDeleteConfirm = createConfirmation();
 	let isDeletingWhiteboard = $state(false);
 
-	// Total selections for library badge
+	// Total selections for library badge (exclude canon - always injected)
 	const totalLibrarySelections = $derived(
-		articles.filter(a => a.is_enabled).length + selectedWhiteboardIds.length + selectedDesignerCanvasIds.length
+		articles.filter(a => a.is_enabled && !a.is_canon).length + selectedWhiteboardIds.length + selectedDesignerCanvasIds.length
 	);
 
 	let pendingTimeouts: number[] = [];
