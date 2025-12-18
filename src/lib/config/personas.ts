@@ -84,7 +84,7 @@ export interface Persona {
 }
 
 /**
- * Gunnar: Full memory pyramid
+ * Gunnar: Full memory pyramid + productivity data (todos, diary)
  */
 const GUNNAR_CHUNKS: ContextChunk[] = [
 	'working',
@@ -92,7 +92,9 @@ const GUNNAR_CHUNKS: ContextChunk[] = [
 	'starred',
 	'semantic',
 	'canon',
-	'active'
+	'active',
+	'todos',
+	'diary'
 ];
 
 /**

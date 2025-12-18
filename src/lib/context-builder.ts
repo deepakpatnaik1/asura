@@ -82,7 +82,7 @@ interface RankedVectorResult extends VectorSearchResult {
 
 /**
  * Builds memory context for AI conversations
- * Enforces 40% context window cap with priority-based truncation
+ * Uses full context window with priority-based truncation
  *
  * Context injection is config-driven via persona.contextChunks:
  * - working: Last N superjournal turns (unified across all personas)
@@ -104,7 +104,7 @@ export async function buildContext(
 ): Promise<StructuredContext> {
 	// Get model's context window and calculate budget
 	const contextWindow = await getModelContextWindow(supabase, modelIdentifier);
-	const contextBudget = Math.floor(contextWindow * MEMORY.contextWindowCap); // 40% cap
+	const contextBudget = Math.floor(contextWindow * MEMORY.contextWindowCap);
 
 	// Initialize context components
 	const components: ContextComponents = {

@@ -4,12 +4,9 @@
 
 ## Working Docs
 
-Go to /Users/d.patnaik/code/vault/Welcome.md.
-Read the file.
-Then find the open docs in /Users/d.patnaik/code/vault/docs/aether.
-We will work on the open docs.
+Working docs are in the sibling directory: `/Users/d.patnaik/obsidian/aether-docs`
 
-**Reference:** [aether-workflows.md](/Users/d.patnaik/code/vault/docs/aether/aether-workflows.md) - comprehensive workflow documentation
+**Reference:** [aether-workflows.md](/Users/d.patnaik/obsidian/aether-docs/aether-workflows.md) - comprehensive workflow documentation
 
 ---
 
@@ -104,7 +101,7 @@ src/
 | Recent | journal | Compressed summaries | Last 100, truncated to fit |
 | Semantic | journal + embedding | Vector search | Top 10 if space (activates at 100+ entries) |
 
-**Context Budget:** 40% of model context window, priority-based truncation.
+**Context Budget:** Full model context window, priority-based truncation.
 
 ## Key Patterns
 
