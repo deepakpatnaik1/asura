@@ -22,11 +22,11 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 
 	if (error) {
 		// User denied access or other error
-		throw redirect(302, '/todo?error=calendar_denied');
+		throw redirect(302, '/?error=calendar_denied');
 	}
 
 	if (!code) {
-		throw redirect(302, '/todo?error=no_code');
+		throw redirect(302, '/?error=no_code');
 	}
 
 	// 3. EXCHANGE CODE FOR TOKENS
@@ -51,14 +51,14 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 
 		if (dbError) {
 			console.error('Failed to store tokens:', dbError);
-			throw redirect(302, '/todo?error=storage_failed');
+			throw redirect(302, '/?error=storage_failed');
 		}
 
-		// 5. REDIRECT TO TODO PAGE
-		throw redirect(302, '/todo?calendar=connected');
+		// 5. REDIRECT TO HOME PAGE
+		throw redirect(302, '/?calendar=connected');
 	} catch (err) {
 		if (err instanceof Response) throw err; // Re-throw redirects
 		console.error('OAuth callback error:', err);
-		throw redirect(302, '/todo?error=oauth_failed');
+		throw redirect(302, '/?error=oauth_failed');
 	}
 };

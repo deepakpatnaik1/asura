@@ -61,6 +61,10 @@
 	let isExporting = $state(false);
 	let errorMessage = $state<string | null>(null);
 
+	// Google Calendar connection state
+	let calendarConnected = $state(false);
+	let calendarLoading = $state(false);
+
 	// Delete confirmation state
 	const deleteConfirm = createConfirmation();
 
@@ -124,11 +128,18 @@
 	// Fetch data on mount
 	onMount(async () => {
 		try {
-			// Fetch models and settings in parallel
-			const [modelsRes, settingsRes] = await Promise.all([
+			// Fetch models, settings, and calendar status in parallel
+			const [modelsRes, settingsRes, calendarRes] = await Promise.all([
 				fetch('/api/models'),
-				fetch('/api/settings')
+				fetch('/api/settings'),
+				fetch('/api/google/calendar/events?days=1')
 			]);
+
+			// Check calendar connection status
+			if (calendarRes.ok) {
+				const calendarData = await calendarRes.json();
+				calendarConnected = calendarData.connected === true;
+			}
 
 			if (!modelsRes.ok) throw new Error('Failed to fetch models');
 			if (!settingsRes.ok) throw new Error('Failed to fetch settings');
@@ -230,6 +241,29 @@
 	function handleOverlayClick(event: MouseEvent) {
 		if (event.target === event.currentTarget) {
 			onClose();
+		}
+	}
+
+	// Handle Google Calendar connection
+	function handleConnectCalendar() {
+		// Redirect to OAuth flow
+		window.location.href = '/api/google/calendar/authorize';
+	}
+
+	// Handle Google Calendar disconnection
+	async function handleDisconnectCalendar() {
+		calendarLoading = true;
+		try {
+			const response = await fetch('/api/google/calendar/disconnect', { method: 'DELETE' });
+			if (response.ok) {
+				calendarConnected = false;
+			} else {
+				errorMessage = 'Failed to disconnect Google Calendar.';
+			}
+		} catch {
+			errorMessage = 'Failed to disconnect Google Calendar.';
+		} finally {
+			calendarLoading = false;
 		}
 	}
 
@@ -631,6 +665,33 @@
 										</optgroup>
 									{/each}
 								</select>
+							</div>
+						</div>
+
+						<!-- Connections Section -->
+						<div class="section-group">
+							<h3 class="section-heading">Connections</h3>
+							<div class="connection-row">
+								<span class="connection-label">Google Calendar</span>
+								{#if calendarConnected}
+									<span class="connection-status connected">Connected</span>
+									<button
+										class="connection-btn disconnect"
+										onclick={handleDisconnectCalendar}
+										disabled={calendarLoading}
+									>
+										{calendarLoading ? 'Disconnecting...' : 'Disconnect'}
+									</button>
+								{:else}
+									<span class="connection-status">Not connected</span>
+									<button
+										class="connection-btn connect"
+										onclick={handleConnectCalendar}
+										disabled={calendarLoading}
+									>
+										Connect
+									</button>
+								{/if}
 							</div>
 						</div>
 					</div>
@@ -1176,5 +1237,66 @@
 			rgba(239, 68, 68, 0.3) var(--progress, 0%),
 			transparent var(--progress, 0%)
 		);
+	}
+
+	/* Connection row styles */
+	.connection-row {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		margin-left: 24px;
+		margin-bottom: 6px;
+	}
+
+	.connection-label {
+		font-size: 8pt;
+		color: hsl(var(--muted-foreground));
+	}
+
+	.connection-status {
+		font-size: 8pt;
+		color: hsl(var(--muted-foreground));
+		opacity: 0.6;
+	}
+
+	.connection-status.connected {
+		color: hsl(142, 70%, 45%);
+		opacity: 1;
+	}
+
+	.connection-btn {
+		margin-left: auto;
+		padding: 3px 10px;
+		font-size: 8pt;
+		font-family: inherit;
+		border: 1px solid hsl(var(--border));
+		border-radius: 0;
+		cursor: pointer;
+		transition: all 0.15s;
+	}
+
+	.connection-btn.connect {
+		background: hsl(var(--primary));
+		color: hsl(var(--primary-foreground));
+		border-color: hsl(var(--primary));
+	}
+
+	.connection-btn.connect:hover:not(:disabled) {
+		opacity: 0.9;
+	}
+
+	.connection-btn.disconnect {
+		background: transparent;
+		color: hsl(var(--muted-foreground));
+	}
+
+	.connection-btn.disconnect:hover:not(:disabled) {
+		color: hsl(0, 70%, 60%);
+		border-color: hsl(0, 70%, 60%);
+	}
+
+	.connection-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
 	}
 </style>
