@@ -106,7 +106,8 @@ export function isProviderSupported(provider: ProviderType): boolean {
 		provider === 'openrouter' ||
 		provider === 'together' ||
 		provider === 'groq' ||
-		provider === 'replicate'
+		provider === 'replicate' ||
+		provider === 'venice'
 	);
 }
 

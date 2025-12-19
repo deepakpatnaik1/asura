@@ -21,6 +21,7 @@ import {
 	converseStreamTogether,
 	converseStreamGroq,
 	converseStreamReplicate,
+	converseStreamVenice,
 	saveToSuperjournal,
 	triggerBackgroundJobs,
 	getModelProvider,
@@ -567,7 +568,9 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 												? converseStreamGroq(streamParams)
 												: conversationProvider === 'replicate'
 													? converseStreamReplicate(streamParams)
-													: converseStream(streamParams);
+													: conversationProvider === 'venice'
+														? converseStreamVenice(streamParams)
+														: converseStream(streamParams);
 
 					let result;
 					while (true) {

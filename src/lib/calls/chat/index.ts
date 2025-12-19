@@ -11,6 +11,7 @@ export { converseStreamGoogle } from './converse-google';
 export { converseStreamTogether } from './converse-together';
 export { converseStreamGroq } from './converse-groq';
 export { converseStreamReplicate } from './converse-replicate';
+export { converseStreamVenice } from './converse-venice';
 export { compress, type CompressParams, type CompressResult } from './compress';
 
 // Background jobs
