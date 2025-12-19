@@ -57,6 +57,7 @@ import {
 import { IMAGE_GEN_TOOL, EDIT_IMAGE_TOOL, executeImageGen, executeEditImage, storeImageAndUpdateCanvas, resolveImageCode, type ImageGenContext, type ImageEditContext } from '$lib/api/image-gen-tools';
 import { refreshAccessToken } from '$lib/api/google-calendar';
 import { BRAVE_SEARCH_TOOL, executeBraveSearch } from '$lib/api/brave-search';
+import { REDDIT_TOOLS, executeRedditTool, isRedditTool } from '$lib/api/reddit-tools';
 import { parseToolIntents, hasToolIntents } from '$lib/api/tool-intent-parser';
 import { createClient } from '@supabase/supabase-js';
 import { PUBLIC_SUPABASE_URL } from '$env/static/public';
@@ -228,6 +229,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			const hasCanvasTools = personaTools.some(t => isCanvasTool(t));
 			const hasImageGen = personaTools.includes('generate_image');
 			const hasImageEdit = personaTools.includes('edit_image');
+			const hasRedditTools = personaTools.some(t => isRedditTool(t));
 
 			log.info('Tool setup', {
 				persona,
@@ -306,6 +308,11 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			if (hasImageEdit && imageEditModel) {
 				imageEditContext = { supabase, model: imageEditModel };
 				allTools.push(EDIT_IMAGE_TOOL as Anthropic.Tool);
+			}
+
+			// Set up Reddit tools (Ananya)
+			if (hasRedditTools) {
+				allTools.push(...REDDIT_TOOLS);
 			}
 
 			// Only pass tools to model if it supports native tool calling
@@ -511,6 +518,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 						message: result.error || 'Image editing failed'
 					};
 				}
+			} else if (isRedditTool(toolName)) {
+				return executeRedditTool(toolName, input);
 			} else if (isTodoTool(toolName) && todoContext) {
 				return executeTodoTool(toolName, input, todoContext, todoMutations!);
 			} else if (calendarContext) {

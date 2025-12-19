@@ -28,6 +28,8 @@ const VALID_BUCKETS = [
 	'persona:kirby',
 	'persona:samara',
 	'persona:alicja',
+	'persona:eva',
+	'persona:ananya',
 	'content:ephemeral',
 	'content:strategic',
 	'content:canon',

@@ -557,6 +557,7 @@
 		display: flex;
 		align-items: center;
 		gap: 4px;
+		padding-right: 6px;
 		border-left: 2px solid transparent;
 		transition: all 0.15s ease;
 		border-bottom: 1px solid hsl(var(--border) / 0.2);

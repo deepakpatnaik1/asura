@@ -272,6 +272,8 @@
 	const chartDeleteConfirm = createConfirmation();
 	const whiteboardDeleteConfirm = createConfirmation();
 	let isDeletingWhiteboard = $state(false);
+	const designerCanvasDeleteConfirm = createConfirmation();
+	let isDeletingDesignerCanvas = $state(false);
 
 	// Total selections for library badge (exclude canon - always injected)
 	const totalLibrarySelections = $derived(
@@ -505,6 +507,30 @@
 		showLibrary = false;
 	}
 
+	// Delete designer canvas from library
+	function handleDesignerCanvasDeleteClick(canvasId: string, event: MouseEvent) {
+		event.stopPropagation();
+		designerCanvasDeleteConfirm.start(canvasId, async () => {
+			isDeletingDesignerCanvas = true;
+			const originalCanvases = designerCanvases;
+			designerCanvases = designerCanvases.filter(c => c.id !== canvasId);
+			if (viewingDesignerCanvasId === canvasId) {
+				viewingDesignerCanvasId = designerCanvases.length > 0 ? designerCanvases[0].id : null;
+			}
+
+			try {
+				const response = await fetch(`/api/canvases/${canvasId}`, { method: 'DELETE' });
+				if (!response.ok) {
+					designerCanvases = originalCanvases;
+				}
+			} catch (error) {
+				designerCanvases = originalCanvases;
+			} finally {
+				isDeletingDesignerCanvas = false;
+			}
+		});
+	}
+
 	// Toggle whiteboard selection for context injection (persists to DB)
 	async function toggleWhiteboardSelection(id: string) {
 		const whiteboard = whiteboards.find(wb => wb.id === id);
@@ -660,6 +686,7 @@
 			articleDeleteConfirm.cleanup();
 			chartDeleteConfirm.cleanup();
 			whiteboardDeleteConfirm.cleanup();
+			designerCanvasDeleteConfirm.cleanup();
 			window.removeEventListener('nuke-complete', handleNukeEvent as EventListener);
 		};
 	});
@@ -1310,7 +1337,9 @@
 								onDesignerCanvasToggle={toggleDesignerCanvasSelection}
 								onDesignerCanvasOpen={handleOpenDesignerCanvas}
 								onDesignerCanvasRename={renameDesignerCanvas}
+								onDesignerCanvasDelete={handleDesignerCanvasDeleteClick}
 								onDesignerCanvasClear={clearDesignerCanvasSelection}
+								isDeletingDesignerCanvas={isDeletingDesignerCanvas}
 
 								onClose={() => showLibrary = false}
 							/>
@@ -1377,6 +1406,12 @@
 		isOpen={whiteboardDeleteConfirm.isActive}
 		progress={whiteboardDeleteConfirm.progress}
 		onCancel={() => whiteboardDeleteConfirm.cancel()}
+	/>
+
+	<ConfirmationModal
+		isOpen={designerCanvasDeleteConfirm.isActive}
+		progress={designerCanvasDeleteConfirm.progress}
+		onCancel={() => designerCanvasDeleteConfirm.cancel()}
 	/>
 
 	<CanvasContainer

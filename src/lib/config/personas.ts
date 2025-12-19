@@ -67,7 +67,9 @@ export type ToolName =
 	| 'delete_element'
 	// Image generation (Eva)
 	| 'generate_image'
-	| 'edit_image';
+	| 'edit_image'
+	// Reddit tools (Ananya)
+	| 'fetch_reddit_thread';
 
 /**
  * Persona configuration interface
@@ -157,9 +159,9 @@ const EVA_TOOLS: ToolName[] = [
 const ANANYA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'canon', 'semantic', 'active'];
 
 /**
- * Ananya tools: empty for now, Reddit tools added in Layer 2
+ * Ananya tools: Reddit engagement
  */
-const ANANYA_TOOLS: ToolName[] = [];
+const ANANYA_TOOLS: ToolName[] = ['fetch_reddit_thread'];
 
 /**
  * All Alicja tools
