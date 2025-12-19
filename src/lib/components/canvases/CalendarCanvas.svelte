@@ -21,6 +21,17 @@
 
 	let { persona, refreshTrigger = 0 }: Props = $props();
 
+	// Track refresh trigger changes - use $derived to ensure reactivity
+	let lastTrigger = $state(0);
+	$effect(() => {
+		if (refreshTrigger !== lastTrigger && refreshTrigger > 0) {
+			lastTrigger = refreshTrigger;
+			fetchCalendarEvents();
+			fetchTodos();
+			fetchDiaryEntries();
+		}
+	});
+
 	// Listen for nuke events to clear UI instantly
 	onMount(() => {
 		const handleNuke = (e: CustomEvent<{ bucket: string }>) => {
@@ -38,15 +49,6 @@
 
 	// Get accent color for static UI elements
 	const accentColor = $derived(getPersonaAccentColor(persona));
-
-	// Refresh when trigger changes
-	$effect(() => {
-		if (refreshTrigger > 0) {
-			fetchCalendarEvents();
-			fetchTodos();
-			fetchDiaryEntries();
-		}
-	});
 
 	// Calendar state
 	interface CalendarEvent {
