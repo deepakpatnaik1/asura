@@ -25,7 +25,7 @@
 	}
 
 	// All override keys (personas + processors)
-	const OVERRIDE_KEYS = ['gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya', 'embeddings', 'compression', 'chat_compression', 'chat_compression_uncensored', 'tool_calling', 'image_gen', 'image_edit'] as const;
+	const OVERRIDE_KEYS = ['gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya', 'embeddings', 'compression', 'chat_compression', 'chat_compression_uncensored', 'character_planning', 'image_gen', 'image_edit'] as const;
 	type OverrideKey = typeof OVERRIDE_KEYS[number];
 
 	// Persona names for uncensored compression flags
@@ -44,8 +44,9 @@
 		compression: '',
 		chat_compression: '',
 		chat_compression_uncensored: '',
-		tool_calling: '',
-		image_gen: ''
+		character_planning: '',
+		image_gen: '',
+		image_edit: ''
 	});
 
 	// Per-persona uncensored compression flags
@@ -162,7 +163,7 @@
 				compression: '',
 				chat_compression: '',
 				chat_compression_uncensored: '',
-				tool_calling: '',
+				character_planning: '',
 				image_gen: '',
 				image_edit: ''
 			};
@@ -377,11 +378,23 @@
 		}));
 	});
 
-	// Group tool calling models by provider
-	const toolCallingModelsByProvider = $derived.by(() => {
-		const toolModels = models.filter((m) => m.model_type === 'tool_calling');
+	// Known uncensored model identifiers for character planning
+	const UNCENSORED_MODEL_IDS = [
+		'sao10k/l3.3-euryale-70b',
+		'neversleep/llama-3.1-lumimaid-70b',
+		'neversleep/llama-3.1-lumimaid-8b',
+		'gryphe/mythomax-l2-13b',
+		'nousresearch/hermes-3-llama-3.1-70b',
+		'venice-uncensored'
+	];
 
-		const grouped = toolModels.reduce((acc, model) => {
+	// Group uncensored text models by provider (for Character Planning dropdown)
+	const uncensoredModelsByProvider = $derived.by(() => {
+		const uncensoredModels = models.filter((m) =>
+			m.model_type === 'text_generation' && UNCENSORED_MODEL_IDS.includes(m.model_identifier)
+		);
+
+		const grouped = uncensoredModels.reduce((acc, model) => {
 			const provider = model.provider;
 			if (!acc[provider]) acc[provider] = [];
 			acc[provider].push(model);
@@ -631,9 +644,9 @@
 								</select>
 							</div>
 							<div class="dropdown-row">
-								<label for="tool-calling-select">Tool calling</label>
-								<select id="tool-calling-select" value={modelOverrides.tool_calling} onchange={(e) => handleOverrideChange('tool_calling', e)}>
-									{#each toolCallingModelsByProvider as group}
+								<label for="character-planning-select">Character planning</label>
+								<select id="character-planning-select" value={modelOverrides.character_planning} onchange={(e) => handleOverrideChange('character_planning', e)}>
+									{#each uncensoredModelsByProvider as group}
 										<optgroup label={group.label}>
 											{#each group.models as model}
 												<option value={model.model_identifier}>{model.model_name}</option>
@@ -1127,7 +1140,7 @@
 	 */
 	.all-models-list {
 		--personas-count: 6;      /* Gunnar, Kirby, Samara, Alicja, Eva, Ananya */
-		--processes-count: 7;     /* Embeddings, File artisan cut, Chat artisan cut, Chat artisan cut (uncensored), Tool calling, Image generation, Image editing */
+		--processes-count: 7;     /* Embeddings, File artisan cut, Chat artisan cut, Chat artisan cut (uncensored), Character planning, Image generation, Image editing */
 		--dropdown-height: 24px;
 		--dropdown-gap: 6px;
 		--section-gap: 51px;      /* 20px + 23px + 8px */

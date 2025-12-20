@@ -97,6 +97,61 @@
 	// Image cache for Konva (requires HTMLImageElement)
 	let imageCache = $state<Map<string, HTMLImageElement>>(new Map());
 
+	// Character sheet from semantic layer
+	interface CharacterSheet {
+		name: string;
+		personality: string;
+		voice: string;
+		backstory: string;
+		appearance: string;
+		image_prompts: string[];
+	}
+	let character = $derived<CharacterSheet | null>(
+		(canvas?.state?.semantic?.character as CharacterSheet) || null
+	);
+
+	// Character sheet position (stored in semantic layer)
+	let characterSheetX = $state(0);
+	let characterSheetY = $state(0);
+
+	// Format character sheet as text for display
+	let characterText = $derived(() => {
+		if (!character) return '';
+		const lines = [
+			character.name,
+			'',
+			`Personality: ${character.personality}`,
+			'',
+			`Voice: ${character.voice}`,
+			'',
+			`Backstory: ${character.backstory}`,
+			'',
+			`Appearance: ${character.appearance}`
+		];
+		if (character.image_prompts?.length > 0) {
+			lines.push('', 'Image Prompts:');
+			character.image_prompts.forEach((p, i) => lines.push(`${i + 1}. ${p}`));
+		}
+		return lines.join('\n');
+	});
+
+	// Handle character sheet drag
+	function handleCharacterSheetDrag(e: any) {
+		characterSheetX = e.target.x();
+		characterSheetY = e.target.y();
+		// Persist position to semantic layer
+		if (canvas && onStateChange) {
+			onStateChange(canvas.id, {
+				render: elements,
+				semantic: {
+					...canvas.state?.semantic,
+					characterSheetPosition: { x: characterSheetX, y: characterSheetY }
+				},
+				viewport: { x: stageX, y: stageY, scale: stageScale }
+			});
+		}
+	}
+
 	// Load state when canvas changes
 	$effect(() => {
 		if (canvas?.state) {
@@ -104,12 +159,18 @@
 			stageX = canvas.state.viewport?.x || 0;
 			stageY = canvas.state.viewport?.y || 0;
 			stageScale = canvas.state.viewport?.scale || 1;
+			// Load character sheet position
+			const pos = canvas.state.semantic?.characterSheetPosition as { x: number; y: number } | undefined;
+			characterSheetX = pos?.x || 0;
+			characterSheetY = pos?.y || 0;
 		} else {
 			// Reset to empty state
 			elements = [];
 			stageX = 0;
 			stageY = 0;
 			stageScale = 1;
+			characterSheetX = 0;
+			characterSheetY = 0;
 		}
 		selectedId = null;
 	});
@@ -308,27 +369,6 @@
 		}
 	}
 
-	// Double-click to add new note
-	function handleDblClick(e: any) {
-		if (!canvas) return; // Need active canvas to add elements
-
-		const stage = e.target.getStage();
-		const pointer = stage.getPointerPosition();
-		const newElement: RenderElement = {
-			id: `note-${Date.now()}`,
-			type: 'note',
-			x: (pointer.x - stageX) / stageScale,
-			y: (pointer.y - stageY) / stageScale,
-			text: 'Character note...',
-			fill: '#4a3a5a', // Purple-ish for Eva's aesthetic
-			width: 150,
-			height: 100
-		};
-		elements = [...elements, newElement];
-		selectedId = newElement.id;
-		notifyStateChange();
-	}
-
 	// Handle canvas selection from footer
 	function handleCanvasClick(id: string) {
 		if (onSelect) {
@@ -343,17 +383,29 @@
 
 	// Fit to content: auto-layout elements in a cluster with gaps, then center and zoom to fit
 	function fitToContent() {
-		if (elements.length === 0) return;
+		if (elements.length === 0 && !character) return;
 
 		const GAP = 10;
 		const PADDING = 40;
 
-		// Get element dimensions
+		// Get element dimensions (include character sheet as pseudo-element if it exists)
 		const sized = elements.map((el) => ({
 			el,
 			w: el.width || (el.type === 'image' ? 200 : el.type === 'text' ? 400 : 150),
-			h: el.height || (el.type === 'image' ? 200 : el.type === 'text' ? 250 : 100)
+			h: el.height || (el.type === 'image' ? 200 : el.type === 'text' ? 250 : 100),
+			isCharacterSheet: false
 		}));
+
+		// Add character sheet as an item to layout
+		if (character) {
+			const sheetText = characterText();
+			sized.push({
+				el: { id: '__character_sheet__', type: 'text', x: 0, y: 0 } as RenderElement,
+				w: BASE_WIDTH,
+				h: Math.max(300, sheetText.length * 0.35),
+				isCharacterSheet: true
+			});
+		}
 
 		// Calculate grid dimensions for a roughly square cluster
 		const cols = Math.ceil(Math.sqrt(sized.length));
@@ -371,7 +423,7 @@
 		});
 
 		// Position elements in grid
-		const positioned: { el: RenderElement; x: number; y: number; w: number; h: number }[] = [];
+		const positioned: { el: RenderElement; x: number; y: number; w: number; h: number; isCharacterSheet: boolean }[] = [];
 
 		sized.forEach((item, i) => {
 			const col = i % cols;
@@ -394,9 +446,16 @@
 
 		// Apply new positions to elements
 		elements = elements.map((el) => {
-			const pos = positioned.find((p) => p.el.id === el.id);
+			const pos = positioned.find((p) => !p.isCharacterSheet && p.el.id === el.id);
 			return pos ? { ...el, x: pos.x, y: pos.y } : el;
 		});
+
+		// Apply position to character sheet
+		const charPos = positioned.find((p) => p.isCharacterSheet);
+		if (charPos) {
+			characterSheetX = charPos.x;
+			characterSheetY = charPos.y;
+		}
 
 		// Calculate bounding box
 		let minX = Infinity,
@@ -447,7 +506,6 @@
 						onwheel={handleWheel}
 						ondragend={handleStageDragEnd}
 						onclick={handleStageClick}
-						ondblclick={handleDblClick}
 					>
 						<svelte:component this={Layer}>
 							{#each elements as element (element.id)}
@@ -684,6 +742,46 @@
 									</svelte:component>
 								{/if}
 							{/each}
+
+							<!-- Character sheet as draggable canvas element -->
+							{#if character}
+								{@const sheetWidth = fixedWidth}
+								{@const sheetText = characterText()}
+								{@const sheetHeight = Math.max(300 * inverseScale, sheetText.length * 0.35 * inverseScale)}
+								<svelte:component
+									this={Group}
+									x={characterSheetX}
+									y={characterSheetY}
+									draggable={true}
+									ondragend={handleCharacterSheetDrag}
+								>
+									<svelte:component
+										this={Rect}
+										width={sheetWidth}
+										height={sheetHeight}
+										fill="rgba(74, 58, 90, 0.95)"
+										stroke="#8b7da0"
+										strokeWidth={1}
+										cornerRadius={4 * inverseScale}
+										shadowColor="black"
+										shadowBlur={12}
+										shadowOpacity={0.4}
+										shadowOffsetY={4}
+									/>
+									<svelte:component
+										this={Text}
+										text={sheetText}
+										x={fixedPadding}
+										y={fixedPadding}
+										width={sheetWidth - fixedPadding * 2}
+										fontSize={fixedFontSize}
+										lineHeight={fixedLineHeight}
+										fontFamily="'SF Mono', Monaco, 'Cascadia Code', monospace"
+										fill="#ebe5db"
+										wrap="word"
+									/>
+								</svelte:component>
+							{/if}
 						</svelte:component>
 					</svelte:component>
 				{:else}
@@ -694,7 +792,7 @@
 			{/if}
 
 			<!-- Fit to content button -->
-			{#if canvas && elements.length > 0}
+			{#if canvas && (elements.length > 0 || character)}
 				<button
 					class="fit-button"
 					title="Fit to content"
@@ -703,6 +801,7 @@
 					<Icon src={LuCompass} size="13" />
 				</button>
 			{/if}
+
 		</div>
 	{/snippet}
 	{#snippet footer()}
@@ -864,4 +963,5 @@
 		color: hsl(var(--muted-foreground));
 		margin-top: auto;
 	}
+
 </style>

@@ -45,6 +45,7 @@ interface CanvasMutations {
 	deleted_canvases?: string[];
 	updated_canvases?: { id: string; state: unknown }[];
 	opened_canvas?: string | null; // ID of canvas to open in UI
+	closed_canvas?: string | null; // ID of canvas to close/deselect
 }
 
 export const currentMessage = writable<Message | null>(null);

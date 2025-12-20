@@ -90,6 +90,22 @@ export const LIST_CANVASES_TOOL: Anthropic.Tool = {
 	}
 };
 
+export const CLOSE_CANVAS_TOOL: Anthropic.Tool = {
+	name: 'close_canvas',
+	description:
+		'Close/deselect a designer canvas. The canvas remains available but is removed from the active context. Use this when the user wants to stop working on a canvas without deleting it.',
+	input_schema: {
+		type: 'object',
+		properties: {
+			canvas_id: {
+				type: 'string',
+				description: 'The UUID of the canvas to close'
+			}
+		},
+		required: ['canvas_id']
+	}
+};
+
 export const DELETE_ELEMENT_TOOL: Anthropic.Tool = {
 	name: 'delete_element',
 	description:
@@ -170,6 +186,7 @@ export const CANVAS_TOOLS: Anthropic.Tool[] = [
 	RENAME_CANVAS_TOOL,
 	DELETE_CANVAS_TOOL,
 	OPEN_CANVAS_TOOL,
+	CLOSE_CANVAS_TOOL,
 	LIST_CANVASES_TOOL,
 	UPDATE_CANVAS_TOOL,
 	DELETE_ELEMENT_TOOL
@@ -247,6 +264,7 @@ export interface CanvasMutations {
 	renamed_canvases: { id: string; title: string }[];
 	deleted_canvases: string[]; // IDs
 	opened_canvas: string | null; // ID of canvas to open in UI
+	closed_canvas: string | null; // ID of canvas to close/deselect
 	updated_canvases: { id: string; state: CanvasState }[];
 }
 
@@ -259,6 +277,7 @@ export function createEmptyCanvasMutations(): CanvasMutations {
 		renamed_canvases: [],
 		deleted_canvases: [],
 		opened_canvas: null,
+		closed_canvas: null,
 		updated_canvases: []
 	};
 }
@@ -284,6 +303,9 @@ export async function executeCanvasTool(
 
 		case 'open_canvas':
 			return executeOpenCanvas(input, context, mutations);
+
+		case 'close_canvas':
+			return executeCloseCanvas(input, context, mutations);
 
 		case 'list_canvases':
 			return executeListCanvases(context);
@@ -561,6 +583,49 @@ async function executeOpenCanvas(
 }
 
 /**
+ * Close Canvas Executor
+ */
+async function executeCloseCanvas(
+	input: Record<string, unknown>,
+	context: CanvasToolContext,
+	mutations: CanvasMutations
+): Promise<ToolExecutionResult> {
+	try {
+		const { supabase, userId } = context;
+		const canvasId = input.canvas_id as string;
+
+		// Verify canvas exists and belongs to user
+		const { data: canvas, error } = await supabase
+			.from('canvas_designer')
+			.select('id, title')
+			.eq('id', canvasId)
+			.eq('user_id', userId)
+			.single();
+
+		if (error || !canvas) {
+			return {
+				success: false,
+				message: 'Canvas not found'
+			};
+		}
+
+		// Set this as the canvas to close in UI
+		mutations.closed_canvas = canvasId;
+
+		return {
+			success: true,
+			message: `Closed canvas "${canvas.title}"`,
+			data: { id: canvasId, title: canvas.title }
+		};
+	} catch (error) {
+		return {
+			success: false,
+			message: `Failed to close canvas: ${error instanceof Error ? error.message : 'Unknown error'}`
+		};
+	}
+}
+
+/**
  * List Canvases Executor
  */
 async function executeListCanvases(context: CanvasToolContext): Promise<ToolExecutionResult> {
@@ -825,6 +890,7 @@ export function isCanvasTool(toolName: string): boolean {
 		'rename_canvas',
 		'delete_canvas',
 		'open_canvas',
+		'close_canvas',
 		'list_canvases',
 		'update_canvas',
 		'delete_element'

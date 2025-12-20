@@ -25,7 +25,7 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 		.from('canvas_designer')
 		.select('id, title, is_selected, created_at, updated_at')
 		.eq('user_id', userId)
-		.order('updated_at', { ascending: false });
+		.order('created_at', { ascending: false });
 
 	if (error) {
 		return databaseError('Failed to fetch canvases');

@@ -79,7 +79,7 @@ export const settingsUpdateSchema = z.object({
 	model_compression: z.string().nullable().optional(),
 	model_chat_compression: z.string().nullable().optional(),
 	model_chat_compression_uncensored: z.string().nullable().optional(),
-	model_tool_calling: z.string().nullable().optional(),
+	model_character_planning: z.string().nullable().optional(),
 	model_image_gen: z.string().nullable().optional(),
 	model_image_edit: z.string().nullable().optional(),
 

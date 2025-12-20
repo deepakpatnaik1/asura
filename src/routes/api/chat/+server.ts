@@ -56,13 +56,19 @@ import {
 	type CanvasState
 } from '$lib/api/canvas-tools';
 import { IMAGE_GEN_TOOL, EDIT_IMAGE_TOOL, executeImageGen, executeEditImage, storeImageAndUpdateCanvas, resolveImageCode, type ImageGenContext, type ImageEditContext } from '$lib/api/image-gen-tools';
+import {
+	CHARACTER_TOOLS,
+	executeCharacterTool,
+	isCharacterTool,
+	type CharacterToolContext
+} from '$lib/api/character-tools';
 import { refreshAccessToken } from '$lib/api/google-calendar';
 import { BRAVE_SEARCH_TOOL, executeBraveSearch } from '$lib/api/brave-search';
 import { REDDIT_TOOLS, executeRedditTool, isRedditTool } from '$lib/api/reddit-tools';
 import { parseToolIntents, hasToolIntents } from '$lib/api/tool-intent-parser';
 import { createClient } from '@supabase/supabase-js';
 import { PUBLIC_SUPABASE_URL } from '$env/static/public';
-import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
+import { SUPABASE_SERVICE_ROLE_KEY, FIREWORKS_API_KEY, OPENROUTER_API_KEY } from '$env/static/private';
 import sharp from 'sharp';
 
 // Service role client for storage operations
@@ -110,7 +116,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			.from('user_settings')
 			.select(`selected_persona, default_model,
 				model_gunnar, model_kirby, model_samara, model_alicja, model_eva, model_ananya,
-				model_tool_calling, model_image_gen, model_image_edit`)
+				model_tool_calling, model_character_planning, model_image_gen, model_image_edit`)
 			.eq('user_id', userId)
 			.single();
 
@@ -217,6 +223,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		let calendarContext: CalendarToolContext | null = null;
 		let whiteboardContext: WhiteboardToolContext | null = null;
 		let canvasContext: CanvasToolContext | null = null;
+		let characterContext: CharacterToolContext | null = null;
 		let imageGenContext: ImageGenContext | null = null;
 		let imageEditContext: ImageEditContext | null = null;
 
@@ -228,6 +235,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			const hasTodoTools = personaTools.some(t => isTodoTool(t));
 			const hasWhiteboardTools = personaTools.some(t => isWhiteboardTool(t));
 			const hasCanvasTools = personaTools.some(t => isCanvasTool(t));
+			const hasCharacterTools = personaTools.some(t => isCharacterTool(t));
 			const hasImageGen = personaTools.includes('generate_image');
 			const hasImageEdit = personaTools.includes('edit_image');
 			const hasRedditTools = personaTools.some(t => isRedditTool(t));
@@ -295,6 +303,18 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				allTools.push(...CANVAS_TOOLS);
 			}
 
+			// Set up character tools context (Eva)
+			const characterPlanningModel = settings?.model_character_planning as string | undefined;
+			if (hasCharacterTools && characterPlanningModel) {
+				characterContext = {
+					supabase,
+					userId,
+					characterPlanningModel,
+					openrouterApiKey: OPENROUTER_API_KEY
+				};
+				allTools.push(...CHARACTER_TOOLS);
+			}
+
 			// Set up image generation tool (Eva)
 			const imageGenModel = settings?.model_image_gen as string | undefined;
 
@@ -350,6 +370,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				return executeWhiteboardTool(toolName, input, whiteboardContext, whiteboardMutations!);
 			} else if (isCanvasTool(toolName) && canvasContext) {
 				return executeCanvasTool(toolName, input, canvasContext, canvasMutations!);
+			} else if (isCharacterTool(toolName) && characterContext) {
+				return executeCharacterTool(toolName, input, characterContext);
 			} else if (toolName === 'generate_image' && imageGenContext) {
 				const params = input as {
 					prompt: string;

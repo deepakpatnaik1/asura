@@ -229,6 +229,23 @@
 				forceCanvas = 'designer'; // Switch to designer canvas when canvas is opened
 			}
 
+			// Handle closed canvas - deselect it (persist to DB)
+			if (mutations.closed_canvas) {
+				const closedId = mutations.closed_canvas;
+				const canvas = designerCanvases.find(c => c.id === closedId);
+				if (canvas && canvas.is_selected) {
+					designerCanvases = designerCanvases.map(c =>
+						c.id === closedId ? { ...c, is_selected: false } : c
+					);
+					// Persist deselection
+					fetch(`/api/canvases/${closedId}`, {
+						method: 'PUT',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({ is_selected: false })
+					}).catch(err => console.error('Failed to persist canvas deselection:', err));
+				}
+			}
+
 			// Handle updated canvases - apply state changes and trigger refresh
 			if (mutations.updated_canvases && mutations.updated_canvases.length > 0) {
 				for (const updated of mutations.updated_canvases) {
