@@ -137,9 +137,9 @@ const GUNNAR_TOOLS: ToolName[] = [
 ];
 
 /**
- * Eva: Character designer - minimal context (system prompt only for speed)
+ * Eva: Character designer - minimal but not stateless
  */
-const EVA_CHUNKS: ContextChunk[] = [];
+const EVA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'active'];
 
 /**
  * Eva canvas tools (parallel to Gunnar's whiteboard tools)

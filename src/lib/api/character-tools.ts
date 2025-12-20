@@ -64,7 +64,9 @@ export interface CharacterToolContext {
 	supabase: SupabaseClient;
 	userId: string;
 	characterPlanningModel: string;
+	characterPlanningProvider: string;
 	openrouterApiKey: string;
+	veniceApiKey: string;
 }
 
 /**
@@ -109,7 +111,7 @@ export async function executeCharacterTool(
 /**
  * Call OpenRouter API for character planning
  */
-async function callCharacterPlanner(
+async function callOpenRouter(
 	model: string,
 	name: string,
 	description: string,
@@ -140,13 +142,72 @@ async function callCharacterPlanner(
 
 	if (!response.ok) {
 		const error = await response.text();
-		log.error('Character planner API error', { status: response.status, error });
-		throw new Error(`Character planner API error: ${response.status} - ${error}`);
+		log.error('OpenRouter API error', { status: response.status, error });
+		throw new Error(`OpenRouter API error: ${response.status} - ${error}`);
 	}
 
 	const data = await response.json();
-	log.info('Character planner response received', { hasContent: !!data.choices?.[0]?.message?.content });
+	log.info('OpenRouter response received', { hasContent: !!data.choices?.[0]?.message?.content });
 	return data.choices?.[0]?.message?.content || '';
+}
+
+/**
+ * Call Venice API for character planning
+ */
+async function callVenice(
+	model: string,
+	name: string,
+	description: string,
+	apiKey: string
+): Promise<string> {
+	const userPrompt = `Create a character sheet for: ${name} - ${description}`;
+
+	log.info('Calling character planner via Venice', { model, name, hasApiKey: !!apiKey });
+
+	const response = await fetch('https://api.venice.ai/api/v1/chat/completions', {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${apiKey}`
+		},
+		body: JSON.stringify({
+			model,
+			messages: [
+				{ role: 'system', content: CHARACTER_PLANNER_PROMPT },
+				{ role: 'user', content: userPrompt }
+			],
+			max_tokens: 2048,
+			temperature: 0.7
+		})
+	});
+
+	if (!response.ok) {
+		const error = await response.text();
+		log.error('Venice API error', { status: response.status, error });
+		throw new Error(`Venice API error: ${response.status} - ${error}`);
+	}
+
+	const data = await response.json();
+	log.info('Venice response received', { hasContent: !!data.choices?.[0]?.message?.content });
+	return data.choices?.[0]?.message?.content || '';
+}
+
+/**
+ * Call character planner with appropriate provider
+ */
+async function callCharacterPlanner(
+	model: string,
+	provider: string,
+	name: string,
+	description: string,
+	openrouterApiKey: string,
+	veniceApiKey: string
+): Promise<string> {
+	if (provider === 'venice') {
+		return callVenice(model, name, description, veniceApiKey);
+	}
+	// Default to OpenRouter for all other providers
+	return callOpenRouter(model, name, description, openrouterApiKey);
 }
 
 /**
@@ -157,12 +218,12 @@ async function executePlanCharacter(
 	context: CharacterToolContext
 ): Promise<CharacterToolResult> {
 	try {
-		const { supabase, userId, characterPlanningModel, openrouterApiKey } = context;
+		const { supabase, userId, characterPlanningModel, characterPlanningProvider, openrouterApiKey, veniceApiKey } = context;
 		const canvasId = input.canvas_id as string;
 		const name = input.name as string;
 		const description = input.description as string;
 
-		log.info('Executing plan_character', { canvasId, name, description, model: characterPlanningModel });
+		log.info('Executing plan_character', { canvasId, name, description, model: characterPlanningModel, provider: characterPlanningProvider });
 
 		if (!canvasId || !name || !description) {
 			log.warn('Missing required fields', { canvasId, name, description });
@@ -187,12 +248,14 @@ async function executePlanCharacter(
 			};
 		}
 
-		// Call character planner model via OpenRouter
+		// Call character planner model via appropriate provider
 		const rawOutput = await callCharacterPlanner(
 			characterPlanningModel,
+			characterPlanningProvider,
 			name,
 			description,
-			openrouterApiKey
+			openrouterApiKey,
+			veniceApiKey
 		);
 
 		// Parse JSON from response
@@ -242,9 +305,7 @@ async function executePlanCharacter(
 		return {
 			success: true,
 			message: `Character sheet created for ${characterSheet.name}. Saved to canvas.`,
-			data: {
-				character: characterSheet
-			},
+			// Note: Do NOT return character sheet content - Eva must stay blind to NSFW output
 			canvasId,
 			canvasState: newState
 		};

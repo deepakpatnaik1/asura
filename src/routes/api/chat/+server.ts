@@ -68,7 +68,7 @@ import { REDDIT_TOOLS, executeRedditTool, isRedditTool } from '$lib/api/reddit-t
 import { parseToolIntents, hasToolIntents } from '$lib/api/tool-intent-parser';
 import { createClient } from '@supabase/supabase-js';
 import { PUBLIC_SUPABASE_URL } from '$env/static/public';
-import { SUPABASE_SERVICE_ROLE_KEY, FIREWORKS_API_KEY, OPENROUTER_API_KEY } from '$env/static/private';
+import { SUPABASE_SERVICE_ROLE_KEY, FIREWORKS_API_KEY, OPENROUTER_API_KEY, VENICE_API_KEY } from '$env/static/private';
 import sharp from 'sharp';
 
 // Service role client for storage operations
@@ -306,11 +306,21 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			// Set up character tools context (Eva)
 			const characterPlanningModel = settings?.model_character_planning as string | undefined;
 			if (hasCharacterTools && characterPlanningModel) {
+				// Look up provider for the character planning model
+				const { data: modelData } = await supabase
+					.from('models')
+					.select('provider')
+					.eq('model_identifier', characterPlanningModel)
+					.single();
+				const characterPlanningProvider = modelData?.provider || 'openrouter';
+
 				characterContext = {
 					supabase,
 					userId,
 					characterPlanningModel,
-					openrouterApiKey: OPENROUTER_API_KEY
+					characterPlanningProvider,
+					openrouterApiKey: OPENROUTER_API_KEY,
+					veniceApiKey: VENICE_API_KEY
 				};
 				allTools.push(...CHARACTER_TOOLS);
 			}
