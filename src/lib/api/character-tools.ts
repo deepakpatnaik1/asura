@@ -8,21 +8,21 @@
 
 import type Anthropic from '@anthropic-ai/sdk';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { CHARACTER_PLANNER_PROMPT } from '$lib/prompts/workers/character-planner';
+import { CHARACTER_PLANNER_PROMPT, FERTILITY_MARKERS } from '$lib/prompts/workers/character-planner';
 import { createSimpleLogger } from '$lib/api/logger';
 import { generateImage } from '$lib/calls/image';
 
 const log = createSimpleLogger('CharacterTools');
 
 /**
- * Image prompt quality prefix - prepended to character's image_prompt
+ * Image prompt quality prefix - raw, real, not plastic
  */
-const IMAGE_QUALITY_PREFIX = 'Photorealistic, natural skin texture, visible pores, subtle imperfections, film grain, 35mm film photography, sharp focus, professional lighting. ';
+const IMAGE_QUALITY_PREFIX = 'Raw photo, candid shot, natural imperfect skin with visible pores and texture, slight skin blemishes, real human skin, unretouched, no makeup or minimal makeup, natural lighting, shallow depth of field, shot on Canon 5D Mark IV, 85mm f/1.4 lens, slight film grain. ';
 
 /**
- * Negative prompt for quality control
+ * Negative prompt for quality control - reject all artificial looks
  */
-const IMAGE_NEGATIVE_PROMPT = 'plastic skin, airbrushed, smooth skin, porcelain, CGI, bad hands, deformed, blurry, watermark, text, logo, low quality, jpeg artifacts';
+const IMAGE_NEGATIVE_PROMPT = 'plastic skin, airbrushed, smooth skin, porcelain skin, perfect skin, flawless skin, CGI, 3D render, digital art, illustration, anime, cartoon, painting, doll-like, mannequin, wax figure, overexposed, oversaturated, bad hands, deformed, blurry, watermark, text, logo, low quality, jpeg artifacts, instagram filter, beauty filter, facetune, photoshopped';
 
 /**
  * Generate a unique 3-character alphanumeric code
@@ -102,6 +102,17 @@ export const DRAW_CHARACTER_TOOL: Anthropic.Tool = {
 export const CHARACTER_TOOLS: Anthropic.Tool[] = [PLAN_CHARACTER_TOOL, DRAW_CHARACTER_TOOL];
 
 /**
+ * Physical anchors - consistent identifiers across all images
+ */
+export interface PhysicalAnchors {
+	face: string;
+	eyes: string;
+	hair: string;
+	skin: string;
+	distinctive: string;
+}
+
+/**
  * Character sheet structure returned by planner
  */
 export interface CharacterSheet {
@@ -109,8 +120,8 @@ export interface CharacterSheet {
 	personality: string;
 	voice: string;
 	backstory: string;
-	appearance: string;
-	image_prompts: string[];
+	physical_anchors: PhysicalAnchors;
+	scenes: string[];
 }
 
 /**
@@ -342,17 +353,17 @@ async function executePlanCharacter(
 		const existingState = canvas.state as { render?: { code?: string }[]; semantic?: Record<string, unknown>; viewport?: unknown } | null;
 		const existingCodes = new Set((existingState?.render || []).map(el => el.code).filter(Boolean) as string[]);
 
-		// Generate codes: 5 text fields + N prompt fields
-		const promptCount = characterSheet.image_prompts?.length || 0;
-		const codes = generateUniqueCodes(5 + promptCount, existingCodes);
+		// Generate codes: 4 text fields + N scene fields
+		const sceneCount = characterSheet.scenes?.length || 0;
+		const codes = generateUniqueCodes(4 + sceneCount, existingCodes);
 
-		// Build modular elements
-		const textFields: Array<{ field: 'name' | 'personality' | 'voice' | 'backstory' | 'appearance'; value: string }> = [
+		// Build modular elements - 4 text fields (name, personality, voice, backstory)
+		// physical_anchors go in semantic layer, not as text elements
+		const textFields: Array<{ field: 'name' | 'personality' | 'voice' | 'backstory'; value: string }> = [
 			{ field: 'name', value: characterSheet.name },
 			{ field: 'personality', value: characterSheet.personality },
 			{ field: 'voice', value: characterSheet.voice },
-			{ field: 'backstory', value: characterSheet.backstory },
-			{ field: 'appearance', value: characterSheet.appearance }
+			{ field: 'backstory', value: characterSheet.backstory }
 		];
 
 		const elements: Array<{
@@ -360,7 +371,7 @@ async function executePlanCharacter(
 			type: 'text' | 'prompt';
 			code: string;
 			text: string;
-			field?: 'name' | 'personality' | 'voice' | 'backstory' | 'appearance';
+			field?: 'name' | 'personality' | 'voice' | 'backstory';
 			promptIndex?: number;
 			x: number;
 			y: number;
@@ -379,13 +390,13 @@ async function executePlanCharacter(
 			});
 		});
 
-		// Add prompt elements
-		(characterSheet.image_prompts || []).forEach((promptText, i) => {
+		// Add scene/prompt elements
+		(characterSheet.scenes || []).forEach((sceneText, i) => {
 			elements.push({
-				id: codes[5 + i],
+				id: codes[4 + i],
 				type: 'prompt',
-				code: codes[5 + i],
-				text: promptText,
+				code: codes[4 + i],
+				text: sceneText,
 				promptIndex: i,
 				x: 500,
 				y: i * 200
@@ -393,12 +404,15 @@ async function executePlanCharacter(
 		});
 
 		// Build code summary for Eva (grouped by type)
-		const textCodes = codes.slice(0, 5);
-		const promptCodes = codes.slice(5);
+		const textCodes = codes.slice(0, 4);
+		const promptCodes = codes.slice(4);
 
 		const newState = {
 			render: elements,
-			semantic: { characterName: characterSheet.name },
+			semantic: {
+				characterName: characterSheet.name,
+				physical_anchors: characterSheet.physical_anchors
+			},
 			viewport: existingState?.viewport || { x: 0, y: 0, scale: 1 }
 		};
 
@@ -517,17 +531,34 @@ async function executeDrawCharacter(
 			};
 		}
 
-		// Get the prompt text (Eva never sees this content)
-		const promptText = promptElement.text;
-		if (!promptText) {
+		// Get the scene text (Eva never sees this content)
+		const sceneText = promptElement.text;
+		if (!sceneText) {
 			return {
 				success: false,
 				message: `Prompt element ${code} has no text content`
 			};
 		}
 
-		// Build final prompt with quality prefix
-		const finalPrompt = IMAGE_QUALITY_PREFIX + promptText;
+		// Get physical anchors from semantic layer
+		const physicalAnchors = state?.semantic?.physical_anchors as PhysicalAnchors | undefined;
+		if (!physicalAnchors) {
+			return {
+				success: false,
+				message: `No physical anchors found. Run plan_character first.`
+			};
+		}
+
+		// Build full prompt: fertility markers + physical anchors + scene + quality
+		const anchorString = [
+			physicalAnchors.face,
+			physicalAnchors.eyes,
+			physicalAnchors.hair,
+			physicalAnchors.skin,
+			physicalAnchors.distinctive
+		].filter(Boolean).join(', ');
+
+		const finalPrompt = `${IMAGE_QUALITY_PREFIX}${FERTILITY_MARKERS}, ${anchorString}. ${sceneText}`;
 
 		log.info('Generating image', { code, model: imageGenModel });
 
