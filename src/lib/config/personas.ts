@@ -68,6 +68,7 @@ export type ToolName =
 	| 'delete_element'
 	// Character tools (Eva)
 	| 'plan_character'
+	| 'draw_character'
 	// Image generation (Eva)
 	| 'generate_image'
 	| 'edit_image'
@@ -241,7 +242,7 @@ export const PERSONAS: Record<string, Persona> = {
 		systemPrompt: 'eva',
 		contextChunks: EVA_CHUNKS,
 		compression: true,
-		tools: ['create_canvas', 'rename_canvas', 'delete_canvas', 'open_canvas', 'close_canvas', 'list_canvases', 'plan_character']
+		tools: ['create_canvas', 'rename_canvas', 'delete_canvas', 'open_canvas', 'close_canvas', 'list_canvases', 'plan_character', 'draw_character']
 	},
 	ananya: {
 		name: 'ananya',

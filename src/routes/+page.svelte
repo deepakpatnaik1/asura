@@ -187,7 +187,7 @@
 		if (mutations) {
 			// Handle created canvases - add to list
 			if (mutations.created_canvases && mutations.created_canvases.length > 0) {
-				designerCanvases = [...designerCanvases, ...mutations.created_canvases];
+				designerCanvases = [...mutations.created_canvases, ...designerCanvases];
 			}
 
 			// Handle renamed canvases - update titles

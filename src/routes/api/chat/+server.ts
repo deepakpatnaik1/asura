@@ -305,6 +305,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 
 			// Set up character tools context (Eva)
 			const characterPlanningModel = settings?.model_character_planning as string | undefined;
+			const imageGenModel = settings?.model_image_gen as string | undefined;
 			if (hasCharacterTools && characterPlanningModel) {
 				// Look up provider for the character planning model
 				const { data: modelData } = await supabase
@@ -319,6 +320,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 					userId,
 					characterPlanningModel,
 					characterPlanningProvider,
+					imageGenModel: imageGenModel || '',
 					openrouterApiKey: OPENROUTER_API_KEY,
 					veniceApiKey: VENICE_API_KEY
 				};
@@ -326,7 +328,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			}
 
 			// Set up image generation tool (Eva)
-			const imageGenModel = settings?.model_image_gen as string | undefined;
 
 			if (hasImageGen && imageGenModel) {
 				imageGenContext = { supabase, model: imageGenModel };

@@ -632,7 +632,7 @@
 								</select>
 							</div>
 							<div class="dropdown-row">
-								<label for="chat-compression-uncensored-select">Chat artisan cut (uncensored)</label>
+								<label for="chat-compression-uncensored-select">Chat artisan cut (NSFW)</label>
 								<select id="chat-compression-uncensored-select" value={modelOverrides.chat_compression_uncensored} onchange={(e) => handleOverrideChange('chat_compression_uncensored', e)}>
 									{#each modelsByProvider as group}
 										<optgroup label={group.label}>
@@ -644,7 +644,7 @@
 								</select>
 							</div>
 							<div class="dropdown-row">
-								<label for="character-planning-select">Character planning</label>
+								<label for="character-planning-select">Character plan (NSFW)</label>
 								<select id="character-planning-select" value={modelOverrides.character_planning} onchange={(e) => handleOverrideChange('character_planning', e)}>
 									{#each uncensoredModelsByProvider as group}
 										<optgroup label={group.label}>
@@ -656,7 +656,7 @@
 								</select>
 							</div>
 							<div class="dropdown-row">
-								<label for="image-gen-select">Image generation</label>
+								<label for="image-gen-select">Image gen (NSFW)</label>
 								<select id="image-gen-select" value={modelOverrides.image_gen} onchange={(e) => handleOverrideChange('image_gen', e)}>
 									{#each imageGenModelsByProvider as group}
 										<optgroup label={group.label}>
@@ -668,7 +668,7 @@
 								</select>
 							</div>
 							<div class="dropdown-row">
-								<label for="image-edit-select">Image editing</label>
+								<label for="image-edit-select">Image editing (NSFW)</label>
 								<select id="image-edit-select" value={modelOverrides.image_edit} onchange={(e) => handleOverrideChange('image_edit', e)}>
 									{#each imageEditModelsByProvider as group}
 										<optgroup label={group.label}>
@@ -1140,7 +1140,7 @@
 	 */
 	.all-models-list {
 		--personas-count: 6;      /* Gunnar, Kirby, Samara, Alicja, Eva, Ananya */
-		--processes-count: 7;     /* Embeddings, File artisan cut, Chat artisan cut, Chat artisan cut (uncensored), Character planning, Image generation, Image editing */
+		--processes-count: 7;     /* Embeddings, File artisan cut, Chat artisan cut, Chat artisan cut (NSFW), Character plan (NSFW), Image gen (NSFW), Image editing (NSFW) */
 		--dropdown-height: 24px;
 		--dropdown-gap: 6px;
 		--section-gap: 51px;      /* 20px + 23px + 8px */

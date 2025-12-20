@@ -11,7 +11,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { supabaseAdmin } from '$lib/supabase-admin';
-import { FAL_API_KEY } from '$env/static/private';
+import { FAL_API_KEY, VENICE_API_KEY, MODELSLAB_API_KEY } from '$env/static/private';
 
 interface TestResult {
 	model: string;
@@ -98,6 +98,10 @@ async function testImageProvider(provider: string, modelId: string): Promise<str
 	switch (provider) {
 		case 'fal':
 			return testFal(modelId);
+		case 'venice':
+			return testVenice(modelId);
+		case 'modelslab':
+			return testModelsLab(modelId);
 		default:
 			throw new Error(`Image provider not implemented: ${provider}`);
 	}
@@ -147,4 +151,134 @@ async function testFal(modelId: string): Promise<string> {
 	}
 
 	return data.images[0].url;
+}
+
+/**
+ * Test Venice AI image generation
+ * Uses minimal settings: 256x256, simple prompt
+ */
+async function testVenice(modelId: string): Promise<string> {
+	if (!VENICE_API_KEY) {
+		throw new Error('VENICE_API_KEY not configured');
+	}
+
+	const response = await fetch('https://api.venice.ai/api/v1/image/generate', {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${VENICE_API_KEY}`
+		},
+		body: JSON.stringify({
+			model: modelId,
+			prompt: 'A simple red square on white background',
+			width: 256,
+			height: 256,
+			steps: 4,
+			seed: 42,
+			safe_mode: false
+		})
+	});
+
+	if (!response.ok) {
+		const error = await response.text();
+		throw new Error(`Venice ${response.status}: ${error}`);
+	}
+
+	const data = await response.json();
+
+	// Venice returns images array with base64 or url
+	if (!data.images || !data.images[0]) {
+		throw new Error('Invalid response from Venice - no images');
+	}
+
+	const imageData = data.images[0];
+
+	// Return URL if present, otherwise indicate base64 was returned
+	if (typeof imageData === 'string') {
+		return `data:image/png;base64,${imageData.substring(0, 50)}...`;
+	}
+	if (imageData.url) {
+		return imageData.url;
+	}
+	if (imageData.base64) {
+		return `data:image/png;base64,${imageData.base64.substring(0, 50)}...`;
+	}
+
+	throw new Error('Invalid response from Venice - unexpected format');
+}
+
+/**
+ * Test ModelsLab image generation
+ * Uses minimal settings: 256x256, simple prompt
+ * Note: ModelsLab may return async processing status
+ */
+async function testModelsLab(modelId: string): Promise<string> {
+	if (!MODELSLAB_API_KEY) {
+		throw new Error('MODELSLAB_API_KEY not configured');
+	}
+
+	const response = await fetch('https://modelslab.com/api/v6/images/text2img', {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json'
+		},
+		body: JSON.stringify({
+			key: MODELSLAB_API_KEY,
+			model_id: modelId,
+			prompt: 'A simple red square on white background',
+			width: '256',
+			height: '256',
+			samples: '1',
+			num_inference_steps: '4',
+			seed: 42,
+			safety_checker: 'no',
+			enhance_prompt: 'no'
+		})
+	});
+
+	if (!response.ok) {
+		const error = await response.text();
+		throw new Error(`ModelsLab ${response.status}: ${error}`);
+	}
+
+	const data = await response.json();
+
+	if (data.status === 'error') {
+		throw new Error(`ModelsLab error: ${data.message || 'Unknown error'}`);
+	}
+
+	// Handle async processing
+	if (data.status === 'processing') {
+		const fetchResult = data.fetch_result;
+		if (!fetchResult) {
+			throw new Error('ModelsLab processing but no fetch_result URL');
+		}
+
+		// Poll for up to 30 seconds
+		let attempts = 0;
+		while (attempts < 30) {
+			await new Promise((resolve) => setTimeout(resolve, 1000));
+			const pollResponse = await fetch(fetchResult, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ key: MODELSLAB_API_KEY })
+			});
+			const pollData = await pollResponse.json();
+			if (pollData.status === 'success' && pollData.output && pollData.output[0]) {
+				return pollData.output[0];
+			}
+			if (pollData.status === 'error') {
+				throw new Error(`ModelsLab failed: ${pollData.message || 'Unknown error'}`);
+			}
+			attempts++;
+		}
+		throw new Error('ModelsLab generation timed out after 30s');
+	}
+
+	// Immediate success
+	if (!data.output || !data.output[0]) {
+		throw new Error('Invalid response from ModelsLab - no output');
+	}
+
+	return data.output[0];
 }

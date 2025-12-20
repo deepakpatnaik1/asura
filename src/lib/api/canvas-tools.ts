@@ -224,7 +224,8 @@ export interface DesignerCanvas {
  */
 export type RenderElement = {
 	id: string;
-	type: 'note' | 'label' | 'line' | 'arrow' | 'group' | 'image';
+	type: 'note' | 'label' | 'line' | 'arrow' | 'group' | 'image' | 'text' | 'prompt';
+	code: string; // 3-char alphanumeric reference code (e.g., "A7K") - required
 	x?: number;
 	y?: number;
 	text?: string;
@@ -244,7 +245,10 @@ export type RenderElement = {
 	seed?: number; // For consistent generations
 	model?: string; // Which model generated it
 	role?: string; // 'hero' | 'gallery' | 'expression' etc.
-	code?: string; // 3-char alphanumeric reference code (e.g., "A7K")
+	// Character element properties
+	field?: 'name' | 'personality' | 'voice' | 'backstory' | 'appearance'; // For text elements
+	promptIndex?: number; // For prompt elements: 0, 1, 2
+	sourcePromptCode?: string; // For images: links back to prompt element
 };
 
 /**

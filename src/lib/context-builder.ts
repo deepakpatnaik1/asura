@@ -1005,7 +1005,18 @@ function formatSingleCanvas(canvas: {
 </canvas>`;
 	}
 
-	const renderJson = JSON.stringify(render, null, 2);
+	// Strip base64 image data from render elements to keep context small
+	// Eva doesn't need actual image data - just metadata (code, type, position, dimensions)
+	const renderForContext = render.map(el => {
+		if (el.type === 'image' && el.src?.startsWith('data:')) {
+			// Replace base64 data with placeholder, keep all other metadata
+			const { src, ...rest } = el;
+			return { ...rest, src: '[base64 image data]' };
+		}
+		return el;
+	});
+
+	const renderJson = JSON.stringify(renderForContext, null, 2);
 	const semanticJson = JSON.stringify(semantic, null, 2);
 
 	return `<canvas id="${id}">

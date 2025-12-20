@@ -44,7 +44,8 @@ export async function generateWithFal(params: ImageGenParams): Promise<{ imageBa
 			seed,
 			guidance_scale: cfgScale,
 			num_images: 1,
-			enable_safety_checker: false // NSFW capable
+			enable_safety_checker: false,
+			safety_tolerance: 6 // Most permissive (1=strict, 6=permissive)
 		})
 	});
 

@@ -126,61 +126,6 @@
 		return modified ? result : els;
 	}
 
-	// Character sheet from semantic layer
-	interface CharacterSheet {
-		name: string;
-		personality: string;
-		voice: string;
-		backstory: string;
-		appearance: string;
-		image_prompts: string[];
-	}
-	let character = $derived<CharacterSheet | null>(
-		(canvas?.state?.semantic?.character as CharacterSheet) || null
-	);
-
-	// Character sheet position and code (stored in semantic layer)
-	let characterSheetX = $state(0);
-	let characterSheetY = $state(0);
-	let characterSheetCode = $state<string | null>(null);
-
-	// Format character sheet as text for display
-	let characterText = $derived(() => {
-		if (!character) return '';
-		const lines = [
-			character.name,
-			'',
-			`Personality: ${character.personality}`,
-			'',
-			`Voice: ${character.voice}`,
-			'',
-			`Backstory: ${character.backstory}`,
-			'',
-			`Appearance: ${character.appearance}`
-		];
-		if (character.image_prompts?.length > 0) {
-			lines.push('', 'Image Prompts:');
-			character.image_prompts.forEach((p, i) => lines.push(`${i + 1}. ${p}`));
-		}
-		return lines.join('\n');
-	});
-
-	// Handle character sheet drag
-	function handleCharacterSheetDrag(e: any) {
-		characterSheetX = e.target.x();
-		characterSheetY = e.target.y();
-		// Persist position to semantic layer
-		if (canvas && onStateChange) {
-			onStateChange(canvas.id, {
-				render: elements,
-				semantic: {
-					...canvas.state?.semantic,
-					characterSheetPosition: { x: characterSheetX, y: characterSheetY }
-				},
-				viewport: { x: stageX, y: stageY, scale: stageScale }
-			});
-		}
-	}
 
 	// Load state when canvas changes
 	$effect(() => {
@@ -201,43 +146,12 @@
 			stageX = canvas.state.viewport?.x || 0;
 			stageY = canvas.state.viewport?.y || 0;
 			stageScale = canvas.state.viewport?.scale || 1;
-			// Load character sheet position and code
-			const pos = canvas.state.semantic?.characterSheetPosition as { x: number; y: number } | undefined;
-			characterSheetX = pos?.x || 0;
-			characterSheetY = pos?.y || 0;
-
-			// Load or generate character sheet code
-			const existingCode = canvas.state.semantic?.characterSheetCode as string | undefined;
-			if (existingCode) {
-				characterSheetCode = existingCode;
-			} else if (canvas.state.semantic?.character) {
-				// Generate code for character sheet if it exists but has no code
-				const existingCodes = new Set(withCodes.map(e => e.code).filter(Boolean));
-				let newCode = generateCode();
-				while (existingCodes.has(newCode)) {
-					newCode = generateCode();
-				}
-				characterSheetCode = newCode;
-				// Persist the new code
-				if (onStateChange) {
-					onStateChange(canvas.id, {
-						render: withCodes,
-						semantic: { ...canvas.state.semantic, characterSheetCode: newCode },
-						viewport: canvas.state.viewport || { x: 0, y: 0, scale: 1 }
-					});
-				}
-			} else {
-				characterSheetCode = null;
-			}
 		} else {
 			// Reset to empty state
 			elements = [];
 			stageX = 0;
 			stageY = 0;
 			stageScale = 1;
-			characterSheetX = 0;
-			characterSheetY = 0;
-			characterSheetCode = null;
 		}
 		selectedId = null;
 	});
@@ -245,12 +159,21 @@
 	// Load images for image elements
 	$effect(() => {
 		const imageElements = elements.filter((el) => el.type === 'image' && el.src);
+		console.log('[DesignerCanvas] Loading images:', imageElements.length, 'elements');
 		for (const el of imageElements) {
 			if (el.src && !imageCache.has(el.src)) {
+				console.log('[DesignerCanvas] Loading image:', el.id, el.src?.substring(0, 50));
 				const img = new window.Image();
-				img.crossOrigin = 'anonymous';
+				// Only set crossOrigin for external URLs, not data URLs
+				if (!el.src.startsWith('data:')) {
+					img.crossOrigin = 'anonymous';
+				}
 				img.onload = () => {
+					console.log('[DesignerCanvas] Image loaded:', el.id);
 					imageCache = new Map(imageCache).set(el.src!, img);
+				};
+				img.onerror = (e) => {
+					console.error('[DesignerCanvas] Image load error:', el.id, e);
 				};
 				img.src = el.src;
 			}
@@ -450,29 +373,17 @@
 
 	// Fit to content: auto-layout elements in a cluster with gaps, then center and zoom to fit
 	function fitToContent() {
-		if (elements.length === 0 && !character) return;
+		if (elements.length === 0) return;
 
 		const GAP = 10;
 		const PADDING = 40;
 
-		// Get element dimensions (include character sheet as pseudo-element if it exists)
+		// Get element dimensions
 		const sized = elements.map((el) => ({
 			el,
-			w: el.width || (el.type === 'image' ? 200 : el.type === 'text' ? 400 : 150),
-			h: el.height || (el.type === 'image' ? 200 : el.type === 'text' ? 250 : 100),
-			isCharacterSheet: false
+			w: el.width || (el.type === 'image' ? 384 : el.type === 'text' || el.type === 'prompt' ? 400 : 150),
+			h: el.height || (el.type === 'image' ? 512 : el.type === 'text' || el.type === 'prompt' ? 150 : 100)
 		}));
-
-		// Add character sheet as an item to layout
-		if (character) {
-			const sheetText = characterText();
-			sized.push({
-				el: { id: '__character_sheet__', type: 'text', x: 0, y: 0 } as RenderElement,
-				w: BASE_WIDTH,
-				h: Math.max(300, sheetText.length * 0.35),
-				isCharacterSheet: true
-			});
-		}
 
 		// Calculate grid dimensions for a roughly square cluster
 		const cols = Math.ceil(Math.sqrt(sized.length));
@@ -490,7 +401,7 @@
 		});
 
 		// Position elements in grid
-		const positioned: { el: RenderElement; x: number; y: number; w: number; h: number; isCharacterSheet: boolean }[] = [];
+		const positioned: { el: RenderElement; x: number; y: number; w: number; h: number }[] = [];
 
 		sized.forEach((item, i) => {
 			const col = i % cols;
@@ -513,16 +424,9 @@
 
 		// Apply new positions to elements
 		elements = elements.map((el) => {
-			const pos = positioned.find((p) => !p.isCharacterSheet && p.el.id === el.id);
+			const pos = positioned.find((p) => p.el.id === el.id);
 			return pos ? { ...el, x: pos.x, y: pos.y } : el;
 		});
-
-		// Apply position to character sheet
-		const charPos = positioned.find((p) => p.isCharacterSheet);
-		if (charPos) {
-			characterSheetX = charPos.x;
-			characterSheetY = charPos.y;
-		}
 
 		// Calculate bounding box
 		let minX = Infinity,
@@ -876,10 +780,12 @@
 										{/if}
 									</svelte:component>
 								{:else if element.type === 'text'}
-									<!-- Text: plain text block - zoom-invariant -->
+									<!-- Text: character field with heading - zoom-invariant -->
 									{@const boxWidth = fixedWidth}
-									{@const boxHeight = Math.max(200 * inverseScale, (element.text?.length || 0) * 0.4 * inverseScale)}
+									{@const headerHeight = 20 * inverseScale}
+									{@const boxHeight = Math.max(200 * inverseScale, (element.text?.length || 0) * 0.4 * inverseScale) + headerHeight}
 									{@const ribbonHeight = 14 * inverseScale}
+									{@const fieldLabel = element.field ? element.field.charAt(0).toUpperCase() + element.field.slice(1) : 'Text'}
 									<svelte:component
 										this={Group}
 										x={element.x}
@@ -897,11 +803,24 @@
 											strokeWidth={selectedId === element.id ? 2 : 1}
 											cornerRadius={6}
 										/>
+										<!-- Field heading -->
+										<svelte:component
+											this={Text}
+											text={fieldLabel}
+											x={fixedPadding}
+											y={ribbonHeight + fixedPadding * 0.5}
+											width={boxWidth - fixedPadding * 2}
+											fontSize={fixedFontSize * 1.1}
+											fontFamily="'SF Mono', Monaco, 'Cascadia Code', monospace"
+											fill="#888"
+											fontStyle="bold"
+										/>
+										<!-- Content text -->
 										<svelte:component
 											this={Text}
 											text={element.text || ''}
 											x={fixedPadding}
-											y={fixedPadding}
+											y={ribbonHeight + headerHeight}
 											width={boxWidth - fixedPadding * 2}
 											fontSize={fixedFontSize}
 											lineHeight={fixedLineHeight}
@@ -959,98 +878,107 @@
 											/>
 										{/if}
 									</svelte:component>
+								{:else if element.type === 'prompt'}
+									<!-- Prompt: image generation prompt with heading - teal styling -->
+									{@const boxWidth = fixedWidth}
+									{@const headerHeight = 20 * inverseScale}
+									{@const boxHeight = Math.max(120 * inverseScale, (element.text?.length || 0) * 0.4 * inverseScale) + headerHeight}
+									{@const ribbonHeight = 14 * inverseScale}
+									{@const promptLabel = element.promptIndex !== undefined ? `Prompt ${element.promptIndex + 1}` : 'Prompt'}
+									<svelte:component
+										this={Group}
+										x={element.x}
+										y={element.y}
+										draggable={true}
+										ondragend={(e: any) => handleDragEnd(element.id, e)}
+										onclick={() => handleSelect(element.id)}
+									>
+										<svelte:component
+											this={Rect}
+											width={boxWidth}
+											height={boxHeight}
+											fill="rgba(20, 60, 60, 0.95)"
+											stroke={selectedId === element.id ? '#fff' : 'rgba(60, 160, 160, 0.6)'}
+											strokeWidth={selectedId === element.id ? 2 : 1}
+											cornerRadius={6}
+										/>
+										<!-- Prompt heading -->
+										<svelte:component
+											this={Text}
+											text={promptLabel}
+											x={fixedPadding}
+											y={ribbonHeight + fixedPadding * 0.5}
+											width={boxWidth - fixedPadding * 2}
+											fontSize={fixedFontSize * 1.1}
+											fontFamily="'SF Mono', Monaco, 'Cascadia Code', monospace"
+											fill="#5a9a9a"
+											fontStyle="bold"
+										/>
+										<!-- Content text -->
+										<svelte:component
+											this={Text}
+											text={element.text || ''}
+											x={fixedPadding}
+											y={ribbonHeight + headerHeight}
+											width={boxWidth - fixedPadding * 2}
+											fontSize={fixedFontSize}
+											lineHeight={fixedLineHeight}
+											fontFamily="'SF Mono', Monaco, 'Cascadia Code', monospace"
+											fill="#a8e0e0"
+											wrap="word"
+										/>
+										<!-- Code ribbons at top and bottom -->
+										{#if element.code}
+											<!-- Top ribbon -->
+											<svelte:component
+												this={Rect}
+												x={0}
+												y={0}
+												width={boxWidth}
+												height={ribbonHeight}
+												fill="rgba(0,0,0,0.5)"
+											/>
+											<svelte:component
+												this={Text}
+												x={0}
+												y={0}
+												width={boxWidth}
+												height={ribbonHeight}
+												text={element.code}
+												fontSize={fixedFontSize}
+												fontFamily="'SF Mono', Monaco, 'Cascadia Code', monospace"
+												fill="#a8e0e0"
+												fontStyle="bold"
+												align="center"
+												verticalAlign="middle"
+											/>
+											<!-- Bottom ribbon -->
+											<svelte:component
+												this={Rect}
+												x={0}
+												y={boxHeight - ribbonHeight}
+												width={boxWidth}
+												height={ribbonHeight}
+												fill="rgba(0,0,0,0.5)"
+											/>
+											<svelte:component
+												this={Text}
+												x={0}
+												y={boxHeight - ribbonHeight}
+												width={boxWidth}
+												height={ribbonHeight}
+												text={element.code}
+												fontSize={fixedFontSize}
+												fontFamily="'SF Mono', Monaco, 'Cascadia Code', monospace"
+												fill="#a8e0e0"
+												fontStyle="bold"
+												align="center"
+												verticalAlign="middle"
+											/>
+										{/if}
+									</svelte:component>
 								{/if}
 							{/each}
-
-							<!-- Character sheet as draggable canvas element -->
-							{#if character}
-								{@const sheetWidth = fixedWidth}
-								{@const sheetText = characterText()}
-								{@const sheetHeight = Math.max(300 * inverseScale, sheetText.length * 0.35 * inverseScale)}
-								{@const ribbonHeight = 14 * inverseScale}
-								<svelte:component
-									this={Group}
-									x={characterSheetX}
-									y={characterSheetY}
-									draggable={true}
-									ondragend={handleCharacterSheetDrag}
-								>
-									<svelte:component
-										this={Rect}
-										width={sheetWidth}
-										height={sheetHeight}
-										fill="rgba(74, 58, 90, 0.95)"
-										stroke="#8b7da0"
-										strokeWidth={1}
-										cornerRadius={4 * inverseScale}
-										shadowColor="black"
-										shadowBlur={12}
-										shadowOpacity={0.4}
-										shadowOffsetY={4}
-									/>
-									<svelte:component
-										this={Text}
-										text={sheetText}
-										x={fixedPadding}
-										y={fixedPadding}
-										width={sheetWidth - fixedPadding * 2}
-										fontSize={fixedFontSize}
-										lineHeight={fixedLineHeight}
-										fontFamily="'SF Mono', Monaco, 'Cascadia Code', monospace"
-										fill="#ebe5db"
-										wrap="word"
-									/>
-									<!-- Code ribbons at top and bottom -->
-									{#if characterSheetCode}
-										<!-- Top ribbon -->
-										<svelte:component
-											this={Rect}
-											x={0}
-											y={0}
-											width={sheetWidth}
-											height={ribbonHeight}
-											fill="rgba(0,0,0,0.5)"
-										/>
-										<svelte:component
-											this={Text}
-											x={0}
-											y={0}
-											width={sheetWidth}
-											height={ribbonHeight}
-											text={characterSheetCode}
-											fontSize={fixedFontSize}
-											fontFamily="'SF Mono', Monaco, 'Cascadia Code', monospace"
-											fill="#ebe5db"
-											fontStyle="bold"
-											align="center"
-											verticalAlign="middle"
-										/>
-										<!-- Bottom ribbon -->
-										<svelte:component
-											this={Rect}
-											x={0}
-											y={sheetHeight - ribbonHeight}
-											width={sheetWidth}
-											height={ribbonHeight}
-											fill="rgba(0,0,0,0.5)"
-										/>
-										<svelte:component
-											this={Text}
-											x={0}
-											y={sheetHeight - ribbonHeight}
-											width={sheetWidth}
-											height={ribbonHeight}
-											text={characterSheetCode}
-											fontSize={fixedFontSize}
-											fontFamily="'SF Mono', Monaco, 'Cascadia Code', monospace"
-											fill="#ebe5db"
-											fontStyle="bold"
-											align="center"
-											verticalAlign="middle"
-										/>
-									{/if}
-								</svelte:component>
-							{/if}
 						</svelte:component>
 					</svelte:component>
 				{:else}
@@ -1061,7 +989,7 @@
 			{/if}
 
 			<!-- Fit to content button -->
-			{#if canvas && (elements.length > 0 || character)}
+			{#if canvas && elements.length > 0}
 				<button
 					class="fit-button"
 					title="Fit to content"
