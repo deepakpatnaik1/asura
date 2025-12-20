@@ -1290,8 +1290,13 @@ async function executeUpdateDiary(
 		if (newTags !== undefined && JSON.stringify(data.tags) !== JSON.stringify(newTags)) {
 			discrepancies.push('tags');
 		}
-		if (newLoggedAt !== undefined && data.logged_at !== newLoggedAt) {
-			discrepancies.push('logged_at');
+		if (newLoggedAt !== undefined) {
+			// Compare timestamps by value, not string format
+			const inputTime = new Date(newLoggedAt).getTime();
+			const dbTime = new Date(data.logged_at).getTime();
+			if (inputTime !== dbTime) {
+				discrepancies.push('logged_at');
+			}
 		}
 		if (newEventPeriod !== undefined) {
 			const expectedEventPeriod = newEventPeriod || null;
@@ -1299,8 +1304,13 @@ async function executeUpdateDiary(
 				discrepancies.push('event_period');
 			}
 		}
-		if (newSortDate !== undefined && data.sort_date !== newSortDate) {
-			discrepancies.push('sort_date');
+		if (newSortDate !== undefined) {
+			// Compare dates by value, not string format
+			const inputDate = new Date(newSortDate).toISOString().split('T')[0];
+			const dbDate = new Date(data.sort_date).toISOString().split('T')[0];
+			if (inputDate !== dbDate) {
+				discrepancies.push('sort_date');
+			}
 		}
 
 		if (discrepancies.length > 0) {

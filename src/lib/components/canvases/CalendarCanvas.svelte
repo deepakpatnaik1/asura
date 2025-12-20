@@ -401,10 +401,18 @@
 	let diaryEntries = $state<DiaryEntry[]>([]);
 	let diaryDays = $state<DiaryDay[]>([]);
 	let diaryLoading = $state(false);
+	let diaryPaneContent = $state<HTMLDivElement | null>(null);
 
 	// Fetch diary entries on mount
 	$effect(() => {
 		fetchDiaryEntries();
+	});
+
+	// Scroll diary to bottom when entries load (show latest entry)
+	$effect(() => {
+		if (diaryDays.length > 0 && !diaryLoading && diaryPaneContent) {
+			diaryPaneContent.scrollTop = diaryPaneContent.scrollHeight;
+		}
 	});
 
 	async function fetchDiaryEntries() {
@@ -608,7 +616,7 @@
 						<span class="loading-indicator">...</span>
 					{/if}
 				</div>
-				<div class="pane-content">
+				<div class="pane-content" bind:this={diaryPaneContent}>
 					{#if diaryDays.length > 0}
 						{@const seenMonths = new Set<string>()}
 						{#each diaryDays as day (day.dateKey)}
