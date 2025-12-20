@@ -97,6 +97,35 @@
 	// Image cache for Konva (requires HTMLImageElement)
 	let imageCache = $state<Map<string, HTMLImageElement>>(new Map());
 
+	// Code generation for elements without codes
+	const CODE_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+	function generateCode(): string {
+		let code = '';
+		for (let i = 0; i < 3; i++) {
+			code += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
+		}
+		return code;
+	}
+
+	// Ensure all elements have codes (generates on first render, persists via notifyStateChange)
+	function ensureElementCodes(els: RenderElement[]): RenderElement[] {
+		const existingCodes = new Set(els.map(e => e.code).filter(Boolean));
+		let modified = false;
+		const result = els.map(el => {
+			if (!el.code) {
+				let newCode = generateCode();
+				while (existingCodes.has(newCode)) {
+					newCode = generateCode();
+				}
+				existingCodes.add(newCode);
+				modified = true;
+				return { ...el, code: newCode };
+			}
+			return el;
+		});
+		return modified ? result : els;
+	}
+
 	// Character sheet from semantic layer
 	interface CharacterSheet {
 		name: string;
@@ -110,9 +139,10 @@
 		(canvas?.state?.semantic?.character as CharacterSheet) || null
 	);
 
-	// Character sheet position (stored in semantic layer)
+	// Character sheet position and code (stored in semantic layer)
 	let characterSheetX = $state(0);
 	let characterSheetY = $state(0);
+	let characterSheetCode = $state<string | null>(null);
 
 	// Format character sheet as text for display
 	let characterText = $derived(() => {
@@ -155,14 +185,50 @@
 	// Load state when canvas changes
 	$effect(() => {
 		if (canvas?.state) {
-			elements = canvas.state.render || [];
+			const rawElements = canvas.state.render || [];
+			const withCodes = ensureElementCodes(rawElements);
+			elements = withCodes;
+
+			// If codes were generated, persist them
+			if (withCodes !== rawElements && canvas && onStateChange) {
+				onStateChange(canvas.id, {
+					render: withCodes,
+					semantic: canvas.state.semantic || {},
+					viewport: canvas.state.viewport || { x: 0, y: 0, scale: 1 }
+				});
+			}
+
 			stageX = canvas.state.viewport?.x || 0;
 			stageY = canvas.state.viewport?.y || 0;
 			stageScale = canvas.state.viewport?.scale || 1;
-			// Load character sheet position
+			// Load character sheet position and code
 			const pos = canvas.state.semantic?.characterSheetPosition as { x: number; y: number } | undefined;
 			characterSheetX = pos?.x || 0;
 			characterSheetY = pos?.y || 0;
+
+			// Load or generate character sheet code
+			const existingCode = canvas.state.semantic?.characterSheetCode as string | undefined;
+			if (existingCode) {
+				characterSheetCode = existingCode;
+			} else if (canvas.state.semantic?.character) {
+				// Generate code for character sheet if it exists but has no code
+				const existingCodes = new Set(withCodes.map(e => e.code).filter(Boolean));
+				let newCode = generateCode();
+				while (existingCodes.has(newCode)) {
+					newCode = generateCode();
+				}
+				characterSheetCode = newCode;
+				// Persist the new code
+				if (onStateChange) {
+					onStateChange(canvas.id, {
+						render: withCodes,
+						semantic: { ...canvas.state.semantic, characterSheetCode: newCode },
+						viewport: canvas.state.viewport || { x: 0, y: 0, scale: 1 }
+					});
+				}
+			} else {
+				characterSheetCode = null;
+			}
 		} else {
 			// Reset to empty state
 			elements = [];
@@ -171,6 +237,7 @@
 			stageScale = 1;
 			characterSheetX = 0;
 			characterSheetY = 0;
+			characterSheetCode = null;
 		}
 		selectedId = null;
 	});
@@ -513,6 +580,7 @@
 									<!-- Note: card with text - zoom-invariant -->
 									{@const boxWidth = fixedWidth}
 									{@const boxHeight = Math.max(100 * inverseScale, (element.text?.length || 0) * 0.4 * inverseScale)}
+									{@const ribbonHeight = 14 * inverseScale}
 									<svelte:component
 										this={Group}
 										x={element.x}
@@ -548,6 +616,55 @@
 											fill="#ebe5db"
 											wrap="word"
 										/>
+										<!-- Code ribbons at top and bottom -->
+										{#if element.code}
+											<!-- Top ribbon -->
+											<svelte:component
+												this={Rect}
+												x={0}
+												y={0}
+												width={boxWidth}
+												height={ribbonHeight}
+												fill="rgba(0,0,0,0.5)"
+											/>
+											<svelte:component
+												this={Text}
+												x={0}
+												y={0}
+												width={boxWidth}
+												height={ribbonHeight}
+												text={element.code}
+												fontSize={fixedFontSize}
+												fontFamily="'SF Mono', Monaco, 'Cascadia Code', monospace"
+												fill="#ebe5db"
+												fontStyle="bold"
+												align="center"
+												verticalAlign="middle"
+											/>
+											<!-- Bottom ribbon -->
+											<svelte:component
+												this={Rect}
+												x={0}
+												y={boxHeight - ribbonHeight}
+												width={boxWidth}
+												height={ribbonHeight}
+												fill="rgba(0,0,0,0.5)"
+											/>
+											<svelte:component
+												this={Text}
+												x={0}
+												y={boxHeight - ribbonHeight}
+												width={boxWidth}
+												height={ribbonHeight}
+												text={element.code}
+												fontSize={fixedFontSize}
+												fontFamily="'SF Mono', Monaco, 'Cascadia Code', monospace"
+												fill="#ebe5db"
+												fontStyle="bold"
+												align="center"
+												verticalAlign="middle"
+											/>
+										{/if}
 									</svelte:component>
 								{:else if element.type === 'label'}
 									<!-- Label: standalone text - zoom-invariant -->
@@ -597,6 +714,9 @@
 									/>
 								{:else if element.type === 'group'}
 									<!-- Group: outline style - fixed visual size -->
+									{@const groupWidth = element.width || 426}
+									{@const groupHeight = element.height || 150}
+									{@const ribbonHeight = 14 * inverseScale}
 									<svelte:component
 										this={Group}
 										x={element.x}
@@ -607,8 +727,8 @@
 									>
 										<svelte:component
 											this={Rect}
-											width={element.width || 426}
-											height={element.height || 150}
+											width={groupWidth}
+											height={groupHeight}
 											fill={element.fill || 'rgba(20,20,20,0.8)'}
 											stroke={selectedId === element.id
 												? '#fff'
@@ -626,6 +746,55 @@
 												lineHeight={fixedLineHeight}
 												fontFamily="'SF Mono', Monaco, 'Cascadia Code', monospace"
 												fill={element.stroke || '#5a5a5a'}
+											/>
+										{/if}
+										<!-- Code ribbons at top and bottom -->
+										{#if element.code}
+											<!-- Top ribbon -->
+											<svelte:component
+												this={Rect}
+												x={0}
+												y={0}
+												width={groupWidth}
+												height={ribbonHeight}
+												fill="rgba(0,0,0,0.5)"
+											/>
+											<svelte:component
+												this={Text}
+												x={0}
+												y={0}
+												width={groupWidth}
+												height={ribbonHeight}
+												text={element.code}
+												fontSize={fixedFontSize}
+												fontFamily="'SF Mono', Monaco, 'Cascadia Code', monospace"
+												fill="#ebe5db"
+												fontStyle="bold"
+												align="center"
+												verticalAlign="middle"
+											/>
+											<!-- Bottom ribbon -->
+											<svelte:component
+												this={Rect}
+												x={0}
+												y={groupHeight - ribbonHeight}
+												width={groupWidth}
+												height={ribbonHeight}
+												fill="rgba(0,0,0,0.5)"
+											/>
+											<svelte:component
+												this={Text}
+												x={0}
+												y={groupHeight - ribbonHeight}
+												width={groupWidth}
+												height={ribbonHeight}
+												text={element.code}
+												fontSize={fixedFontSize}
+												fontFamily="'SF Mono', Monaco, 'Cascadia Code', monospace"
+												fill="#ebe5db"
+												fontStyle="bold"
+												align="center"
+												verticalAlign="middle"
 											/>
 										{/if}
 									</svelte:component>
@@ -710,6 +879,7 @@
 									<!-- Text: plain text block - zoom-invariant -->
 									{@const boxWidth = fixedWidth}
 									{@const boxHeight = Math.max(200 * inverseScale, (element.text?.length || 0) * 0.4 * inverseScale)}
+									{@const ribbonHeight = 14 * inverseScale}
 									<svelte:component
 										this={Group}
 										x={element.x}
@@ -739,6 +909,55 @@
 											fill="#ebe5db"
 											wrap="word"
 										/>
+										<!-- Code ribbons at top and bottom -->
+										{#if element.code}
+											<!-- Top ribbon -->
+											<svelte:component
+												this={Rect}
+												x={0}
+												y={0}
+												width={boxWidth}
+												height={ribbonHeight}
+												fill="rgba(0,0,0,0.5)"
+											/>
+											<svelte:component
+												this={Text}
+												x={0}
+												y={0}
+												width={boxWidth}
+												height={ribbonHeight}
+												text={element.code}
+												fontSize={fixedFontSize}
+												fontFamily="'SF Mono', Monaco, 'Cascadia Code', monospace"
+												fill="#ebe5db"
+												fontStyle="bold"
+												align="center"
+												verticalAlign="middle"
+											/>
+											<!-- Bottom ribbon -->
+											<svelte:component
+												this={Rect}
+												x={0}
+												y={boxHeight - ribbonHeight}
+												width={boxWidth}
+												height={ribbonHeight}
+												fill="rgba(0,0,0,0.5)"
+											/>
+											<svelte:component
+												this={Text}
+												x={0}
+												y={boxHeight - ribbonHeight}
+												width={boxWidth}
+												height={ribbonHeight}
+												text={element.code}
+												fontSize={fixedFontSize}
+												fontFamily="'SF Mono', Monaco, 'Cascadia Code', monospace"
+												fill="#ebe5db"
+												fontStyle="bold"
+												align="center"
+												verticalAlign="middle"
+											/>
+										{/if}
 									</svelte:component>
 								{/if}
 							{/each}
@@ -748,6 +967,7 @@
 								{@const sheetWidth = fixedWidth}
 								{@const sheetText = characterText()}
 								{@const sheetHeight = Math.max(300 * inverseScale, sheetText.length * 0.35 * inverseScale)}
+								{@const ribbonHeight = 14 * inverseScale}
 								<svelte:component
 									this={Group}
 									x={characterSheetX}
@@ -780,6 +1000,55 @@
 										fill="#ebe5db"
 										wrap="word"
 									/>
+									<!-- Code ribbons at top and bottom -->
+									{#if characterSheetCode}
+										<!-- Top ribbon -->
+										<svelte:component
+											this={Rect}
+											x={0}
+											y={0}
+											width={sheetWidth}
+											height={ribbonHeight}
+											fill="rgba(0,0,0,0.5)"
+										/>
+										<svelte:component
+											this={Text}
+											x={0}
+											y={0}
+											width={sheetWidth}
+											height={ribbonHeight}
+											text={characterSheetCode}
+											fontSize={fixedFontSize}
+											fontFamily="'SF Mono', Monaco, 'Cascadia Code', monospace"
+											fill="#ebe5db"
+											fontStyle="bold"
+											align="center"
+											verticalAlign="middle"
+										/>
+										<!-- Bottom ribbon -->
+										<svelte:component
+											this={Rect}
+											x={0}
+											y={sheetHeight - ribbonHeight}
+											width={sheetWidth}
+											height={ribbonHeight}
+											fill="rgba(0,0,0,0.5)"
+										/>
+										<svelte:component
+											this={Text}
+											x={0}
+											y={sheetHeight - ribbonHeight}
+											width={sheetWidth}
+											height={ribbonHeight}
+											text={characterSheetCode}
+											fontSize={fixedFontSize}
+											fontFamily="'SF Mono', Monaco, 'Cascadia Code', monospace"
+											fill="#ebe5db"
+											fontStyle="bold"
+											align="center"
+											verticalAlign="middle"
+										/>
+									{/if}
 								</svelte:component>
 							{/if}
 						</svelte:component>
