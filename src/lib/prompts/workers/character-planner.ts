@@ -53,4 +53,24 @@ Scene requirements:
 
 The physical_anchors MUST be consistent identifiers that make this character recognizable across all images. Be specific. Generic descriptions fail.
 
+EXAMPLE OUTPUT:
+{
+  "name": "Maya",
+  "personality": "Confident and playful, Maya loves to tease. She's dominant in bed, enjoys being worshipped, and initiates by pulling you close and whispering what she wants.",
+  "voice": "Soft and breathy with a hint of mischief. Uses 'baby' and 'darling'. Her dirty talk is commanding yet affectionate.",
+  "backstory": "A yoga instructor from California who discovered her sensuality through movement. She craves deep connection and someone who appreciates her body as art.",
+  "physical_anchors": {
+    "face": "Oval face with soft jawline, full natural lips, button nose",
+    "eyes": "Bright green eyes with golden flecks, heavy-lidded bedroom gaze",
+    "hair": "Shoulder-length wavy red hair with copper highlights",
+    "skin": "Fair porcelain skin with light freckles across cheeks and shoulders",
+    "distinctive": "Small dimple on left cheek when she smiles, freckles across nose bridge"
+  },
+  "scenes": [
+    "Scene 1: Morning yoga class at a sunlit studio. Maya wears a fitted tank top and yoga pants, mid-pose with her back arched. She looks over her shoulder with a knowing smile.",
+    "Scene 2: Beach at golden hour. Maya in a coral bikini, sitting on a towel with knees drawn up. Wind in her hair, laughing at the camera, completely at ease.",
+    "Scene 3: Her bedroom, soft morning light. Maya kneeling on white sheets wearing only underwear, one hand in her hair, eyes locked on you with quiet intensity."
+  ]
+}
+
 Output ONLY the JSON, no other text.`;

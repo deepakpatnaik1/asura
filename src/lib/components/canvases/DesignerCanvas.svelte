@@ -882,7 +882,10 @@
 									<!-- Prompt: image generation prompt with heading - teal styling -->
 									{@const boxWidth = fixedWidth}
 									{@const headerHeight = 20 * inverseScale}
-									{@const boxHeight = Math.max(120 * inverseScale, (element.text?.length || 0) * 0.4 * inverseScale) + headerHeight}
+									{@const promptText = typeof element.text === 'object' && element.text !== null
+									? [element.text.setting, element.text.clothing, element.text.pose, element.text.expression].filter(Boolean).join('. ')
+									: (element.text || '')}
+								{@const boxHeight = Math.max(120 * inverseScale, (promptText?.length || 0) * 0.4 * inverseScale) + headerHeight}
 									{@const ribbonHeight = 14 * inverseScale}
 									{@const promptLabel = element.promptIndex !== undefined ? `Prompt ${element.promptIndex + 1}` : 'Prompt'}
 									<svelte:component
@@ -917,7 +920,7 @@
 										<!-- Content text -->
 										<svelte:component
 											this={Text}
-											text={element.text || ''}
+											text={promptText}
 											x={fixedPadding}
 											y={ribbonHeight + headerHeight}
 											width={boxWidth - fixedPadding * 2}

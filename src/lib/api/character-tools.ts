@@ -205,7 +205,7 @@ async function callOpenRouter(
 				{ role: 'system', content: CHARACTER_PLANNER_PROMPT },
 				{ role: 'user', content: userPrompt }
 			],
-			max_tokens: 2048,
+			max_tokens: 4096,
 			temperature: 0.7
 		})
 	});
@@ -246,7 +246,7 @@ async function callVenice(
 				{ role: 'system', content: CHARACTER_PLANNER_PROMPT },
 				{ role: 'user', content: userPrompt }
 			],
-			max_tokens: 2048,
+			max_tokens: 4096,
 			temperature: 0.7
 		})
 	});
@@ -532,11 +532,29 @@ async function executeDrawCharacter(
 		}
 
 		// Get the scene text (Eva never sees this content)
-		const sceneText = promptElement.text;
-		if (!sceneText) {
+		// Handle both string and object formats (some models return structured objects)
+		let sceneText: string;
+		const rawText = promptElement.text;
+
+		if (!rawText) {
 			return {
 				success: false,
 				message: `Prompt element ${code} has no text content`
+			};
+		}
+
+		if (typeof rawText === 'string') {
+			sceneText = rawText;
+		} else if (typeof rawText === 'object') {
+			// Concatenate object fields: setting, clothing, pose, expression
+			const obj = rawText as { setting?: string; clothing?: string; pose?: string; expression?: string };
+			sceneText = [obj.setting, obj.clothing, obj.pose, obj.expression]
+				.filter(Boolean)
+				.join('. ');
+		} else {
+			return {
+				success: false,
+				message: `Prompt element ${code} has invalid text format`
 			};
 		}
 
