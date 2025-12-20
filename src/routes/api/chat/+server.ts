@@ -371,7 +371,16 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			} else if (isCanvasTool(toolName) && canvasContext) {
 				return executeCanvasTool(toolName, input, canvasContext, canvasMutations!);
 			} else if (isCharacterTool(toolName) && characterContext) {
-				return executeCharacterTool(toolName, input, characterContext);
+				const result = await executeCharacterTool(toolName, input, characterContext);
+				// Track canvas mutation so client refreshes
+				if (result.success && result.canvasId && result.canvasState && canvasMutations) {
+					canvasMutations.updated_canvases.push({
+						id: result.canvasId,
+						state: result.canvasState as CanvasState
+					});
+					log.info('Canvas mutation pushed for character tool', { canvasId: result.canvasId });
+				}
+				return result;
 			} else if (toolName === 'generate_image' && imageGenContext) {
 				const params = input as {
 					prompt: string;

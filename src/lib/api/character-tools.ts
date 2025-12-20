@@ -74,6 +74,10 @@ export interface CharacterToolResult {
 	success: boolean;
 	message: string;
 	data?: unknown;
+	/** Canvas ID if a canvas was updated */
+	canvasId?: string;
+	/** New canvas state if a canvas was updated */
+	canvasState?: unknown;
 }
 
 /**
@@ -240,7 +244,9 @@ async function executePlanCharacter(
 			message: `Character sheet created for ${characterSheet.name}. Saved to canvas.`,
 			data: {
 				character: characterSheet
-			}
+			},
+			canvasId,
+			canvasState: newState
 		};
 	} catch (error) {
 		log.error('Character planning failed', { error: error instanceof Error ? error.message : 'Unknown' });
