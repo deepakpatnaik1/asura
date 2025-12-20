@@ -62,9 +62,12 @@ export type ToolName =
 	| 'rename_canvas'
 	| 'delete_canvas'
 	| 'open_canvas'
+	| 'close_canvas'
 	| 'list_canvases'
 	| 'update_canvas'
 	| 'delete_element'
+	// Character tools (Eva)
+	| 'plan_character'
 	// Image generation (Eva)
 	| 'generate_image'
 	| 'edit_image'
@@ -119,7 +122,7 @@ const SAMARA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic
 /**
  * Alicja: Scribe - productivity data + her own conversation memory
  */
-const ALICJA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic', 'canon', 'active', 'todos', 'diary', 'tags', 'calendar'];
+const ALICJA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic', 'active', 'todos', 'diary', 'tags', 'calendar'];
 
 /**
  * Gunnar whiteboard tools
@@ -134,9 +137,9 @@ const GUNNAR_TOOLS: ToolName[] = [
 ];
 
 /**
- * Eva: Character designer - standard memory pyramid
+ * Eva: Character designer - minimal context (system prompt only for speed)
  */
-const EVA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic', 'canon', 'active'];
+const EVA_CHUNKS: ContextChunk[] = [];
 
 /**
  * Eva canvas tools (parallel to Gunnar's whiteboard tools)
@@ -238,7 +241,7 @@ export const PERSONAS: Record<string, Persona> = {
 		systemPrompt: 'eva',
 		contextChunks: EVA_CHUNKS,
 		compression: true,
-		tools: EVA_TOOLS
+		tools: ['create_canvas', 'rename_canvas', 'delete_canvas', 'open_canvas', 'close_canvas', 'list_canvases', 'plan_character']
 	},
 	ananya: {
 		name: 'ananya',
