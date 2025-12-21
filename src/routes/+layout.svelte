@@ -130,16 +130,24 @@
 		cursor: pointer;
 		padding: 4px;
 		opacity: 0.7;
-		transition: all 0.2s;
+		transition: opacity 0.2s, color 0.2s;
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		text-decoration: none;
+		width: 26px;
+		height: 26px;
+		transform: translateZ(0);
+		backface-visibility: hidden;
 	}
 
 	.sidebar-icon:hover {
 		opacity: 1;
 		color: var(--boss-accent);
+	}
+
+	.sidebar-icon :global(svg) {
+		flex-shrink: 0;
 	}
 
 	.main-content {
