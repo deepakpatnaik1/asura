@@ -1,30 +1,18 @@
 /**
  * Open Content API
  *
- * POST: Open a file from library - creates superjournal entry and enables content
- * Returns the new message for immediate UI display
+ * POST: Open a file from library - finds original turn and enables content
+ * Returns the original superjournal ID for scrolling (doesn't create new entries)
  */
 
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { requireAuth } from '$lib/api/require-auth';
 import { databaseError, notFoundError, validationError } from '$lib/api/errors';
-import { DEFAULT_PERSONA } from '$lib/config/personas';
-
-function formatTimestamp(dateString: string): string {
-	const date = new Date(dateString);
-	return date.toLocaleString('en-US', {
-		month: 'short',
-		day: 'numeric',
-		hour: 'numeric',
-		minute: '2-digit',
-		hour12: true
-	});
-}
 
 /**
  * POST /api/chat/files/[id]/open
- * Open content from library - creates superjournal entry showing content in UI
+ * Open content from library - returns original turn ID for navigation
  */
 export const POST: RequestHandler = async ({ params, locals: { safeGetSession, supabase } }) => {
 	const auth = await requireAuth(safeGetSession);
@@ -39,7 +27,7 @@ export const POST: RequestHandler = async ({ params, locals: { safeGetSession, s
 	// Fetch content record
 	const { data: content, error: contentError } = await supabase
 		.from('articles')
-		.select('id, title, raw_content')
+		.select('id, title')
 		.eq('id', id)
 		.eq('user_id', userId)
 		.single();
@@ -48,32 +36,15 @@ export const POST: RequestHandler = async ({ params, locals: { safeGetSession, s
 		return notFoundError('Content not found');
 	}
 
-	// Fetch user's selected persona
-	const { data: settings } = await supabase
-		.from('user_settings')
-		.select('selected_persona')
-		.eq('user_id', userId)
-		.single();
-
-	const persona = settings?.selected_persona || DEFAULT_PERSONA;
-
-	// Create superjournal entry
-	const { data: sjEntry, error: sjError } = await supabase
+	// Find the original superjournal entry for this content
+	const { data: originalEntry } = await supabase
 		.from('superjournal')
-		.insert({
-			user_id: userId,
-			persona_name: persona,
-			user_message: `Boss reopened ${content.title}`,
-			ai_response: `<!--content:${content.id}-->`,
-			model_identifier: 'file-open',
-			content_id: content.id
-		})
-		.select('*')
+		.select('id')
+		.eq('content_id', id)
+		.eq('user_id', userId)
+		.order('created_at', { ascending: true })
+		.limit(1)
 		.single();
-
-	if (sjError || !sjEntry) {
-		return databaseError('Failed to create message');
-	}
 
 	// Enable the content for context injection
 	await supabase
@@ -82,13 +53,9 @@ export const POST: RequestHandler = async ({ params, locals: { safeGetSession, s
 		.eq('id', id)
 		.eq('user_id', userId);
 
-	// Return message in same format as page load (with expanded content)
+	// Return original entry ID for scrolling (or null if not found)
 	return json({
 		success: true,
-		message: {
-			...sjEntry,
-			ai_response: `<!--content:${content.id}-->\n${content.raw_content || ''}`,
-			formatted_timestamp: formatTimestamp(sjEntry.created_at)
-		}
+		originalSuperjournalId: originalEntry?.id || null
 	});
 };
