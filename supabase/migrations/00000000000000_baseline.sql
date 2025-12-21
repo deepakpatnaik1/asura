@@ -256,7 +256,10 @@ CREATE TABLE public.article_charts (
     anthropic_file_created_at timestamp with time zone,
     alt_text text DEFAULT ''::text,
     is_relevant boolean DEFAULT true,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    superjournal_id uuid,
+    is_pinned boolean DEFAULT false,
+    is_dismissed boolean DEFAULT false
 );
 
 
@@ -933,6 +936,7 @@ CREATE TABLE public.user_settings (
     model_tool_calling text,
     model_chat_compression text DEFAULT 'claude-opus-4-5-20251101'::text,
     model_chat_compression_uncensored text DEFAULT 'nousresearch/hermes-3-llama-3.1-70b'::text,
+    model_character_planning text,
     compression_uncensored_gunnar boolean DEFAULT false,
     compression_uncensored_kirby boolean DEFAULT false,
     compression_uncensored_samara boolean DEFAULT false,
@@ -1581,6 +1585,14 @@ ALTER TABLE ONLY public.article_charts
 
 ALTER TABLE ONLY public.article_charts
     ADD CONSTRAINT article_charts_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+
+
+--
+-- Name: article_charts article_charts_superjournal_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.article_charts
+    ADD CONSTRAINT article_charts_superjournal_id_fkey FOREIGN KEY (superjournal_id) REFERENCES public.superjournal(id) ON DELETE CASCADE;
 
 
 --
