@@ -68,24 +68,30 @@ export async function runCompressJob(params: CompressJobParams): Promise<void> {
 		}
 
 		// Get compression model from user settings
-		// Check persona's uncensored flag to determine which model to use
+		// If persona's checkbox is checked, use persona's own chat model for compression
+		// Otherwise use the global chat_compression model
 		const { data: settings } = await supabase
 			.from('user_settings')
-			.select(`model_chat_compression, model_chat_compression_uncensored,
+			.select(`model_chat_compression,
+				model_gunnar, model_kirby, model_samara, model_alicja, model_eva, model_ananya,
 				compression_uncensored_gunnar, compression_uncensored_kirby,
 				compression_uncensored_samara, compression_uncensored_alicja,
 				compression_uncensored_eva, compression_uncensored_ananya`)
 			.eq('user_id', userId)
 			.single();
 
-		// Check if this persona uses uncensored compression
-		const uncensoredFlagKey = `compression_uncensored_${personaName}` as keyof typeof settings;
-		const useUncensored = settings?.[uncensoredFlagKey] === true;
+		// Check if this persona uses its own model for compression
+		const usePersonaModelKey = `compression_uncensored_${personaName}` as keyof typeof settings;
+		const usePersonaModel = settings?.[usePersonaModelKey] === true;
 
-		const compressionModel = useUncensored && settings?.model_chat_compression_uncensored
-			? settings.model_chat_compression_uncensored
+		// Get persona's own model if flag is set
+		const personaModelKey = `model_${personaName}` as keyof typeof settings;
+		const personaModel = settings?.[personaModelKey] as string | undefined;
+
+		const compressionModel = usePersonaModel && personaModel
+			? personaModel
 			: (settings?.model_chat_compression || DEFAULT_COMPRESSION_MODEL);
-		log.info('Using compression model', { compressionModel, useUncensored });
+		log.info('Using compression model', { compressionModel, usePersonaModel });
 
 		// Check if placeholder journal row exists (created by star button)
 		const { data: existingJournal } = await supabase

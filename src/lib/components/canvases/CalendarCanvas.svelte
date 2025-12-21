@@ -261,7 +261,12 @@
 		}
 		if (event.start.dateTime) {
 			const date = new Date(event.start.dateTime);
-			return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase();
+			const hours = date.getHours();
+			const minutes = date.getMinutes();
+			const ampm = hours >= 12 ? 'pm' : 'am';
+			const hour12 = hours % 12 || 12;
+			// Compact format: "11am" or "2:30pm" (no space, omit :00)
+			return minutes === 0 ? `${hour12}${ampm}` : `${hour12}:${minutes.toString().padStart(2, '0')}${ampm}`;
 		}
 		return null;
 	}

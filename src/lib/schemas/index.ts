@@ -23,7 +23,7 @@ export const personaSchema = z.enum(['gunnar', 'kirby', 'samara', 'alicja', 'eva
 /** Override key enum (personas + processor types for model overrides) */
 export const overrideKeySchema = z.enum([
 	'gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya', // Personas
-	'embeddings', 'compression', 'chat_compression', 'chat_compression_uncensored', // Text processes
+	'embeddings', 'compression', 'chat_compression', // Text processes
 	'tool_calling', 'image_gen', 'image_edit' // Eva pipeline
 ]);
 
@@ -78,7 +78,6 @@ export const settingsUpdateSchema = z.object({
 	model_embeddings: z.string().nullable().optional(),
 	model_compression: z.string().nullable().optional(),
 	model_chat_compression: z.string().nullable().optional(),
-	model_chat_compression_uncensored: z.string().nullable().optional(),
 	model_character_planning: z.string().nullable().optional(),
 	model_image_gen: z.string().nullable().optional(),
 	model_image_edit: z.string().nullable().optional(),

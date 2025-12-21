@@ -18,7 +18,6 @@ const MODEL_COLUMNS = [
 	'model_embeddings',
 	'model_compression',
 	'model_chat_compression',
-	'model_chat_compression_uncensored',
 	'model_character_planning',
 	'model_image_gen',
 	'model_image_edit'
@@ -46,7 +45,7 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 		.select(
 			`default_model, selected_persona,
 			 model_gunnar, model_kirby, model_samara, model_alicja, model_eva, model_ananya,
-			 model_embeddings, model_compression, model_chat_compression, model_chat_compression_uncensored,
+			 model_embeddings, model_compression, model_chat_compression,
 			 model_character_planning, model_image_gen, model_image_edit,
 			 compression_uncensored_gunnar, compression_uncensored_kirby, compression_uncensored_samara,
 			 compression_uncensored_alicja, compression_uncensored_eva, compression_uncensored_ananya`
