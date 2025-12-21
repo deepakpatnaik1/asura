@@ -215,6 +215,7 @@
 	.chart-thumbnail img {
 		height: 100%;
 		width: auto;
+		object-fit: contain;
 		background: hsl(var(--background));
 		margin: 0;
 		padding: 0;
