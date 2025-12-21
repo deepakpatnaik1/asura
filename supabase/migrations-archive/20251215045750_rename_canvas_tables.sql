@@ -70,8 +70,8 @@ ALTER TABLE todos RENAME TO canvas_planner_todos;
 -- Rename founder_diary -> canvas_planner_diary
 ALTER TABLE founder_diary RENAME TO canvas_planner_diary;
 
--- Rename charts -> canvas_gallery_charts
-ALTER TABLE charts RENAME TO canvas_gallery_charts;
+-- Rename charts -> canvas_gallery_charts (if exists)
+ALTER TABLE IF EXISTS charts RENAME TO canvas_gallery_charts;
 
 -- Rename tags -> canvas_planner_tags
 ALTER TABLE tags RENAME TO canvas_planner_tags;
@@ -84,5 +84,5 @@ COMMENT ON TABLE canvas_whiteboard IS 'Gunnar whiteboard canvases for strategy p
 COMMENT ON TABLE canvas_design IS 'Eva design canvases for character work';
 COMMENT ON TABLE canvas_planner_todos IS 'Alicja planner - todo items';
 COMMENT ON TABLE canvas_planner_diary IS 'Alicja planner - founder diary entries';
-COMMENT ON TABLE canvas_gallery_charts IS 'Chart/image gallery from content and AI responses';
+-- COMMENT ON TABLE canvas_gallery_charts IS 'Chart/image gallery from content and AI responses';
 COMMENT ON TABLE canvas_planner_tags IS 'Alicja planner - tags for todos and diary';

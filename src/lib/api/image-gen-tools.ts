@@ -24,8 +24,8 @@ function generateRandomCode(): string {
 }
 
 /**
- * Generate a unique image code, checking for collisions
- * Returns the code and inserts it into the image_codes table
+ * Generate a unique element code, checking for collisions
+ * Returns the code and inserts it into the element_codes table
  */
 export async function generateImageCode(
 	supabase: SupabaseClient,
@@ -40,8 +40,8 @@ export async function generateImageCode(
 
 		// Try to insert - will fail if code already exists (primary key constraint)
 		const { error } = await supabase
-			.from('image_codes')
-			.insert({ code, canvas_id: canvasId, image_id: imageId, image_url: imageUrl });
+			.from('element_codes')
+			.insert({ code, canvas_id: canvasId, element_id: imageId, storage_url: imageUrl, element_type: 'image' });
 
 		if (!error) {
 			return code;
@@ -60,15 +60,15 @@ export async function generateImageCode(
 }
 
 /**
- * Look up an image URL by its code
+ * Look up an element by its code
  */
-export async function resolveImageCode(
+export async function resolveElementCode(
 	supabase: SupabaseClient,
 	code: string
-): Promise<{ imageUrl: string; canvasId: string; imageId: string } | null> {
+): Promise<{ storageUrl: string | null; canvasId: string; elementId: string; elementType: string } | null> {
 	const { data, error } = await supabase
-		.from('image_codes')
-		.select('image_url, canvas_id, image_id')
+		.from('element_codes')
+		.select('storage_url, canvas_id, element_id, element_type')
 		.eq('code', code.toUpperCase())
 		.single();
 
@@ -77,10 +77,123 @@ export async function resolveImageCode(
 	}
 
 	return {
-		imageUrl: data.image_url,
+		storageUrl: data.storage_url,
 		canvasId: data.canvas_id,
-		imageId: data.image_id
+		elementId: data.element_id,
+		elementType: data.element_type
 	};
+}
+
+/**
+ * Look up an image URL by its code (legacy alias)
+ */
+export async function resolveImageCode(
+	supabase: SupabaseClient,
+	code: string
+): Promise<{ imageUrl: string; canvasId: string; imageId: string } | null> {
+	const result = await resolveElementCode(supabase, code);
+	if (!result || !result.storageUrl) {
+		return null;
+	}
+	return {
+		imageUrl: result.storageUrl,
+		canvasId: result.canvasId,
+		imageId: result.elementId
+	};
+}
+
+/**
+ * Register an element code in the database
+ * Used for syncing canvas element codes to the element_codes table
+ */
+export async function registerElementCode(
+	supabase: SupabaseClient,
+	canvasId: string,
+	elementId: string,
+	code: string,
+	elementType: string,
+	storageUrl?: string,
+	caption?: string
+): Promise<boolean> {
+	const { error } = await supabase
+		.from('element_codes')
+		.upsert(
+			{
+				code: code.toUpperCase(),
+				canvas_id: canvasId,
+				element_id: elementId,
+				element_type: elementType,
+				storage_url: storageUrl || null,
+				caption: caption || null
+			},
+			{ onConflict: 'code' }
+		);
+
+	return !error;
+}
+
+/**
+ * Remove an element code from the database
+ */
+export async function removeElementCode(
+	supabase: SupabaseClient,
+	code: string
+): Promise<boolean> {
+	const { error } = await supabase
+		.from('element_codes')
+		.delete()
+		.eq('code', code.toUpperCase());
+
+	return !error;
+}
+
+/**
+ * Sync all element codes for a canvas
+ * Removes stale codes and adds new ones
+ */
+export async function syncCanvasElementCodes(
+	supabase: SupabaseClient,
+	canvasId: string,
+	elements: Array<{ id: string; code?: string; type: string; src?: string; text?: string }>
+): Promise<void> {
+	// Get existing codes for this canvas
+	const { data: existingCodes } = await supabase
+		.from('element_codes')
+		.select('code, element_id')
+		.eq('canvas_id', canvasId);
+
+	const existingCodeMap = new Map((existingCodes || []).map(c => [c.element_id, c.code]));
+	const currentElementIds = new Set(elements.map(e => e.id));
+
+	// Remove codes for deleted elements
+	const codesToRemove = (existingCodes || [])
+		.filter(c => !currentElementIds.has(c.element_id))
+		.map(c => c.code);
+
+	if (codesToRemove.length > 0) {
+		await supabase
+			.from('element_codes')
+			.delete()
+			.in('code', codesToRemove);
+	}
+
+	// Add/update codes for current elements
+	const upsertData = elements
+		.filter(e => e.code)
+		.map(e => ({
+			code: e.code!.toUpperCase(),
+			canvas_id: canvasId,
+			element_id: e.id,
+			element_type: e.type,
+			storage_url: e.type === 'image' ? e.src : null,
+			caption: e.type === 'text' ? e.text : null
+		}));
+
+	if (upsertData.length > 0) {
+		await supabase
+			.from('element_codes')
+			.upsert(upsertData, { onConflict: 'code' });
+	}
 }
 
 // Tool schema for Claude's tool_use

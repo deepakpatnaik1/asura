@@ -12,6 +12,7 @@ import type { RequestHandler } from './$types';
 import { requireAuth } from '$lib/api/require-auth';
 import { parseRequestJson } from '$lib/api/parse-json';
 import { databaseError, notFoundError, validationError } from '$lib/api/errors';
+import { syncCanvasElementCodes } from '$lib/api/image-gen-tools';
 
 /**
  * GET /api/canvases/[id]
@@ -104,6 +105,15 @@ export const PUT: RequestHandler = async ({ params, request, locals: { safeGetSe
 
 	if (error || !data) {
 		return notFoundError('Canvas');
+	}
+
+	// Sync element codes to database when state changes
+	if (state !== undefined) {
+		const renderElements = (state as { render?: Array<{ id: string; code?: string; type: string; src?: string; text?: string }> }).render || [];
+		// Fire and forget - don't block the response
+		syncCanvasElementCodes(supabase, id, renderElements).catch(err => {
+			console.error('[Canvases API] Failed to sync element codes:', err);
+		});
 	}
 
 	return json({ success: true });
