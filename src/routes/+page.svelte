@@ -686,7 +686,7 @@
 
 		(async () => {
 			inputMessage = getPersonaPrefix();
-			await Promise.all([loadCharts(), loadWhiteboards(), loadDesignerCanvases()]);
+			await Promise.all([loadCharts(), loadWhiteboards(), loadDesignerCanvases(), loadArticles()]);
 		})();
 
 		// Listen for nuke events from SettingsModal
