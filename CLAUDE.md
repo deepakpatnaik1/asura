@@ -1,7 +1,5 @@
 # CLAUDE.md
 
-> **LIVE ON VERCEL** - Production deployment active. Test thoroughly before committing.
-
 ## Working Docs
 
 Working docs are in the sibling directory: `/Users/d.patnaik/obsidian/aether-docs`

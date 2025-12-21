@@ -66,6 +66,9 @@
 	let calendarConnected = $state(false);
 	let calendarLoading = $state(false);
 
+	// Backup status
+	let lastBackup = $state<string | null>(null);
+
 	// Delete confirmation state
 	const deleteConfirm = createConfirmation();
 
@@ -129,17 +132,24 @@
 	// Fetch data on mount
 	onMount(async () => {
 		try {
-			// Fetch models, settings, and calendar status in parallel
-			const [modelsRes, settingsRes, calendarRes] = await Promise.all([
+			// Fetch models, settings, calendar status, and backup status in parallel
+			const [modelsRes, settingsRes, calendarRes, backupRes] = await Promise.all([
 				fetch('/api/models'),
 				fetch('/api/settings'),
-				fetch('/api/google/calendar/events?days=1')
+				fetch('/api/google/calendar/events?days=1'),
+				fetch('/api/backup-status')
 			]);
 
 			// Check calendar connection status
 			if (calendarRes.ok) {
 				const calendarData = await calendarRes.json();
 				calendarConnected = calendarData.connected === true;
+			}
+
+			// Check backup status
+			if (backupRes.ok) {
+				const backupData = await backupRes.json();
+				lastBackup = backupData.lastBackup;
 			}
 
 			if (!modelsRes.ok) throw new Error('Failed to fetch models');
@@ -784,6 +794,11 @@
 						/>
 					</div>
 				</div>
+
+				<!-- Backup Status -->
+				{#if lastBackup}
+					<div class="backup-status">Last backup: {lastBackup}</div>
+				{/if}
 			{/if}
 		</div>
 	</div>
@@ -1311,5 +1326,13 @@
 	.connection-btn:disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
+	}
+
+	.backup-status {
+		margin-top: 16px;
+		font-size: 7pt;
+		color: hsl(var(--muted-foreground));
+		opacity: 0.5;
+		text-align: right;
 	}
 </style>
