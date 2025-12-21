@@ -36,7 +36,7 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supab
 			alt_text,
 			is_pinned,
 			created_at,
-			articles!inner(id, title, is_enabled)
+			articles!inner(id, title, is_enabled, is_canon)
 		`)
 		.eq('user_id', userId)
 		.not('content_id', 'is', null)
@@ -63,21 +63,27 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supab
 	}
 
 	// Transform to public URLs (use relative URLs to go through Vite proxy in dev)
-	const charts = (data || []).map((chart) => {
-		// articles is a single object when using !inner join
-		const content = chart.articles as unknown as { title: string } | null;
-		return {
-			id: chart.id,
-			file_id: chart.content_id, // Keep API response naming for backwards compatibility
-			chart_index: chart.chart_index,
-			thumbnail_url: `/storage/v1/object/public/content/${chart.thumbnail_path}`,
-			full_url: `/storage/v1/object/public/content/${chart.storage_path}`,
-			alt: chart.alt_text,
-			is_pinned: chart.is_pinned,
-			source: 'file' as const,
-			file_title: content?.title
-		};
-	});
+	// Filter out charts from canon files (they can't be toggled off, so no point showing thumbnails)
+	const charts = (data || [])
+		.filter((chart) => {
+			const content = chart.articles as unknown as { is_canon?: boolean } | null;
+			return !content?.is_canon;
+		})
+		.map((chart) => {
+			// articles is a single object when using !inner join
+			const content = chart.articles as unknown as { title: string } | null;
+			return {
+				id: chart.id,
+				file_id: chart.content_id, // Keep API response naming for backwards compatibility
+				chart_index: chart.chart_index,
+				thumbnail_url: `/storage/v1/object/public/content/${chart.thumbnail_path}`,
+				full_url: `/storage/v1/object/public/content/${chart.storage_path}`,
+				alt: chart.alt_text,
+				is_pinned: chart.is_pinned,
+				source: 'file' as const,
+				file_title: content?.title
+			};
+		});
 
 	return json({ charts });
 };
