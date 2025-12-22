@@ -38,6 +38,7 @@ interface ContextComponents {
 	otherArcs: string;
 	workData: string; // Todo mode: current todos and tags
 	calendar: string; // Google Calendar events (for Alicja)
+	fitness: string; // Fitness/health log (for Alicja)
 	whiteboard: string; // Active whiteboard (for Gunnar)
 	canvas: string; // Designer canvases (for Eva)
 }
@@ -54,6 +55,7 @@ interface ContextStats {
 		otherArcs: number;
 		workData: number;
 		calendar: number;
+		fitness: number;
 		whiteboard: number;
 		canvas: number;
 	};
@@ -117,6 +119,7 @@ export async function buildContext(
 		otherArcs: '',
 		workData: '',
 		calendar: '',
+		fitness: '',
 		whiteboard: '',
 		canvas: ''
 	};
@@ -298,6 +301,26 @@ export async function buildContext(
 			}
 		} catch {
 			// Calendar fetch failed, continue without it
+		}
+	}
+
+	// Priority 0.7: Fitness log (for Alicja)
+	if (hasChunk('fitness')) {
+		try {
+			const { data: fitnessData } = await supabase
+				.from('canvas_planner_fitness')
+				.select('id, entry, logged_at')
+				.eq('user_id', userId)
+				.order('logged_at', { ascending: false })
+				.limit(30);
+
+			if (fitnessData && fitnessData.length > 0) {
+				const fitnessText = formatFitnessLog(fitnessData);
+				components.fitness = fitnessText;
+				totalTokens += estimateTokens(fitnessText);
+			}
+		} catch {
+			// Fitness fetch failed, continue without it
 		}
 	}
 
@@ -525,6 +548,7 @@ export async function buildContext(
 			otherArcs: estimateTokens(components.otherArcs),
 			workData: estimateTokens(components.workData),
 			calendar: estimateTokens(components.calendar),
+			fitness: estimateTokens(components.fitness),
 			whiteboard: estimateTokens(components.whiteboard),
 			canvas: estimateTokens(components.canvas)
 		}
@@ -882,6 +906,31 @@ ${eventsJson}
 `;
 }
 
+// Format fitness log for Alicja
+function formatFitnessLog(
+	entries: Array<{
+		id: string;
+		entry: Record<string, unknown>;
+		logged_at: string;
+	}>
+): string {
+	if (entries.length === 0) return '';
+
+	const formattedEntries = entries.map((e) => ({
+		...e.entry,
+		logged_at: e.logged_at
+	}));
+
+	const entriesJson = JSON.stringify(formattedEntries, null, 2);
+
+	return `--- FITNESS LOG (Last 30 Entries) ---
+<fitness_log>
+${entriesJson}
+</fitness_log>
+
+`;
+}
+
 // Format whiteboard context for Gunnar (dual-layer: render + semantic)
 interface WhiteboardStateForContext {
 	render?: Array<{
@@ -1055,6 +1104,7 @@ function assembleContext(components: ContextComponents): string {
 		components.canon, // Canon first (shared knowledge across all modes)
 		components.workData, // Work data for todo mode (before superjournal so Alicja sees todos first)
 		components.calendar, // Calendar events (for Alicja)
+		components.fitness, // Fitness log (for Alicja)
 		components.whiteboard, // Active whiteboard (for Gunnar)
 		components.canvas, // Designer canvases (for Eva)
 		components.superjournal,

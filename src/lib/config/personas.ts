@@ -24,6 +24,7 @@ export type ContextChunk =
 	| 'diary' // Founder diary entries
 	| 'tags' // Canonical tag list
 	| 'calendar' // Google Calendar events (future)
+	| 'fitness' // Fitness/health log entries
 	| 'time'; // Current timestamp (always injected, not toggleable)
 
 
@@ -44,6 +45,8 @@ export type ToolName =
 	| 'log_diary'
 	| 'update_diary'
 	| 'delete_diary'
+	// Fitness tools
+	| 'log_fitness'
 	// Calendar tools
 	| 'list_calendar_events'
 	| 'create_calendar_event'
@@ -123,7 +126,7 @@ const SAMARA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic
 /**
  * Alicja: Scribe - productivity data + her own conversation memory
  */
-const ALICJA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic', 'active', 'todos', 'diary', 'tags', 'calendar'];
+const ALICJA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic', 'active', 'todos', 'diary', 'tags', 'calendar', 'fitness'];
 
 /**
  * Gunnar whiteboard tools
@@ -183,6 +186,7 @@ const ALICJA_TOOLS: ToolName[] = [
 	'log_diary',
 	'update_diary',
 	'delete_diary',
+	'log_fitness',
 	'list_calendar_events',
 	'create_calendar_event',
 	'update_calendar_event',

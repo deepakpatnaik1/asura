@@ -288,8 +288,23 @@ export const DELETE_DIARY_TOOL: Anthropic.Tool = {
 	}
 };
 
+export const LOG_FITNESS_TOOL: Anthropic.Tool = {
+	name: 'log_fitness',
+	description: 'Log a fitness or health entry. Use when user shares weight, workouts, or health updates.',
+	input_schema: {
+		type: 'object',
+		properties: {
+			entry: {
+				type: 'object',
+				description: 'The fitness data to log. Structure it however makes sense for the update.'
+			}
+		},
+		required: ['entry']
+	}
+};
+
 /**
- * All todo tools (includes diary)
+ * All todo tools (includes diary and fitness)
  */
 export const TODO_TOOLS: Anthropic.Tool[] = [
 	CREATE_TODO_TOOL,
@@ -303,7 +318,8 @@ export const TODO_TOOLS: Anthropic.Tool[] = [
 	MERGE_TAGS_TOOL,
 	LOG_DIARY_TOOL,
 	UPDATE_DIARY_TOOL,
-	DELETE_DIARY_TOOL
+	DELETE_DIARY_TOOL,
+	LOG_FITNESS_TOOL
 ];
 
 /**
@@ -351,6 +367,15 @@ export interface DiaryEntry {
 }
 
 /**
+ * Fitness entry type for mutations payload
+ */
+export interface FitnessEntry {
+	id: string;
+	entry: Record<string, unknown>;
+	logged_at: string;
+}
+
+/**
  * Mutations payload returned with chat response
  * Covers todos, diary, and calendar operations
  */
@@ -370,6 +395,8 @@ export interface TodoMutations {
 	diary_entries: DiaryEntry[];
 	updated_diary: { id: string; description?: string; tags?: string[] }[];
 	deleted_diary: string[]; // IDs
+	// Fitness mutations
+	fitness_entries: FitnessEntry[];
 	// Calendar mutations
 	created_events: string[]; // Event IDs
 	updated_events: string[]; // Event IDs
@@ -393,6 +420,7 @@ export function createEmptyMutations(): TodoMutations {
 		diary_entries: [],
 		updated_diary: [],
 		deleted_diary: [],
+		fitness_entries: [],
 		created_events: [],
 		updated_events: [],
 		deleted_events: []
@@ -444,6 +472,9 @@ export async function executeTodoTool(
 
 		case 'delete_diary':
 			return executeDeleteDiary(input, context, mutations);
+
+		case 'log_fitness':
+			return executeLogFitness(input, context, mutations);
 
 		default:
 			return {
@@ -1408,7 +1439,52 @@ async function executeDeleteDiary(
 }
 
 /**
- * Check if a tool name is a todo tool (includes diary)
+ * Log Fitness Executor
+ */
+async function executeLogFitness(
+	input: Record<string, unknown>,
+	context: TodoToolContext,
+	mutations: TodoMutations
+): Promise<ToolExecutionResult> {
+	try {
+		const { supabase, userId, sourceMessageId } = context;
+		const entry = input.entry as Record<string, unknown>;
+
+		const { data, error } = await supabase
+			.from('canvas_planner_fitness')
+			.insert({
+				user_id: userId,
+				entry,
+				source_message_id: sourceMessageId || null
+			})
+			.select()
+			.single();
+
+		if (error) throw error;
+
+		const fitnessEntry: FitnessEntry = {
+			id: data.id,
+			entry: data.entry,
+			logged_at: data.logged_at
+		};
+
+		mutations.fitness_entries.push(fitnessEntry);
+
+		return {
+			success: true,
+			message: `Logged fitness entry`,
+			data: fitnessEntry
+		};
+	} catch (error) {
+		return {
+			success: false,
+			message: `Failed to log fitness entry: ${error instanceof Error ? error.message : 'Unknown error'}`
+		};
+	}
+}
+
+/**
+ * Check if a tool name is a todo tool (includes diary and fitness)
  */
 export function isTodoTool(toolName: string): boolean {
 	return [
@@ -1423,6 +1499,7 @@ export function isTodoTool(toolName: string): boolean {
 		'merge_tags',
 		'log_diary',
 		'update_diary',
-		'delete_diary'
+		'delete_diary',
+		'log_fitness'
 	].includes(toolName);
 }
