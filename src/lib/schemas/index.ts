@@ -82,7 +82,6 @@ export const settingsUpdateSchema = z.object({
 	model_character_planning: z.string().nullable().optional(),
 	model_image_gen: z.string().nullable().optional(),
 	model_image_edit: z.string().nullable().optional(),
-	model_comment_generator: z.string().nullable().optional(),
 
 	// Per-persona uncensored compression flags
 	compression_uncensored_gunnar: z.boolean().optional(),

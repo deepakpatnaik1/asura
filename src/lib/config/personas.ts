@@ -80,7 +80,6 @@ export type ToolName =
 	| 'fetch_subreddit_posts'
 	// Engagement tools (Ananya)
 	| 'get_subreddit_registry'
-	| 'draft_comment'
 	| 'log_engagement';
 
 /**
@@ -166,17 +165,16 @@ const EVA_TOOLS: ToolName[] = [
 ];
 
 /**
- * Ananya: Reddit engagement - her own history, no Honeybloom knowledge
- * Excludes: canon (Honeybloom docs), active (library content)
- * Includes: recent (her own compressed turns - engagement history)
+ * Ananya: Reddit engagement
+ * Includes canon - she knows the product, trusts her not to leak
  */
-const ANANYA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic'];
+const ANANYA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic', 'canon'];
 
 /**
  * Ananya tools: Reddit engagement
- * Two-model architecture: Ananya (Haiku) orchestrates, draft_comment calls Opus
+ * Single-model: Ananya writes comments directly in conversation
  */
-const ANANYA_TOOLS: ToolName[] = ['fetch_reddit_thread', 'fetch_subreddit_posts', 'get_subreddit_registry', 'draft_comment', 'log_engagement'];
+const ANANYA_TOOLS: ToolName[] = ['fetch_reddit_thread', 'fetch_subreddit_posts', 'get_subreddit_registry', 'log_engagement'];
 
 /**
  * All Alicja tools

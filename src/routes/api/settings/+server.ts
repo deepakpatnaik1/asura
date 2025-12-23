@@ -20,8 +20,7 @@ const MODEL_COLUMNS = [
 	'model_chat_compression',
 	'model_character_planning',
 	'model_image_gen',
-	'model_image_edit',
-	'model_comment_generator'
+	'model_image_edit'
 ] as const;
 
 // Per-persona uncensored compression flags
@@ -47,7 +46,7 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 			`default_model, selected_persona,
 			 model_gunnar, model_kirby, model_samara, model_alicja, model_eva, model_ananya,
 			 model_embeddings, model_compression, model_chat_compression,
-			 model_character_planning, model_image_gen, model_image_edit, model_comment_generator,
+			 model_character_planning, model_image_gen, model_image_edit,
 			 compression_uncensored_gunnar, compression_uncensored_kirby, compression_uncensored_samara,
 			 compression_uncensored_alicja, compression_uncensored_eva, compression_uncensored_ananya`
 		)

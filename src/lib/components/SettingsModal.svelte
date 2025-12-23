@@ -25,7 +25,7 @@
 	}
 
 	// All override keys (personas + processors)
-	const OVERRIDE_KEYS = ['gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya', 'embeddings', 'compression', 'chat_compression', 'character_planning', 'image_gen', 'image_edit', 'comment_generator'] as const;
+	const OVERRIDE_KEYS = ['gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya', 'embeddings', 'compression', 'chat_compression', 'character_planning', 'image_gen', 'image_edit'] as const;
 	type OverrideKey = typeof OVERRIDE_KEYS[number];
 
 	// Persona names for uncensored compression flags
@@ -45,8 +45,7 @@
 		chat_compression: '',
 		character_planning: '',
 		image_gen: '',
-		image_edit: '',
-		comment_generator: ''
+		image_edit: ''
 	});
 
 	// Per-persona uncensored compression flags
@@ -174,8 +173,7 @@
 				chat_compression: '',
 				character_planning: '',
 				image_gen: '',
-				image_edit: '',
-				comment_generator: ''
+				image_edit: ''
 			};
 
 			// Load model overrides from settings - use exact DB values, no fallbacks
@@ -685,18 +683,6 @@
 									{/each}
 								</select>
 							</div>
-							<div class="dropdown-row">
-								<label for="comment-generator-select">Reddit/Discord</label>
-								<select id="comment-generator-select" value={modelOverrides.comment_generator} onchange={(e) => handleOverrideChange('comment_generator', e)}>
-									{#each modelsByProvider as group}
-										<optgroup label={group.label}>
-											{#each group.models as model}
-												<option value={model.model_identifier}>{model.model_name}</option>
-											{/each}
-										</optgroup>
-									{/each}
-								</select>
-							</div>
 						</div>
 
 						<!-- Connections Section -->
@@ -1163,7 +1149,7 @@
 	 */
 	.all-models-list {
 		--personas-count: 6;      /* Gunnar, Kirby, Samara, Alicja, Eva, Ananya */
-		--processes-count: 7;     /* Embeddings, File artisan cut, Chat artisan cut, Character plan (NSFW), Image gen (NSFW), Image editing (NSFW), Reddit/Discord */
+		--processes-count: 6;     /* Embeddings, File artisan cut, Chat artisan cut, Character plan (NSFW), Image gen (NSFW), Image editing (NSFW) */
 		--dropdown-height: 24px;
 		--dropdown-gap: 6px;
 		--section-gap: 51px;      /* 20px + 23px + 8px */
