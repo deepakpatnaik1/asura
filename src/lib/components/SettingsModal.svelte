@@ -25,7 +25,7 @@
 	}
 
 	// All override keys (personas + processors)
-	const OVERRIDE_KEYS = ['gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya', 'embeddings', 'compression', 'chat_compression', 'character_planning', 'image_gen', 'image_edit'] as const;
+	const OVERRIDE_KEYS = ['gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya', 'embeddings', 'compression', 'chat_compression', 'character_planning', 'image_gen', 'image_edit', 'comment_generator'] as const;
 	type OverrideKey = typeof OVERRIDE_KEYS[number];
 
 	// Persona names for uncensored compression flags
@@ -45,7 +45,8 @@
 		chat_compression: '',
 		character_planning: '',
 		image_gen: '',
-		image_edit: ''
+		image_edit: '',
+		comment_generator: ''
 	});
 
 	// Per-persona uncensored compression flags
@@ -173,7 +174,8 @@
 				chat_compression: '',
 				character_planning: '',
 				image_gen: '',
-				image_edit: ''
+				image_edit: '',
+				comment_generator: ''
 			};
 
 			// Load model overrides from settings - use exact DB values, no fallbacks
@@ -388,12 +390,20 @@
 
 	// Known uncensored model identifiers for character planning
 	const UNCENSORED_MODEL_IDS = [
+		// Existing
 		'sao10k/l3.3-euryale-70b',
-		'neversleep/llama-3.1-lumimaid-70b',
-		'neversleep/llama-3.1-lumimaid-8b',
 		'gryphe/mythomax-l2-13b',
 		'nousresearch/hermes-3-llama-3.1-70b',
-		'venice-uncensored'
+		'venice-uncensored',
+		// New (Dec 2025)
+		'nousresearch/hermes-4-70b',
+		'nousresearch/hermes-4-405b',
+		'anthracite-org/magnum-v4-72b',
+		'neversleep/noromaid-20b',
+		'neversleep/llama-3.1-lumimaid-8b',
+		'thedrummer/rocinante-12b',
+		'thedrummer/skyfall-36b-v2',
+		'thedrummer/cydonia-24b-v4.1'
 	];
 
 	// Group uncensored text models by provider (for Character Planning dropdown)
@@ -667,6 +677,18 @@
 								<label for="image-edit-select">Image editing (NSFW)</label>
 								<select id="image-edit-select" value={modelOverrides.image_edit} onchange={(e) => handleOverrideChange('image_edit', e)}>
 									{#each imageEditModelsByProvider as group}
+										<optgroup label={group.label}>
+											{#each group.models as model}
+												<option value={model.model_identifier}>{model.model_name}</option>
+											{/each}
+										</optgroup>
+									{/each}
+								</select>
+							</div>
+							<div class="dropdown-row">
+								<label for="comment-generator-select">Reddit/Discord</label>
+								<select id="comment-generator-select" value={modelOverrides.comment_generator} onchange={(e) => handleOverrideChange('comment_generator', e)}>
+									{#each modelsByProvider as group}
 										<optgroup label={group.label}>
 											{#each group.models as model}
 												<option value={model.model_identifier}>{model.model_name}</option>
@@ -1141,7 +1163,7 @@
 	 */
 	.all-models-list {
 		--personas-count: 6;      /* Gunnar, Kirby, Samara, Alicja, Eva, Ananya */
-		--processes-count: 6;     /* Embeddings, File artisan cut, Chat artisan cut, Character plan (NSFW), Image gen (NSFW), Image editing (NSFW) */
+		--processes-count: 7;     /* Embeddings, File artisan cut, Chat artisan cut, Character plan (NSFW), Image gen (NSFW), Image editing (NSFW), Reddit/Discord */
 		--dropdown-height: 24px;
 		--dropdown-gap: 6px;
 		--section-gap: 51px;      /* 20px + 23px + 8px */

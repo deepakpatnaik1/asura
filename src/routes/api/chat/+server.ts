@@ -65,6 +65,7 @@ import {
 import { refreshAccessToken } from '$lib/api/google-calendar';
 import { BRAVE_SEARCH_TOOL, executeBraveSearch } from '$lib/api/brave-search';
 import { REDDIT_TOOLS, executeRedditTool, isRedditTool } from '$lib/api/reddit-tools';
+import { ENGAGEMENT_TOOLS, executeEngagementTool, isEngagementTool, type EngagementToolContext } from '$lib/roles/community-manager/engagement';
 import { parseToolIntents, hasToolIntents } from '$lib/api/tool-intent-parser';
 import { createClient } from '@supabase/supabase-js';
 import { PUBLIC_SUPABASE_URL } from '$env/static/public';
@@ -116,7 +117,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			.from('user_settings')
 			.select(`selected_persona, default_model,
 				model_gunnar, model_kirby, model_samara, model_alicja, model_eva, model_ananya,
-				model_tool_calling, model_character_planning, model_image_gen, model_image_edit`)
+				model_tool_calling, model_character_planning, model_image_gen, model_image_edit, model_comment_generator`)
 			.eq('user_id', userId)
 			.single();
 
@@ -226,6 +227,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		let characterContext: CharacterToolContext | null = null;
 		let imageGenContext: ImageGenContext | null = null;
 		let imageEditContext: ImageEditContext | null = null;
+		let engagementContext: EngagementToolContext | null = null;
 
 		if (personaTools.length > 0) {
 			// Persona has tools configured
@@ -239,6 +241,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			const hasImageGen = personaTools.includes('generate_image');
 			const hasImageEdit = personaTools.includes('edit_image');
 			const hasRedditTools = personaTools.some(t => isRedditTool(t));
+			const hasEngagementTools = personaTools.some(t => isEngagementTool(t));
 
 			log.info('Tool setup', {
 				persona,
@@ -345,6 +348,16 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			// Set up Reddit tools (Ananya)
 			if (hasRedditTools) {
 				allTools.push(...REDDIT_TOOLS);
+			}
+
+			// Set up engagement tools (Ananya)
+			// draft_comment needs the comment generator model
+			const commentGeneratorModel = settings?.model_comment_generator as string | undefined;
+			if (hasEngagementTools) {
+				engagementContext = {
+					commentGeneratorModel: commentGeneratorModel || 'claude-opus-4-5-20251101'
+				};
+				allTools.push(...ENGAGEMENT_TOOLS);
 			}
 
 			// Only pass tools to model if it supports native tool calling
@@ -563,6 +576,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				}
 			} else if (isRedditTool(toolName)) {
 				return executeRedditTool(toolName, input);
+			} else if (isEngagementTool(toolName) && engagementContext) {
+				return executeEngagementTool(toolName, input, engagementContext);
 			} else if (isTodoTool(toolName) && todoContext) {
 				return executeTodoTool(toolName, input, todoContext, todoMutations!);
 			} else if (calendarContext) {

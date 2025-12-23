@@ -33,6 +33,7 @@ const VALID_BUCKETS = [
 	'content:ephemeral',
 	'content:strategic',
 	'content:canon',
+	'content:gettysburg',
 	'productivity:diary',
 	'productivity:todos'
 ] as const;
@@ -269,6 +270,9 @@ async function nukeContent(supabase: App.Locals['supabase'], userId: string, tie
 			// Content where is_canon = true
 			query = query.eq('is_canon', true);
 			break;
+		case 'gettysburg':
+			// Special case: delete superjournal entries tagged [Gettysburg]
+			return await nukeGettysburg(supabase, userId, log);
 		default:
 			return badRequest(`Unknown content tier: ${tier}`);
 	}
@@ -341,6 +345,33 @@ async function nukeContent(supabase: App.Locals['supabase'], userId: string, tie
 			content: ids.length,
 			storage_files: storagePaths.length
 		}
+	});
+}
+
+/**
+ * Nuke Gettysburg chunks (superjournal entries tagged with [Gettysburg])
+ */
+async function nukeGettysburg(supabase: App.Locals['supabase'], userId: string, log: ReturnType<typeof createLogger>) {
+	// Delete superjournal entries where user_message starts with [Gettysburg]
+	const { data: deleted, error: deleteError } = await supabase
+		.from('superjournal')
+		.delete()
+		.eq('user_id', userId)
+		.like('user_message', '[Gettysburg]%')
+		.select('id');
+
+	if (deleteError) {
+		log.error('Failed to delete Gettysburg entries', { error: deleteError });
+		return databaseError('Failed to delete Gettysburg entries');
+	}
+
+	const count = deleted?.length || 0;
+	log.info('Nuke Gettysburg complete', { entriesDeleted: count });
+
+	return json({
+		success: true,
+		bucket: 'content:gettysburg',
+		deleted: { superjournal: count }
 	});
 }
 

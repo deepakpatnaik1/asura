@@ -76,7 +76,12 @@ export type ToolName =
 	| 'generate_image'
 	| 'edit_image'
 	// Reddit tools (Ananya)
-	| 'fetch_reddit_thread';
+	| 'fetch_reddit_thread'
+	| 'fetch_subreddit_posts'
+	// Engagement tools (Ananya)
+	| 'get_subreddit_registry'
+	| 'draft_comment'
+	| 'log_engagement';
 
 /**
  * Persona configuration interface
@@ -161,14 +166,17 @@ const EVA_TOOLS: ToolName[] = [
 ];
 
 /**
- * Ananya: Reddit engagement - full memory pyramid + active files
+ * Ananya: Reddit engagement - her own history, no Honeybloom knowledge
+ * Excludes: canon (Honeybloom docs), active (library content)
+ * Includes: recent (her own compressed turns - engagement history)
  */
-const ANANYA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'canon', 'semantic', 'active'];
+const ANANYA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic'];
 
 /**
  * Ananya tools: Reddit engagement
+ * Two-model architecture: Ananya (Haiku) orchestrates, draft_comment calls Opus
  */
-const ANANYA_TOOLS: ToolName[] = ['fetch_reddit_thread'];
+const ANANYA_TOOLS: ToolName[] = ['fetch_reddit_thread', 'fetch_subreddit_posts', 'get_subreddit_registry', 'draft_comment', 'log_engagement'];
 
 /**
  * All Alicja tools

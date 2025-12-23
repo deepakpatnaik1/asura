@@ -36,7 +36,8 @@
 	const CONTENT_BUCKETS = [
 		{ id: 'content:ephemeral', label: 'Ephemeral', description: 'Unprocessed pastes' },
 		{ id: 'content:strategic', label: 'Strategic', description: 'Processed, non-canon' },
-		{ id: 'content:canon', label: 'Canon', description: 'Foundational docs' }
+		{ id: 'content:canon', label: 'Canon', description: 'Foundational docs' },
+		{ id: 'content:gettysburg', label: 'Gettysburg', description: 'Design review chunks' }
 	] as const;
 
 	const PRODUCTIVITY_BUCKETS = [
