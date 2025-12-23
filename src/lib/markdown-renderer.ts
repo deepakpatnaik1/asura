@@ -237,6 +237,12 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 			rest = rest.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;">$1</code>`);
 			rest = rest.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${ACCENT}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
 			rest = rest.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">$1</a>`);
+			// Auto-link bare URLs (not already in markdown link) → pill badge
+			rest = rest.replace(/(?<!href="|]\()https?:\/\/[^\s<>"()]+/g, (url) => {
+				const redditMatch = url.match(/reddit\.com\/r\/(\w+)/);
+				const label = redditMatch ? `r/${redditMatch[1]}` : url.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+				return `<a href="${url}" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">${label}</a>`;
+			});
 			listIndent = 2; // "- " = 2 chars
 			results.push(`<span style="display: flex; margin-left: 1.5em;"><span style="color: ${ACCENT}; flex-shrink: 0; margin-right: 0.5em;">◦</span><span><strong style="color: ${ACCENT};">${boldText}</strong>${rest}</span></span>`);
 			continue;
@@ -303,6 +309,12 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 			rest = rest.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;">$1</code>`);
 			rest = rest.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${ACCENT}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
 			rest = rest.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">$1</a>`);
+			// Auto-link bare URLs (not already in markdown link) → pill badge
+			rest = rest.replace(/(?<!href="|]\()https?:\/\/[^\s<>"()]+/g, (url) => {
+				const redditMatch = url.match(/reddit\.com\/r\/(\w+)/);
+				const label = redditMatch ? `r/${redditMatch[1]}` : url.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+				return `<a href="${url}" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">${label}</a>`;
+			});
 			listIndent = indent.length + 2; // existing indent + "- "
 			results.push(`<span style="display: flex; margin-left: 3em;"><span style="color: ${ACCENT}; flex-shrink: 0; margin-right: 0.5em;">◦</span><span>${rest}</span></span>`);
 			continue;
@@ -323,6 +335,12 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 			rest = rest.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;">$1</code>`);
 			rest = rest.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${ACCENT}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
 			rest = rest.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">$1</a>`);
+			// Auto-link bare URLs (not already in markdown link) → pill badge
+			rest = rest.replace(/(?<!href="|]\()https?:\/\/[^\s<>"()]+/g, (url) => {
+				const redditMatch = url.match(/reddit\.com\/r\/(\w+)/);
+				const label = redditMatch ? `r/${redditMatch[1]}` : url.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+				return `<a href="${url}" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">${label}</a>`;
+			});
 			listIndent = indent.length + num.length + 2; // existing indent + number + ". "
 			results.push(`<span style="display: flex; margin-left: 3em;"><span style="color: ${ACCENT}; flex-shrink: 0; margin-right: 0.5em;">${num}.</span><span>${rest}</span></span>`);
 			continue;
@@ -346,6 +364,12 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 				return `<a href="${url}" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">r/${sub}</a>`;
 			});
 			rest = rest.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">$1</a>`);
+			// Auto-link bare URLs (not already in markdown link) → pill badge
+			rest = rest.replace(/(?<!href="|]\()https?:\/\/[^\s<>"()]+/g, (url) => {
+				const redditMatch = url.match(/reddit\.com\/r\/(\w+)/);
+				const label = redditMatch ? `r/${redditMatch[1]}` : url.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+				return `<a href="${url}" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">${label}</a>`;
+			});
 			listIndent = 2; // "- " = 2 chars
 			results.push(`<span style="display: flex; margin-left: 1.5em;"><span style="color: ${ACCENT}; font-weight: bold; flex-shrink: 0; margin-right: 0.5em;">◦</span><span>${rest}</span></span>`);
 			continue;
@@ -365,6 +389,12 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 			rest = rest.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;">$1</code>`);
 			rest = rest.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${ACCENT}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
 			rest = rest.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">$1</a>`);
+			// Auto-link bare URLs (not already in markdown link) → pill badge
+			rest = rest.replace(/(?<!href="|]\()https?:\/\/[^\s<>"()]+/g, (url) => {
+				const redditMatch = url.match(/reddit\.com\/r\/(\w+)/);
+				const label = redditMatch ? `r/${redditMatch[1]}` : url.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+				return `<a href="${url}" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">${label}</a>`;
+			});
 			listIndent = num.length + 2; // number + ". "
 			results.push(`<span style="display: flex; margin-left: 1.5em;"><span style="color: ${ACCENT}; font-weight: bold; flex-shrink: 0; margin-right: 0.5em;">${num}.</span><span>${rest}</span></span>`);
 			continue;
@@ -388,6 +418,12 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 			rest = rest.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;">$1</code>`);
 			rest = rest.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${ACCENT}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
 			rest = rest.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">$1</a>`);
+			// Auto-link bare URLs (not already in markdown link) → pill badge
+			rest = rest.replace(/(?<!href="|]\()https?:\/\/[^\s<>"()]+/g, (url) => {
+				const redditMatch = url.match(/reddit\.com\/r\/(\w+)/);
+				const label = redditMatch ? `r/${redditMatch[1]}` : url.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+				return `<a href="${url}" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">${label}</a>`;
+			});
 			listIndent = 0;
 			results.push(`<strong style="color: ${ACCENT};">${boldText}</strong>${rest}`);
 			continue;
