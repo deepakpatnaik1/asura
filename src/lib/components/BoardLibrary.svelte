@@ -9,17 +9,7 @@
 	 */
 	import { Icon } from 'svelte-icons-pack';
 	import { LuTrash2, LuCheck } from 'svelte-icons-pack/lu';
-
-	interface Whiteboard {
-		id: string;
-		title: string;
-		state?: {
-			notes: Array<{ id: string; x: number; y: number; text: string; fill: string; width: number; height: number }>;
-			viewport: { x: number; y: number; scale: number };
-		};
-		created_at: string;
-		updated_at: string;
-	}
+	import type { Whiteboard } from '$lib/api/whiteboard-tools';
 
 	interface Props {
 		whiteboards: Whiteboard[];

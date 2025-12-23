@@ -215,6 +215,7 @@ export interface ToolExecutionResult {
 export interface DesignerCanvas {
 	id: string;
 	title: string;
+	state?: CanvasState;
 	created_at: string;
 	updated_at: string;
 }
@@ -222,13 +223,23 @@ export interface DesignerCanvas {
 /**
  * Render element types
  */
+/**
+ * Structured prompt text for prompt elements
+ */
+export interface PromptText {
+	setting?: string;
+	clothing?: string;
+	pose?: string;
+	expression?: string;
+}
+
 export type RenderElement = {
 	id: string;
 	type: 'note' | 'label' | 'line' | 'arrow' | 'group' | 'image' | 'text' | 'prompt';
 	code: string; // 3-char alphanumeric reference code (e.g., "A7K") - required
 	x?: number;
 	y?: number;
-	text?: string;
+	text?: string | PromptText; // String for text elements, PromptText for prompt elements
 	fill?: string;
 	width?: number;
 	height?: number;

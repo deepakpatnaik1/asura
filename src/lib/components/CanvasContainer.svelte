@@ -9,7 +9,8 @@
 	 */
 
 	import { type CanvasType, DEFAULT_CANVAS } from '$lib/config/canvases';
-	import type { CanvasState } from '$lib/api/canvas-tools';
+	import type { CanvasState, DesignerCanvas as DesignerCanvasData } from '$lib/api/canvas-tools';
+	import type { Whiteboard, WhiteboardState } from '$lib/api/whiteboard-tools';
 	import CanvasSwitcher from './CanvasSwitcher.svelte';
 	import ChartCarousel from './ChartCarousel.svelte';
 	import CalendarCanvas from './canvases/CalendarCanvas.svelte';
@@ -22,27 +23,6 @@
 		thumbnail_url: string;
 		full_url: string;
 		alt: string;
-	}
-
-	// Whiteboard type for Notes canvas
-	interface Whiteboard {
-		id: string;
-		title: string;
-		state?: {
-			notes: Array<{ id: string; x: number; y: number; text: string; fill: string; width: number; height: number }>;
-			viewport: { x: number; y: number; scale: number };
-		};
-		created_at: string;
-		updated_at: string;
-	}
-
-	// Designer Canvas type for Designer canvas
-	interface DesignerCanvasData {
-		id: string;
-		title: string;
-		state?: CanvasState;
-		created_at: string;
-		updated_at: string;
 	}
 
 	interface Props {

@@ -172,16 +172,6 @@ export interface ToolExecutionResult {
 }
 
 /**
- * Whiteboard type for mutations payload
- */
-export interface Whiteboard {
-	id: string;
-	title: string;
-	created_at: string;
-	updated_at: string;
-}
-
-/**
  * Render element types
  */
 export type RenderElement = {
@@ -214,6 +204,17 @@ export interface WhiteboardState {
 	render: RenderElement[];
 	semantic: Record<string, unknown>;
 	viewport: { x: number; y: number; scale: number };
+}
+
+/**
+ * Whiteboard type for mutations payload
+ */
+export interface Whiteboard {
+	id: string;
+	title: string;
+	state?: WhiteboardState;
+	created_at: string;
+	updated_at: string;
 }
 
 /**

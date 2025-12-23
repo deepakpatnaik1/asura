@@ -4,7 +4,7 @@
 	 * Renders whiteboards with multiple element types: notes, labels, lines, arrows, groups
 	 */
 
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import CanvasFrame from '$lib/components/CanvasFrame.svelte';
 	import type { RenderElement, WhiteboardState } from '$lib/api/whiteboard-tools';
 	import { CANVAS, LAYOUT } from '$lib/config/layout';
@@ -71,6 +71,9 @@
 	let Arrow: any;
 	let Image: any;
 
+	// Cleanup reference
+	let resizeObserver: ResizeObserver | null = null;
+
 	// Image cache for Konva (requires HTMLImageElement)
 	let imageCache = $state<Map<string, HTMLImageElement>>(new Map());
 
@@ -128,17 +131,17 @@
 		mounted = true;
 
 		// Handle resize
-		const resizeObserver = new ResizeObserver((entries) => {
+		resizeObserver = new ResizeObserver((entries) => {
 			for (const entry of entries) {
 				stageWidth = entry.contentRect.width;
 				stageHeight = entry.contentRect.height;
 			}
 		});
 		if (containerEl) resizeObserver.observe(containerEl);
+	});
 
-		return () => {
-			resizeObserver.disconnect();
-		};
+	onDestroy(() => {
+		resizeObserver?.disconnect();
 	});
 
 	// Notify parent of state changes (for persistence)

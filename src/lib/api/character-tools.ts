@@ -339,7 +339,7 @@ async function executePlanCharacter(
 				throw new Error('No JSON found in response');
 			}
 			characterSheet = JSON.parse(jsonMatch[0]);
-			log.info('Character sheet parsed successfully', { name: characterSheet.name, promptCount: characterSheet.image_prompts?.length });
+			log.info('Character sheet parsed successfully', { name: characterSheet.name, sceneCount: characterSheet.scenes?.length });
 		} catch (parseError) {
 			log.error('JSON parse failed', { error: parseError instanceof Error ? parseError.message : 'Unknown', rawOutput: rawOutput.substring(0, 500) });
 			return {

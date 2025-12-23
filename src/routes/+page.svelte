@@ -59,14 +59,12 @@
 	let whiteboardRefreshTrigger = $state(0);
 
 	// Whiteboard state for notes canvas
+	import type { WhiteboardState } from '$lib/api/whiteboard-tools';
 	interface Whiteboard {
 		id: string;
 		title: string;
 		is_selected: boolean;
-		state?: {
-			notes: Array<{ id: string; x: number; y: number; text: string; fill: string; width: number; height: number }>;
-			viewport: { x: number; y: number; scale: number };
-		};
+		state?: WhiteboardState;
 		created_at: string;
 		updated_at: string;
 	}
@@ -122,9 +120,10 @@
 	$effect(() => {
 		const mutations = $lastWhiteboardMutations;
 		if (mutations) {
-			// Handle created whiteboards - add to list
+			// Handle created whiteboards - add to list with is_selected: false
 			if (mutations.created_whiteboards && mutations.created_whiteboards.length > 0) {
-				whiteboards = [...whiteboards, ...mutations.created_whiteboards];
+				const newWhiteboards = mutations.created_whiteboards.map(wb => ({ ...wb, is_selected: false }));
+				whiteboards = [...whiteboards, ...newWhiteboards];
 			}
 
 			// Handle renamed whiteboards - update titles
@@ -170,7 +169,7 @@
 			if (mutations.updated_whiteboards && mutations.updated_whiteboards.length > 0) {
 				for (const updated of mutations.updated_whiteboards) {
 					whiteboards = whiteboards.map(wb =>
-						wb.id === updated.id ? { ...wb, state: updated.state } : wb
+						wb.id === updated.id ? ({ ...wb, state: updated.state } as Whiteboard) : wb
 					);
 				}
 				whiteboardRefreshTrigger++;
@@ -185,9 +184,10 @@
 	$effect(() => {
 		const mutations = $lastCanvasMutations;
 		if (mutations) {
-			// Handle created canvases - add to list
+			// Handle created canvases - add to list with is_selected: false
 			if (mutations.created_canvases && mutations.created_canvases.length > 0) {
-				designerCanvases = [...mutations.created_canvases, ...designerCanvases];
+				const newCanvases = mutations.created_canvases.map(c => ({ ...c, is_selected: false }));
+				designerCanvases = [...newCanvases, ...designerCanvases];
 			}
 
 			// Handle renamed canvases - update titles
@@ -278,6 +278,7 @@
 		id: string;
 		title: string;
 		is_enabled: boolean;
+		is_canon?: boolean;
 		created_at: string;
 	}
 	let articles = $state<Article[]>([]);
@@ -350,7 +351,7 @@
 			const response = await fetch('/api/whiteboards');
 			if (response.ok) {
 				const data = await response.json();
-				whiteboards = data.whiteboards || [];
+				whiteboards = (data.whiteboards || []) as Whiteboard[];
 				// Selection state comes from is_selected field (persisted in DB)
 				// Auto-view first whiteboard (most recently updated) and fetch its full state
 				if (whiteboards.length > 0 && !viewingWhiteboardId) {
@@ -361,7 +362,7 @@
 					if (stateResponse.ok) {
 						const stateData = await stateResponse.json();
 						whiteboards = whiteboards.map(wb =>
-							wb.id === firstId ? stateData.whiteboard : wb
+							wb.id === firstId ? (stateData.whiteboard as Whiteboard) : wb
 						);
 					}
 				}

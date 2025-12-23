@@ -5,11 +5,11 @@
 	 * Purple-ish aesthetic to match Eva's palette
 	 */
 
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { Icon } from 'svelte-icons-pack';
 	import { LuCompass } from 'svelte-icons-pack/lu';
 	import CanvasFrame from '$lib/components/CanvasFrame.svelte';
-	import type { RenderElement, CanvasState } from '$lib/api/canvas-tools';
+	import type { RenderElement, CanvasState, PromptText } from '$lib/api/canvas-tools';
 	import { CANVAS, LAYOUT } from '$lib/config/layout';
 
 	interface Canvas {
@@ -93,6 +93,9 @@
 	let Line: any;
 	let Arrow: any;
 	let Image: any;
+
+	// Cleanup reference
+	let resizeObserver: ResizeObserver | null = null;
 
 	// Image cache for Konva (requires HTMLImageElement)
 	let imageCache = $state<Map<string, HTMLImageElement>>(new Map());
@@ -202,17 +205,17 @@
 		mounted = true;
 
 		// Handle resize
-		const resizeObserver = new ResizeObserver((entries) => {
+		resizeObserver = new ResizeObserver((entries) => {
 			for (const entry of entries) {
 				stageWidth = entry.contentRect.width;
 				stageHeight = entry.contentRect.height;
 			}
 		});
 		if (containerEl) resizeObserver.observe(containerEl);
+	});
 
-		return () => {
-			resizeObserver.disconnect();
-		};
+	onDestroy(() => {
+		resizeObserver?.disconnect();
 	});
 
 	// Notify parent of state changes (for persistence)
@@ -483,7 +486,8 @@
 								{#if element.type === 'note'}
 									<!-- Note: card with text - zoom-invariant -->
 									{@const boxWidth = fixedWidth}
-									{@const boxHeight = Math.max(100 * inverseScale, (element.text?.length || 0) * 0.4 * inverseScale)}
+									{@const textStr = typeof element.text === 'string' ? element.text : ''}
+									{@const boxHeight = Math.max(100 * inverseScale, (textStr.length || 0) * 0.4 * inverseScale)}
 									{@const ribbonHeight = 14 * inverseScale}
 									<svelte:component
 										this={Group}
@@ -783,7 +787,8 @@
 									<!-- Text: character field with heading - zoom-invariant -->
 									{@const boxWidth = fixedWidth}
 									{@const headerHeight = 20 * inverseScale}
-									{@const boxHeight = Math.max(200 * inverseScale, (element.text?.length || 0) * 0.4 * inverseScale) + headerHeight}
+									{@const textStr2 = typeof element.text === 'string' ? element.text : ''}
+									{@const boxHeight = Math.max(200 * inverseScale, (textStr2.length || 0) * 0.4 * inverseScale) + headerHeight}
 									{@const ribbonHeight = 14 * inverseScale}
 									{@const fieldLabel = element.field ? element.field.charAt(0).toUpperCase() + element.field.slice(1) : 'Text'}
 									<svelte:component
@@ -882,9 +887,10 @@
 									<!-- Prompt: image generation prompt with heading - teal styling -->
 									{@const boxWidth = fixedWidth}
 									{@const headerHeight = 20 * inverseScale}
-									{@const promptText = typeof element.text === 'object' && element.text !== null
-									? [element.text.setting, element.text.clothing, element.text.pose, element.text.expression].filter(Boolean).join('. ')
-									: (element.text || '')}
+									{@const promptTextObj = typeof element.text === 'object' && element.text !== null ? element.text as PromptText : null}
+									{@const promptText = promptTextObj
+									? [promptTextObj.setting, promptTextObj.clothing, promptTextObj.pose, promptTextObj.expression].filter(Boolean).join('. ')
+									: (element.text as string || '')}
 								{@const boxHeight = Math.max(120 * inverseScale, (promptText?.length || 0) * 0.4 * inverseScale) + headerHeight}
 									{@const ribbonHeight = 14 * inverseScale}
 									{@const promptLabel = element.promptIndex !== undefined ? `Prompt ${element.promptIndex + 1}` : 'Prompt'}
