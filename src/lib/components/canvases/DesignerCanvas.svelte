@@ -9,7 +9,7 @@
 	import { Icon } from 'svelte-icons-pack';
 	import { LuCompass } from 'svelte-icons-pack/lu';
 	import CanvasFrame from '$lib/components/CanvasFrame.svelte';
-	import type { RenderElement, CanvasState, PromptText } from '$lib/api/canvas-tools';
+	import type { RenderElement, CanvasState, PromptText } from '$lib/roles/design-lead/canvas';
 	import { CANVAS, LAYOUT } from '$lib/config/layout';
 
 	interface Canvas {
@@ -333,7 +333,7 @@
 			const newScale = direction > 0 ? oldScale * scaleBy : oldScale / scaleBy;
 
 			// Clamp scale
-			stageScale = Math.max(0.3, Math.min(3, newScale));
+			stageScale = Math.max(0.1, Math.min(3, newScale));
 
 			stageX = pointer.x - mousePointTo.x * stageScale;
 			stageY = pointer.y - mousePointTo.y * stageScale;

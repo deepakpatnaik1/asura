@@ -18,14 +18,14 @@ export const uuidSchema = z.string().uuid('Invalid ID format');
 export const nonEmptyString = z.string().min(1, 'Required');
 
 /** Persona enum (allowed values) */
-export const personaSchema = z.enum(['gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya']);
+export const personaSchema = z.enum(['gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya', 'nico']);
 
 /** Override key enum (personas + processor types for model overrides) */
 export const overrideKeySchema = z.enum([
-	'gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya', // Personas
+	'gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya', 'nico', // Personas
 	'embeddings', 'compression', 'chat_compression', // Text processes
 	'tool_calling', 'image_gen', 'image_edit', // Eva pipeline
-	'comment_generator' // Ananya pipeline
+	'comment_generator' // Ananya/Nico pipeline
 ]);
 
 // ============================================================================
@@ -74,6 +74,7 @@ export const settingsUpdateSchema = z.object({
 	model_alicja: z.string().nullable().optional(),
 	model_eva: z.string().nullable().optional(),
 	model_ananya: z.string().nullable().optional(),
+	model_nico: z.string().nullable().optional(),
 
 	// Process model overrides
 	model_embeddings: z.string().nullable().optional(),
@@ -89,7 +90,8 @@ export const settingsUpdateSchema = z.object({
 	compression_uncensored_samara: z.boolean().optional(),
 	compression_uncensored_alicja: z.boolean().optional(),
 	compression_uncensored_eva: z.boolean().optional(),
-	compression_uncensored_ananya: z.boolean().optional()
+	compression_uncensored_ananya: z.boolean().optional(),
+	compression_uncensored_nico: z.boolean().optional()
 }).refine(
 	(data) => Object.keys(data).length > 0,
 	{ message: 'At least one field must be provided' }

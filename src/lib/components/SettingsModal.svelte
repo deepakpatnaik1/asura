@@ -25,11 +25,11 @@
 	}
 
 	// All override keys (personas + processors)
-	const OVERRIDE_KEYS = ['gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya', 'embeddings', 'compression', 'chat_compression', 'character_planning', 'image_gen', 'image_edit'] as const;
+	const OVERRIDE_KEYS = ['gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya', 'nico', 'embeddings', 'compression', 'chat_compression', 'character_planning', 'image_gen', 'image_edit'] as const;
 	type OverrideKey = typeof OVERRIDE_KEYS[number];
 
 	// Persona names for uncensored compression flags
-	const PERSONA_NAMES = ['gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya'] as const;
+	const PERSONA_NAMES = ['gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya', 'nico'] as const;
 	type PersonaName = typeof PERSONA_NAMES[number];
 
 	let models = $state<Model[]>([]);
@@ -40,6 +40,7 @@
 		alicja: '',
 		eva: '',
 		ananya: '',
+		nico: '',
 		embeddings: '',
 		compression: '',
 		chat_compression: '',
@@ -55,7 +56,8 @@
 		samara: false,
 		alicja: false,
 		eva: true,
-		ananya: false
+		ananya: false,
+		nico: false
 	});
 	let isLoading = $state(true);
 	let isExporting = $state(false);
@@ -168,6 +170,7 @@
 				alicja: '',
 				eva: '',
 				ananya: '',
+				nico: '',
 				embeddings: '',
 				compression: '',
 				chat_compression: '',
@@ -189,7 +192,8 @@
 				samara: false,
 				alicja: false,
 				eva: true,
-				ananya: false
+				ananya: false,
+				nico: false
 			};
 			for (const persona of PERSONA_NAMES) {
 				const columnName = `compression_uncensored_${persona}` as keyof typeof settings;
@@ -597,6 +601,19 @@
 								<label for="ananya-select">Ananya</label>
 								<input type="checkbox" id="ananya-uncensored" checked={uncensoredFlags.ananya} onchange={(e) => handleUncensoredChange('ananya', e)} title="Use persona model for compression" />
 								<select id="ananya-select" value={modelOverrides.ananya} onchange={(e) => handleOverrideChange('ananya', e)}>
+									{#each modelsByProvider as group}
+										<optgroup label={group.label}>
+											{#each group.models as model}
+												<option value={model.model_identifier}>{model.model_name}</option>
+											{/each}
+										</optgroup>
+									{/each}
+								</select>
+							</div>
+							<div class="dropdown-row">
+								<label for="nico-select">Nico</label>
+								<input type="checkbox" id="nico-uncensored" checked={uncensoredFlags.nico} onchange={(e) => handleUncensoredChange('nico', e)} title="Use persona model for compression" />
+								<select id="nico-select" value={modelOverrides.nico} onchange={(e) => handleOverrideChange('nico', e)}>
 									{#each modelsByProvider as group}
 										<optgroup label={group.label}>
 											{#each group.models as model}
@@ -1148,7 +1165,7 @@
 	 * Update these counts when adding/removing dropdowns:
 	 */
 	.all-models-list {
-		--personas-count: 6;      /* Gunnar, Kirby, Samara, Alicja, Eva, Ananya */
+		--personas-count: 7;      /* Gunnar, Kirby, Samara, Alicja, Eva, Ananya, Nico */
 		--processes-count: 6;     /* Embeddings, File artisan cut, Chat artisan cut, Character plan (NSFW), Image gen (NSFW), Image editing (NSFW) */
 		--dropdown-height: 24px;
 		--dropdown-gap: 6px;

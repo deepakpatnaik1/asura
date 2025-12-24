@@ -1,17 +1,93 @@
 /**
- * Canvas Tools for Eva
- * Uses canvas_designer table
+ * Role: Design Lead - Canvas Responsibility
  *
- * Tool definitions and executors for designer canvas operations.
- * These tools allow Eva to create, rename, delete, and open designer canvases.
+ * Canvas CRUD operations for Eva.
+ * Tools for managing designer canvases.
  */
 
 import type Anthropic from '@anthropic-ai/sdk';
-import type { SupabaseClient } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js';
+import { PUBLIC_SUPABASE_URL } from '$env/static/public';
+import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
+
+const supabase = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+// ============================================================================
+// Types
+// ============================================================================
 
 /**
- * Tool Definitions
+ * Structured prompt text for prompt elements
  */
+export interface PromptText {
+	setting?: string;
+	clothing?: string;
+	pose?: string;
+	expression?: string;
+}
+
+export type RenderElement = {
+	id: string;
+	type: 'note' | 'label' | 'line' | 'arrow' | 'group' | 'image' | 'text' | 'prompt';
+	code: string; // 3-char alphanumeric reference code (e.g., "A7K")
+	x?: number;
+	y?: number;
+	text?: string | PromptText;
+	fill?: string;
+	width?: number;
+	height?: number;
+	fontSize?: number;
+	stroke?: string;
+	strokeWidth?: number;
+	from?: [number, number];
+	to?: [number, number];
+	label?: string;
+	// Image-specific properties
+	src?: string;
+	thumbnail_url?: string;
+	prompt?: string;
+	seed?: number;
+	model?: string;
+	role?: string;
+	// Character element properties
+	field?: 'name' | 'personality' | 'voice' | 'backstory' | 'appearance';
+	promptIndex?: number;
+	sourcePromptCode?: string;
+};
+
+export interface CanvasState {
+	render: RenderElement[];
+	semantic: Record<string, unknown>;
+	viewport: { x: number; y: number; scale: number };
+}
+
+export interface DesignerCanvas {
+	id: string;
+	title: string;
+	state?: CanvasState;
+	created_at: string;
+	updated_at: string;
+}
+
+export interface CanvasMutations {
+	created_canvases: DesignerCanvas[];
+	renamed_canvases: { id: string; title: string }[];
+	deleted_canvases: string[];
+	opened_canvas: string | null;
+	closed_canvas: string | null;
+	updated_canvases: { id: string; state: CanvasState }[];
+}
+
+export interface CanvasToolResult {
+	success: boolean;
+	message: string;
+	data?: unknown;
+	mutations?: CanvasMutations;
+}
+
+// ============================================================================
+// Tool Definitions
+// ============================================================================
 
 export const CREATE_CANVAS_TOOL: Anthropic.Tool = {
 	name: 'create_canvas',
@@ -79,17 +155,6 @@ export const OPEN_CANVAS_TOOL: Anthropic.Tool = {
 	}
 };
 
-export const LIST_CANVASES_TOOL: Anthropic.Tool = {
-	name: 'list_canvases',
-	description:
-		'List all available designer canvases for the user. Use this to show the user their canvases or to help them choose which one to open.',
-	input_schema: {
-		type: 'object',
-		properties: {},
-		required: []
-	}
-};
-
 export const CLOSE_CANVAS_TOOL: Anthropic.Tool = {
 	name: 'close_canvas',
 	description:
@@ -106,23 +171,14 @@ export const CLOSE_CANVAS_TOOL: Anthropic.Tool = {
 	}
 };
 
-export const DELETE_ELEMENT_TOOL: Anthropic.Tool = {
-	name: 'delete_element',
+export const LIST_CANVASES_TOOL: Anthropic.Tool = {
+	name: 'list_canvases',
 	description:
-		'Delete a single element from a canvas by its code. Use this when the user wants to remove a specific image or element.',
+		'List all available designer canvases for the user. Use this to show the user their canvases or to help them choose which one to open.',
 	input_schema: {
 		type: 'object',
-		properties: {
-			canvas_id: {
-				type: 'string',
-				description: 'The UUID of the canvas containing the element'
-			},
-			element_code: {
-				type: 'string',
-				description: 'The 3-character code of the element to delete (e.g., "FX9", "MLF")'
-			}
-		},
-		required: ['canvas_id', 'element_code']
+		properties: {},
+		required: []
 	}
 };
 
@@ -158,7 +214,6 @@ export const UPDATE_CANVAS_TOOL: Anthropic.Tool = {
 						from: { type: 'array', items: { type: 'number' } },
 						to: { type: 'array', items: { type: 'number' } },
 						label: { type: 'string' },
-						// Image-specific properties
 						src: { type: 'string', description: 'URL to image' },
 						prompt: { type: 'string', description: 'Generation prompt for iteration' },
 						seed: { type: 'number', description: 'Seed for consistent generations' },
@@ -178,9 +233,26 @@ export const UPDATE_CANVAS_TOOL: Anthropic.Tool = {
 	}
 };
 
-/**
- * All canvas tools
- */
+export const DELETE_ELEMENT_TOOL: Anthropic.Tool = {
+	name: 'delete_element',
+	description:
+		'Delete a single element from a canvas by its code. Use this when the user wants to remove a specific image or element.',
+	input_schema: {
+		type: 'object',
+		properties: {
+			canvas_id: {
+				type: 'string',
+				description: 'The UUID of the canvas containing the element'
+			},
+			element_code: {
+				type: 'string',
+				description: 'The 3-character code of the element to delete (e.g., "FX9", "MLF")'
+			}
+		},
+		required: ['canvas_id', 'element_code']
+	}
+};
+
 export const CANVAS_TOOLS: Anthropic.Tool[] = [
 	CREATE_CANVAS_TOOL,
 	RENAME_CANVAS_TOOL,
@@ -192,100 +264,10 @@ export const CANVAS_TOOLS: Anthropic.Tool[] = [
 	DELETE_ELEMENT_TOOL
 ];
 
-/**
- * Context for tool execution
- */
-export interface CanvasToolContext {
-	supabase: SupabaseClient;
-	userId: string;
-}
+// ============================================================================
+// Helpers
+// ============================================================================
 
-/**
- * Tool execution result
- */
-export interface ToolExecutionResult {
-	success: boolean;
-	message: string;
-	data?: unknown;
-}
-
-/**
- * Canvas type for mutations payload
- */
-export interface DesignerCanvas {
-	id: string;
-	title: string;
-	state?: CanvasState;
-	created_at: string;
-	updated_at: string;
-}
-
-/**
- * Render element types
- */
-/**
- * Structured prompt text for prompt elements
- */
-export interface PromptText {
-	setting?: string;
-	clothing?: string;
-	pose?: string;
-	expression?: string;
-}
-
-export type RenderElement = {
-	id: string;
-	type: 'note' | 'label' | 'line' | 'arrow' | 'group' | 'image' | 'text' | 'prompt';
-	code: string; // 3-char alphanumeric reference code (e.g., "A7K") - required
-	x?: number;
-	y?: number;
-	text?: string | PromptText; // String for text elements, PromptText for prompt elements
-	fill?: string;
-	width?: number;
-	height?: number;
-	fontSize?: number;
-	stroke?: string;
-	strokeWidth?: number;
-	from?: [number, number];
-	to?: [number, number];
-	label?: string;
-	// Image-specific properties
-	src?: string; // URL to image
-	thumbnail_url?: string; // Thumbnail URL
-	prompt?: string; // Generation prompt (for iteration)
-	seed?: number; // For consistent generations
-	model?: string; // Which model generated it
-	role?: string; // 'hero' | 'gallery' | 'expression' etc.
-	// Character element properties
-	field?: 'name' | 'personality' | 'voice' | 'backstory' | 'appearance'; // For text elements
-	promptIndex?: number; // For prompt elements: 0, 1, 2
-	sourcePromptCode?: string; // For images: links back to prompt element
-};
-
-/**
- * Canvas state with dual-layer model
- */
-export interface CanvasState {
-	render: RenderElement[];
-	semantic: Record<string, unknown>;
-	viewport: { x: number; y: number; scale: number };
-}
-
-/**
- * Mutations payload returned with chat response
- */
-export interface CanvasMutations {
-	created_canvases: DesignerCanvas[];
-	renamed_canvases: { id: string; title: string }[];
-	deleted_canvases: string[]; // IDs
-	opened_canvas: string | null; // ID of canvas to open in UI
-	closed_canvas: string | null; // ID of canvas to close/deselect
-	updated_canvases: { id: string; state: CanvasState }[];
-}
-
-/**
- * Create empty mutations object
- */
 export function createEmptyCanvasMutations(): CanvasMutations {
 	return {
 		created_canvases: [],
@@ -297,86 +279,47 @@ export function createEmptyCanvasMutations(): CanvasMutations {
 	};
 }
 
-/**
- * Execute a canvas tool
- */
-export async function executeCanvasTool(
-	toolName: string,
-	input: Record<string, unknown>,
-	context: CanvasToolContext,
-	mutations: CanvasMutations
-): Promise<ToolExecutionResult> {
-	switch (toolName) {
-		case 'create_canvas':
-			return executeCreateCanvas(input, context, mutations);
-
-		case 'rename_canvas':
-			return executeRenameCanvas(input, context, mutations);
-
-		case 'delete_canvas':
-			return executeDeleteCanvas(input, context, mutations);
-
-		case 'open_canvas':
-			return executeOpenCanvas(input, context, mutations);
-
-		case 'close_canvas':
-			return executeCloseCanvas(input, context, mutations);
-
-		case 'list_canvases':
-			return executeListCanvases(context);
-
-		case 'update_canvas':
-			return executeUpdateCanvas(input, context, mutations);
-
-		case 'delete_element':
-			return executeDeleteElement(input, context, mutations);
-
-		default:
-			return {
-				success: false,
-				message: `Unknown canvas tool: ${toolName}`
-			};
-	}
+export function isCanvasTool(toolName: string): boolean {
+	return [
+		'create_canvas',
+		'rename_canvas',
+		'delete_canvas',
+		'open_canvas',
+		'close_canvas',
+		'list_canvases',
+		'update_canvas',
+		'delete_element'
+	].includes(toolName);
 }
 
-/**
- * Create Canvas Executor
- */
+// ============================================================================
+// Executors
+// ============================================================================
+
 async function executeCreateCanvas(
 	input: Record<string, unknown>,
-	context: CanvasToolContext,
+	userId: string,
 	mutations: CanvasMutations
-): Promise<ToolExecutionResult> {
+): Promise<CanvasToolResult> {
 	try {
-		const { supabase, userId } = context;
 		const title = (input.title as string).trim();
 
 		if (!title) {
-			return {
-				success: false,
-				message: 'Title cannot be empty'
-			};
+			return { success: false, message: 'Title cannot be empty' };
 		}
 
 		if (title.length > 255) {
-			return {
-				success: false,
-				message: 'Title must be 255 characters or less'
-			};
+			return { success: false, message: 'Title must be 255 characters or less' };
 		}
 
 		const { data, error } = await supabase
 			.from('canvas_designer')
-			.insert({
-				user_id: userId,
-				title
-			})
+			.insert({ user_id: userId, title })
 			.select('id, title, created_at, updated_at')
 			.single();
 
 		if (error) throw error;
 
-		// Verify the created canvas matches what was requested
 		if (data.title !== title) {
 			return {
 				success: false,
@@ -393,13 +336,13 @@ async function executeCreateCanvas(
 		};
 
 		mutations.created_canvases.push(canvas);
-		// Auto-open newly created canvas
 		mutations.opened_canvas = canvas.id;
 
 		return {
 			success: true,
 			message: `Created canvas "${title}"`,
-			data: canvas
+			data: canvas,
+			mutations
 		};
 	} catch (error) {
 		return {
@@ -409,34 +352,23 @@ async function executeCreateCanvas(
 	}
 }
 
-/**
- * Rename Canvas Executor
- */
 async function executeRenameCanvas(
 	input: Record<string, unknown>,
-	context: CanvasToolContext,
+	userId: string,
 	mutations: CanvasMutations
-): Promise<ToolExecutionResult> {
+): Promise<CanvasToolResult> {
 	try {
-		const { supabase, userId } = context;
 		const canvasId = input.canvas_id as string;
 		const newTitle = (input.title as string).trim();
 
 		if (!newTitle) {
-			return {
-				success: false,
-				message: 'Title cannot be empty'
-			};
+			return { success: false, message: 'Title cannot be empty' };
 		}
 
 		if (newTitle.length > 255) {
-			return {
-				success: false,
-				message: 'Title must be 255 characters or less'
-			};
+			return { success: false, message: 'Title must be 255 characters or less' };
 		}
 
-		// Get old title for message
 		const { data: existing, error: fetchError } = await supabase
 			.from('canvas_designer')
 			.select('title')
@@ -445,20 +377,14 @@ async function executeRenameCanvas(
 			.single();
 
 		if (fetchError || !existing) {
-			return {
-				success: false,
-				message: 'Canvas not found'
-			};
+			return { success: false, message: 'Canvas not found' };
 		}
 
 		const oldTitle = existing.title;
 
 		const { data: updated, error } = await supabase
 			.from('canvas_designer')
-			.update({
-				title: newTitle,
-				updated_at: new Date().toISOString()
-			})
+			.update({ title: newTitle, updated_at: new Date().toISOString() })
 			.eq('id', canvasId)
 			.eq('user_id', userId)
 			.select('title')
@@ -466,12 +392,8 @@ async function executeRenameCanvas(
 
 		if (error) throw error;
 
-		// Verify the update actually happened
 		if (!updated || updated.title !== newTitle) {
-			return {
-				success: false,
-				message: `Rename failed: title did not update. Check database permissions.`
-			};
+			return { success: false, message: `Rename failed: title did not update.` };
 		}
 
 		mutations.renamed_canvases.push({ id: canvasId, title: newTitle });
@@ -479,7 +401,8 @@ async function executeRenameCanvas(
 		return {
 			success: true,
 			message: `Renamed canvas from "${oldTitle}" to "${newTitle}"`,
-			data: { id: canvasId, title: newTitle }
+			data: { id: canvasId, title: newTitle },
+			mutations
 		};
 	} catch (error) {
 		return {
@@ -489,19 +412,14 @@ async function executeRenameCanvas(
 	}
 }
 
-/**
- * Delete Canvas Executor
- */
 async function executeDeleteCanvas(
 	input: Record<string, unknown>,
-	context: CanvasToolContext,
+	userId: string,
 	mutations: CanvasMutations
-): Promise<ToolExecutionResult> {
+): Promise<CanvasToolResult> {
 	try {
-		const { supabase, userId } = context;
 		const canvasId = input.canvas_id as string;
 
-		// Get title before deleting
 		const { data: canvas, error: fetchError } = await supabase
 			.from('canvas_designer')
 			.select('title')
@@ -510,10 +428,7 @@ async function executeDeleteCanvas(
 			.single();
 
 		if (fetchError || !canvas) {
-			return {
-				success: false,
-				message: 'Canvas not found'
-			};
+			return { success: false, message: 'Canvas not found' };
 		}
 
 		const { error } = await supabase
@@ -524,7 +439,7 @@ async function executeDeleteCanvas(
 
 		if (error) throw error;
 
-		// Verify deletion - record should no longer exist
+		// Verify deletion
 		const { data: stillExists } = await supabase
 			.from('canvas_designer')
 			.select('id')
@@ -533,10 +448,7 @@ async function executeDeleteCanvas(
 			.single();
 
 		if (stillExists) {
-			return {
-				success: false,
-				message: `Delete failed: canvas still exists. Check database permissions.`
-			};
+			return { success: false, message: `Delete failed: canvas still exists.` };
 		}
 
 		mutations.deleted_canvases.push(canvasId);
@@ -544,7 +456,8 @@ async function executeDeleteCanvas(
 		return {
 			success: true,
 			message: `Deleted canvas "${canvas.title}"`,
-			data: { id: canvasId }
+			data: { id: canvasId },
+			mutations
 		};
 	} catch (error) {
 		return {
@@ -554,19 +467,14 @@ async function executeDeleteCanvas(
 	}
 }
 
-/**
- * Open Canvas Executor
- */
 async function executeOpenCanvas(
 	input: Record<string, unknown>,
-	context: CanvasToolContext,
+	userId: string,
 	mutations: CanvasMutations
-): Promise<ToolExecutionResult> {
+): Promise<CanvasToolResult> {
 	try {
-		const { supabase, userId } = context;
 		const canvasId = input.canvas_id as string;
 
-		// Verify canvas exists and belongs to user
 		const { data: canvas, error } = await supabase
 			.from('canvas_designer')
 			.select('id, title')
@@ -575,19 +483,16 @@ async function executeOpenCanvas(
 			.single();
 
 		if (error || !canvas) {
-			return {
-				success: false,
-				message: 'Canvas not found'
-			};
+			return { success: false, message: 'Canvas not found' };
 		}
 
-		// Set this as the canvas to open in UI
 		mutations.opened_canvas = canvasId;
 
 		return {
 			success: true,
 			message: `Opening canvas "${canvas.title}"`,
-			data: { id: canvasId, title: canvas.title }
+			data: { id: canvasId, title: canvas.title },
+			mutations
 		};
 	} catch (error) {
 		return {
@@ -597,19 +502,14 @@ async function executeOpenCanvas(
 	}
 }
 
-/**
- * Close Canvas Executor
- */
 async function executeCloseCanvas(
 	input: Record<string, unknown>,
-	context: CanvasToolContext,
+	userId: string,
 	mutations: CanvasMutations
-): Promise<ToolExecutionResult> {
+): Promise<CanvasToolResult> {
 	try {
-		const { supabase, userId } = context;
 		const canvasId = input.canvas_id as string;
 
-		// Verify canvas exists and belongs to user
 		const { data: canvas, error } = await supabase
 			.from('canvas_designer')
 			.select('id, title')
@@ -618,19 +518,16 @@ async function executeCloseCanvas(
 			.single();
 
 		if (error || !canvas) {
-			return {
-				success: false,
-				message: 'Canvas not found'
-			};
+			return { success: false, message: 'Canvas not found' };
 		}
 
-		// Set this as the canvas to close in UI
 		mutations.closed_canvas = canvasId;
 
 		return {
 			success: true,
 			message: `Closed canvas "${canvas.title}"`,
-			data: { id: canvasId, title: canvas.title }
+			data: { id: canvasId, title: canvas.title },
+			mutations
 		};
 	} catch (error) {
 		return {
@@ -640,13 +537,8 @@ async function executeCloseCanvas(
 	}
 }
 
-/**
- * List Canvases Executor
- */
-async function executeListCanvases(context: CanvasToolContext): Promise<ToolExecutionResult> {
+async function executeListCanvases(userId: string): Promise<CanvasToolResult> {
 	try {
-		const { supabase, userId } = context;
-
 		const { data: canvases, error } = await supabase
 			.from('canvas_designer')
 			.select('id, title, created_at, updated_at')
@@ -680,19 +572,14 @@ async function executeListCanvases(context: CanvasToolContext): Promise<ToolExec
 	}
 }
 
-/**
- * Update Canvas Executor
- */
 async function executeUpdateCanvas(
 	input: Record<string, unknown>,
-	context: CanvasToolContext,
+	userId: string,
 	mutations: CanvasMutations
-): Promise<ToolExecutionResult> {
+): Promise<CanvasToolResult> {
 	try {
-		const { supabase, userId } = context;
 		const canvasId = input.canvas_id as string;
 
-		// Validate required params
 		if (!canvasId) {
 			return {
 				success: false,
@@ -700,14 +587,11 @@ async function executeUpdateCanvas(
 			};
 		}
 
-		// Default to empty array/object if not provided
-		// Accept 'content' as alias for 'semantic' (common LLM mistake)
 		const render = Array.isArray(input.render) ? (input.render as RenderElement[]) : [];
 		const semantic = (input.semantic as Record<string, unknown>)
 			|| (input.content as Record<string, unknown>)
 			|| {};
 
-		// Verify canvas exists and belongs to user
 		const { data: existing, error: fetchError } = await supabase
 			.from('canvas_designer')
 			.select('title, state')
@@ -716,28 +600,17 @@ async function executeUpdateCanvas(
 			.single();
 
 		if (fetchError || !existing) {
-			return {
-				success: false,
-				message: 'Canvas not found'
-			};
+			return { success: false, message: 'Canvas not found' };
 		}
 
-		// Preserve viewport from existing state
 		const existingState = existing.state as CanvasState | null;
 		const viewport = existingState?.viewport || { x: 0, y: 0, scale: 1 };
 
-		const newState: CanvasState = {
-			render,
-			semantic,
-			viewport
-		};
+		const newState: CanvasState = { render, semantic, viewport };
 
 		const { data: updated, error } = await supabase
 			.from('canvas_designer')
-			.update({
-				state: newState,
-				updated_at: new Date().toISOString()
-			})
+			.update({ state: newState, updated_at: new Date().toISOString() })
 			.eq('id', canvasId)
 			.eq('user_id', userId)
 			.select('state')
@@ -745,15 +618,10 @@ async function executeUpdateCanvas(
 
 		if (error) throw error;
 
-		// Verify the update actually happened
 		if (!updated || !updated.state) {
-			return {
-				success: false,
-				message: `Update failed: state did not save. Check database permissions.`
-			};
+			return { success: false, message: `Update failed: state did not save.` };
 		}
 
-		// Verify render array length matches (basic sanity check)
 		const savedRender = (updated.state as CanvasState).render;
 		if (!savedRender || savedRender.length !== render.length) {
 			return {
@@ -762,15 +630,14 @@ async function executeUpdateCanvas(
 			};
 		}
 
-		// Add to mutations for UI update
 		mutations.updated_canvases.push({ id: canvasId, state: newState });
-		// Also open this canvas so user sees the changes
 		mutations.opened_canvas = canvasId;
 
 		return {
 			success: true,
 			message: `Updated canvas "${existing.title}" with ${render.length} elements`,
-			data: { id: canvasId, elementCount: render.length }
+			data: { id: canvasId, elementCount: render.length },
+			mutations
 		};
 	} catch (error) {
 		return {
@@ -780,27 +647,19 @@ async function executeUpdateCanvas(
 	}
 }
 
-/**
- * Delete Element Executor
- */
 async function executeDeleteElement(
 	input: Record<string, unknown>,
-	context: CanvasToolContext,
+	userId: string,
 	mutations: CanvasMutations
-): Promise<ToolExecutionResult> {
+): Promise<CanvasToolResult> {
 	try {
-		const { supabase, userId } = context;
 		const canvasId = input.canvas_id as string;
 		const elementCode = (input.element_code as string)?.toUpperCase();
 
 		if (!canvasId || !elementCode) {
-			return {
-				success: false,
-				message: 'Missing canvas_id or element_code'
-			};
+			return { success: false, message: 'Missing canvas_id or element_code' };
 		}
 
-		// Get current canvas state
 		const { data: canvas, error: fetchError } = await supabase
 			.from('canvas_designer')
 			.select('title, state')
@@ -809,16 +668,12 @@ async function executeDeleteElement(
 			.single();
 
 		if (fetchError || !canvas) {
-			return {
-				success: false,
-				message: 'Canvas not found'
-			};
+			return { success: false, message: 'Canvas not found' };
 		}
 
 		const currentState = canvas.state as CanvasState | null;
 		const currentRender = currentState?.render || [];
 
-		// Find the element by code
 		const elementIndex = currentRender.findIndex(
 			(el) => el.code?.toUpperCase() === elementCode
 		);
@@ -830,7 +685,6 @@ async function executeDeleteElement(
 			};
 		}
 
-		// Remove the element
 		const newRender = [
 			...currentRender.slice(0, elementIndex),
 			...currentRender.slice(elementIndex + 1)
@@ -842,19 +696,15 @@ async function executeDeleteElement(
 			viewport: currentState?.viewport || { x: 0, y: 0, scale: 1 }
 		};
 
-		// Save updated state
 		const { error: updateError } = await supabase
 			.from('canvas_designer')
-			.update({
-				state: newState,
-				updated_at: new Date().toISOString()
-			})
+			.update({ state: newState, updated_at: new Date().toISOString() })
 			.eq('id', canvasId)
 			.eq('user_id', userId);
 
 		if (updateError) throw updateError;
 
-		// Verify the element was actually removed
+		// Verify deletion
 		const { data: verifyCanvas, error: verifyError } = await supabase
 			.from('canvas_designer')
 			.select('state')
@@ -863,10 +713,7 @@ async function executeDeleteElement(
 			.single();
 
 		if (verifyError || !verifyCanvas) {
-			return {
-				success: false,
-				message: `Delete verification failed: could not re-fetch canvas`
-			};
+			return { success: false, message: `Delete verification failed: could not re-fetch canvas` };
 		}
 
 		const verifyState = verifyCanvas.state as CanvasState | null;
@@ -876,17 +723,17 @@ async function executeDeleteElement(
 		if (stillExists) {
 			return {
 				success: false,
-				message: `Delete failed: element ${elementCode} still exists. Check database permissions.`
+				message: `Delete failed: element ${elementCode} still exists.`
 			};
 		}
 
-		// Add to mutations for UI update
 		mutations.updated_canvases.push({ id: canvasId, state: newState });
 
 		return {
 			success: true,
 			message: `Deleted element ${elementCode} from canvas "${canvas.title}"`,
-			data: { canvas_id: canvasId, deleted_code: elementCode, remaining_elements: newRender.length }
+			data: { canvas_id: canvasId, deleted_code: elementCode, remaining_elements: newRender.length },
+			mutations
 		};
 	} catch (error) {
 		return {
@@ -896,18 +743,35 @@ async function executeDeleteElement(
 	}
 }
 
-/**
- * Check if a tool name is a canvas tool
- */
-export function isCanvasTool(toolName: string): boolean {
-	return [
-		'create_canvas',
-		'rename_canvas',
-		'delete_canvas',
-		'open_canvas',
-		'close_canvas',
-		'list_canvases',
-		'update_canvas',
-		'delete_element'
-	].includes(toolName);
+// ============================================================================
+// Main Dispatcher
+// ============================================================================
+
+export async function executeCanvasTool(
+	toolName: string,
+	input: Record<string, unknown>,
+	userId: string
+): Promise<CanvasToolResult> {
+	const mutations = createEmptyCanvasMutations();
+
+	switch (toolName) {
+		case 'create_canvas':
+			return executeCreateCanvas(input, userId, mutations);
+		case 'rename_canvas':
+			return executeRenameCanvas(input, userId, mutations);
+		case 'delete_canvas':
+			return executeDeleteCanvas(input, userId, mutations);
+		case 'open_canvas':
+			return executeOpenCanvas(input, userId, mutations);
+		case 'close_canvas':
+			return executeCloseCanvas(input, userId, mutations);
+		case 'list_canvases':
+			return executeListCanvases(userId);
+		case 'update_canvas':
+			return executeUpdateCanvas(input, userId, mutations);
+		case 'delete_element':
+			return executeDeleteElement(input, userId, mutations);
+		default:
+			return { success: false, message: `Unknown canvas tool: ${toolName}` };
+	}
 }

@@ -75,7 +75,7 @@
 	const selectedWhiteboardIds = $derived(whiteboards.filter(wb => wb.is_selected).map(wb => wb.id));
 
 	// Designer canvas state for Eva
-	import type { CanvasState } from '$lib/api/canvas-tools';
+	import type { CanvasState } from '$lib/roles/design-lead/canvas';
 	interface DesignerCanvasData {
 		id: string;
 		title: string;

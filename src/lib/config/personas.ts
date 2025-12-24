@@ -78,7 +78,10 @@ export type ToolName =
 	// Reddit tools (Ananya)
 	| 'fetch_reddit_thread'
 	| 'fetch_subreddit_posts'
-	// Engagement tools (Ananya)
+	// Discord tools (Nico)
+	| 'fetch_discord_thread'
+	| 'get_discord_server_registry'
+	// Engagement tools (Ananya, Nico)
 	| 'get_subreddit_registry'
 	| 'log_engagement';
 
@@ -177,6 +180,18 @@ const ANANYA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic
 const ANANYA_TOOLS: ToolName[] = ['fetch_reddit_thread', 'fetch_subreddit_posts', 'get_subreddit_registry', 'log_engagement'];
 
 /**
+ * Nico: Discord engagement
+ * Includes canon - he knows the product, trusts him not to leak
+ */
+const NICO_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic', 'canon'];
+
+/**
+ * Nico tools: Discord engagement
+ * Single-model: Nico writes comments directly in conversation
+ */
+const NICO_TOOLS: ToolName[] = ['fetch_discord_thread', 'get_discord_server_registry', 'log_engagement'];
+
+/**
  * All Alicja tools
  */
 const ALICJA_TOOLS: ToolName[] = [
@@ -252,7 +267,7 @@ export const PERSONAS: Record<string, Persona> = {
 		systemPrompt: 'eva',
 		contextChunks: EVA_CHUNKS,
 		compression: true,
-		tools: ['create_canvas', 'rename_canvas', 'delete_canvas', 'open_canvas', 'close_canvas', 'list_canvases', 'plan_character', 'draw_character']
+		tools: ['create_canvas', 'rename_canvas', 'delete_canvas', 'open_canvas', 'close_canvas', 'list_canvases', 'update_canvas', 'delete_element', 'plan_character', 'draw_character', 'generate_image', 'edit_image']
 	},
 	ananya: {
 		name: 'ananya',
@@ -263,13 +278,23 @@ export const PERSONAS: Record<string, Persona> = {
 		contextChunks: ANANYA_CHUNKS,
 		compression: true,
 		tools: ANANYA_TOOLS
+	},
+	nico: {
+		name: 'nico',
+		displayName: 'Nico',
+		accentColor: getPaletteColor('nico'),
+		model: null,
+		systemPrompt: 'nico', // Discord engagement manager
+		contextChunks: NICO_CHUNKS,
+		compression: true,
+		tools: NICO_TOOLS
 	}
 };
 
 /**
  * Persona names as const array for type safety
  */
-export const PERSONA_NAMES = ['gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya'] as const;
+export const PERSONA_NAMES = ['gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya', 'nico'] as const;
 export type PersonaName = (typeof PERSONA_NAMES)[number];
 
 /**

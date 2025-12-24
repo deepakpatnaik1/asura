@@ -12,7 +12,7 @@ import type { RequestHandler } from './$types';
 import { requireAuth } from '$lib/api/require-auth';
 import { parseRequestJson } from '$lib/api/parse-json';
 import { databaseError, notFoundError, validationError } from '$lib/api/errors';
-import { syncCanvasElementCodes } from '$lib/api/image-gen-tools';
+import { syncCanvasElementCodes } from '$lib/roles/design-lead';
 
 /**
  * GET /api/canvases/[id]

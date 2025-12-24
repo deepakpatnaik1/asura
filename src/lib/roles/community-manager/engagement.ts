@@ -18,21 +18,26 @@ const supabase = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY);
 // Types
 // ============================================================================
 
-export interface SubredditEntry {
+export interface CommunityEntry {
 	id: string;
 	name: string;
 	url: string;
-	tier: number;
 	platform: string;
 	last_engaged: string | null;
 	notes: string | null;
 }
 
-export interface SubredditRegistryResult {
+// Alias for backwards compatibility
+export type SubredditEntry = CommunityEntry;
+
+export interface RegistryResult {
 	success: boolean;
 	message: string;
-	data?: SubredditEntry[];
+	data?: CommunityEntry[];
 }
+
+// Alias for backwards compatibility
+export type SubredditRegistryResult = RegistryResult;
 
 export interface LogEngagementResult {
 	success: boolean;
@@ -50,15 +55,25 @@ export interface LogEngagementResult {
 export const GET_SUBREDDIT_REGISTRY_TOOL: Anthropic.Tool = {
 	name: 'get_subreddit_registry',
 	description:
-		'Get the list of subreddits to consider for community engagement. Returns subreddits organized by tier (1=daily, 2=2-3x weekly, 3=weekly, 4=weekly scan). Use this when Boss asks to start community engagement.',
+		'Get the list of subreddits to consider for community engagement. Returns subreddits ordered by last_engaged (oldest first). Use this when Boss asks to start community engagement.',
 	input_schema: {
 		type: 'object',
-		properties: {
-			tier: {
-				type: 'number',
-				description: 'Optional: filter by tier (1-4). If not provided, returns all tiers.'
-			}
-		},
+		properties: {},
+		required: []
+	}
+};
+
+/**
+ * Get Discord Server Registry Tool
+ * Returns the list of Discord servers Nico should consider for engagement.
+ */
+export const GET_DISCORD_SERVER_REGISTRY_TOOL: Anthropic.Tool = {
+	name: 'get_discord_server_registry',
+	description:
+		'Get the list of Discord servers to consider for community engagement. Returns servers ordered by last_engaged (oldest first). Use this when Boss asks to start Discord engagement or when you need to pick a server to visit.',
+	input_schema: {
+		type: 'object',
+		properties: {},
 		required: []
 	}
 };
@@ -107,23 +122,14 @@ export const LOG_ENGAGEMENT_TOOL: Anthropic.Tool = {
  * Execute get_subreddit_registry tool
  */
 export async function executeGetSubredditRegistry(
-	input: Record<string, unknown>
-): Promise<SubredditRegistryResult> {
-	const tier = input.tier as number | undefined;
-
+	_input: Record<string, unknown>
+): Promise<RegistryResult> {
 	try {
-		let query = supabase
+		const { data, error } = await supabase
 			.from('subreddit_registry')
 			.select('*')
 			.eq('platform', 'reddit')
-			.order('tier', { ascending: true })
 			.order('last_engaged', { ascending: true, nullsFirst: true });
-
-		if (tier !== undefined) {
-			query = query.eq('tier', tier);
-		}
-
-		const { data, error } = await query;
 
 		if (error) {
 			return { success: false, message: `Database error: ${error.message}` };
@@ -132,7 +138,37 @@ export async function executeGetSubredditRegistry(
 		return {
 			success: true,
 			message: `Found ${data.length} subreddits`,
-			data: data as SubredditEntry[]
+			data: data as CommunityEntry[]
+		};
+	} catch (error) {
+		return {
+			success: false,
+			message: `Failed to fetch registry: ${error instanceof Error ? error.message : 'Unknown error'}`
+		};
+	}
+}
+
+/**
+ * Execute get_discord_server_registry tool
+ */
+export async function executeGetDiscordServerRegistry(
+	_input: Record<string, unknown>
+): Promise<RegistryResult> {
+	try {
+		const { data, error } = await supabase
+			.from('subreddit_registry')
+			.select('*')
+			.eq('platform', 'discord')
+			.order('last_engaged', { ascending: true, nullsFirst: true });
+
+		if (error) {
+			return { success: false, message: `Database error: ${error.message}` };
+		}
+
+		return {
+			success: true,
+			message: `Found ${data.length} Discord servers`,
+			data: data as CommunityEntry[]
 		};
 	} catch (error) {
 		return {
@@ -203,16 +239,30 @@ export async function executeLogEngagement(
 // Exports
 // ============================================================================
 
-export const ENGAGEMENT_TOOLS: Anthropic.Tool[] = [
+// Reddit engagement tools (Ananya)
+export const REDDIT_ENGAGEMENT_TOOLS: Anthropic.Tool[] = [
 	GET_SUBREDDIT_REGISTRY_TOOL,
 	LOG_ENGAGEMENT_TOOL
 ];
 
+// Discord engagement tools (Nico)
+export const DISCORD_ENGAGEMENT_TOOLS: Anthropic.Tool[] = [
+	GET_DISCORD_SERVER_REGISTRY_TOOL,
+	LOG_ENGAGEMENT_TOOL
+];
+
+// All engagement tools (for backwards compatibility)
+export const ENGAGEMENT_TOOLS: Anthropic.Tool[] = [
+	GET_SUBREDDIT_REGISTRY_TOOL,
+	GET_DISCORD_SERVER_REGISTRY_TOOL,
+	LOG_ENGAGEMENT_TOOL
+];
+
 export function isEngagementTool(toolName: string): boolean {
-	return ['get_subreddit_registry', 'log_engagement'].includes(toolName);
+	return ['get_subreddit_registry', 'get_discord_server_registry', 'log_engagement'].includes(toolName);
 }
 
-export type EngagementToolResult = SubredditRegistryResult | LogEngagementResult;
+export type EngagementToolResult = RegistryResult | LogEngagementResult;
 
 export async function executeEngagementTool(
 	toolName: string,
@@ -221,6 +271,8 @@ export async function executeEngagementTool(
 	switch (toolName) {
 		case 'get_subreddit_registry':
 			return executeGetSubredditRegistry(input);
+		case 'get_discord_server_registry':
+			return executeGetDiscordServerRegistry(input);
 		case 'log_engagement':
 			return executeLogEngagement(input);
 		default:

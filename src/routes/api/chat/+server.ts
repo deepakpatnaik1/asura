@@ -47,30 +47,23 @@ import {
 	type WhiteboardMutations
 } from '$lib/api/whiteboard-tools';
 import {
-	CANVAS_TOOLS,
-	executeCanvasTool,
-	isCanvasTool,
+	DESIGN_TOOLS,
+	isDesignTool,
+	executeDesignTool,
 	createEmptyCanvasMutations,
-	type CanvasToolContext,
 	type CanvasMutations,
-	type CanvasState
-} from '$lib/api/canvas-tools';
-import { IMAGE_GEN_TOOL, EDIT_IMAGE_TOOL, executeImageGen, executeEditImage, storeImageAndUpdateCanvas, resolveImageCode, type ImageGenContext, type ImageEditContext } from '$lib/api/image-gen-tools';
-import {
-	CHARACTER_TOOLS,
-	executeCharacterTool,
-	isCharacterTool,
-	type CharacterToolContext
-} from '$lib/api/character-tools';
+	type CanvasState,
+	type DesignToolContext
+} from '$lib/roles/design-lead';
 import { refreshAccessToken } from '$lib/api/google-calendar';
 import { BRAVE_SEARCH_TOOL, executeBraveSearch } from '$lib/api/brave-search';
 import { REDDIT_TOOLS, executeRedditTool, isRedditTool } from '$lib/api/reddit-tools';
+import { DISCORD_TOOLS, executeDiscordTool, isDiscordTool } from '$lib/channels/discord';
 import { ENGAGEMENT_TOOLS, executeEngagementTool, isEngagementTool } from '$lib/roles/community-manager/engagement';
 import { parseToolIntents, hasToolIntents } from '$lib/api/tool-intent-parser';
 import { createClient } from '@supabase/supabase-js';
 import { PUBLIC_SUPABASE_URL } from '$env/static/public';
-import { SUPABASE_SERVICE_ROLE_KEY, FIREWORKS_API_KEY, OPENROUTER_API_KEY, VENICE_API_KEY } from '$env/static/private';
-import sharp from 'sharp';
+import { SUPABASE_SERVICE_ROLE_KEY, OPENROUTER_API_KEY, VENICE_API_KEY } from '$env/static/private';
 
 // Service role client for storage operations
 const supabaseStorage = createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -223,10 +216,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		let todoContext: TodoToolContext | null = null;
 		let calendarContext: CalendarToolContext | null = null;
 		let whiteboardContext: WhiteboardToolContext | null = null;
-		let canvasContext: CanvasToolContext | null = null;
-		let characterContext: CharacterToolContext | null = null;
-		let imageGenContext: ImageGenContext | null = null;
-		let imageEditContext: ImageEditContext | null = null;
+		let designContext: DesignToolContext | null = null;
 
 		if (personaTools.length > 0) {
 			// Persona has tools configured
@@ -235,11 +225,9 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			// Check which tool categories this persona has
 			const hasTodoTools = personaTools.some(t => isTodoTool(t));
 			const hasWhiteboardTools = personaTools.some(t => isWhiteboardTool(t));
-			const hasCanvasTools = personaTools.some(t => isCanvasTool(t));
-			const hasCharacterTools = personaTools.some(t => isCharacterTool(t));
-			const hasImageGen = personaTools.includes('generate_image');
-			const hasImageEdit = personaTools.includes('edit_image');
+			const hasDesignTools = personaTools.some(t => isDesignTool(t));
 			const hasRedditTools = personaTools.some(t => isRedditTool(t));
+			const hasDiscordTools = personaTools.some(t => isDiscordTool(t));
 			const hasEngagementTools = personaTools.some(t => isEngagementTool(t));
 
 			log.info('Tool setup', {
@@ -298,50 +286,40 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				allTools.push(...WHITEBOARD_TOOLS);
 			}
 
-			// Set up canvas tools context (Eva)
-			if (hasCanvasTools) {
+			// Set up design tools context (Eva - canvas, character, image gen/edit)
+			if (hasDesignTools) {
 				canvasMutations = createEmptyCanvasMutations();
-				canvasContext = { supabase, userId };
-				allTools.push(...CANVAS_TOOLS);
-			}
 
-			// Set up character tools context (Eva)
-			const characterPlanningModel = settings?.model_character_planning as string | undefined;
-			const imageGenModel = settings?.model_image_gen as string | undefined;
-			if (hasCharacterTools && characterPlanningModel) {
+				const characterPlanningModel = settings?.model_character_planning as string | undefined;
+				const imageGenModel = settings?.model_image_gen as string | undefined;
+				const imageEditModel = settings?.model_image_edit as string | undefined;
+
 				// Look up provider for the character planning model
-				const { data: modelData } = await supabase
-					.from('models')
-					.select('provider')
-					.eq('model_identifier', characterPlanningModel)
-					.single();
-				const characterPlanningProvider = modelData?.provider || 'openrouter';
+				let characterPlanningProvider = 'openrouter';
+				if (characterPlanningModel) {
+					const { data: modelData } = await supabase
+						.from('models')
+						.select('provider')
+						.eq('model_identifier', characterPlanningModel)
+						.single();
+					characterPlanningProvider = modelData?.provider || 'openrouter';
+				}
 
-				characterContext = {
-					supabase,
+				designContext = {
 					userId,
 					characterPlanningModel,
 					characterPlanningProvider,
-					imageGenModel: imageGenModel || '',
-					openrouterApiKey: OPENROUTER_API_KEY,
-					veniceApiKey: VENICE_API_KEY
+					imageGenModel,
+					imageEditModel,
+					apiKeys: {
+						openrouter: OPENROUTER_API_KEY,
+						venice: VENICE_API_KEY
+					}
 				};
-				allTools.push(...CHARACTER_TOOLS);
-			}
 
-			// Set up image generation tool (Eva)
-
-			if (hasImageGen && imageGenModel) {
-				imageGenContext = { supabase, model: imageGenModel };
-				allTools.push(IMAGE_GEN_TOOL as Anthropic.Tool);
-			}
-
-			// Set up image editing tool (Eva)
-			const imageEditModel = settings?.model_image_edit as string | undefined;
-
-			if (hasImageEdit && imageEditModel) {
-				imageEditContext = { supabase, model: imageEditModel };
-				allTools.push(EDIT_IMAGE_TOOL as Anthropic.Tool);
+				// Add only the design tools this persona has
+				const personaDesignTools = DESIGN_TOOLS.filter(t => personaTools.includes(t.name as typeof personaTools[number]));
+				allTools.push(...personaDesignTools);
 			}
 
 			// Set up Reddit tools (Ananya)
@@ -349,7 +327,12 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				allTools.push(...REDDIT_TOOLS);
 			}
 
-			// Set up engagement tools (Ananya)
+			// Set up Discord tools (Nico)
+			if (hasDiscordTools) {
+				allTools.push(...DISCORD_TOOLS);
+			}
+
+			// Set up engagement tools (Ananya, Nico)
 			if (hasEngagementTools) {
 				allTools.push(...ENGAGEMENT_TOOLS);
 			}
@@ -386,190 +369,35 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				};
 			} else if (isWhiteboardTool(toolName) && whiteboardContext) {
 				return executeWhiteboardTool(toolName, input, whiteboardContext, whiteboardMutations!);
-			} else if (isCanvasTool(toolName) && canvasContext) {
-				return executeCanvasTool(toolName, input, canvasContext, canvasMutations!);
-			} else if (isCharacterTool(toolName) && characterContext) {
-				const result = await executeCharacterTool(toolName, input, characterContext);
-				// Track canvas mutation so client refreshes
-				if (result.success && result.canvasId && result.canvasState && canvasMutations) {
-					canvasMutations.updated_canvases.push({
-						id: result.canvasId,
-						state: result.canvasState as CanvasState
-					});
-					log.info('Canvas mutation pushed for character tool', { canvasId: result.canvasId });
+			} else if (isDesignTool(toolName) && designContext) {
+				const result = await executeDesignTool(toolName, input, designContext);
+				// Merge mutations if present
+				if (result.success && result.mutations && canvasMutations) {
+					if (result.mutations.created_canvases.length > 0) {
+						canvasMutations.created_canvases.push(...result.mutations.created_canvases);
+					}
+					if (result.mutations.renamed_canvases.length > 0) {
+						canvasMutations.renamed_canvases.push(...result.mutations.renamed_canvases);
+					}
+					if (result.mutations.deleted_canvases.length > 0) {
+						canvasMutations.deleted_canvases.push(...result.mutations.deleted_canvases);
+					}
+					if (result.mutations.opened_canvas) {
+						canvasMutations.opened_canvas = result.mutations.opened_canvas;
+					}
+					if (result.mutations.closed_canvas) {
+						canvasMutations.closed_canvas = result.mutations.closed_canvas;
+					}
+					if (result.mutations.updated_canvases.length > 0) {
+						canvasMutations.updated_canvases.push(...result.mutations.updated_canvases);
+					}
+					log.info('Design tool mutations merged', { tool: toolName, mutationCount: result.mutations.updated_canvases.length });
 				}
 				return result;
-			} else if (toolName === 'generate_image' && imageGenContext) {
-				const params = input as {
-					prompt: string;
-					negative_prompt?: string;
-					style?: string;
-					framing?: string;
-					mood?: string;
-					aspect_ratio?: string;
-					steps?: number;
-					cfg_scale?: number;
-					seed?: number;
-					canvas_id?: string;
-				};
-				log.info('Generating image', {
-					prompt: params.prompt?.substring(0, 100),
-					model: imageGenContext.model,
-					canvas_id: params.canvas_id
-				});
-				const result = await executeImageGen(params, imageGenContext);
-				if (result.success && result.imageBase64) {
-					// If canvas_id provided, store image and update canvas
-					if (params.canvas_id) {
-						// Get dimensions from aspect ratio
-						const dimensions: Record<string, { width: number; height: number }> = {
-							'1:1': { width: 1024, height: 1024 },
-							'3:4': { width: 768, height: 1024 },
-							'4:3': { width: 1024, height: 768 },
-							'16:9': { width: 1024, height: 576 },
-							'9:16': { width: 576, height: 1024 },
-							'21:9': { width: 1344, height: 576 }
-						};
-						const dims = dimensions[params.aspect_ratio || '3:4'] || dimensions['3:4'];
-
-						const storeResult = await storeImageAndUpdateCanvas(
-							supabaseStorage,
-							result.imageBase64,
-							params.canvas_id,
-							dims
-						);
-
-						if (storeResult.success && storeResult.newState && storeResult.imageUrl) {
-							// Track canvas mutation so client refreshes
-							if (canvasMutations) {
-								canvasMutations.updated_canvases.push({
-									id: params.canvas_id,
-									state: storeResult.newState as CanvasState
-								});
-							}
-
-							return {
-								success: true,
-								message: `Image generated: ${storeResult.imageCode}. Seed: ${result.seed}`
-							};
-						} else if (storeResult.success) {
-							// Stored but no newState (edge case)
-							return {
-								success: true,
-								message: `Image generated: ${storeResult.imageCode}. Seed: ${result.seed}`
-							};
-						} else {
-							return {
-								success: false,
-								message: `Image generated but storage failed: ${storeResult.error}`
-							};
-						}
-					}
-					return {
-						success: true,
-						message: `Image generated successfully (no canvas target). Seed: ${result.seed}`
-					};
-				} else {
-					return {
-						success: false,
-						message: result.error || 'Image generation failed'
-					};
-				}
-			} else if (toolName === 'edit_image' && imageEditContext) {
-				const params = input as {
-					source_code: string;
-					instruction: string;
-					strength?: number;
-					seed?: number;
-					canvas_id?: string;
-				};
-
-				// Resolve source_code to URL
-				const resolved = await resolveImageCode(supabaseStorage, params.source_code);
-				if (!resolved) {
-					return {
-						success: false,
-						message: `Image code "${params.source_code}" not found. Check the code shown at bottom-left of the image.`
-					};
-				}
-
-				// Use canvas_id from params, or fall back to the source image's canvas
-				const targetCanvasId = params.canvas_id || resolved.canvasId;
-
-				log.info('Editing image', {
-					sourceCode: params.source_code,
-					sourceUrl: resolved.imageUrl.substring(0, 50),
-					instruction: params.instruction?.substring(0, 100),
-					model: imageEditContext.model,
-					strength: params.strength
-				});
-
-				const result = await executeEditImage(
-					{
-						source_image_url: resolved.imageUrl,
-						instruction: params.instruction,
-						strength: params.strength,
-						seed: params.seed,
-						canvas_id: targetCanvasId
-					},
-					imageEditContext
-				);
-
-				if (result.success && result.imageBase64) {
-					// Store image and update canvas
-					if (targetCanvasId) {
-						// Get actual dimensions from the returned image
-						const imageBuffer = Buffer.from(result.imageBase64, 'base64');
-						const metadata = await sharp(imageBuffer).metadata();
-						const dims = { width: metadata.width || 1024, height: metadata.height || 1024 };
-
-						const storeResult = await storeImageAndUpdateCanvas(
-							supabaseStorage,
-							result.imageBase64,
-							targetCanvasId,
-							dims
-						);
-
-						if (storeResult.success && storeResult.newState && storeResult.imageUrl) {
-							// Track canvas mutation so client refreshes
-							if (canvasMutations) {
-								canvasMutations.updated_canvases.push({
-									id: targetCanvasId,
-									state: storeResult.newState as CanvasState
-								});
-								log.info('Canvas mutation pushed for edit_image', { canvasId: targetCanvasId, mutationCount: canvasMutations.updated_canvases.length });
-							} else {
-								log.warn('canvasMutations is null - edit will not trigger refresh', { targetCanvasId });
-							}
-
-							return {
-								success: true,
-								message: `Image edited from ${params.source_code} → new image ${storeResult.imageCode}. Seed: ${result.seed}`
-							};
-						} else if (storeResult.success) {
-							return {
-								success: true,
-								message: `Image edited and stored. Code: ${storeResult.imageCode}, seed: ${result.seed}`
-							};
-						} else {
-							return {
-								success: false,
-								message: `Image edited but storage failed: ${storeResult.error}`
-							};
-						}
-					}
-					return {
-						success: true,
-						message: `Image edited successfully (no canvas target). Seed: ${result.seed}`
-					};
-				} else {
-					return {
-						success: false,
-						message: result.error || 'Image editing failed'
-					};
-				}
 			} else if (isRedditTool(toolName)) {
 				return executeRedditTool(toolName, input);
+			} else if (isDiscordTool(toolName)) {
+				return executeDiscordTool(toolName, input);
 			} else if (isEngagementTool(toolName)) {
 				return executeEngagementTool(toolName, input);
 			} else if (isTodoTool(toolName) && todoContext) {

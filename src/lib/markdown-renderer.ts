@@ -22,6 +22,24 @@ function processInlineFormatting(text: string, accent: string, accentBg: string)
 }
 
 /**
+ * Enforce sentence case: capitalize first letter of each sentence
+ * Runs after code blocks are extracted (so we don't modify code)
+ */
+function enforceSentenceCase(text: string): string {
+	// Capitalize first letter of the entire text (if it's a letter)
+	let result = text.replace(/^(\s*)([a-z])/, (_, ws, letter) => ws + letter.toUpperCase());
+
+	// Capitalize first letter after sentence-ending punctuation
+	// Match: (. or ! or ?) + (whitespace or newline) + (lowercase letter)
+	// Skip placeholder tokens like __CODE_0__, __TABLE_0__, __QUOTE_0__
+	result = result.replace(/([.!?])(\s+)([a-z])/g, (_, punct, space, letter) => {
+		return punct + space + letter.toUpperCase();
+	});
+
+	return result;
+}
+
+/**
  * Render a markdown pipe table as HTML
  */
 function renderTable(tableMatch: string, accent: string): string {
@@ -72,7 +90,9 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 	const codeBlockRegex = /^```(\w*)\n([\s\S]*?)^```$/gm;
 	processed = processed.replace(codeBlockRegex, (match, lang, code) => {
 		const placeholder = `__CODE_${codeBlocks.length}__`;
-		const escapedCode = code
+		// For unlabeled code blocks (natural language like Ananya's comments), apply sentence case
+		const processedCode = !lang ? enforceSentenceCase(code) : code;
+		const escapedCode = processedCode
 			.replace(/&/g, '&amp;')
 			.replace(/</g, '&lt;')
 			.replace(/>/g, '&gt;')
@@ -81,8 +101,8 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 			// Hyphen as dash when adjacent to contractions
 			.replace(/(\w)-(\w+'\w+)/g, '$1 – $2')  // word-that's → word – that's
 			.replace(/(\w+'\w+)-(\w)/g, '$1 – $2'); // that's-word → that's – word
-		// Base64 encode the raw code for the copy button (avoids escaping issues)
-		const codeBase64 = btoa(unescape(encodeURIComponent(code.trim())));
+		// Base64 encode the processed code for the copy button (so copied text also has sentence case)
+		const codeBase64 = btoa(unescape(encodeURIComponent(processedCode.trim())));
 		const langLabel = lang ? `<span style="font-size: 0.7em; opacity: 0.4; text-transform: uppercase;">${lang}</span>` : '';
 		// Copy button with LuCopy-style icon
 		const copyBtn = `<button class="code-copy-btn" data-code="${codeBase64}" style="background: transparent; border: none; cursor: pointer; opacity: 0.4; padding: 2px; display: flex; align-items: center; transition: opacity 0.2s;" title="Copy code"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg></button>`;
@@ -90,6 +110,10 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 		codeBlocks.push(`<div class="code-block-container" style="position: relative; background: ${CODE_BLOCK_BG}; border-radius: 6px; padding: 12px; margin: 0.5em 0; overflow-x: auto;">${header}<pre style="margin: 0; font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace; font-size: 0.85em; line-height: 1.5; white-space: pre-wrap; word-break: break-word;"><code>${escapedCode}</code></pre></div>`);
 		return placeholder + '\n';
 	});
+
+	// Enforce sentence case: capitalize first letter of each sentence
+	// (After code blocks extracted so we don't modify code)
+	processed = enforceSentenceCase(processed);
 
 	// Render markdown tables with placeholders (protect from escaping)
 	const tables: string[] = [];
@@ -443,6 +467,19 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 			.replace(/&/g, '&amp;')
 			.replace(/</g, '&lt;')
 			.replace(/>/g, '&gt;');
+
+		// Protect bare URLs from italic processing (underscores in URLs get mangled)
+		// Extract URLs as placeholders, process inline formatting, then restore
+		const urlPlaceholders: string[] = [];
+		escaped = escaped.replace(/https?:\/\/[^\s<>"]+/g, (url) => {
+			const placeholder = `__URL_${urlPlaceholders.length}__`;
+			// For Reddit URLs, show r/subreddit; otherwise show domain
+			const redditMatch = url.match(/reddit\.com\/r\/(\w+)/);
+			const label = redditMatch ? `r/${redditMatch[1]}` : url.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+			urlPlaceholders.push(`<a href="${url}" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">${label}</a>`);
+			return placeholder;
+		});
+
 		// Bold first (non-greedy to handle nested italic), then italic
 		// Bold uses (.+?) to allow asterisks inside (for nested *italic*)
 		escaped = escaped.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
@@ -462,14 +499,10 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 			const url = `https://www.reddit.com/r/${sub}/`;
 			return `<a href="${url}" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">r/${sub}</a>`;
 		});
-		// Auto-link bare URLs (not already in markdown link) → pill badge
-		// Exclude () to handle URLs in parentheses like "text (https://example.com)"
-		escaped = escaped.replace(/(?<!href="|]\()https?:\/\/[^\s<>"()]+/g, (url) => {
-			// For Reddit URLs, show r/subreddit; otherwise show domain
-			const redditMatch = url.match(/reddit\.com\/r\/(\w+)/);
-			const label = redditMatch ? `r/${redditMatch[1]}` : url.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
-			return `<a href="${url}" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">${label}</a>`;
-		});
+		// Restore URL placeholders (protected from italic processing above)
+		for (let i = 0; i < urlPlaceholders.length; i++) {
+			escaped = escaped.replace(`__URL_${i}__`, urlPlaceholders[i]);
+		}
 
 		// If this is a continuation line (non-empty, after a list item), indent it
 		if (listIndent > 0 && escaped.trim() !== '') {

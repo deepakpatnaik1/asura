@@ -9,7 +9,7 @@
 	 */
 
 	import { type CanvasType, DEFAULT_CANVAS } from '$lib/config/canvases';
-	import type { CanvasState, DesignerCanvas as DesignerCanvasData } from '$lib/api/canvas-tools';
+	import type { CanvasState, DesignerCanvas as DesignerCanvasData } from '$lib/roles/design-lead/canvas';
 	import type { Whiteboard, WhiteboardState } from '$lib/api/whiteboard-tools';
 	import CanvasSwitcher from './CanvasSwitcher.svelte';
 	import ChartCarousel from './ChartCarousel.svelte';

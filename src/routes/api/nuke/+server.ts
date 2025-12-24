@@ -30,6 +30,7 @@ const VALID_BUCKETS = [
 	'persona:alicja',
 	'persona:eva',
 	'persona:ananya',
+	'persona:nico',
 	'content:ephemeral',
 	'content:strategic',
 	'content:canon',

@@ -10,7 +10,7 @@ import type { RequestHandler } from './$types';
 import { requireAuth } from '$lib/api/require-auth';
 import { parseRequestJson } from '$lib/api/parse-json';
 import { validationError, internalError } from '$lib/api/errors';
-import { storeImageAndUpdateCanvas } from '$lib/api/image-gen-tools';
+import { storeImageToCanvas } from '$lib/roles/design-lead';
 import { createClient } from '@supabase/supabase-js';
 import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
@@ -77,7 +77,7 @@ export const POST: RequestHandler = async ({ params, request, locals: { safeGetS
 		const webpBase64 = webpBuffer.toString('base64');
 
 		// Store image and update canvas
-		const result = await storeImageAndUpdateCanvas(
+		const result = await storeImageToCanvas(
 			supabaseStorage,
 			webpBase64,
 			canvasId,
