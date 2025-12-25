@@ -3,21 +3,43 @@ import { DEFAULT_PERSONA } from '$lib/config/personas';
 
 /**
  * Process inline markdown formatting (bold, italic, code) in a string
+ * IMPORTANT: Extract code spans as placeholders BEFORE italic processing to prevent
+ * underscores inside backticks from being interpreted as italic markers.
  */
 function processInlineFormatting(text: string, accent: string, accentBg: string): string {
 	let result = text
 		.replace(/&/g, '&amp;')
 		.replace(/</g, '&lt;')
 		.replace(/>/g, '&gt;');
+
+	// Extract inline code as placeholders FIRST (protect from italic processing)
+	// Use %% delimiters to avoid underscore-based italic matching
+	const codePlaceholders: string[] = [];
+	const codeStyle = `background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;`;
+	result = result.replace(/`([^`]+)`/g, (_, code) => {
+		const placeholder = `%%INLINECODE${codePlaceholders.length}%%`;
+		codePlaceholders.push(`<code style="${codeStyle}">${code}</code>`);
+		return placeholder;
+	});
+	// Auto-detect snake_case identifiers → inline code style (also as placeholders)
+	result = result.replace(/\b([a-zA-Z][a-zA-Z0-9]*_[a-zA-Z0-9_]+)\b/g, (_, identifier) => {
+		const placeholder = `%%INLINECODE${codePlaceholders.length}%%`;
+		codePlaceholders.push(`<code style="${codeStyle}">${identifier}</code>`);
+		return placeholder;
+	});
+
 	// Bold
 	result = result.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-	// Italic (asterisk and underscore)
+	// Italic (asterisk and underscore) - safe now that code spans are placeholders
 	result = result.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
 	result = result.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
-	// Inline code
-	result = result.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;">$1</code>`);
 	// Links
 	result = result.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="color: ${accent}; text-decoration: none;">$1</a>`);
+
+	// Restore inline code from placeholders
+	for (let i = 0; i < codePlaceholders.length; i++) {
+		result = result.replace(`%%INLINECODE${i}%%`, codePlaceholders[i]);
+	}
 	return result;
 }
 
@@ -142,17 +164,34 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 
 			if (content) {
 				// Escape HTML
-				const escaped = content
+				let formatted = content
 					.replace(/&/g, '&amp;')
 					.replace(/</g, '&lt;')
 					.replace(/>/g, '&gt;');
-				// Apply inline formatting
-				let formatted = escaped.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+				// Extract inline code as placeholders FIRST (protect from italic processing)
+				// Use %% delimiters to avoid underscore-based italic matching
+				const quoteCodePlaceholders: string[] = [];
+				const quoteCodeStyle = `background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;`;
+				formatted = formatted.replace(/`([^`]+)`/g, (_, code) => {
+					const placeholder = `%%QUOTECODE${quoteCodePlaceholders.length}%%`;
+					quoteCodePlaceholders.push(`<code style="${quoteCodeStyle}">${code}</code>`);
+					return placeholder;
+				});
+				formatted = formatted.replace(/\b([a-zA-Z][a-zA-Z0-9]*_[a-zA-Z0-9_]+)\b/g, (_, identifier) => {
+					const placeholder = `%%QUOTECODE${quoteCodePlaceholders.length}%%`;
+					quoteCodePlaceholders.push(`<code style="${quoteCodeStyle}">${identifier}</code>`);
+					return placeholder;
+				});
+				// Apply inline formatting (bold, italic) - safe now that code spans are placeholders
+				formatted = formatted.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 				formatted = formatted.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
 				formatted = formatted.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
-				formatted = formatted.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;">$1</code>`);
 				formatted = formatted.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${ACCENT}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
 				formatted = formatted.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">$1</a>`);
+				// Restore inline code from placeholders
+				for (let i = 0; i < quoteCodePlaceholders.length; i++) {
+					formatted = formatted.replace(`%%QUOTECODE${i}%%`, quoteCodePlaceholders[i]);
+				}
 
 				// Indent nested quotes
 				const indent = nestLevel > 1 ? `margin-left: ${(nestLevel - 1) * 1.5}em;` : '';
@@ -231,6 +270,7 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
 			rest = rest.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
 			rest = rest.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;">$1</code>`);
+			rest = rest.replace(/\b([a-zA-Z][a-zA-Z0-9]*_[a-zA-Z0-9_]+)\b/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;">$1</code>`);
 			rest = rest.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${ACCENT}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
 			rest = rest.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">$1</a>`);
 			// Auto-link bare URLs (exclude () for parenthetical URLs)
@@ -259,6 +299,7 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
 			rest = rest.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
 			rest = rest.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;">$1</code>`);
+			rest = rest.replace(/\b([a-zA-Z][a-zA-Z0-9]*_[a-zA-Z0-9_]+)\b/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;">$1</code>`);
 			rest = rest.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${ACCENT}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
 			rest = rest.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">$1</a>`);
 			// Auto-link bare URLs (not already in markdown link) → pill badge
@@ -296,10 +337,29 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 				.replace(/&/g, '&amp;')
 				.replace(/</g, '&lt;')
 				.replace(/>/g, '&gt;');
+			// Extract inline code as placeholders FIRST (protect from italic processing)
+			// Use %% delimiters to avoid underscore-based italic matching
+			const headerCodePlaceholders: string[] = [];
+			const headerCodeStyle = `background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;`;
+			content = content.replace(/`([^`]+)`/g, (_, code) => {
+				const placeholder = `%%HDRCODE${headerCodePlaceholders.length}%%`;
+				headerCodePlaceholders.push(`<code style="${headerCodeStyle}">${code}</code>`);
+				return placeholder;
+			});
+			// Auto-detect snake_case identifiers
+			content = content.replace(/\b([a-zA-Z][a-zA-Z0-9]*_[a-zA-Z0-9_]+)\b/g, (_, identifier) => {
+				const placeholder = `%%HDRCODE${headerCodePlaceholders.length}%%`;
+				headerCodePlaceholders.push(`<code style="${headerCodeStyle}">${identifier}</code>`);
+				return placeholder;
+			});
 			// Process inline formatting (bold, italic) within headers
 			content = content.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 			content = content.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
 			content = content.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
+			// Restore inline code from placeholders
+			for (let i = 0; i < headerCodePlaceholders.length; i++) {
+				content = content.replace(`%%HDRCODE${i}%%`, headerCodePlaceholders[i]);
+			}
 			// Size decreases with level: h1=1.45em, h2=1.3em, h3=1.15em
 			const sizes = ['1.45em', '1.3em', '1.15em'];
 			const fontSize = sizes[level - 1];
@@ -331,6 +391,7 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
 			rest = rest.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
 			rest = rest.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;">$1</code>`);
+			rest = rest.replace(/\b([a-zA-Z][a-zA-Z0-9]*_[a-zA-Z0-9_]+)\b/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;">$1</code>`);
 			rest = rest.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${ACCENT}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
 			rest = rest.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">$1</a>`);
 			// Auto-link bare URLs (not already in markdown link) → pill badge
@@ -357,6 +418,7 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
 			rest = rest.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
 			rest = rest.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;">$1</code>`);
+			rest = rest.replace(/\b([a-zA-Z][a-zA-Z0-9]*_[a-zA-Z0-9_]+)\b/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;">$1</code>`);
 			rest = rest.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${ACCENT}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
 			rest = rest.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">$1</a>`);
 			// Auto-link bare URLs (not already in markdown link) → pill badge
@@ -381,6 +443,7 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
 			rest = rest.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
 			rest = rest.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;">$1</code>`);
+			rest = rest.replace(/\b([a-zA-Z][a-zA-Z0-9]*_[a-zA-Z0-9_]+)\b/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;">$1</code>`);
 			rest = rest.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${ACCENT}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
 			// Reddit subreddit pattern: "r/Name (https://reddit.com/r/...)" → single badge
 			rest = rest.replace(/r\/\w+\s*\(https?:\/\/(?:www\.)?reddit\.com\/r\/(\w+)\/?(?:\?[^)]*)?\)/gi, (match, sub) => {
@@ -411,6 +474,7 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
 			rest = rest.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
 			rest = rest.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;">$1</code>`);
+			rest = rest.replace(/\b([a-zA-Z][a-zA-Z0-9]*_[a-zA-Z0-9_]+)\b/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;">$1</code>`);
 			rest = rest.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${ACCENT}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
 			rest = rest.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">$1</a>`);
 			// Auto-link bare URLs (not already in markdown link) → pill badge
@@ -440,6 +504,7 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
 			rest = rest.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
 			rest = rest.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;">$1</code>`);
+			rest = rest.replace(/\b([a-zA-Z][a-zA-Z0-9]*_[a-zA-Z0-9_]+)\b/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;">$1</code>`);
 			rest = rest.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${ACCENT}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
 			rest = rest.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">$1</a>`);
 			// Auto-link bare URLs (not already in markdown link) → pill badge
@@ -480,16 +545,30 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 			return placeholder;
 		});
 
+		// Extract inline code as placeholders FIRST (protect from italic processing)
+		// Use %% delimiters to avoid underscore-based italic matching
+		const lineCodePlaceholders: string[] = [];
+		const lineCodeStyle = `background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;`;
+		escaped = escaped.replace(/`([^`]+)`/g, (_, code) => {
+			const placeholder = `%%LINECODE${lineCodePlaceholders.length}%%`;
+			lineCodePlaceholders.push(`<code style="${lineCodeStyle}">${code}</code>`);
+			return placeholder;
+		});
+		// Auto-detect snake_case identifiers → inline code style (also as placeholders)
+		escaped = escaped.replace(/\b([a-zA-Z][a-zA-Z0-9]*_[a-zA-Z0-9_]+)\b/g, (_, identifier) => {
+			const placeholder = `%%LINECODE${lineCodePlaceholders.length}%%`;
+			lineCodePlaceholders.push(`<code style="${lineCodeStyle}">${identifier}</code>`);
+			return placeholder;
+		});
+
 		// Bold first (non-greedy to handle nested italic), then italic
 		// Bold uses (.+?) to allow asterisks inside (for nested *italic*)
 		escaped = escaped.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-		// Italic: both *text* and _text_ syntax
+		// Italic: both *text* and _text_ syntax - safe now that code spans are placeholders
 		// Asterisk italic uses (?<!\*) negative lookbehind to avoid matching ** as *
 		escaped = escaped.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
 		// Underscore italic uses (?<!_) negative lookbehind (though __ bold is rare)
 		escaped = escaped.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
-		// Inline code with backticks
-		escaped = escaped.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;">$1</code>`);
 		// Images ![alt](url) → inline image
 		escaped = escaped.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${ACCENT}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
 		// Links [text](url) → pill badge style like tool calls
@@ -502,6 +581,10 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 		// Restore URL placeholders (protected from italic processing above)
 		for (let i = 0; i < urlPlaceholders.length; i++) {
 			escaped = escaped.replace(`__URL_${i}__`, urlPlaceholders[i]);
+		}
+		// Restore inline code placeholders
+		for (let i = 0; i < lineCodePlaceholders.length; i++) {
+			escaped = escaped.replace(`%%LINECODE${i}%%`, lineCodePlaceholders[i]);
 		}
 
 		// If this is a continuation line (non-empty, after a list item), indent it

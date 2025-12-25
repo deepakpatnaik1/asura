@@ -64,13 +64,13 @@ export const GET_SUBREDDIT_REGISTRY_TOOL: Anthropic.Tool = {
 };
 
 /**
- * Get Discord Server Registry Tool
- * Returns the list of Discord servers Nico should consider for engagement.
+ * Get Discord Channel Registry Tool
+ * Returns the list of curated Discord forum channels Nico should consider for engagement.
  */
-export const GET_DISCORD_SERVER_REGISTRY_TOOL: Anthropic.Tool = {
-	name: 'get_discord_server_registry',
+export const GET_DISCORD_CHANNEL_REGISTRY_TOOL: Anthropic.Tool = {
+	name: 'get_discord_channel_registry',
 	description:
-		'Get the list of Discord servers to consider for community engagement. Returns servers ordered by last_engaged (oldest first). Use this when Boss asks to start Discord engagement or when you need to pick a server to visit.',
+		'Get the list of curated Discord forum channels for community engagement. Returns specific channel URLs (not servers) ordered by last_engaged (oldest first). Use this when Boss asks to start Discord engagement.',
 	input_schema: {
 		type: 'object',
 		properties: {},
@@ -85,21 +85,26 @@ export const GET_DISCORD_SERVER_REGISTRY_TOOL: Anthropic.Tool = {
 export const LOG_ENGAGEMENT_TOOL: Anthropic.Tool = {
 	name: 'log_engagement',
 	description:
-		'Log that Boss posted a comment. Call this when Boss confirms they posted the drafted comment. Updates engagement history and subreddit last_engaged timestamp.',
+		'Log that Boss posted a comment. Call this when Boss confirms they posted the drafted comment. Updates engagement history and community last_engaged timestamp. Works for both Reddit and Discord.',
 	input_schema: {
 		type: 'object',
 		properties: {
-			subreddit: {
+			community: {
 				type: 'string',
-				description: 'Subreddit name (e.g., "Replika" or "NomiAI")'
+				description: 'Community name (e.g., "Replika", "NomiAI", "Candy AI")'
+			},
+			platform: {
+				type: 'string',
+				enum: ['reddit', 'discord'],
+				description: 'Platform: "reddit" or "discord" (default: reddit)'
 			},
 			post_url: {
 				type: 'string',
-				description: 'Full URL of the Reddit post'
+				description: 'Full URL of the post or thread'
 			},
 			post_title: {
 				type: 'string',
-				description: 'Title of the post'
+				description: 'Title of the post or thread'
 			},
 			comment_text: {
 				type: 'string',
@@ -110,7 +115,7 @@ export const LOG_ENGAGEMENT_TOOL: Anthropic.Tool = {
 				description: 'Optional notes about this engagement'
 			}
 		},
-		required: ['subreddit', 'post_url', 'post_title', 'comment_text']
+		required: ['community', 'post_url', 'post_title', 'comment_text']
 	}
 };
 
@@ -149,9 +154,9 @@ export async function executeGetSubredditRegistry(
 }
 
 /**
- * Execute get_discord_server_registry tool
+ * Execute get_discord_channel_registry tool
  */
-export async function executeGetDiscordServerRegistry(
+export async function executeGetDiscordChannelRegistry(
 	_input: Record<string, unknown>
 ): Promise<RegistryResult> {
 	try {
@@ -167,7 +172,7 @@ export async function executeGetDiscordServerRegistry(
 
 		return {
 			success: true,
-			message: `Found ${data.length} Discord servers`,
+			message: `Found ${data.length} Discord channels`,
 			data: data as CommunityEntry[]
 		};
 	} catch (error) {
@@ -190,26 +195,28 @@ async function updateSubredditEngagement(subredditName: string): Promise<void> {
 
 /**
  * Execute log_engagement tool
- * Logs to engagement_log and updates subreddit last_engaged.
+ * Logs to engagement_log and updates community last_engaged.
  */
 export async function executeLogEngagement(
 	input: Record<string, unknown>
 ): Promise<LogEngagementResult> {
-	const subreddit = (input.subreddit as string)?.replace(/^r\//, '');
+	// Support both old 'subreddit' param and new 'community' param
+	const community = (input.community as string) || (input.subreddit as string)?.replace(/^r\//, '');
+	const platform = (input.platform as string) || 'reddit';
 	const postUrl = input.post_url as string;
 	const postTitle = input.post_title as string;
 	const commentText = input.comment_text as string;
 	const notes = input.notes as string | undefined;
 
-	if (!subreddit || !postUrl || !postTitle || !commentText) {
+	if (!community || !postUrl || !postTitle || !commentText) {
 		return { success: false, message: 'Missing required parameters' };
 	}
 
 	try {
 		// Insert into engagement_log
 		const { error: insertError } = await supabase.from('engagement_log').insert({
-			subreddit,
-			platform: 'reddit',
+			subreddit: community,
+			platform,
 			post_url: postUrl,
 			post_title: postTitle,
 			comment_text: commentText,
@@ -220,12 +227,13 @@ export async function executeLogEngagement(
 			return { success: false, message: `Failed to log engagement: ${insertError.message}` };
 		}
 
-		// Update last_engaged on subreddit
-		await updateSubredditEngagement(subreddit);
+		// Update last_engaged on community
+		await updateSubredditEngagement(community);
 
+		const prefix = platform === 'reddit' ? 'r/' : '';
 		return {
 			success: true,
-			message: `Logged engagement in r/${subreddit}. Subreddit last_engaged updated.`
+			message: `Logged ${platform} engagement in ${prefix}${community}. Community last_engaged updated.`
 		};
 	} catch (error) {
 		return {
@@ -247,19 +255,19 @@ export const REDDIT_ENGAGEMENT_TOOLS: Anthropic.Tool[] = [
 
 // Discord engagement tools (Nico)
 export const DISCORD_ENGAGEMENT_TOOLS: Anthropic.Tool[] = [
-	GET_DISCORD_SERVER_REGISTRY_TOOL,
+	GET_DISCORD_CHANNEL_REGISTRY_TOOL,
 	LOG_ENGAGEMENT_TOOL
 ];
 
 // All engagement tools (for backwards compatibility)
 export const ENGAGEMENT_TOOLS: Anthropic.Tool[] = [
 	GET_SUBREDDIT_REGISTRY_TOOL,
-	GET_DISCORD_SERVER_REGISTRY_TOOL,
+	GET_DISCORD_CHANNEL_REGISTRY_TOOL,
 	LOG_ENGAGEMENT_TOOL
 ];
 
 export function isEngagementTool(toolName: string): boolean {
-	return ['get_subreddit_registry', 'get_discord_server_registry', 'log_engagement'].includes(toolName);
+	return ['get_subreddit_registry', 'get_discord_channel_registry', 'log_engagement'].includes(toolName);
 }
 
 export type EngagementToolResult = RegistryResult | LogEngagementResult;
@@ -271,8 +279,8 @@ export async function executeEngagementTool(
 	switch (toolName) {
 		case 'get_subreddit_registry':
 			return executeGetSubredditRegistry(input);
-		case 'get_discord_server_registry':
-			return executeGetDiscordServerRegistry(input);
+		case 'get_discord_channel_registry':
+			return executeGetDiscordChannelRegistry(input);
 		case 'log_engagement':
 			return executeLogEngagement(input);
 		default:

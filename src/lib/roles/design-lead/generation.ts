@@ -14,6 +14,7 @@ import {
 	editImage,
 	type ImageGenParams
 } from '$lib/channels/image-models';
+import sharp from 'sharp';
 import {
 	type CanvasState,
 	type CanvasMutations,
@@ -384,6 +385,22 @@ async function executeEditImage(
 			return { success: false, message: `Source image ${sourceCode} not found` };
 		}
 
+		// Get source image dimensions from canvas state
+		const { data: sourceCanvas } = await supabase
+			.from('canvas_designer')
+			.select('state')
+			.eq('id', sourceInfo.canvasId)
+			.single();
+
+		let dims = { width: 768, height: 1024 }; // Fallback default
+		if (sourceCanvas?.state) {
+			const state = sourceCanvas.state as { render: Array<{ id: string; width?: number; height?: number }> };
+			const sourceElement = state.render.find(el => el.id === sourceInfo.elementId);
+			if (sourceElement?.width && sourceElement?.height) {
+				dims = { width: sourceElement.width, height: sourceElement.height };
+			}
+		}
+
 		const result = await editImage(supabase, {
 			sourceImageUrl: sourceInfo.storageUrl,
 			prompt: instruction,
@@ -392,11 +409,17 @@ async function executeEditImage(
 			seed: input.seed as number | undefined
 		});
 
+		// Read actual output dimensions from the returned image
+		const outputBuffer = Buffer.from(result.imageBase64, 'base64');
+		const outputMetadata = await sharp(outputBuffer).metadata();
+		if (outputMetadata.width && outputMetadata.height) {
+			dims = { width: outputMetadata.width, height: outputMetadata.height };
+		}
+
 		// Determine target canvas
 		const targetCanvasId = canvasId || sourceInfo.canvasId;
 
-		// Store and update canvas
-		const dims = { width: 768, height: 1024 }; // Default portrait
+		// Store and update canvas with actual output dimensions
 		const storeResult = await storeImageAndUpdateCanvas(result.imageBase64, targetCanvasId, userId, dims);
 
 		if (!storeResult.success) {
