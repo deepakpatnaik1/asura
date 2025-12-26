@@ -58,6 +58,11 @@ function enforceSentenceCase(text: string): string {
 		return punct + space + letter.toUpperCase();
 	});
 
+	// Capitalize first letter after newline(s) - new paragraphs
+	result = result.replace(/(\n+)([a-z])/g, (_, newlines, letter) => {
+		return newlines + letter.toUpperCase();
+	});
+
 	return result;
 }
 
@@ -505,6 +510,13 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 				.replace(/&/g, '&amp;')
 				.replace(/</g, '&lt;')
 				.replace(/>/g, '&gt;');
+			// Extract URLs as placeholders FIRST to protect from snake_case detection
+			const boldUrlPlaceholders: string[] = [];
+			rest = rest.replace(/https?:\/\/[^\s<>"]+/g, (url) => {
+				const placeholder = `__BOLDURL_${boldUrlPlaceholders.length}__`;
+				boldUrlPlaceholders.push(url);
+				return placeholder;
+			});
 			// Handle inline formatting in the rest (bold first, then italic with lookbehind)
 			rest = rest.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
@@ -513,12 +525,11 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 			rest = rest.replace(/\b([a-zA-Z][a-zA-Z0-9]*_[a-zA-Z0-9_]+)\b/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;">$1</code>`);
 			rest = rest.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${ACCENT}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
 			rest = rest.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">$1</a>`);
-			// Auto-link bare URLs (not already in markdown link) → pill badge
-			rest = rest.replace(/(?<!href="|]\()https?:\/\/[^\s<>"()]+/g, (url) => {
-				const redditMatch = url.match(/reddit\.com\/r\/(\w+)/);
-				const label = redditMatch ? `r/${redditMatch[1]}` : url.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
-				return `<a href="${url}" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">${label}</a>`;
-			});
+			// Restore URLs and render as clickable links (full URL as label for readability)
+			for (let i = 0; i < boldUrlPlaceholders.length; i++) {
+				const url = boldUrlPlaceholders[i];
+				rest = rest.replace(`__BOLDURL_${i}__`, `<a href="${url}" target="_blank" rel="noopener" style="color: ${ACCENT}; text-decoration: underline;">${url}</a>`);
+			}
 			listIndent = 0;
 			results.push(`<strong style="color: ${ACCENT};">${boldText}</strong>${rest}`);
 			continue;
