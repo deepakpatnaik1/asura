@@ -688,6 +688,8 @@
 		(async () => {
 			inputMessage = getPersonaPrefix();
 			await Promise.all([loadCharts(), loadWhiteboards(), loadDesignerCanvases(), loadArticles()]);
+			// Ensure enabled articles (e.g., from Gettysburg workflow) have message turns
+			await ensureEnabledArticlesHaveEntries();
 		})();
 
 		// Listen for nuke events from SettingsModal
@@ -1063,6 +1065,41 @@
 		}
 	}
 
+	/**
+	 * Ensure all enabled articles have corresponding superjournal entries.
+	 * This handles articles created via SQL (Gettysburg workflow) or other paths
+	 * that don't go through the /open endpoint.
+	 */
+	async function ensureEnabledArticlesHaveEntries() {
+		const enabledArticles = articles.filter(a => a.is_enabled);
+		if (enabledArticles.length === 0) return;
+
+		const newMessages: typeof allMessages = [];
+
+		for (const article of enabledArticles) {
+			try {
+				const response = await fetch(`/api/chat/files/${article.id}/open`, { method: 'POST' });
+				if (response.ok) {
+					const data = await response.json();
+					// Only add if a new entry was created (not already existing)
+					if (data.message && !data.existed) {
+						newMessages.push(data.message);
+					}
+				}
+			} catch (error) {
+				console.error(`Failed to ensure entry for article ${article.id}:`, error);
+			}
+		}
+
+		// Append any new messages and scroll
+		if (newMessages.length > 0) {
+			allMessages = [...allMessages, ...newMessages];
+			totalMessageCount += newMessages.length;
+			await tick();
+			scrollToLastTurn(CHAT_CONFIG);
+		}
+	}
+
 	async function reloadMessages() {
 		try {
 			const response = await fetch('/api/superjournal?offset=0&limit=50');
@@ -1088,12 +1125,23 @@
 					articles = articles.map((a) => a.id === articleId ? { ...a, is_enabled: currentState } : a);
 				} else {
 					const data = await response.json();
-					allMessages = [...allMessages, data.message];
-					totalMessageCount++;
 					await loadFileCharts();
-					forceCanvas = 'carousel'; // Switch to carousel when content is selected
-					await tick();
-					scrollToLastTurn(CHAT_CONFIG);
+					forceCanvas = 'carousel';
+
+					if (data.message) {
+						// New entry created - append to messages and scroll
+						allMessages = [...allMessages, data.message];
+						totalMessageCount++;
+						await tick();
+						scrollToLastTurn(CHAT_CONFIG);
+					} else if (data.originalSuperjournalId) {
+						// Entry already exists - scroll to it
+						await tick();
+						const element = document.getElementById(`message-${data.originalSuperjournalId}`);
+						if (element) {
+							element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+						}
+					}
 				}
 			} else {
 				const response = await fetch(`/api/chat/files/${articleId}`, {
@@ -1288,6 +1336,7 @@
 				{@const msgAccentColor = getPersonaAccentColor(msg.persona_name)}
 				{@const msgAccentBg = getPersonaAccentBg(msg.persona_name)}
 				<MessageGroup
+					messageId={msg.id}
 					userMessage={msg.user_message}
 					aiResponse={msg.ai_response}
 					personaName={msg.persona_name}

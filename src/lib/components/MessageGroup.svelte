@@ -7,6 +7,8 @@
 	let aiMessageContainer: HTMLDivElement;
 
 	interface Props {
+		/** Message ID for scroll targeting */
+		messageId?: string;
 		/** User message content */
 		userMessage: string;
 		/** AI response content (markdown) */
@@ -40,6 +42,7 @@
 	}
 
 	let {
+		messageId,
 		userMessage,
 		aiResponse,
 		personaName,
@@ -135,7 +138,7 @@
 </script>
 
 <!-- Boss Message -->
-<div class="message-group">
+<div class="message-group" id={messageId ? `message-${messageId}` : undefined}>
 	<div class="boss-message" style="background: {accentBg};">
 		{#if turnNumber !== undefined}
 			<div class="turn-indicator">turn {turnNumber}</div>
