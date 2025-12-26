@@ -25,7 +25,7 @@ export const PALETTES: Record<string, Palette> = {
 		alicja: 'rgb(56, 140, 220)', // vibrant blue
 		eva: 'rgb(255, 183, 197)', // cherry blossom
 		ananya: 'rgb(167, 139, 250)', // violet
-		nico: 'rgb(251, 146, 60)' // orange-400
+		nico: 'rgb(167, 139, 250)' // violet (same as ananya)
 	},
 	jewel: {
 		name: 'Deep Jewel',
@@ -35,7 +35,7 @@ export const PALETTES: Record<string, Palette> = {
 		alicja: 'rgb(48, 78, 128)', // navy
 		eva: 'rgb(183, 110, 121)', // deep rose
 		ananya: 'rgb(124, 58, 237)', // violet-600
-		nico: 'rgb(234, 88, 12)' // orange-600
+		nico: 'rgb(124, 58, 237)' // violet-600 (same as ananya)
 	},
 	muted: {
 		name: 'Muted Sophistication',
@@ -45,7 +45,7 @@ export const PALETTES: Record<string, Palette> = {
 		alicja: 'rgb(110, 135, 155)', // steel
 		eva: 'rgb(200, 160, 170)', // dusty pink
 		ananya: 'rgb(150, 130, 170)', // muted violet
-		nico: 'rgb(180, 140, 110)' // muted orange
+		nico: 'rgb(150, 130, 170)' // muted violet (same as ananya)
 	},
 	warm: {
 		name: 'Warm Earth',
@@ -55,7 +55,7 @@ export const PALETTES: Record<string, Palette> = {
 		alicja: 'rgb(160, 140, 100)', // sand
 		eva: 'rgb(230, 150, 140)', // coral
 		ananya: 'rgb(168, 128, 180)', // dusty violet
-		nico: 'rgb(210, 140, 90)' // warm orange
+		nico: 'rgb(168, 128, 180)' // dusty violet (same as ananya)
 	},
 	neon: {
 		name: 'Neon',
@@ -65,7 +65,7 @@ export const PALETTES: Record<string, Palette> = {
 		alicja: 'rgb(50, 150, 255)', // neon blue
 		eva: 'rgb(255, 130, 170)', // neon coral pink
 		ananya: 'rgb(196, 130, 255)', // neon violet
-		nico: 'rgb(255, 150, 50)' // neon orange
+		nico: 'rgb(196, 130, 255)' // neon violet (same as ananya)
 	},
 	mono: {
 		name: 'Monochrome',
@@ -75,7 +75,7 @@ export const PALETTES: Record<string, Palette> = {
 		alicja: 'rgb(120, 120, 120)', // dark gray
 		eva: 'rgb(190, 175, 180)', // silver pink
 		ananya: 'rgb(170, 170, 170)', // gray
-		nico: 'rgb(150, 150, 150)' // gray
+		nico: 'rgb(170, 170, 170)' // gray (same as ananya)
 	}
 };
 
