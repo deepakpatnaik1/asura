@@ -158,6 +158,10 @@ export const LOG_ENGAGEMENT_TOOL: Anthropic.Tool = {
 				type: 'string',
 				description: 'The comment that was posted'
 			},
+			comment_url: {
+				type: 'string',
+				description: 'Permalink to the specific comment Boss posted (for metrics tracking)'
+			},
 			notes: {
 				type: 'string',
 				description: 'Optional notes about this engagement'
@@ -254,6 +258,7 @@ export async function executeLogEngagement(
 	const postUrl = input.post_url as string;
 	const postTitle = input.post_title as string;
 	const commentText = input.comment_text as string;
+	const commentUrl = input.comment_url as string | undefined;
 	const notes = input.notes as string | undefined;
 
 	if (!community || !postUrl || !postTitle || !commentText) {
@@ -268,6 +273,7 @@ export async function executeLogEngagement(
 			post_url: postUrl,
 			post_title: postTitle,
 			comment_text: commentText,
+			comment_url: commentUrl,
 			notes
 		});
 
@@ -279,9 +285,10 @@ export async function executeLogEngagement(
 		await updateSubredditEngagement(community);
 
 		const prefix = platform === 'reddit' ? 'r/' : '';
+		const metricsNote = commentUrl ? ' Metrics tracking enabled.' : ' (No comment_url - metrics tracking disabled)';
 		return {
 			success: true,
-			message: `Logged ${platform} engagement in ${prefix}${community}. Community last_engaged updated.`
+			message: `Logged ${platform} engagement in ${prefix}${community}. Community last_engaged updated.${metricsNote}`
 		};
 	} catch (error) {
 		return {
