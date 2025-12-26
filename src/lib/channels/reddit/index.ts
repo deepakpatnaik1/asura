@@ -9,10 +9,9 @@ import type Anthropic from '@anthropic-ai/sdk';
 
 /**
  * Cooldown between Reddit API calls to avoid rate limiting.
- * Unauthenticated Reddit API: 10 requests/min = 6 second minimum.
- * Adding buffer for safety.
+ * OAuth authenticated: 100 requests/min. Using 2s for human-like pacing.
  */
-const REDDIT_COOLDOWN_MS = 6500;
+const REDDIT_COOLDOWN_MS = 2000;
 let lastRedditCall = 0;
 
 async function waitForCooldown(): Promise<void> {

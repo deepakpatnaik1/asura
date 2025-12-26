@@ -88,7 +88,9 @@ export type ToolName =
 	| 'clear_discord_session'
 	// Engagement tools (Ananya, Nico)
 	| 'get_subreddit_registry'
-	| 'log_engagement';
+	| 'log_engagement'
+	| 'update_engagement'
+	| 'delete_engagement';
 
 /**
  * Persona configuration interface
@@ -182,7 +184,7 @@ const ANANYA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic
  * Ananya tools: Reddit engagement
  * Single-model: Ananya writes comments directly in conversation
  */
-const ANANYA_TOOLS: ToolName[] = ['fetch_reddit_thread', 'fetch_subreddit_posts', 'get_subreddit_registry', 'log_engagement'];
+const ANANYA_TOOLS: ToolName[] = ['fetch_reddit_thread', 'fetch_subreddit_posts', 'get_subreddit_registry', 'log_engagement', 'update_engagement', 'delete_engagement'];
 
 /**
  * Nico: Discord engagement

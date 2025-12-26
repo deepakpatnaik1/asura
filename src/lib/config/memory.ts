@@ -47,5 +47,5 @@ export const MEMORY = {
 	 * Maximum recursion depth for tool use in AI calls
 	 * Prevents runaway tool chains from consuming unbounded memory.
 	 */
-	maxToolUseDepth: 5
+	maxToolUseDepth: 15
 } as const;
