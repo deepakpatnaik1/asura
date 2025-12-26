@@ -688,8 +688,8 @@
 		(async () => {
 			inputMessage = getPersonaPrefix();
 			await Promise.all([loadCharts(), loadWhiteboards(), loadDesignerCanvases(), loadArticles()]);
-			// Ensure enabled articles (e.g., from Gettysburg workflow) have message turns
-			await ensureEnabledArticlesHaveEntries();
+			// Ensure ALL articles have message turns (handles Gettysburg workflow, direct SQL inserts, etc.)
+			await ensureAllArticlesHaveEntries();
 		})();
 
 		// Listen for nuke events from SettingsModal
@@ -1066,17 +1066,19 @@
 	}
 
 	/**
-	 * Ensure all enabled articles have corresponding superjournal entries.
+	 * Ensure ALL articles have corresponding superjournal entries.
 	 * This handles articles created via SQL (Gettysburg workflow) or other paths
-	 * that don't go through the /open endpoint.
+	 * that don't go through the normal upload flow.
+	 *
+	 * All article types (ephemeral, persistent, canon, gettysburg) should appear
+	 * as message turns with their content displayed.
 	 */
-	async function ensureEnabledArticlesHaveEntries() {
-		const enabledArticles = articles.filter(a => a.is_enabled);
-		if (enabledArticles.length === 0) return;
+	async function ensureAllArticlesHaveEntries() {
+		if (articles.length === 0) return;
 
 		const newMessages: typeof allMessages = [];
 
-		for (const article of enabledArticles) {
+		for (const article of articles) {
 			try {
 				const response = await fetch(`/api/chat/files/${article.id}/open`, { method: 'POST' });
 				if (response.ok) {

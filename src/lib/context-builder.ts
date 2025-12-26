@@ -645,7 +645,8 @@ function formatStarredMessages(
 		.map(
 			(entry) =>
 				`[Starred - ${formatTimestamp(entry.created_at)}]
-User: ${entry.boss_essence}`
+User: ${entry.boss_essence}
+${entry.persona_name}: ${entry.persona_essence}`
 		)
 		.join('\n\n');
 

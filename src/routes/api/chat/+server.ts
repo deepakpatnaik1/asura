@@ -58,7 +58,7 @@ import {
 import { refreshAccessToken } from '$lib/api/google-calendar';
 import { BRAVE_SEARCH_TOOL, executeBraveSearch } from '$lib/api/brave-search';
 import { REDDIT_TOOLS, executeRedditTool, isRedditTool } from '$lib/api/reddit-tools';
-import { DISCORD_TOOLS, executeDiscordTool, isDiscordTool } from '$lib/channels/discord';
+import { ALL_DISCORD_TOOLS, executeDiscordTool, isDiscordTool } from '$lib/channels/discord';
 import { ENGAGEMENT_TOOLS, executeEngagementTool, isEngagementTool } from '$lib/roles/community-manager/engagement';
 import { parseToolIntents, hasToolIntents } from '$lib/api/tool-intent-parser';
 import { createClient } from '@supabase/supabase-js';
@@ -327,9 +327,9 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				allTools.push(...REDDIT_TOOLS);
 			}
 
-			// Set up Discord tools (Nico)
+			// Set up Discord tools (Nico) - includes session management
 			if (hasDiscordTools) {
-				allTools.push(...DISCORD_TOOLS);
+				allTools.push(...ALL_DISCORD_TOOLS);
 			}
 
 			// Set up engagement tools (Ananya, Nico)

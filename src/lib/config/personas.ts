@@ -80,7 +80,12 @@ export type ToolName =
 	| 'fetch_subreddit_posts'
 	// Discord tools (Nico)
 	| 'fetch_discord_thread'
-	| 'get_discord_server_registry'
+	| 'fetch_discord_channel'
+	| 'get_discord_channel_registry'
+	// Discord session tools (Nico)
+	| 'save_discord_session'
+	| 'get_new_discord_messages'
+	| 'clear_discord_session'
 	// Engagement tools (Ananya, Nico)
 	| 'get_subreddit_registry'
 	| 'log_engagement';
@@ -186,10 +191,18 @@ const ANANYA_TOOLS: ToolName[] = ['fetch_reddit_thread', 'fetch_subreddit_posts'
 const NICO_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic', 'canon'];
 
 /**
- * Nico tools: Discord engagement
+ * Nico tools: Discord engagement + session management
  * Single-model: Nico writes comments directly in conversation
  */
-const NICO_TOOLS: ToolName[] = ['fetch_discord_thread', 'get_discord_server_registry', 'log_engagement'];
+const NICO_TOOLS: ToolName[] = [
+	'fetch_discord_channel',
+	'fetch_discord_thread',
+	'get_discord_channel_registry',
+	'save_discord_session',
+	'get_new_discord_messages',
+	'clear_discord_session',
+	'log_engagement'
+];
 
 /**
  * All Alicja tools

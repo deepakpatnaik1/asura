@@ -79,6 +79,54 @@ export const GET_DISCORD_CHANNEL_REGISTRY_TOOL: Anthropic.Tool = {
 };
 
 /**
+ * Update Engagement Tool
+ * Updates an existing engagement log entry (e.g., when comment was revised).
+ */
+export const UPDATE_ENGAGEMENT_TOOL: Anthropic.Tool = {
+	name: 'update_engagement',
+	description:
+		'Update an existing engagement log entry. Use this when Boss revised a comment after it was already logged. Matches by post_url.',
+	input_schema: {
+		type: 'object',
+		properties: {
+			post_url: {
+				type: 'string',
+				description: 'Full URL of the post or thread (used to find the log entry)'
+			},
+			comment_text: {
+				type: 'string',
+				description: 'The revised comment text'
+			},
+			notes: {
+				type: 'string',
+				description: 'Optional updated notes'
+			}
+		},
+		required: ['post_url', 'comment_text']
+	}
+};
+
+/**
+ * Delete Engagement Tool
+ * Deletes an engagement log entry (e.g., when comment was not posted).
+ */
+export const DELETE_ENGAGEMENT_TOOL: Anthropic.Tool = {
+	name: 'delete_engagement',
+	description:
+		'Delete an engagement log entry. Use this when Boss decided not to post the comment or wants to remove a log entry. Matches by post_url.',
+	input_schema: {
+		type: 'object',
+		properties: {
+			post_url: {
+				type: 'string',
+				description: 'Full URL of the post or thread (used to find the log entry)'
+			}
+		},
+		required: ['post_url']
+	}
+};
+
+/**
  * Log Engagement Tool
  * Records that Boss posted a comment. Updates engagement_log and last_engaged.
  */
@@ -243,6 +291,85 @@ export async function executeLogEngagement(
 	}
 }
 
+/**
+ * Execute update_engagement tool
+ * Updates an existing engagement log entry by post_url.
+ */
+export async function executeUpdateEngagement(
+	input: Record<string, unknown>
+): Promise<LogEngagementResult> {
+	const postUrl = input.post_url as string;
+	const commentText = input.comment_text as string;
+	const notes = input.notes as string | undefined;
+
+	if (!postUrl || !commentText) {
+		return { success: false, message: 'Missing required parameters: post_url and comment_text' };
+	}
+
+	try {
+		const updateData: Record<string, string> = { comment_text: commentText };
+		if (notes !== undefined) {
+			updateData.notes = notes;
+		}
+
+		const { error, count } = await supabase
+			.from('engagement_log')
+			.update(updateData)
+			.eq('post_url', postUrl);
+
+		if (error) {
+			return { success: false, message: `Failed to update engagement: ${error.message}` };
+		}
+
+		if (count === 0) {
+			return { success: false, message: `No engagement found for URL: ${postUrl}` };
+		}
+
+		return { success: true, message: `Updated engagement log for: ${postUrl}` };
+	} catch (error) {
+		return {
+			success: false,
+			message: `Failed to update engagement: ${error instanceof Error ? error.message : 'Unknown error'}`
+		};
+	}
+}
+
+/**
+ * Execute delete_engagement tool
+ * Deletes an engagement log entry by post_url.
+ */
+export async function executeDeleteEngagement(
+	input: Record<string, unknown>
+): Promise<LogEngagementResult> {
+	const postUrl = input.post_url as string;
+
+	if (!postUrl) {
+		return { success: false, message: 'Missing required parameter: post_url' };
+	}
+
+	try {
+		const { error, count } = await supabase
+			.from('engagement_log')
+			.delete()
+			.eq('post_url', postUrl);
+
+		if (error) {
+			return { success: false, message: `Failed to delete engagement: ${error.message}` };
+		}
+
+		if (count === 0) {
+			return { success: false, message: `No engagement found for URL: ${postUrl}` };
+		}
+
+		return { success: true, message: `Deleted engagement log for: ${postUrl}` };
+	} catch (error) {
+		return {
+			success: false,
+			message: `Failed to delete engagement: ${error instanceof Error ? error.message : 'Unknown error'}`
+		};
+	}
+}
+
 // ============================================================================
 // Exports
 // ============================================================================
@@ -250,24 +377,30 @@ export async function executeLogEngagement(
 // Reddit engagement tools (Ananya)
 export const REDDIT_ENGAGEMENT_TOOLS: Anthropic.Tool[] = [
 	GET_SUBREDDIT_REGISTRY_TOOL,
-	LOG_ENGAGEMENT_TOOL
+	LOG_ENGAGEMENT_TOOL,
+	UPDATE_ENGAGEMENT_TOOL,
+	DELETE_ENGAGEMENT_TOOL
 ];
 
 // Discord engagement tools (Nico)
 export const DISCORD_ENGAGEMENT_TOOLS: Anthropic.Tool[] = [
 	GET_DISCORD_CHANNEL_REGISTRY_TOOL,
-	LOG_ENGAGEMENT_TOOL
+	LOG_ENGAGEMENT_TOOL,
+	UPDATE_ENGAGEMENT_TOOL,
+	DELETE_ENGAGEMENT_TOOL
 ];
 
 // All engagement tools (for backwards compatibility)
 export const ENGAGEMENT_TOOLS: Anthropic.Tool[] = [
 	GET_SUBREDDIT_REGISTRY_TOOL,
 	GET_DISCORD_CHANNEL_REGISTRY_TOOL,
-	LOG_ENGAGEMENT_TOOL
+	LOG_ENGAGEMENT_TOOL,
+	UPDATE_ENGAGEMENT_TOOL,
+	DELETE_ENGAGEMENT_TOOL
 ];
 
 export function isEngagementTool(toolName: string): boolean {
-	return ['get_subreddit_registry', 'get_discord_channel_registry', 'log_engagement'].includes(toolName);
+	return ['get_subreddit_registry', 'get_discord_channel_registry', 'log_engagement', 'update_engagement', 'delete_engagement'].includes(toolName);
 }
 
 export type EngagementToolResult = RegistryResult | LogEngagementResult;
@@ -283,6 +416,10 @@ export async function executeEngagementTool(
 			return executeGetDiscordChannelRegistry(input);
 		case 'log_engagement':
 			return executeLogEngagement(input);
+		case 'update_engagement':
+			return executeUpdateEngagement(input);
+		case 'delete_engagement':
+			return executeDeleteEngagement(input);
 		default:
 			return { success: false, message: `Unknown engagement tool: ${toolName}` };
 	}

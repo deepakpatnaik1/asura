@@ -3,9 +3,17 @@
  *
  * Discord engagement requires Playwright MCP tools for navigation.
  * This module provides tool definitions and the extraction script.
+ *
+ * Session Management:
+ * Nico uses /tmp/nico-discord-session.json to track thread state across
+ * re-engagements. This enables the diff workflow: fetch → save → re-engage → diff.
  */
 
 import type Anthropic from '@anthropic-ai/sdk';
+import { readFileSync, writeFileSync, unlinkSync, existsSync } from 'fs';
+
+// Session file path (Nico-specific)
+const SESSION_FILE = '/tmp/nico-discord-session.json';
 
 // ============================================================================
 // Tool Definitions
@@ -51,7 +59,94 @@ export const FETCH_DISCORD_THREAD_TOOL: Anthropic.Tool = {
 	}
 };
 
+/**
+ * Save Discord Session Tool
+ * Saves thread state after initial fetch for later diffing.
+ */
+export const SAVE_DISCORD_SESSION_TOOL: Anthropic.Tool = {
+	name: 'save_discord_session',
+	description:
+		'Save thread state after fetching messages. Call this right after browser_evaluate extracts messages from a thread. Stores thread URL and message IDs for later diffing on re-engage.',
+	input_schema: {
+		type: 'object',
+		properties: {
+			thread_url: {
+				type: 'string',
+				description: 'Full Discord thread URL'
+			},
+			messages: {
+				type: 'array',
+				description: 'Array of message objects from extraction (must have msgId, username, content)',
+				items: {
+					type: 'object',
+					properties: {
+						msgId: { type: 'string' },
+						username: { type: 'string' },
+						content: { type: 'string' }
+					},
+					required: ['msgId', 'username', 'content']
+				}
+			}
+		},
+		required: ['thread_url', 'messages']
+	}
+};
+
+/**
+ * Get New Discord Messages Tool
+ * Diffs current messages against saved session, returns only new ones.
+ */
+export const GET_NEW_DISCORD_MESSAGES_TOOL: Anthropic.Tool = {
+	name: 'get_new_discord_messages',
+	description:
+		'Compare new messages against saved session to find NEW messages only. Call this on re-engage after fetching the thread again. Updates session file with new messages. Returns only messages that were not in the previous fetch.',
+	input_schema: {
+		type: 'object',
+		properties: {
+			messages: {
+				type: 'array',
+				description: 'Array of message objects from fresh extraction',
+				items: {
+					type: 'object',
+					properties: {
+						msgId: { type: 'string' },
+						username: { type: 'string' },
+						content: { type: 'string' }
+					},
+					required: ['msgId', 'username', 'content']
+				}
+			}
+		},
+		required: ['messages']
+	}
+};
+
+/**
+ * Clear Discord Session Tool
+ * Clears session file when exiting a thread.
+ */
+export const CLEAR_DISCORD_SESSION_TOOL: Anthropic.Tool = {
+	name: 'clear_discord_session',
+	description:
+		'Clear the session file when exiting a thread. Call this when Boss says "im out", "next thread", or "done". Prepares for a fresh thread.',
+	input_schema: {
+		type: 'object',
+		properties: {},
+		required: []
+	}
+};
+
 export const DISCORD_TOOLS: Anthropic.Tool[] = [FETCH_DISCORD_CHANNEL_TOOL, FETCH_DISCORD_THREAD_TOOL];
+
+// Session management tools (separate for clarity)
+export const DISCORD_SESSION_TOOLS: Anthropic.Tool[] = [
+	SAVE_DISCORD_SESSION_TOOL,
+	GET_NEW_DISCORD_MESSAGES_TOOL,
+	CLEAR_DISCORD_SESSION_TOOL
+];
+
+// All Discord tools including session management
+export const ALL_DISCORD_TOOLS: Anthropic.Tool[] = [...DISCORD_TOOLS, ...DISCORD_SESSION_TOOLS];
 
 // ============================================================================
 // Extraction Scripts
@@ -243,6 +338,27 @@ export interface DiscordToolResult {
 	instructions?: string;
 }
 
+// Session types
+export interface SessionMessage {
+	msgId: string;
+	username: string;
+	content: string;
+}
+
+export interface DiscordSession {
+	threadUrl: string;
+	messages: SessionMessage[];
+	savedAt: string;
+}
+
+export interface SessionToolResult {
+	success: boolean;
+	message: string;
+	newMessages?: SessionMessage[];
+	sessionExists?: boolean;
+	threadUrl?: string;
+}
+
 // ============================================================================
 // Tool Executors
 // ============================================================================
@@ -327,18 +443,172 @@ The script will:
 	};
 }
 
+// ============================================================================
+// Session Executors
+// ============================================================================
+
+/**
+ * Execute save_discord_session tool
+ * Saves thread URL and messages to session file.
+ */
+export function executeSaveDiscordSession(
+	input: Record<string, unknown>
+): SessionToolResult {
+	const threadUrl = input.thread_url as string;
+	const messages = input.messages as SessionMessage[];
+
+	if (!threadUrl || !messages) {
+		return { success: false, message: 'Missing thread_url or messages' };
+	}
+
+	try {
+		const session: DiscordSession = {
+			threadUrl,
+			messages: messages.map(m => ({
+				msgId: m.msgId,
+				username: m.username,
+				content: m.content
+			})),
+			savedAt: new Date().toISOString()
+		};
+
+		writeFileSync(SESSION_FILE, JSON.stringify(session, null, 2));
+
+		return {
+			success: true,
+			message: `Session saved: ${messages.length} messages from ${threadUrl}`,
+			threadUrl
+		};
+	} catch (error) {
+		return {
+			success: false,
+			message: `Failed to save session: ${error instanceof Error ? error.message : 'Unknown error'}`
+		};
+	}
+}
+
+/**
+ * Execute get_new_discord_messages tool
+ * Diffs current messages against saved session, returns only new ones.
+ */
+export function executeGetNewDiscordMessages(
+	input: Record<string, unknown>
+): SessionToolResult {
+	const messages = input.messages as SessionMessage[];
+
+	if (!messages) {
+		return { success: false, message: 'Missing messages array' };
+	}
+
+	// Check if session file exists
+	if (!existsSync(SESSION_FILE)) {
+		return {
+			success: false,
+			message: 'No session file found. Call save_discord_session first after initial fetch.',
+			sessionExists: false
+		};
+	}
+
+	try {
+		const sessionData = readFileSync(SESSION_FILE, 'utf-8');
+		const session: DiscordSession = JSON.parse(sessionData);
+
+		// Build set of known message IDs
+		const knownIds = new Set(session.messages.map(m => m.msgId));
+
+		// Find new messages
+		const newMessages = messages.filter(m => !knownIds.has(m.msgId));
+
+		// Update session with all messages (old + new)
+		const updatedSession: DiscordSession = {
+			threadUrl: session.threadUrl,
+			messages: [
+				...session.messages,
+				...newMessages.map(m => ({
+					msgId: m.msgId,
+					username: m.username,
+					content: m.content
+				}))
+			],
+			savedAt: new Date().toISOString()
+		};
+
+		writeFileSync(SESSION_FILE, JSON.stringify(updatedSession, null, 2));
+
+		if (newMessages.length === 0) {
+			return {
+				success: true,
+				message: 'No new messages since last fetch.',
+				newMessages: [],
+				sessionExists: true,
+				threadUrl: session.threadUrl
+			};
+		}
+
+		return {
+			success: true,
+			message: `Found ${newMessages.length} new message(s) since last fetch.`,
+			newMessages,
+			sessionExists: true,
+			threadUrl: session.threadUrl
+		};
+	} catch (error) {
+		return {
+			success: false,
+			message: `Failed to diff session: ${error instanceof Error ? error.message : 'Unknown error'}`
+		};
+	}
+}
+
+/**
+ * Execute clear_discord_session tool
+ * Clears the session file.
+ */
+export function executeClearDiscordSession(): SessionToolResult {
+	try {
+		if (existsSync(SESSION_FILE)) {
+			unlinkSync(SESSION_FILE);
+			return {
+				success: true,
+				message: 'Session cleared. Ready for new thread.',
+				sessionExists: false
+			};
+		}
+		return {
+			success: true,
+			message: 'No session file to clear.',
+			sessionExists: false
+		};
+	} catch (error) {
+		return {
+			success: false,
+			message: `Failed to clear session: ${error instanceof Error ? error.message : 'Unknown error'}`
+		};
+	}
+}
+
+// ============================================================================
+// Tool Dispatch
+// ============================================================================
+
 /**
  * Execute Discord tool by name
  */
 export function executeDiscordTool(
 	toolName: string,
 	input: Record<string, unknown>
-): DiscordToolResult {
+): DiscordToolResult | SessionToolResult {
 	switch (toolName) {
 		case 'fetch_discord_channel':
 			return executeFetchDiscordChannel(input);
 		case 'fetch_discord_thread':
 			return executeFetchDiscordThread(input);
+		case 'save_discord_session':
+			return executeSaveDiscordSession(input);
+		case 'get_new_discord_messages':
+			return executeGetNewDiscordMessages(input);
+		case 'clear_discord_session':
+			return executeClearDiscordSession();
 		default:
 			return { success: false, message: `Unknown Discord tool: ${toolName}` };
 	}
@@ -348,5 +618,11 @@ export function executeDiscordTool(
  * Check if a tool name is a Discord tool
  */
 export function isDiscordTool(toolName: string): boolean {
-	return ['fetch_discord_channel', 'fetch_discord_thread'].includes(toolName);
+	return [
+		'fetch_discord_channel',
+		'fetch_discord_thread',
+		'save_discord_session',
+		'get_new_discord_messages',
+		'clear_discord_session'
+	].includes(toolName);
 }
