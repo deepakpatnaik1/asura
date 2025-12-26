@@ -1070,8 +1070,8 @@
 	 * This handles articles created via SQL (Gettysburg workflow) or other paths
 	 * that don't go through the normal upload flow.
 	 *
-	 * All article types (ephemeral, persistent, canon, gettysburg) should appear
-	 * as message turns with their content displayed.
+	 * Uses /ensure-entry (not /open) to avoid modifying is_enabled state.
+	 * Articles keep their current enabled/disabled state after page load.
 	 */
 	async function ensureAllArticlesHaveEntries() {
 		if (articles.length === 0) return;
@@ -1080,7 +1080,7 @@
 
 		for (const article of articles) {
 			try {
-				const response = await fetch(`/api/chat/files/${article.id}/open`, { method: 'POST' });
+				const response = await fetch(`/api/chat/files/${article.id}/ensure-entry`, { method: 'POST' });
 				if (response.ok) {
 					const data = await response.json();
 					// Only add if a new entry was created (not already existing)
