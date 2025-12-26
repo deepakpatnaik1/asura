@@ -113,7 +113,13 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 	processed = processed.replace(codeBlockRegex, (match, lang, code) => {
 		const placeholder = `__CODE_${codeBlocks.length}__`;
 		// For unlabeled code blocks (natural language like Ananya's comments), apply sentence case
-		const processedCode = !lang ? enforceSentenceCase(code) : code;
+		let processedCode = !lang ? enforceSentenceCase(code) : code;
+		// For community personas (ananya, nico), convert markdown emphasis to quotes in code blocks
+		if ((persona === 'ananya' || persona === 'nico') && !lang) {
+			processedCode = processedCode
+				.replace(/\*\*([^*]+)\*\*/g, '"$1"')  // **bold** → "word"
+				.replace(/\*([^*]+)\*/g, '"$1"');     // *italic* → "word"
+		}
 		const escapedCode = processedCode
 			.replace(/&/g, '&amp;')
 			.replace(/</g, '&lt;')

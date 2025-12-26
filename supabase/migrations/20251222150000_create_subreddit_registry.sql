@@ -41,5 +41,5 @@ INSERT INTO subreddit_registry (name, url, tier, notes) VALUES
 INSERT INTO subreddit_registry (name, url, tier, notes) VALUES
 ('AIGirlfriend', 'https://www.reddit.com/r/AIGirlfriend/', 4, 'Primary male AI companion hub'),
 ('AiGirlfriendSpace', 'https://www.reddit.com/r/AiGirlfriendSpace/', 4, 'Smaller community'),
-('AISoulmates', 'https://www.reddit.com/r/AISoulmates/', 4, 'Emotional depth focus'),
+('SoulmateAI', 'https://www.reddit.com/r/SoulmateAI/', 4, 'Emotional depth focus'),
 ('ChaiApp', 'https://www.reddit.com/r/ChaiApp/', 4, 'Moderation issues; approach carefully');

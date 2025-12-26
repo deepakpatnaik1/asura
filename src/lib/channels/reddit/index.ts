@@ -8,6 +8,23 @@
 import type Anthropic from '@anthropic-ai/sdk';
 
 /**
+ * Cooldown between Reddit API calls to avoid rate limiting.
+ * Unauthenticated Reddit API: 10 requests/min = 6 second minimum.
+ * Adding buffer for safety.
+ */
+const REDDIT_COOLDOWN_MS = 6500;
+let lastRedditCall = 0;
+
+async function waitForCooldown(): Promise<void> {
+	const now = Date.now();
+	const elapsed = now - lastRedditCall;
+	if (elapsed < REDDIT_COOLDOWN_MS) {
+		await new Promise(resolve => setTimeout(resolve, REDDIT_COOLDOWN_MS - elapsed));
+	}
+	lastRedditCall = Date.now();
+}
+
+/**
  * Tool Definition
  */
 export const FETCH_REDDIT_THREAD_TOOL: Anthropic.Tool = {
@@ -200,6 +217,9 @@ export async function executeFetchRedditThread(
 		return { success: false, message: 'Missing URL parameter' };
 	}
 
+	// Wait for cooldown to avoid rate limiting
+	await waitForCooldown();
+
 	// Validate Reddit URL
 	const redditMatch = url.match(/reddit\.com\/r\/(\w+)\/comments\/(\w+)/);
 	if (!redditMatch) {
@@ -214,13 +234,19 @@ export async function executeFetchRedditThread(
 		const response = await fetch(jsonUrl, {
 			headers: {
 				'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-				'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+				'Accept': 'application/json',
 				'Accept-Language': 'en-US,en;q=0.5'
 			}
 		});
 
 		if (!response.ok) {
 			return { success: false, message: `Reddit API error: ${response.status} ${response.statusText}` };
+		}
+
+		// Check content type - Reddit returns HTML when blocked
+		const contentType = response.headers.get('content-type') || '';
+		if (!contentType.includes('application/json')) {
+			return { success: false, message: 'Reddit blocked the request (rate limit or anti-bot). Try again in a few minutes.' };
 		}
 
 		const json = await response.json() as Array<{ data: { children: Array<{ kind: string; data: Record<string, unknown> }> } }>;
@@ -286,6 +312,9 @@ export async function executeFetchSubredditPosts(
 	// Normalize subreddit name (remove r/ prefix if present)
 	subreddit = subreddit.replace(/^r\//, '');
 
+	// Wait for cooldown to avoid rate limiting
+	await waitForCooldown();
+
 	try {
 		// Add time filter for top sort
 		const timeParam = sort === 'top' ? `&t=${time}` : '';
@@ -293,13 +322,19 @@ export async function executeFetchSubredditPosts(
 		const response = await fetch(jsonUrl, {
 			headers: {
 				'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-				'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+				'Accept': 'application/json',
 				'Accept-Language': 'en-US,en;q=0.5'
 			}
 		});
 
 		if (!response.ok) {
 			return { success: false, message: `Reddit API error: ${response.status} ${response.statusText}` };
+		}
+
+		// Check content type - Reddit returns HTML when blocked
+		const contentType = response.headers.get('content-type') || '';
+		if (!contentType.includes('application/json')) {
+			return { success: false, message: 'Reddit blocked the request (rate limit or anti-bot). Try again in a few minutes.' };
 		}
 
 		const json = await response.json() as { data: { children: Array<{ kind: string; data: Record<string, unknown> }> } };
