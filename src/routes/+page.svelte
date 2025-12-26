@@ -956,7 +956,9 @@
 				break;
 			}
 			case 'content':
-				// Reload articles and file charts
+				// All content tiers (ephemeral, strategic, canon, gettysburg) are articles
+				// Also reload messages since superjournal entries with content markers are deleted
+				reloadMessages();
 				loadArticles();
 				loadFileCharts();
 				break;
@@ -1058,6 +1060,21 @@
 			}
 		} catch (error) {
 			console.error('Failed to load articles:', error);
+		}
+	}
+
+	async function reloadMessages() {
+		try {
+			const response = await fetch('/api/superjournal?offset=0&limit=50');
+			if (response.ok) {
+				const result = await response.json();
+				allMessages = [...result.messages].reverse();
+				totalMessageCount = result.total || result.messages.length;
+				hasMore = result.hasMore || false;
+				currentOffset = result.messages.length;
+			}
+		} catch (error) {
+			console.error('Failed to reload messages:', error);
 		}
 	}
 

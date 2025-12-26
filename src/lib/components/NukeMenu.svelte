@@ -22,8 +22,34 @@
 	let progress = $state(0);
 	let timer: number | null = null;
 
+	// Counts for each bucket
+	interface NukeCounts {
+		personas: Record<string, number>;
+		content: Record<string, number>;
+		productivity: { todos: number; diary: number };
+	}
+	let counts = $state<NukeCounts | null>(null);
+
 	// Menu position (calculated from trigger when open)
 	let menuStyle = $state('');
+
+	// Fetch counts when menu opens
+	$effect(() => {
+		if (isOpen) {
+			fetchCounts();
+		}
+	});
+
+	async function fetchCounts() {
+		try {
+			const response = await fetch('/api/nuke/counts');
+			if (response.ok) {
+				counts = await response.json();
+			}
+		} catch (error) {
+			console.error('Failed to fetch nuke counts:', error);
+		}
+	}
 
 	$effect(() => {
 		if (isOpen && triggerRef) {
@@ -150,13 +176,16 @@
 					{@const persona = PERSONAS[personaName]}
 					{@const bucketId = `persona:${personaName}`}
 					{@const isActive = activeBucket === bucketId}
+					{@const count = counts?.personas[personaName] || 0}
 					<button
 						class="bucket-item"
 						class:active={isActive}
+						class:empty={count === 0}
 						onclick={() => isActive ? cancelCountdown() : startCountdown(bucketId)}
 						style="--bucket-accent: {persona.accentColor}"
+						disabled={count === 0}
 					>
-						<span class="bucket-label">{persona.displayName}</span>
+						<span class="bucket-label">{persona.displayName} ({count})</span>
 						{#if isActive}
 							<div class="progress-bar" style="width: {progress}%"></div>
 							<span class="cancel-hint">click to cancel</span>
@@ -170,12 +199,16 @@
 				<div class="section-label">CONTENT</div>
 				{#each CONTENT_BUCKETS as bucket}
 					{@const isActive = activeBucket === bucket.id}
+					{@const tier = bucket.id.split(':')[1]}
+					{@const count = counts?.content[tier] || 0}
 					<button
 						class="bucket-item"
 						class:active={isActive}
+						class:empty={count === 0}
 						onclick={() => isActive ? cancelCountdown() : startCountdown(bucket.id)}
+						disabled={count === 0}
 					>
-						<span class="bucket-label">{bucket.label}</span>
+						<span class="bucket-label">{bucket.label} ({count})</span>
 						<span class="bucket-description">{bucket.description}</span>
 						{#if isActive}
 							<div class="progress-bar" style="width: {progress}%"></div>
@@ -190,12 +223,16 @@
 				<div class="section-label">PRODUCTIVITY</div>
 				{#each PRODUCTIVITY_BUCKETS as bucket}
 					{@const isActive = activeBucket === bucket.id}
+					{@const target = bucket.id.split(':')[1]}
+					{@const count = target === 'diary' ? (counts?.productivity.diary || 0) : (counts?.productivity.todos || 0)}
 					<button
 						class="bucket-item"
 						class:active={isActive}
+						class:empty={count === 0}
 						onclick={() => isActive ? cancelCountdown() : startCountdown(bucket.id)}
+						disabled={count === 0}
 					>
-						<span class="bucket-label">{bucket.label}</span>
+						<span class="bucket-label">{bucket.label} ({count})</span>
 						<span class="bucket-description">{bucket.description}</span>
 						{#if isActive}
 							<div class="progress-bar" style="width: {progress}%"></div>
@@ -290,6 +327,15 @@
 
 	.bucket-item.active {
 		background: rgba(220, 38, 38, 0.1);
+	}
+
+	.bucket-item.empty {
+		opacity: 0.4;
+		cursor: not-allowed;
+	}
+
+	.bucket-item.empty:hover {
+		background: none;
 	}
 
 	.bucket-label {
