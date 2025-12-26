@@ -144,8 +144,21 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 		return placeholder + '\n';
 	});
 
+	// Extract bare URLs as placeholders BEFORE sentence case and snake_case processing
+	// (URLs with underscores like reddit.com/r/JanitorAI_Official get mangled otherwise)
+	const globalUrls: string[] = [];
+	processed = processed.replace(/https?:\/\/[^\s<>"]+/gi, (url) => {
+		const placeholder = `__GURL_${globalUrls.length}__`;
+		// For Reddit comment permalinks, show "Reply link"; for subreddits show r/name; otherwise domain
+		const isPermalink = /reddit\.com\/r\/\w+\/comments\//.test(url);
+		const redditMatch = url.match(/reddit\.com\/r\/(\w+)/);
+		const label = isPermalink ? 'Reply link' : redditMatch ? `r/${redditMatch[1]}` : url.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+		globalUrls.push(`<a href="${url}" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">${label}</a>`);
+		return placeholder;
+	});
+
 	// Enforce sentence case: capitalize first letter of each sentence
-	// (After code blocks extracted so we don't modify code)
+	// (After code blocks and URLs extracted so we don't modify them)
 	processed = enforceSentenceCase(processed);
 
 	// Render markdown tables with placeholders (protect from escaping)
@@ -662,6 +675,11 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 	// Restore block quote HTML from placeholders
 	for (let i = 0; i < blockQuotes.length; i++) {
 		processed = processed.replace(`__QUOTE_${i}__`, blockQuotes[i]);
+	}
+
+	// Restore global URL placeholders
+	for (let i = 0; i < globalUrls.length; i++) {
+		processed = processed.replace(`__GURL_${i}__`, globalUrls[i]);
 	}
 
 	return `<div style="white-space: pre-wrap; font-family: inherit; margin: 0;">${processed}</div>`;
