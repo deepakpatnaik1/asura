@@ -395,7 +395,23 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				}
 				return result;
 			} else if (isRedditTool(toolName)) {
-				return executeRedditTool(toolName, input);
+				const result = await executeRedditTool(toolName, input);
+				// Log raw Reddit data to raw_intel for product intelligence
+				if (result.success && result.data) {
+					const subreddit = 'subreddit' in result.data ? result.data.subreddit : null;
+					const url = (input.url as string) || (input.subreddit ? `https://www.reddit.com/r/${input.subreddit}` : null);
+					supabaseStorage.from('raw_intel').insert({
+						user_id: userId,
+						tool_name: toolName,
+						subreddit,
+						url,
+						raw_data: result.data,
+						persona
+					}).then(({ error }) => {
+						if (error) log.warn('Failed to log raw intel', { error: error.message });
+					});
+				}
+				return result;
 			} else if (isDiscordTool(toolName)) {
 				return executeDiscordTool(toolName, input);
 			} else if (isEngagementTool(toolName)) {
