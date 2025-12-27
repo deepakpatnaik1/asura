@@ -13,7 +13,6 @@ import { parseRequestJson } from '$lib/api/parse-json';
 import { createMessage } from '$lib/api/anthropic-client';
 import { getModelProvider, assertProviderSupported } from '$lib/calls/chat/provider';
 import { DEFAULT_MODEL } from '$lib/config/models';
-import { DEFAULT_PERSONA } from '$lib/config/personas';
 import { FILE_ARTISAN_CUT_PROMPT } from '$lib/prompts/file-artisan-cut';
 import { databaseError, validationError, internalError } from '$lib/api/errors';
 import { createLogger } from '$lib/api/logger';
@@ -65,9 +64,9 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 
 	const { data, error } = await supabase
 		.from('articles')
-		.select('id, title, is_enabled, is_canon, created_at')
+		.select('id, title, is_enabled, tier, created_at')
 		.eq('user_id', userId)
-		.order('is_canon', { ascending: true }) // Non-canon first, canon at bottom
+		.order('tier', { ascending: false }) // strategic > gettysburg > ephemeral > canon (alphabetically descending, so canon last)
 		.order('created_at', { ascending: false }); // Newest first within each group
 
 	if (error) {
@@ -89,10 +88,13 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 	const log = createLogger('FilesAPI', userId);
 
 	// Parse request body
-	const parseResult = await parseRequestJson<{ content: string; persistent?: boolean; persona?: string; is_canon?: boolean }>(request);
+	const parseResult = await parseRequestJson<{ content: string; persistent?: boolean; tier?: string }>(request);
 	if (!parseResult.success) return parseResult.error;
 
-	const { content, persistent = false, persona: requestPersona, is_canon = false } = parseResult.data;
+	const { content, persistent = false, tier: requestTier } = parseResult.data;
+
+	// Determine tier: explicit tier > persistent flag > ephemeral default
+	const tier = requestTier || (persistent ? 'strategic' : 'ephemeral');
 
 	// Validate content
 	if (!content || typeof content !== 'string') {
@@ -108,16 +110,15 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 	}
 
 	try {
-		// Fetch user settings (default model + persona + file compression model)
+		// Fetch user settings (default model + file compression model)
 		const { data: settings } = await supabase
 			.from('user_settings')
-			.select('default_model, selected_persona, model_compression')
+			.select('default_model, model_compression')
 			.eq('user_id', userId)
 			.single();
 
 		// Use model_compression if set, otherwise fall back to default_model
 		const model = settings?.model_compression || settings?.default_model || DEFAULT_MODEL;
-		const persona = requestPersona || settings?.selected_persona || DEFAULT_PERSONA;
 
 		// Detect if content is HTML or already markdown
 		// Check markdown patterns first - if it looks like markdown, don't run through Turndown
@@ -203,7 +204,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				raw_content: readableContent,
 				artisan_cut: artisanCut,
 				is_enabled: true, // Auto-select on paste
-				is_canon
+				tier
 			})
 			.select('id, title')
 			.single();
@@ -215,11 +216,12 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 
 		// Create superjournal entry for display
 		// Stores only marker; content fetched from content table on display
+		// Use 'system' as persona_name so content turns don't pollute any persona's working/recent memory
 		const { data: sjEntry, error: sjError } = await supabase
 			.from('superjournal')
 			.insert({
 				user_id: userId,
-				persona_name: persona,
+				persona_name: 'system',
 				user_message: `Boss uploaded ${file.title}`,
 				ai_response: `<!--content:${file.id}-->`,
 				model_identifier: 'file-upload',

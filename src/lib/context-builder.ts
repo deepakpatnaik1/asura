@@ -90,7 +90,7 @@ interface RankedVectorResult extends VectorSearchResult {
  * - working: Last N superjournal turns (unified across all personas)
  * - recent: Compressed journal summaries
  * - semantic: Vector search results
- * - canon: is_canon=true content (always included)
+ * - canon: tier='canon' content (always included)
  * - active: Currently selected content(s) (via contentIds)
  * - todos, diary, tags, time: Productivity data
  */
@@ -136,7 +136,7 @@ export async function buildContext(
 			.from('articles')
 			.select('title, artisan_cut, raw_content, created_at')
 			.eq('user_id', userId)
-			.eq('is_canon', true)
+			.eq('tier', 'canon')
 			.order('created_at', { ascending: true });
 
 		if (canonData && canonData.length > 0) {

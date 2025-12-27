@@ -12,9 +12,10 @@ import { createLogger } from '$lib/api/logger';
  *
  * Buckets:
  * - persona:<name>     → Delete superjournal/journal for that persona
- * - content:ephemeral  → Delete content where artisan_cut IS NULL
- * - content:strategic  → Delete content where artisan_cut IS NOT NULL AND is_canon = false
- * - content:canon      → Delete content where is_canon = true
+ * - content:ephemeral  → Delete content where tier = 'ephemeral'
+ * - content:strategic  → Delete content where tier = 'strategic'
+ * - content:canon      → Delete content where tier = 'canon'
+ * - content:gettysburg → Delete content where tier = 'gettysburg'
  * - productivity:diary → Delete founder_diary entries
  * - productivity:todos → Delete todos + tags
  *

@@ -18,7 +18,7 @@ export type ContextChunk =
 	| 'recent' // Compressed summaries (journal)
 	| 'starred' // User's standing instructions (all personas should get this)
 	| 'semantic' // Vector search results
-	| 'canon' // is_canon = true files
+	| 'canon' // tier = 'canon' files
 	| 'active' // Currently selected library items (content, whiteboards, canvases)
 	| 'todos' // Open + completed todos
 	| 'diary' // Founder diary entries
@@ -89,7 +89,6 @@ export type ToolName =
 	// Engagement tools (Ananya, Nico)
 	| 'get_subreddit_registry'
 	| 'log_engagement'
-	| 'update_engagement'
 	| 'delete_engagement';
 
 /**
@@ -184,13 +183,13 @@ const ANANYA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic
  * Ananya tools: Reddit engagement
  * Single-model: Ananya writes comments directly in conversation
  */
-const ANANYA_TOOLS: ToolName[] = ['fetch_reddit_thread', 'fetch_subreddit_posts', 'get_subreddit_registry', 'log_engagement', 'update_engagement', 'delete_engagement'];
+const ANANYA_TOOLS: ToolName[] = ['fetch_reddit_thread', 'fetch_subreddit_posts', 'get_subreddit_registry', 'log_engagement', 'delete_engagement'];
 
 /**
  * Nico: Discord engagement
  * Includes canon - he knows the product, trusts him not to leak
  */
-const NICO_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic', 'canon'];
+const NICO_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic'];
 
 /**
  * Nico tools: Discord engagement + session management

@@ -75,13 +75,15 @@
 		try {
 			processingStatus = isPersistent ? 'Generating artisan cut...' : 'Processing...';
 
+			// Determine tier: canon > strategic > ephemeral
+			const tier = isCanon ? 'canon' : (isPersistent ? 'strategic' : 'ephemeral');
+
 			const response = await fetch('/api/chat/files', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					content,
-					persistent: isPersistent,
-					is_canon: isCanon
+					tier
 				})
 			});
 

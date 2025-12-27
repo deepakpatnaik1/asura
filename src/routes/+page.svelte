@@ -278,7 +278,7 @@
 		id: string;
 		title: string;
 		is_enabled: boolean;
-		is_canon?: boolean;
+		tier?: string;
 		created_at: string;
 	}
 	let articles = $state<Article[]>([]);
@@ -295,7 +295,7 @@
 
 	// Total selections for library badge (exclude canon - always injected)
 	const totalLibrarySelections = $derived(
-		articles.filter(a => a.is_enabled && !a.is_canon).length + selectedWhiteboardIds.length + selectedDesignerCanvasIds.length
+		articles.filter(a => a.is_enabled && a.tier !== 'canon').length + selectedWhiteboardIds.length + selectedDesignerCanvasIds.length
 	);
 
 	let pendingTimeouts: number[] = [];

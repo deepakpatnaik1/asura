@@ -13,7 +13,6 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { requireAuth } from '$lib/api/require-auth';
 import { databaseError, notFoundError, validationError } from '$lib/api/errors';
-import { DEFAULT_PERSONA } from '$lib/config/personas';
 
 function formatTimestamp(dateString: string): string {
 	const date = new Date(dateString);
@@ -70,19 +69,12 @@ export const POST: RequestHandler = async ({ params, locals: { safeGetSession, s
 	}
 
 	// No entry exists - create one
-	const { data: settings } = await supabase
-		.from('user_settings')
-		.select('selected_persona')
-		.eq('user_id', userId)
-		.single();
-
-	const persona = settings?.selected_persona || DEFAULT_PERSONA;
-
+	// Use 'system' as persona_name so content turns don't pollute any persona's working/recent memory
 	const { data: sjEntry, error: sjError } = await supabase
 		.from('superjournal')
 		.insert({
 			user_id: userId,
-			persona_name: persona,
+			persona_name: 'system',
 			user_message: `Boss uploaded ${content.title}`,
 			ai_response: `<!--content:${content.id}-->`,
 			model_identifier: 'file-upload',

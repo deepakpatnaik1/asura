@@ -18,7 +18,7 @@
 		id: string;
 		title: string;
 		is_enabled?: boolean;
-		is_canon?: boolean;
+		tier?: string;
 		created_at: string;
 	}
 
@@ -283,7 +283,7 @@
 			<div class="column-items">
 				{#each articles as item (item.id)}
 					<div class="item" class:active={item.is_enabled}>
-						{#if item.is_canon}
+						{#if item.tier === 'canon'}
 							<span class="toggle-spacer"></span>
 						{:else}
 							<button

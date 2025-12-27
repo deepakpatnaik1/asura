@@ -36,7 +36,7 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supab
 			alt_text,
 			is_pinned,
 			created_at,
-			articles!inner(id, title, is_enabled, is_canon)
+			articles!inner(id, title, is_enabled, tier)
 		`)
 		.eq('user_id', userId)
 		.not('content_id', 'is', null)
@@ -66,8 +66,8 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supab
 	// Filter out charts from canon files (they can't be toggled off, so no point showing thumbnails)
 	const charts = (data || [])
 		.filter((chart) => {
-			const content = chart.articles as unknown as { is_canon?: boolean } | null;
-			return !content?.is_canon;
+			const content = chart.articles as unknown as { tier?: string } | null;
+			return content?.tier !== 'canon';
 		})
 		.map((chart) => {
 			// articles is a single object when using !inner join

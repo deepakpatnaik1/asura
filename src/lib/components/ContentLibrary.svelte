@@ -15,7 +15,7 @@
 		id: string;
 		title: string;
 		is_enabled?: boolean;
-		is_canon?: boolean;
+		tier?: string;
 		created_at: string;
 	}
 
@@ -99,7 +99,7 @@
 				class="content-item"
 				class:active={item.is_enabled}
 			>
-				{#if item.is_canon}
+				{#if item.tier === 'canon'}
 					<!-- Canon: no toggle, always injected -->
 					<span class="canon-spacer"></span>
 				{:else}
