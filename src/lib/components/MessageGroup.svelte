@@ -185,7 +185,15 @@
 				</div>
 			{/if}
 		</div>
-		<div class="message-text">{userMessage}</div>
+		<div class="message-text">
+			{#if personaName === 'samara'}
+				Samara, demystify this.
+			{:else if personaName === 'alicja' && /\blog (this|it|the founder diary)\b/i.test(userMessage)}
+				Alicja, log this.
+			{:else}
+				{userMessage}
+			{/if}
+		</div>
 	</div>
 </div>
 

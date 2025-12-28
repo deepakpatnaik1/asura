@@ -8,7 +8,6 @@
  *
  * Channels:
  * - Reddit
- * - Discord (pending)
  */
 
 export const ROLE_NAME = 'community-manager';

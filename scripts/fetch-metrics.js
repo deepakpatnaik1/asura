@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Fetch Reddit Metrics
 //
-// Fetches metrics for valaquer's recent comments.
-// Stores in metrics table. Matches to engagement_log by post_url when possible.
+// Fetches metrics for valaquer's recent comments (48h+ old, upvotes stabilized).
+// Stores in metrics table. No matching to engagement_log—clean separation.
 //
 // Usage: node scripts/fetch-metrics.js
 // Cron:  0 */12 * * * cd /path/to/aether && node scripts/fetch-metrics.js
@@ -33,22 +33,6 @@ async function fetchUserComments(username, limit = 100) {
 
     const data = await response.json();
     return data.data.children.map(child => child.data);
-}
-
-/**
- * Extract post URL from comment's link_permalink or construct from link_id
- */
-function getPostUrl(comment) {
-    // link_permalink is the thread URL
-    if (comment.link_permalink) {
-        return comment.link_permalink;
-    }
-    // Fallback: construct from subreddit and link_id
-    const linkId = comment.link_id?.replace('t3_', '');
-    if (linkId && comment.subreddit) {
-        return `https://www.reddit.com/r/${comment.subreddit}/comments/${linkId}/`;
-    }
-    return null;
 }
 
 /**
@@ -87,21 +71,6 @@ async function main() {
 
     const existingUrls = new Set(existingMetrics?.map(m => m.comment_url) || []);
 
-    // Get engagement_log entries for matching
-    const { data: engagements } = await supabase
-        .from('engagement_log')
-        .select('id, post_url');
-
-    // Build map of post_url -> engagement_id for matching
-    const engagementMap = new Map();
-    for (const e of engagements || []) {
-        if (e.post_url) {
-            // Normalize URL for matching
-            const normalized = e.post_url.replace(/\/$/, '').toLowerCase();
-            engagementMap.set(normalized, e.id);
-        }
-    }
-
     let inserted = 0;
     let skipped = 0;
 
@@ -114,27 +83,16 @@ async function main() {
             continue;
         }
 
-        const postUrl = getPostUrl(comment);
-        const normalizedPostUrl = postUrl?.replace(/\/$/, '').toLowerCase();
-
-        // Try to match to engagement_log
-        const engagementId = normalizedPostUrl ? engagementMap.get(normalizedPostUrl) : null;
-
         console.log(`- r/${comment.subreddit}: "${comment.link_title?.slice(0, 50)}..."`);
         console.log(`  Upvotes: ${comment.score}, Replies: ${comment.num_comments || 0}`);
-        if (engagementId) {
-            console.log(`  ✓ Matched to engagement_log`);
-        }
 
         // Insert into metrics
         const { error } = await supabase.from('metrics').insert({
-            engagement_id: engagementId,
             comment_url: commentUrl,
             subreddit: comment.subreddit,
             thread_title: comment.link_title,
             upvotes: comment.score,
-            replies: comment.num_comments || 0,
-            position: null
+            replies: comment.num_comments || 0
         });
 
         if (error) {

@@ -13,7 +13,6 @@ export interface Palette {
 	alicja: string;
 	eva: string;
 	ananya: string;
-	nico: string;
 }
 
 export const PALETTES: Record<string, Palette> = {
@@ -24,8 +23,7 @@ export const PALETTES: Record<string, Palette> = {
 		samara: 'rgb(16, 185, 129)', // emerald
 		alicja: 'rgb(56, 140, 220)', // vibrant blue
 		eva: 'rgb(255, 183, 197)', // cherry blossom
-		ananya: 'rgb(167, 139, 250)', // violet
-		nico: 'rgb(167, 139, 250)' // violet (same as ananya)
+		ananya: 'rgb(167, 139, 250)' // violet
 	},
 	jewel: {
 		name: 'Deep Jewel',
@@ -34,8 +32,7 @@ export const PALETTES: Record<string, Palette> = {
 		samara: 'rgb(38, 108, 88)', // forest
 		alicja: 'rgb(48, 78, 128)', // navy
 		eva: 'rgb(183, 110, 121)', // deep rose
-		ananya: 'rgb(124, 58, 237)', // violet-600
-		nico: 'rgb(124, 58, 237)' // violet-600 (same as ananya)
+		ananya: 'rgb(124, 58, 237)' // violet-600
 	},
 	muted: {
 		name: 'Muted Sophistication',
@@ -44,8 +41,7 @@ export const PALETTES: Record<string, Palette> = {
 		samara: 'rgb(115, 145, 130)', // sage
 		alicja: 'rgb(110, 135, 155)', // steel
 		eva: 'rgb(200, 160, 170)', // dusty pink
-		ananya: 'rgb(150, 130, 170)', // muted violet
-		nico: 'rgb(150, 130, 170)' // muted violet (same as ananya)
+		ananya: 'rgb(150, 130, 170)' // muted violet
 	},
 	warm: {
 		name: 'Warm Earth',
@@ -54,8 +50,7 @@ export const PALETTES: Record<string, Palette> = {
 		samara: 'rgb(140, 160, 90)', // olive
 		alicja: 'rgb(160, 140, 100)', // sand
 		eva: 'rgb(230, 150, 140)', // coral
-		ananya: 'rgb(168, 128, 180)', // dusty violet
-		nico: 'rgb(168, 128, 180)' // dusty violet (same as ananya)
+		ananya: 'rgb(168, 128, 180)' // dusty violet
 	},
 	neon: {
 		name: 'Neon',
@@ -64,8 +59,7 @@ export const PALETTES: Record<string, Palette> = {
 		samara: 'rgb(0, 255, 150)', // neon green
 		alicja: 'rgb(50, 150, 255)', // neon blue
 		eva: 'rgb(255, 130, 170)', // neon coral pink
-		ananya: 'rgb(196, 130, 255)', // neon violet
-		nico: 'rgb(196, 130, 255)' // neon violet (same as ananya)
+		ananya: 'rgb(196, 130, 255)' // neon violet
 	},
 	mono: {
 		name: 'Monochrome',
@@ -74,8 +68,7 @@ export const PALETTES: Record<string, Palette> = {
 		samara: 'rgb(160, 160, 160)', // gray
 		alicja: 'rgb(120, 120, 120)', // dark gray
 		eva: 'rgb(190, 175, 180)', // silver pink
-		ananya: 'rgb(170, 170, 170)', // gray
-		nico: 'rgb(170, 170, 170)' // gray (same as ananya)
+		ananya: 'rgb(170, 170, 170)' // gray
 	}
 };
 
@@ -90,6 +83,6 @@ export function getActivePalette(): Palette {
 }
 
 // Helper to get persona color from active palette
-export function getPaletteColor(persona: 'gunnar' | 'kirby' | 'samara' | 'alicja' | 'eva' | 'ananya' | 'nico'): string {
+export function getPaletteColor(persona: 'gunnar' | 'kirby' | 'samara' | 'alicja' | 'eva' | 'ananya'): string {
 	return PALETTES[ACTIVE_PALETTE][persona];
 }

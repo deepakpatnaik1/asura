@@ -58,7 +58,6 @@ import {
 import { refreshAccessToken } from '$lib/api/google-calendar';
 import { BRAVE_SEARCH_TOOL, executeBraveSearch } from '$lib/api/brave-search';
 import { REDDIT_TOOLS, executeRedditTool, isRedditTool } from '$lib/api/reddit-tools';
-import { ALL_DISCORD_TOOLS, executeDiscordTool, isDiscordTool } from '$lib/channels/discord';
 import { ENGAGEMENT_TOOLS, executeEngagementTool, isEngagementTool } from '$lib/roles/community-manager/engagement';
 import { parseToolIntents, hasToolIntents } from '$lib/api/tool-intent-parser';
 import { createClient } from '@supabase/supabase-js';
@@ -227,7 +226,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			const hasWhiteboardTools = personaTools.some(t => isWhiteboardTool(t));
 			const hasDesignTools = personaTools.some(t => isDesignTool(t));
 			const hasRedditTools = personaTools.some(t => isRedditTool(t));
-			const hasDiscordTools = personaTools.some(t => isDiscordTool(t));
 			const hasEngagementTools = personaTools.some(t => isEngagementTool(t));
 
 			log.info('Tool setup', {
@@ -327,12 +325,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				allTools.push(...REDDIT_TOOLS);
 			}
 
-			// Set up Discord tools (Nico) - includes session management
-			if (hasDiscordTools) {
-				allTools.push(...ALL_DISCORD_TOOLS);
-			}
-
-			// Set up engagement tools (Ananya, Nico)
+			// Set up engagement tools (Ananya)
 			if (hasEngagementTools) {
 				allTools.push(...ENGAGEMENT_TOOLS);
 			}
@@ -412,8 +405,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 					});
 				}
 				return result;
-			} else if (isDiscordTool(toolName)) {
-				return executeDiscordTool(toolName, input);
 			} else if (isEngagementTool(toolName)) {
 				return executeEngagementTool(toolName, input);
 			} else if (isTodoTool(toolName) && todoContext) {
