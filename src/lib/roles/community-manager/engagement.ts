@@ -4,8 +4,7 @@
  * Single-model: Ananya writes comments directly in conversation.
  *
  * Tools:
- * - get_subreddit_registry: Select communities to engage
- * - log_engagement: Record that Boss posted a comment
+ * - log_engagement: Increment engagement score for a subreddit after drafting
  */
 
 import type Anthropic from '@anthropic-ai/sdk';
@@ -18,43 +17,32 @@ const supabase = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY);
 // Types
 // ============================================================================
 
-export interface CommunityEntry {
-	id: string;
-	name: string;
-	url: string;
-	platform: string;
-	last_engaged: string | null;
-	notes: string | null;
-}
-
-// Alias for backwards compatibility
-export type SubredditEntry = CommunityEntry;
-
-export interface RegistryResult {
+export interface LogEngagementResult {
 	success: boolean;
 	message: string;
-	data?: CommunityEntry[];
 }
-
-// Alias for backwards compatibility
-export type SubredditRegistryResult = RegistryResult;
 
 // ============================================================================
 // Tool Definitions
 // ============================================================================
 
 /**
- * Get Subreddit Registry Tool
- * Returns the list of subreddits Ananya should consider for engagement.
+ * Log Engagement Tool
+ * Increments the engagement score for a subreddit after Ananya drafts a comment.
  */
-export const GET_SUBREDDIT_REGISTRY_TOOL: Anthropic.Tool = {
-	name: 'get_subreddit_registry',
+export const LOG_ENGAGEMENT_TOOL: Anthropic.Tool = {
+	name: 'log_engagement',
 	description:
-		'Get the list of subreddits to consider for community engagement. Returns subreddits ordered by last_engaged (oldest first). Use this when Boss asks to start community engagement.',
+		'Log that you drafted a comment for a subreddit. Call this after you provide a draft. Increments the engagement score so you rotate to other subreddits next time.',
 	input_schema: {
 		type: 'object',
-		properties: {},
-		required: []
+		properties: {
+			subreddit: {
+				type: 'string',
+				description: 'Subreddit name (e.g., "Replika" or "CharacterAI")'
+			}
+		},
+		required: ['subreddit']
 	}
 };
 
@@ -63,31 +51,48 @@ export const GET_SUBREDDIT_REGISTRY_TOOL: Anthropic.Tool = {
 // ============================================================================
 
 /**
- * Execute get_subreddit_registry tool
+ * Execute log_engagement tool
+ * Increments engagement_score by 1 for the given subreddit
  */
-export async function executeGetSubredditRegistry(
-	_input: Record<string, unknown>
-): Promise<RegistryResult> {
-	try {
-		const { data, error } = await supabase
-			.from('subreddit_registry')
-			.select('*')
-			.eq('platform', 'reddit')
-			.order('last_engaged', { ascending: true, nullsFirst: true });
+export async function executeLogEngagement(
+	input: Record<string, unknown>
+): Promise<LogEngagementResult> {
+	const subreddit = input.subreddit as string;
 
-		if (error) {
-			return { success: false, message: `Database error: ${error.message}` };
+	if (!subreddit) {
+		return { success: false, message: 'Missing subreddit parameter' };
+	}
+
+	try {
+		// First get the current score
+		const { data: current, error: fetchError } = await supabase
+			.from('subreddit_registry')
+			.select('engagement_score')
+			.eq('name', subreddit)
+			.single();
+
+		if (fetchError || !current) {
+			return { success: false, message: `Subreddit not found: ${subreddit}` };
+		}
+
+		// Increment the score
+		const { error: updateError } = await supabase
+			.from('subreddit_registry')
+			.update({ engagement_score: current.engagement_score + 1 })
+			.eq('name', subreddit);
+
+		if (updateError) {
+			return { success: false, message: `Failed to update: ${updateError.message}` };
 		}
 
 		return {
 			success: true,
-			message: `Found ${data.length} subreddits`,
-			data: data as CommunityEntry[]
+			message: `Logged engagement for r/${subreddit} (score: ${current.engagement_score + 1})`
 		};
 	} catch (error) {
 		return {
 			success: false,
-			message: `Failed to fetch registry: ${error instanceof Error ? error.message : 'Unknown error'}`
+			message: `Failed to log engagement: ${error instanceof Error ? error.message : 'Unknown error'}`
 		};
 	}
 }
@@ -96,29 +101,21 @@ export async function executeGetSubredditRegistry(
 // Exports
 // ============================================================================
 
-// Reddit engagement tools (Ananya)
-export const REDDIT_ENGAGEMENT_TOOLS: Anthropic.Tool[] = [
-	GET_SUBREDDIT_REGISTRY_TOOL
-];
-
-// All engagement tools
-export const ENGAGEMENT_TOOLS: Anthropic.Tool[] = [
-	GET_SUBREDDIT_REGISTRY_TOOL
-];
+export const ENGAGEMENT_TOOLS: Anthropic.Tool[] = [LOG_ENGAGEMENT_TOOL];
 
 export function isEngagementTool(toolName: string): boolean {
-	return toolName === 'get_subreddit_registry';
+	return toolName === 'log_engagement';
 }
 
-export type EngagementToolResult = RegistryResult;
+export type EngagementToolResult = LogEngagementResult;
 
 export async function executeEngagementTool(
 	toolName: string,
 	input: Record<string, unknown>
 ): Promise<EngagementToolResult> {
 	switch (toolName) {
-		case 'get_subreddit_registry':
-			return executeGetSubredditRegistry(input);
+		case 'log_engagement':
+			return executeLogEngagement(input);
 		default:
 			return { success: false, message: `Unknown engagement tool: ${toolName}` };
 	}

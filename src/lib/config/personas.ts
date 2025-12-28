@@ -25,6 +25,7 @@ export type ContextChunk =
 	| 'tags' // Canonical tag list
 	| 'calendar' // Google Calendar events (future)
 	| 'fitness' // Fitness/health log entries
+	| 'subreddit_registry' // Top 5 lowest-score subreddits for rotation (Ananya)
 	| 'time'; // Current timestamp (always injected, not toggleable)
 
 
@@ -78,7 +79,7 @@ export type ToolName =
 	// Reddit tools (Ananya)
 	| 'fetch_reddit_thread'
 	| 'fetch_subreddit_posts'
-	| 'get_subreddit_registry';
+	| 'log_engagement';
 
 /**
  * Persona configuration interface
@@ -165,14 +166,14 @@ const EVA_TOOLS: ToolName[] = [
 /**
  * Ananya: Reddit engagement
  * Includes canon - she knows the product, trusts her not to leak
+ * subreddit_registry - top 5 lowest-score subreddits for rotation
  */
-const ANANYA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic', 'canon'];
+const ANANYA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic', 'canon', 'subreddit_registry'];
 
 /**
- * Ananya tools: Reddit engagement
- * Single-model: Ananya writes comments directly in conversation
+ * Ananya tools: Reddit engagement + logging
  */
-const ANANYA_TOOLS: ToolName[] = ['fetch_reddit_thread', 'fetch_subreddit_posts', 'get_subreddit_registry'];
+const ANANYA_TOOLS: ToolName[] = ['fetch_reddit_thread', 'fetch_subreddit_posts', 'log_engagement'];
 
 /**
  * All Alicja tools

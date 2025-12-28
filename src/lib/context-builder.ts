@@ -41,6 +41,7 @@ interface ContextComponents {
 	fitness: string; // Fitness/health log (for Alicja)
 	whiteboard: string; // Active whiteboard (for Gunnar)
 	canvas: string; // Designer canvases (for Eva)
+	subredditRegistry: string; // Subreddit list with engagement timestamps (for Ananya)
 }
 
 interface ContextStats {
@@ -58,6 +59,7 @@ interface ContextStats {
 		fitness: number;
 		whiteboard: number;
 		canvas: number;
+		subredditRegistry: number;
 	};
 }
 
@@ -121,7 +123,8 @@ export async function buildContext(
 		calendar: '',
 		fitness: '',
 		whiteboard: '',
-		canvas: ''
+		canvas: '',
+		subredditRegistry: ''
 	};
 
 	let totalTokens = 0;
@@ -321,6 +324,26 @@ export async function buildContext(
 			}
 		} catch {
 			// Fitness fetch failed, continue without it
+		}
+	}
+
+	// Priority 0.8: Subreddit registry (for Ananya) - top 5 lowest scores
+	if (hasChunk('subreddit_registry')) {
+		try {
+			const { data: registryData } = await supabase
+				.from('subreddit_registry')
+				.select('name, url')
+				.eq('platform', 'reddit')
+				.order('engagement_score', { ascending: true })
+				.limit(5);
+
+			if (registryData && registryData.length > 0) {
+				const registryText = formatSubredditRegistry(registryData);
+				components.subredditRegistry = registryText;
+				totalTokens += estimateTokens(registryText);
+			}
+		} catch {
+			// Registry fetch failed, continue without it
 		}
 	}
 
@@ -550,7 +573,8 @@ export async function buildContext(
 			calendar: estimateTokens(components.calendar),
 			fitness: estimateTokens(components.fitness),
 			whiteboard: estimateTokens(components.whiteboard),
-			canvas: estimateTokens(components.canvas)
+			canvas: estimateTokens(components.canvas),
+			subredditRegistry: estimateTokens(components.subredditRegistry)
 		}
 	};
 
@@ -1099,10 +1123,28 @@ ${formatted}
 `;
 }
 
+// Format subreddit registry for Ananya (top 5 lowest engagement scores)
+function formatSubredditRegistry(
+	entries: Array<{
+		name: string;
+		url: string;
+	}>
+): string {
+	if (entries.length === 0) return '';
+
+	const formatted = entries.map((entry) => `- ${entry.name}: ${entry.url}`).join('\n');
+
+	return `--- SUBREDDIT OPTIONS ---
+${formatted}
+
+`;
+}
+
 // Assemble all context components into final string
 function assembleContext(components: ContextComponents): string {
 	const parts = [
 		components.canon, // Canon first (shared knowledge across all modes)
+		components.subredditRegistry, // Subreddit registry (for Ananya - before superjournal so she sees it first)
 		components.workData, // Work data for todo mode (before superjournal so Alicja sees todos first)
 		components.calendar, // Calendar events (for Alicja)
 		components.fitness, // Fitness log (for Alicja)
