@@ -1134,10 +1134,12 @@
 						// New entry created - append to messages and scroll
 						allMessages = [...allMessages, data.message];
 						totalMessageCount++;
+						selectedPersona = 'system';
 						await tick();
 						scrollToLastTurn(CHAT_CONFIG);
 					} else if (data.originalSuperjournalId) {
 						// Entry already exists - scroll to it
+						selectedPersona = 'system';
 						await tick();
 						const element = document.getElementById(`message-${data.originalSuperjournalId}`);
 						if (element) {
@@ -1237,12 +1239,13 @@
 				id: superjournalId,
 				user_message: `Boss uploaded ${title}`,
 				ai_response: `<!--content:${fileId}-->\n${content}`,
-				persona_name: selectedPersona,
+				persona_name: 'system',
 				created_at: now,
 				formatted_timestamp: formatTimestamp(now),
 				model_identifier: 'file-upload'
 			}];
 			totalMessageCount++;
+			selectedPersona = 'system';
 
 			await tick();
 			setTimeout(() => scrollToLastTurn(CHAT_CONFIG), 100);
