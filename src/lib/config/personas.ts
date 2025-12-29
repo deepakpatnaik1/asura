@@ -262,6 +262,16 @@ export const PERSONAS: Record<string, Persona> = {
 		contextChunks: ANANYA_CHUNKS,
 		compression: true,
 		tools: ANANYA_TOOLS
+	},
+	system: {
+		name: 'system',
+		displayName: 'System',
+		accentColor: getPaletteColor('samara'), // Same color as Samara
+		model: null,
+		systemPrompt: 'samara', // Uses Samara's prompt for article handling
+		contextChunks: [],
+		compression: false,
+		tools: []
 	}
 };
 
