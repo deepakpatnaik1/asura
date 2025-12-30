@@ -112,6 +112,9 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 	// Strip content markers (<!--content:uuid-->) used for lazy loading
 	let processed = markdown.replace(/<!--content:[a-f0-9-]+-->\n?/gi, '');
 
+	// Normalize asterisk bullets to dash bullets (both are valid markdown)
+	processed = processed.replace(/^\*\s+/gm, '- ');
+
 	// Render fenced code blocks with placeholders (protect from escaping)
 	const codeBlocks: string[] = [];
 	const codeBlockRegex = /^```(\w*)\n([\s\S]*?)^```$/gm;
