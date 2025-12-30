@@ -68,8 +68,9 @@ function enforceSentenceCase(text: string): string {
 
 /**
  * Render a markdown pipe table as HTML
+ * @param tableIndex - Index for linking to chart carousel (0-based)
  */
-function renderTable(tableMatch: string, accent: string): string {
+function renderTable(tableMatch: string, accent: string, tableIndex: number): string {
 	const lines = tableMatch.trim().split('\n');
 	if (lines.length < 2) return tableMatch;
 
@@ -94,7 +95,8 @@ function renderTable(tableMatch: string, accent: string): string {
 		).join('')}</tr>`
 	).join('');
 
-	return `<div style="overflow-x: auto;">
+	// data-table-index enables click-to-lightbox; cursor + opacity transition for hover feedback
+	return `<div data-table-index="${tableIndex}" style="overflow-x: auto; cursor: pointer; transition: opacity 0.15s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
 		<table style="border-collapse: collapse; font-size: 0.9em; min-width: 100%;">
 			<thead><tr>${headerCells}</tr></thead>
 			<tbody>${bodyRows}</tbody>
@@ -168,8 +170,9 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 	const tables: string[] = [];
 	const tableRegex = /^(\|[^\n]+\|)\s*\n(\|[-:\s|]+\|)\s*\n((?:\|[^\n]+\|[ \t]*\n?)+)/gm;
 	processed = processed.replace(tableRegex, (match) => {
-		const placeholder = `__TABLE_${tables.length}__`;
-		tables.push(renderTable(match, ACCENT));
+		const tableIndex = tables.length;
+		const placeholder = `__TABLE_${tableIndex}__`;
+		tables.push(renderTable(match, ACCENT, tableIndex));
 		// Ensure newline after placeholder so next line starts fresh
 		return placeholder + '\n';
 	});

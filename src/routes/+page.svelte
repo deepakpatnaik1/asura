@@ -48,6 +48,8 @@
 		is_pinned?: boolean;
 		source: 'file' | 'superjournal';
 		file_id?: string;
+		chart_index?: number;
+		superjournal_id?: string;
 	}
 	let superjournalCharts = $state<Chart[]>([]);
 	let fileCharts = $state<Chart[]>([]);
@@ -943,6 +945,45 @@
 			});
 	}
 
+	/**
+	 * Handle table click in message - open corresponding chart in lightbox
+	 */
+	function handleTableClick(messageId: string | undefined, tableIndex: number) {
+		if (!messageId) return;
+
+		// Find the message
+		const message = allMessages.find(m => m.id === messageId);
+		if (!message) return;
+
+		// Check if this is article content (has content marker)
+		const contentMatch = message.ai_response?.match(/<!--content:([a-f0-9-]+)-->/);
+
+		let matchingCharts: Chart[];
+		if (contentMatch) {
+			// Article content - find charts by file_id
+			const fileId = contentMatch[1];
+			matchingCharts = fileCharts.filter(c => c.file_id === fileId);
+		} else {
+			// AI response - find charts by superjournal_id
+			matchingCharts = superjournalCharts.filter(c => c.superjournal_id === messageId);
+		}
+
+		// Sort by chart_index to match document order (tableIndex is 0-based from markdown)
+		matchingCharts.sort((a, b) => (a.chart_index ?? 0) - (b.chart_index ?? 0));
+
+		const targetChart = matchingCharts[tableIndex];
+		if (!targetChart) return;
+
+		// Find position in allCharts
+		const chartIndex = allCharts.findIndex(c => c.id === targetChart.id);
+		if (chartIndex === -1) return;
+
+		// Open lightbox
+		selectedChartIndex = chartIndex;
+		showLightbox = true;
+		forceCanvas = 'carousel';
+	}
+
 	function handleNukeComplete(bucket: string) {
 		// Parse bucket to determine what to clear from UI
 		const [bucketType, target] = bucket.split(':');
@@ -1355,6 +1396,7 @@
 					onStar={() => handleStarToggle(msg.id)}
 					onCopy={() => handleCopyTurn(msg.id, msg.user_message, msg.ai_response, msg.persona_name)}
 					onDelete={() => handleMessageDeleteClick(msg.id)}
+					onTableClick={handleTableClick}
 				/>
 			{/each}
 

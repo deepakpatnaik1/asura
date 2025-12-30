@@ -39,6 +39,8 @@
 		onCopy?: () => void;
 		/** Delete button click handler */
 		onDelete?: () => void;
+		/** Table click handler (for opening chart in lightbox) */
+		onTableClick?: (messageId: string | undefined, tableIndex: number) => void;
 	}
 
 	let {
@@ -57,7 +59,8 @@
 		showActions = false,
 		onStar,
 		onCopy,
-		onDelete
+		onDelete,
+		onTableClick
 	}: Props = $props();
 
 	// Capitalize persona name
@@ -76,6 +79,18 @@
 			renderedHtml = '';
 		}
 	});
+
+	// Handle table clicks via event delegation (for opening in lightbox)
+	function handleContainerClick(e: MouseEvent) {
+		if (!onTableClick) return;
+
+		const target = e.target as HTMLElement;
+		const tableWrapper = target.closest('[data-table-index]') as HTMLElement;
+		if (tableWrapper) {
+			const tableIndex = parseInt(tableWrapper.dataset.tableIndex || '0', 10);
+			onTableClick(messageId, tableIndex);
+		}
+	}
 
 	// Attach click handlers to code copy buttons after HTML is rendered
 	$effect(() => {
@@ -199,7 +214,8 @@
 
 <!-- AI Response -->
 <div class="message-group">
-	<div class="ai-message" bind:this={aiMessageContainer}>
+	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+	<div class="ai-message" bind:this={aiMessageContainer} onclick={handleContainerClick}>
 		<div class="message-header">
 			<span class="message-label ai-label">{displayName}</span>
 		</div>
