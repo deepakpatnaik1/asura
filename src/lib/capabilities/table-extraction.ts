@@ -73,6 +73,8 @@ function extractCaption(text: string, matchIndex: number): string | undefined {
 	const textBefore = text.slice(0, matchIndex);
 	const lines = textBefore.split('\n');
 
+	let caption: string | undefined;
+
 	// Work backwards to find a caption
 	for (let i = lines.length - 1; i >= 0; i--) {
 		const line = lines[i].trim();
@@ -83,24 +85,28 @@ function extractCaption(text: string, matchIndex: number): string | undefined {
 		// Found a heading (## Heading or ### Heading)
 		const headingMatch = line.match(/^#{1,4}\s+(.+)$/);
 		if (headingMatch) {
-			return headingMatch[1].trim();
+			caption = headingMatch[1].trim();
+			break;
 		}
 
 		// Found a line that ends with a colon (likely a caption)
 		if (line.endsWith(':')) {
-			return line.slice(0, -1).trim();
+			caption = line.slice(0, -1).trim();
+			break;
 		}
 
 		// Found a regular non-empty line - use it if it's short enough to be a caption
 		if (line.length < 150 && !line.startsWith('|') && !line.startsWith('-')) {
-			return line;
+			caption = line;
+			break;
 		}
 
 		// Stop searching after first meaningful content
 		break;
 	}
 
-	return undefined;
+	// Strip markdown formatting from caption
+	return caption ? stripFormattingAsterisks(caption) : undefined;
 }
 
 /**
