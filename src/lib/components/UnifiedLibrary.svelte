@@ -11,13 +11,14 @@
 	 */
 	import { tick } from 'svelte';
 	import { Icon } from 'svelte-icons-pack';
-	import { LuTrash2, LuCheck } from 'svelte-icons-pack/lu';
+	import { LuTrash2, LuCheck, LuStar } from 'svelte-icons-pack/lu';
 
 	// Types
 	interface Article {
 		id: string;
 		title: string;
 		is_enabled?: boolean;
+		is_starred?: boolean;
 		tier?: string;
 		created_at: string;
 	}
@@ -25,6 +26,7 @@
 	interface Whiteboard {
 		id: string;
 		title: string;
+		is_starred?: boolean;
 		state?: unknown;
 		created_at: string;
 		updated_at: string;
@@ -33,6 +35,7 @@
 	interface DesignerCanvas {
 		id: string;
 		title: string;
+		is_starred?: boolean;
 		state?: unknown;
 		created_at: string;
 		updated_at: string;
@@ -44,6 +47,7 @@
 		onArticleToggle?: (id: string, currentState: boolean) => void;
 		onArticleRename?: (id: string, newTitle: string) => void;
 		onArticleDelete: (id: string, event: MouseEvent) => void;
+		onArticleStar?: (id: string, currentState: boolean) => void;
 		onArticleClear?: () => void;
 		isDeletingArticle?: boolean;
 
@@ -54,6 +58,7 @@
 		onWhiteboardOpen: (id: string) => void;
 		onWhiteboardRename?: (id: string, newTitle: string) => void;
 		onWhiteboardDelete?: (id: string, event: MouseEvent) => void;
+		onWhiteboardStar?: (id: string, currentState: boolean) => void;
 		onWhiteboardClear?: () => void;
 		isDeletingWhiteboard?: boolean;
 
@@ -64,6 +69,7 @@
 		onDesignerCanvasOpen?: (id: string) => void;
 		onDesignerCanvasRename?: (id: string, newTitle: string) => void;
 		onDesignerCanvasDelete?: (id: string, event: MouseEvent) => void;
+		onDesignerCanvasStar?: (id: string, currentState: boolean) => void;
 		onDesignerCanvasClear?: () => void;
 		isDeletingDesignerCanvas?: boolean;
 
@@ -76,6 +82,7 @@
 		onArticleToggle,
 		onArticleRename,
 		onArticleDelete,
+		onArticleStar,
 		onArticleClear,
 		isDeletingArticle = false,
 
@@ -85,6 +92,7 @@
 		onWhiteboardOpen,
 		onWhiteboardRename,
 		onWhiteboardDelete,
+		onWhiteboardStar,
 		onWhiteboardClear,
 		isDeletingWhiteboard = false,
 
@@ -94,6 +102,7 @@
 		onDesignerCanvasOpen,
 		onDesignerCanvasRename,
 		onDesignerCanvasDelete,
+		onDesignerCanvasStar,
 		onDesignerCanvasClear,
 		isDeletingDesignerCanvas = false,
 		onClose
@@ -174,6 +183,13 @@
 		editingArticleTitle = '';
 	}
 
+	function handleArticleStar(item: Article, event: MouseEvent) {
+		event.stopPropagation();
+		if (onArticleStar) {
+			onArticleStar(item.id, item.is_starred ?? false);
+		}
+	}
+
 	// Whiteboard handlers
 	function handleWhiteboardToggle(id: string, event: MouseEvent) {
 		event.stopPropagation();
@@ -216,6 +232,13 @@
 		editingWhiteboardTitle = '';
 	}
 
+	function handleWhiteboardStar(wb: Whiteboard, event: MouseEvent) {
+		event.stopPropagation();
+		if (onWhiteboardStar) {
+			onWhiteboardStar(wb.id, wb.is_starred ?? false);
+		}
+	}
+
 	// Designer canvas handlers
 	function handleDesignerCanvasToggle(id: string, event: MouseEvent) {
 		event.stopPropagation();
@@ -256,6 +279,13 @@
 	function cancelDesignerCanvasEdit() {
 		editingDesignerCanvasId = null;
 		editingDesignerCanvasTitle = '';
+	}
+
+	function handleDesignerCanvasStar(canvas: DesignerCanvas, event: MouseEvent) {
+		event.stopPropagation();
+		if (onDesignerCanvasStar) {
+			onDesignerCanvasStar(canvas.id, canvas.is_starred ?? false);
+		}
 	}
 </script>
 
@@ -316,6 +346,14 @@
 							<span class="item-date">{formatDate(item.created_at)}</span>
 						</div>
 						<button
+							class="star-btn"
+							class:active={item.is_starred}
+							onclick={(e) => handleArticleStar(item, e)}
+							title={item.is_starred ? 'Remove bookmark' : 'Bookmark'}
+						>
+							<Icon src={LuStar} size="11" />
+						</button>
+						<button
 							class="delete-btn"
 							onclick={(e) => onArticleDelete(item.id, e)}
 							title="Delete"
@@ -370,6 +408,14 @@
 							{/if}
 							<span class="item-date">{formatDate(wb.updated_at)}</span>
 						</div>
+						<button
+							class="star-btn"
+							class:active={wb.is_starred}
+							onclick={(e) => handleWhiteboardStar(wb, e)}
+							title={wb.is_starred ? 'Remove bookmark' : 'Bookmark'}
+						>
+							<Icon src={LuStar} size="11" />
+						</button>
 						{#if onWhiteboardDelete}
 							<button
 								class="delete-btn"
@@ -427,6 +473,14 @@
 							{/if}
 							<span class="item-date">{formatDate(canvas.updated_at)}</span>
 						</div>
+						<button
+							class="star-btn"
+							class:active={canvas.is_starred}
+							onclick={(e) => handleDesignerCanvasStar(canvas, e)}
+							title={canvas.is_starred ? 'Remove bookmark' : 'Bookmark'}
+						>
+							<Icon src={LuStar} size="11" />
+						</button>
 						{#if onDesignerCanvasDelete}
 							<button
 								class="delete-btn"
@@ -667,6 +721,38 @@
 		min-width: 45px;
 		text-align: right;
 		opacity: 0.7;
+	}
+
+	.star-btn {
+		flex-shrink: 0;
+		width: 20px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: transparent;
+		border: none;
+		color: hsl(var(--muted-foreground));
+		cursor: pointer;
+		transition: all 0.15s ease;
+		opacity: 0;
+	}
+
+	.item:hover .star-btn {
+		opacity: 0.5;
+	}
+
+	.star-btn:hover {
+		opacity: 1;
+		color: var(--boss-accent);
+	}
+
+	.star-btn.active {
+		opacity: 1;
+		color: var(--boss-accent);
+	}
+
+	.star-btn.active :global(svg) {
+		fill: var(--boss-accent);
 	}
 
 	.delete-btn {

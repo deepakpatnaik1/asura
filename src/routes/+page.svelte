@@ -616,6 +616,24 @@
 		}
 	}
 
+	// Star/unstar whiteboard
+	async function starWhiteboard(id: string, currentState: boolean) {
+		whiteboards = whiteboards.map(wb => wb.id === id ? { ...wb, is_starred: !currentState } : wb);
+
+		try {
+			const response = await fetch(`/api/whiteboards/${id}`, {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ is_starred: !currentState })
+			});
+			if (!response.ok) {
+				whiteboards = whiteboards.map(wb => wb.id === id ? { ...wb, is_starred: currentState } : wb);
+			}
+		} catch (error) {
+			whiteboards = whiteboards.map(wb => wb.id === id ? { ...wb, is_starred: currentState } : wb);
+		}
+	}
+
 	// Rename designer canvas
 	async function renameDesignerCanvas(id: string, newTitle: string) {
 		const oldTitle = designerCanvases.find(c => c.id === id)?.title;
@@ -632,6 +650,24 @@
 			}
 		} catch (error) {
 			designerCanvases = designerCanvases.map(c => c.id === id ? { ...c, title: oldTitle || '' } : c);
+		}
+	}
+
+	// Star/unstar designer canvas
+	async function starDesignerCanvas(id: string, currentState: boolean) {
+		designerCanvases = designerCanvases.map(c => c.id === id ? { ...c, is_starred: !currentState } : c);
+
+		try {
+			const response = await fetch(`/api/canvases/${id}`, {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ is_starred: !currentState })
+			});
+			if (!response.ok) {
+				designerCanvases = designerCanvases.map(c => c.id === id ? { ...c, is_starred: currentState } : c);
+			}
+		} catch (error) {
+			designerCanvases = designerCanvases.map(c => c.id === id ? { ...c, is_starred: currentState } : c);
 		}
 	}
 
@@ -1246,6 +1282,24 @@
 		}
 	}
 
+	// Star/unstar article
+	async function starArticle(articleId: string, currentState: boolean) {
+		articles = articles.map((a) => a.id === articleId ? { ...a, is_starred: !currentState } : a);
+
+		try {
+			const response = await fetch(`/api/chat/files/${articleId}`, {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ is_starred: !currentState })
+			});
+			if (!response.ok) {
+				articles = articles.map((a) => a.id === articleId ? { ...a, is_starred: currentState } : a);
+			}
+		} catch (error) {
+			articles = articles.map((a) => a.id === articleId ? { ...a, is_starred: currentState } : a);
+		}
+	}
+
 	function handleArticleDeleteClick(articleId: string, event: MouseEvent) {
 		event.stopPropagation();
 		articleDeleteConfirm.start(articleId, async () => {
@@ -1451,6 +1505,7 @@
 								onArticleToggle={toggleArticle}
 								onArticleRename={renameArticle}
 								onArticleDelete={handleArticleDeleteClick}
+								onArticleStar={starArticle}
 								onArticleClear={clearAllArticles}
 								isDeletingArticle={isDeletingArticle}
 
@@ -1460,6 +1515,7 @@
 								onWhiteboardOpen={handleOpenWhiteboard}
 								onWhiteboardRename={renameWhiteboard}
 								onWhiteboardDelete={handleWhiteboardDeleteClick}
+								onWhiteboardStar={starWhiteboard}
 								onWhiteboardClear={clearWhiteboardSelection}
 								isDeletingWhiteboard={isDeletingWhiteboard}
 
@@ -1469,6 +1525,7 @@
 								onDesignerCanvasOpen={handleOpenDesignerCanvas}
 								onDesignerCanvasRename={renameDesignerCanvas}
 								onDesignerCanvasDelete={handleDesignerCanvasDeleteClick}
+								onDesignerCanvasStar={starDesignerCanvas}
 								onDesignerCanvasClear={clearDesignerCanvasSelection}
 								isDeletingDesignerCanvas={isDeletingDesignerCanvas}
 

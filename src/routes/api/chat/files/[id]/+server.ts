@@ -26,13 +26,13 @@ export const PUT: RequestHandler = async ({ params, request, locals: { safeGetSe
 	}
 
 	// Parse request body
-	const parseResult = await parseRequestJson<{ is_enabled?: boolean; title?: string }>(request);
+	const parseResult = await parseRequestJson<{ is_enabled?: boolean; title?: string; is_starred?: boolean }>(request);
 	if (!parseResult.success) return parseResult.error;
 
-	const { is_enabled, title } = parseResult.data;
+	const { is_enabled, title, is_starred } = parseResult.data;
 
 	// Build update object with only provided fields
-	const updateData: { is_enabled?: boolean; title?: string; updated_at: string } = {
+	const updateData: { is_enabled?: boolean; title?: string; is_starred?: boolean; updated_at: string } = {
 		updated_at: new Date().toISOString()
 	};
 
@@ -51,9 +51,13 @@ export const PUT: RequestHandler = async ({ params, request, locals: { safeGetSe
 		updateData.title = trimmedTitle;
 	}
 
+	if (typeof is_starred === 'boolean') {
+		updateData.is_starred = is_starred;
+	}
+
 	// Must have at least one field to update
-	if (updateData.is_enabled === undefined && updateData.title === undefined) {
-		return validationError('Must provide is_enabled or title to update', 'body');
+	if (updateData.is_enabled === undefined && updateData.title === undefined && updateData.is_starred === undefined) {
+		return validationError('Must provide is_enabled, title, or is_starred to update', 'body');
 	}
 
 	// Update content (RLS ensures user can only update their own content)

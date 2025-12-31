@@ -56,13 +56,13 @@ export const PUT: RequestHandler = async ({ params, request, locals: { safeGetSe
 	}
 
 	// Parse request body
-	const parseResult = await parseRequestJson<{ title?: string; state?: unknown; is_selected?: boolean }>(request);
+	const parseResult = await parseRequestJson<{ title?: string; state?: unknown; is_selected?: boolean; is_starred?: boolean }>(request);
 	if (!parseResult.success) return parseResult.error;
 
-	const { title, state, is_selected } = parseResult.data;
+	const { title, state, is_selected, is_starred } = parseResult.data;
 
 	// Build update object with only provided fields
-	const updateData: { title?: string; state?: unknown; is_selected?: boolean; updated_at: string } = {
+	const updateData: { title?: string; state?: unknown; is_selected?: boolean; is_starred?: boolean; updated_at: string } = {
 		updated_at: new Date().toISOString()
 	};
 
@@ -89,9 +89,13 @@ export const PUT: RequestHandler = async ({ params, request, locals: { safeGetSe
 		updateData.is_selected = is_selected;
 	}
 
+	if (typeof is_starred === 'boolean') {
+		updateData.is_starred = is_starred;
+	}
+
 	// Must have at least one field to update
-	if (updateData.title === undefined && updateData.state === undefined && updateData.is_selected === undefined) {
-		return validationError('Must provide title, state, or is_selected to update', 'body');
+	if (updateData.title === undefined && updateData.state === undefined && updateData.is_selected === undefined && updateData.is_starred === undefined) {
+		return validationError('Must provide title, state, is_selected, or is_starred to update', 'body');
 	}
 
 	const { data, error } = await supabase
