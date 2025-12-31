@@ -15,7 +15,7 @@ function processInlineFormatting(text: string, accent: string, accentBg: string)
 	// Extract inline code as placeholders FIRST (protect from italic processing)
 	// Use %% delimiters to avoid underscore-based italic matching
 	const codePlaceholders: string[] = [];
-	const codeStyle = `background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;`;
+	const codeStyle = `background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em; word-break: break-word;`;
 	result = result.replace(/`([^`]+)`/g, (_, code) => {
 		const placeholder = `%%INLINECODE${codePlaceholders.length}%%`;
 		codePlaceholders.push(`<code style="${codeStyle}">${code}</code>`);
@@ -115,7 +115,8 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 	let processed = markdown.replace(/<!--content:[a-f0-9-]+-->\n?/gi, '');
 
 	// Normalize asterisk bullets to dash bullets (both are valid markdown)
-	processed = processed.replace(/^\*\s+/gm, '- ');
+	// Handle both top-level (*) and indented (    *) bullets
+	processed = processed.replace(/^(\s*)\*\s+/gm, '$1- ');
 
 	// Render fenced code blocks with placeholders (protect from escaping)
 	const codeBlocks: string[] = [];
@@ -201,7 +202,7 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 				// Extract inline code as placeholders FIRST (protect from italic processing)
 				// Use %% delimiters to avoid underscore-based italic matching
 				const quoteCodePlaceholders: string[] = [];
-				const quoteCodeStyle = `background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;`;
+				const quoteCodeStyle = `background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em; word-break: break-word;`;
 				formatted = formatted.replace(/`([^`]+)`/g, (_, code) => {
 					const placeholder = `%%QUOTECODE${quoteCodePlaceholders.length}%%`;
 					quoteCodePlaceholders.push(`<code style="${quoteCodeStyle}">${code}</code>`);
@@ -299,8 +300,8 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 			rest = rest.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
 			rest = rest.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
-			rest = rest.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;">$1</code>`);
-			rest = rest.replace(/\b([a-zA-Z][a-zA-Z0-9]*_[a-zA-Z0-9_]+)\b/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;">$1</code>`);
+			rest = rest.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em; word-break: break-word;">$1</code>`);
+			rest = rest.replace(/\b([a-zA-Z][a-zA-Z0-9]*_[a-zA-Z0-9_]+)\b/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em; word-break: break-word;">$1</code>`);
 			rest = rest.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${ACCENT}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
 			rest = rest.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">$1</a>`);
 			// Auto-link bare URLs (exclude () for parenthetical URLs)
@@ -328,8 +329,8 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 			rest = rest.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
 			rest = rest.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
-			rest = rest.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;">$1</code>`);
-			rest = rest.replace(/\b([a-zA-Z][a-zA-Z0-9]*_[a-zA-Z0-9_]+)\b/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;">$1</code>`);
+			rest = rest.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em; word-break: break-word;">$1</code>`);
+			rest = rest.replace(/\b([a-zA-Z][a-zA-Z0-9]*_[a-zA-Z0-9_]+)\b/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em; word-break: break-word;">$1</code>`);
 			rest = rest.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${ACCENT}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
 			rest = rest.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">$1</a>`);
 			// Auto-link bare URLs (not already in markdown link) → pill badge
@@ -356,11 +357,10 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 			continue;
 		}
 
-		// Markdown headers (# ## ###) → accent colored, sized by level
-		// H4-H6 are ignored (not rendered as headers)
-		// With margin annotation (h1, h2, h3) that's visible but not selectable
+		// Markdown headers (# through ######) → accent colored, sized by level
+		// With margin annotation (h1-h6) that's visible but not selectable
 		// Allow leading whitespace (common after tables in markdown)
-		const headerMatch = line.match(/^\s*(#{1,3})\s+(.+)$/);
+		const headerMatch = line.match(/^\s*(#{1,6})\s+(.+)$/);
 		if (headerMatch) {
 			const level = headerMatch[1].length;
 			let content = headerMatch[2]
@@ -370,7 +370,7 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 			// Extract inline code as placeholders FIRST (protect from italic processing)
 			// Use %% delimiters to avoid underscore-based italic matching
 			const headerCodePlaceholders: string[] = [];
-			const headerCodeStyle = `background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;`;
+			const headerCodeStyle = `background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em; word-break: break-word;`;
 			content = content.replace(/`([^`]+)`/g, (_, code) => {
 				const placeholder = `%%HDRCODE${headerCodePlaceholders.length}%%`;
 				headerCodePlaceholders.push(`<code style="${headerCodeStyle}">${code}</code>`);
@@ -390,8 +390,8 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 			for (let i = 0; i < headerCodePlaceholders.length; i++) {
 				content = content.replace(`%%HDRCODE${i}%%`, headerCodePlaceholders[i]);
 			}
-			// Size decreases with level: h1=1.45em, h2=1.3em, h3=1.15em
-			const sizes = ['1.45em', '1.3em', '1.15em'];
+			// Size decreases with level: h1=1.45em down to h6=0.95em
+			const sizes = ['1.45em', '1.3em', '1.15em', '1.05em', '1em', '0.95em'];
 			const fontSize = sizes[level - 1];
 			const label = `h${level}`;
 			listIndent = 0;
@@ -420,8 +420,8 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 			rest = rest.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
 			rest = rest.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
-			rest = rest.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;">$1</code>`);
-			rest = rest.replace(/\b([a-zA-Z][a-zA-Z0-9]*_[a-zA-Z0-9_]+)\b/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;">$1</code>`);
+			rest = rest.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em; word-break: break-word;">$1</code>`);
+			rest = rest.replace(/\b([a-zA-Z][a-zA-Z0-9]*_[a-zA-Z0-9_]+)\b/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em; word-break: break-word;">$1</code>`);
 			rest = rest.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${ACCENT}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
 			rest = rest.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">$1</a>`);
 			// Auto-link bare URLs (not already in markdown link) → pill badge
@@ -447,8 +447,8 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 			rest = rest.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
 			rest = rest.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
-			rest = rest.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;">$1</code>`);
-			rest = rest.replace(/\b([a-zA-Z][a-zA-Z0-9]*_[a-zA-Z0-9_]+)\b/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;">$1</code>`);
+			rest = rest.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em; word-break: break-word;">$1</code>`);
+			rest = rest.replace(/\b([a-zA-Z][a-zA-Z0-9]*_[a-zA-Z0-9_]+)\b/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em; word-break: break-word;">$1</code>`);
 			rest = rest.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${ACCENT}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
 			rest = rest.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">$1</a>`);
 			// Auto-link bare URLs (not already in markdown link) → pill badge
@@ -472,8 +472,8 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 			rest = rest.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
 			rest = rest.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
-			rest = rest.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;">$1</code>`);
-			rest = rest.replace(/\b([a-zA-Z][a-zA-Z0-9]*_[a-zA-Z0-9_]+)\b/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;">$1</code>`);
+			rest = rest.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em; word-break: break-word;">$1</code>`);
+			rest = rest.replace(/\b([a-zA-Z][a-zA-Z0-9]*_[a-zA-Z0-9_]+)\b/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em; word-break: break-word;">$1</code>`);
 			rest = rest.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${ACCENT}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
 			// Reddit subreddit pattern: "r/Name (https://reddit.com/r/...)" → single badge
 			rest = rest.replace(/r\/\w+\s*\(https?:\/\/(?:www\.)?reddit\.com\/r\/(\w+)\/?(?:\?[^)]*)?\)/gi, (match, sub) => {
@@ -503,8 +503,8 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 			rest = rest.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
 			rest = rest.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
-			rest = rest.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;">$1</code>`);
-			rest = rest.replace(/\b([a-zA-Z][a-zA-Z0-9]*_[a-zA-Z0-9_]+)\b/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;">$1</code>`);
+			rest = rest.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em; word-break: break-word;">$1</code>`);
+			rest = rest.replace(/\b([a-zA-Z][a-zA-Z0-9]*_[a-zA-Z0-9_]+)\b/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em; word-break: break-word;">$1</code>`);
 			rest = rest.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${ACCENT}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
 			rest = rest.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">$1</a>`);
 			// Auto-link bare URLs (not already in markdown link) → pill badge
@@ -540,8 +540,8 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 			rest = rest.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
 			rest = rest.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
-			rest = rest.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;">$1</code>`);
-			rest = rest.replace(/\b([a-zA-Z][a-zA-Z0-9]*_[a-zA-Z0-9_]+)\b/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;">$1</code>`);
+			rest = rest.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em; word-break: break-word;">$1</code>`);
+			rest = rest.replace(/\b([a-zA-Z][a-zA-Z0-9]*_[a-zA-Z0-9_]+)\b/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em; word-break: break-word;">$1</code>`);
 			rest = rest.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${ACCENT}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
 			rest = rest.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">$1</a>`);
 			// Restore URLs and render as clickable links (full URL as label for readability)
@@ -584,7 +584,7 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 		// Extract inline code as placeholders FIRST (protect from italic processing)
 		// Use %% delimiters to avoid underscore-based italic matching
 		const lineCodePlaceholders: string[] = [];
-		const lineCodeStyle = `background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em;`;
+		const lineCodeStyle = `background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em; word-break: break-word;`;
 		escaped = escaped.replace(/`([^`]+)`/g, (_, code) => {
 			const placeholder = `%%LINECODE${lineCodePlaceholders.length}%%`;
 			lineCodePlaceholders.push(`<code style="${lineCodeStyle}">${code}</code>`);
