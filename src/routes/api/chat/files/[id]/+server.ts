@@ -26,13 +26,28 @@ export const PUT: RequestHandler = async ({ params, request, locals: { safeGetSe
 	}
 
 	// Parse request body
-	const parseResult = await parseRequestJson<{ is_enabled?: boolean; title?: string; is_starred?: boolean }>(request);
+	interface PendingAnnotation {
+		headerText: string;
+		headerLevel: number;
+	}
+	const parseResult = await parseRequestJson<{
+		is_enabled?: boolean;
+		title?: string;
+		is_starred?: boolean;
+		pending_annotation?: PendingAnnotation | null;
+	}>(request);
 	if (!parseResult.success) return parseResult.error;
 
-	const { is_enabled, title, is_starred } = parseResult.data;
+	const { is_enabled, title, is_starred, pending_annotation } = parseResult.data;
 
 	// Build update object with only provided fields
-	const updateData: { is_enabled?: boolean; title?: string; is_starred?: boolean; updated_at: string } = {
+	const updateData: {
+		is_enabled?: boolean;
+		title?: string;
+		is_starred?: boolean;
+		pending_annotation?: PendingAnnotation | null;
+		updated_at: string;
+	} = {
 		updated_at: new Date().toISOString()
 	};
 
@@ -55,9 +70,19 @@ export const PUT: RequestHandler = async ({ params, request, locals: { safeGetSe
 		updateData.is_starred = is_starred;
 	}
 
+	// Handle pending_annotation (can be set to object or cleared with null)
+	if (pending_annotation !== undefined) {
+		updateData.pending_annotation = pending_annotation;
+	}
+
 	// Must have at least one field to update
-	if (updateData.is_enabled === undefined && updateData.title === undefined && updateData.is_starred === undefined) {
-		return validationError('Must provide is_enabled, title, or is_starred to update', 'body');
+	if (
+		updateData.is_enabled === undefined &&
+		updateData.title === undefined &&
+		updateData.is_starred === undefined &&
+		updateData.pending_annotation === undefined
+	) {
+		return validationError('Must provide is_enabled, title, is_starred, or pending_annotation to update', 'body');
 	}
 
 	// Update content (RLS ensures user can only update their own content)

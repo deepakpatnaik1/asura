@@ -388,10 +388,12 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 			const sizes = ['1.45em', '1.3em', '1.15em', '1.05em', '1em', '0.95em'];
 			const fontSize = sizes[level - 1];
 			const label = `h${level}`;
+			const tag = `h${level}`;
 			listIndent = 0;
+			// Use proper heading tags for semantics and annotation targeting
 			// Position relative container with absolute-positioned label outside text flow
 			// Add top margin for visual separation from preceding content
-			results.push(`<span style="position: relative; display: flex; align-items: center; margin-top: 0.5em;"><span style="position: absolute; left: -2.5em; font-size: 0.7em; opacity: 0.3; user-select: none; pointer-events: none;">${label}</span><span style="color: ${ACCENT}; font-size: ${fontSize};">${content}</span></span>`);
+			results.push(`<${tag} style="position: relative; display: flex; align-items: center; margin-top: 0.5em; font-weight: normal;"><span style="position: absolute; left: -2.5em; font-size: 0.7em; opacity: 0.3; user-select: none; pointer-events: none;">${label}</span><span style="color: ${ACCENT}; font-size: ${fontSize};">${content}</span></${tag}>`);
 			continue;
 		}
 

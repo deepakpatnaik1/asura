@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Icon } from 'svelte-icons-pack';
-	import { LuPaperclip, LuFolder } from 'svelte-icons-pack/lu';
+	import { LuPaperclip, LuFolder, LuFilePenLine } from 'svelte-icons-pack/lu';
 	import { currentMessage, isLoading, sendMessage, abortCurrentMessage, lastMutations, lastWhiteboardMutations, lastCanvasMutations } from '$lib/stores/chat';
 	import { tick, onMount, onDestroy } from 'svelte';
 	import { DEFAULT_PERSONA, PERSONAS } from '$lib/config/personas';
@@ -267,8 +267,11 @@
 	let messagesEndRef: HTMLDivElement;
 	let textareaRef: HTMLTextAreaElement;
 
-	// Helper to get persona prefix for input field
+	// Helper to get prefix for input field (persona name or annotation mode)
 	function getPersonaPrefix(): string {
+		if (annotationMode && annotationTarget) {
+			return "Boss's Feedback: ";
+		}
 		const persona = PERSONAS[selectedPersona];
 		return persona ? `${persona.displayName}, ` : '';
 	}
@@ -276,11 +279,29 @@
 	// Article paste and library state
 	let showFilePaste = $state(false);
 	let showLibrary = $state(false);
-		interface Article {
+
+	// Annotation mode state (for write-back feature)
+	let annotationMode = $state(false);
+	interface AnnotationTarget {
+		headerText: string;
+		headerLevel: number;
+		headerIndex: number;
+		articleId: string;
+		markerElement: HTMLElement | null;
+	}
+	let annotationTarget = $state<AnnotationTarget | null>(null);
+
+	interface PendingAnnotation {
+		headerText: string;
+		headerLevel: number;
+		headerIndex: number;
+	}
+	interface Article {
 		id: string;
 		title: string;
 		is_enabled: boolean;
 		tier?: string;
+		pending_annotation?: PendingAnnotation | null;
 		created_at: string;
 	}
 	let articles = $state<Article[]>([]);
@@ -322,7 +343,7 @@
 	 * Start watching linked files via SSE
 	 * Auto-reconnects on connection drop (server restart, network issues)
 	 */
-	async function startFileWatching(isReconnect = false) {
+	async function startFileWatching() {
 		const articleIds = getLinkedArticleIds();
 		if (articleIds.length === 0) return;
 
@@ -380,12 +401,12 @@
 
 			// Stream ended normally (server closed) - reconnect after delay
 			if (!signal.aborted) {
-				setTimeout(() => startFileWatching(true), 3000);
+				setTimeout(() => startFileWatching(), 3000);
 			}
-		} catch (error) {
+		} catch {
 			// Connection failed - reconnect after delay (unless intentionally aborted)
-			if (!signal.aborted) {
-				setTimeout(() => startFileWatching(true), 3000);
+			if (!watchAbortController?.signal.aborted) {
+				setTimeout(() => startFileWatching(), 3000);
 			}
 		}
 	}
@@ -830,6 +851,9 @@
 			await ensureAllArticlesHaveEntries();
 			// Start watching linked Obsidian files for live updates
 			startFileWatching();
+			// Restore annotation marker if one was saved (must run after DOM is rendered)
+			await tick();
+			restoreAnnotationMarker();
 		})();
 
 		// Listen for nuke events from SettingsModal
@@ -959,6 +983,39 @@
 		if (!inputMessage.trim() || $isLoading) return;
 
 		const message = inputMessage.trim();
+
+		// Check if we're submitting an annotation (write-back mode)
+		if (annotationMode && annotationTarget) {
+			inputMessage = getPersonaPrefix();
+			resetTextareaHeight();
+
+			try {
+				const response = await fetch(`/api/chat/files/${annotationTarget.articleId}/annotate`, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						headerText: annotationTarget.headerText,
+						headerLevel: annotationTarget.headerLevel,
+						headerIndex: annotationTarget.headerIndex,
+						feedback: message
+					})
+				});
+
+				if (response.ok) {
+					// Clear marker and exit annotation mode
+					clearAnnotationMarker();
+					annotationMode = false;
+				} else {
+					const error = await response.json();
+					console.error('Annotation failed:', error);
+				}
+			} catch (err) {
+				console.error('Annotation failed:', err);
+			}
+			return;
+		}
+
+		// Normal message flow
 		inputMessage = getPersonaPrefix();
 		resetTextareaHeight();
 
@@ -1121,6 +1178,221 @@
 		selectedChartIndex = chartIndex;
 		showLightbox = true;
 		forceCanvas = 'carousel';
+	}
+
+	/**
+	 * Handle click in messages area when annotation mode is active.
+	 * Finds the nearest following header and places a marker there.
+	 */
+	function handleAnnotationClick(event: MouseEvent) {
+		if (!annotationMode) return;
+
+		const target = event.target as HTMLElement;
+
+		// Don't annotate if clicking on buttons, interactive elements, or dismiss button
+		if (target.closest('button') || target.closest('a') || target.closest('.annotation-dismiss')) return;
+
+		// Find the content container (.message-text inside .ai-message)
+		const messageText = target.closest('.message-text');
+		if (!messageText) return;
+
+		// Find the message group to extract articleId from content marker
+		const messageGroup = target.closest('[data-message-id]') as HTMLElement | null;
+		if (!messageGroup) return;
+
+		const messageId = messageGroup.dataset.messageId;
+		const message = allMessages.find(m => m.id === messageId);
+		if (!message) return;
+
+		// Extract articleId from content marker
+		const contentMatch = message.ai_response?.match(/<!--content:([a-f0-9-]+)-->/);
+		if (!contentMatch) return; // Only allow annotations on linked articles
+
+		const articleId = contentMatch[1];
+
+		// Get all headers in this message
+		const allHeaders = messageText.querySelectorAll('h1, h2, h3, h4, h5, h6');
+		if (allHeaders.length === 0) return;
+
+		// Find the NEXT header after the clicked element in document order
+		let header: HTMLElement | null = null;
+		for (const h of allHeaders) {
+			const position = target.compareDocumentPosition(h);
+			if (position & Node.DOCUMENT_POSITION_FOLLOWING) {
+				header = h as HTMLElement;
+				break;
+			}
+		}
+
+		// If no header is after the target, use the last header
+		if (!header && allHeaders.length > 0) {
+			header = allHeaders[allHeaders.length - 1] as HTMLElement;
+		}
+
+		if (!header) return;
+
+		// Remove existing marker if any
+		clearAnnotationMarker();
+
+		// Create marker element with dismiss button
+		const marker = document.createElement('div');
+		marker.className = 'annotation-marker';
+		marker.innerHTML = `
+			<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"/></svg>
+			<button class="annotation-dismiss" title="Remove marker">×</button>
+		`;
+
+		// Add click handler for dismiss button
+		const dismissBtn = marker.querySelector('.annotation-dismiss');
+		dismissBtn?.addEventListener('click', (e) => {
+			e.stopPropagation();
+			clearAnnotationMarker();
+		});
+
+		// Insert marker directly before the found header
+		header.parentElement?.insertBefore(marker, header);
+
+		// Set annotation target
+		// Header structure: <h3><span>H3</span><span>Tier 1 Facts</span></h3>
+		// Get the content span (last child), not the label span
+		const levelMatch = header.tagName.match(/H(\d)/);
+		const contentSpan = header.querySelector('span:last-child');
+		const headerText = contentSpan?.textContent?.trim() || header.textContent?.trim() || '';
+		const headerLevel = levelMatch ? parseInt(levelMatch[1]) : 2;
+
+		// Count which occurrence of this header (0-indexed)
+		// Headers with same text and level may appear multiple times (e.g., "Tier 1 Facts" per turn)
+		let headerIndex = 0;
+		for (const h of allHeaders) {
+			if (h === header) break;
+			const hContentSpan = h.querySelector('span:last-child');
+			const hText = hContentSpan?.textContent?.trim() || h.textContent?.trim();
+			if (hText === headerText && h.tagName === header.tagName) {
+				headerIndex++;
+			}
+		}
+
+		annotationTarget = {
+			headerText,
+			headerLevel,
+			headerIndex,
+			articleId,
+			markerElement: marker
+		};
+
+		// Save to database for persistence
+		fetch(`/api/chat/files/${articleId}`, {
+			method: 'PUT',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ pending_annotation: { headerText, headerLevel, headerIndex } })
+		}).catch(err => console.error('Failed to save annotation:', err));
+
+		// Update local articles state
+		articles = articles.map(a =>
+			a.id === articleId ? { ...a, pending_annotation: { headerText, headerLevel, headerIndex } } : a
+		);
+
+		// Update input to show annotation prefix and focus
+		inputMessage = getPersonaPrefix();
+		textareaRef?.focus();
+	}
+
+	/**
+	 * Clear annotation marker from DOM and database
+	 */
+	function clearAnnotationMarker() {
+		const articleId = annotationTarget?.articleId;
+
+		if (annotationTarget?.markerElement) {
+			annotationTarget.markerElement.remove();
+		}
+		annotationTarget = null;
+
+		// Restore persona prefix in input (now that annotationTarget is null)
+		inputMessage = getPersonaPrefix();
+
+		// Clear from database
+		if (articleId) {
+			fetch(`/api/chat/files/${articleId}`, {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ pending_annotation: null })
+			}).catch(err => console.error('Failed to clear annotation:', err));
+
+			// Update local articles state
+			articles = articles.map(a =>
+				a.id === articleId ? { ...a, pending_annotation: null } : a
+			);
+		}
+	}
+
+	/**
+	 * Restore annotation marker from articles data on page load
+	 */
+	function restoreAnnotationMarker() {
+		// Find article with pending annotation
+		const articleWithAnnotation = articles.find(a => a.pending_annotation);
+		if (!articleWithAnnotation?.pending_annotation) return;
+
+		const { headerText, headerLevel, headerIndex } = articleWithAnnotation.pending_annotation;
+		const articleId = articleWithAnnotation.id;
+
+		// Find the message with this article
+		const message = allMessages.find(m => m.ai_response?.includes(`<!--content:${articleId}-->`));
+		if (!message) return;
+
+		// Find the message element (AI response div with data-message-id)
+		const messageElement = document.querySelector(`[data-message-id="${message.id}"]`);
+		if (!messageElement) return;
+
+		const messageText = messageElement.querySelector('.message-text');
+		if (!messageText) return;
+
+		// Find the header by text content and index (use last span to skip H3 label)
+		const allHeaders = messageText.querySelectorAll(`h${headerLevel}`);
+		let header: HTMLElement | null = null;
+		let matchCount = 0;
+		for (const h of allHeaders) {
+			const contentSpan = h.querySelector('span:last-child');
+			const hText = contentSpan?.textContent?.trim() || h.textContent?.trim();
+			if (hText === headerText) {
+				if (matchCount === headerIndex) {
+					header = h as HTMLElement;
+					break;
+				}
+				matchCount++;
+			}
+		}
+
+		if (!header) return;
+
+		// Create marker element with dismiss button
+		const marker = document.createElement('div');
+		marker.className = 'annotation-marker';
+		marker.innerHTML = `
+			<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"/></svg>
+			<button class="annotation-dismiss" title="Remove marker">×</button>
+		`;
+
+		const dismissBtn = marker.querySelector('.annotation-dismiss');
+		dismissBtn?.addEventListener('click', (e) => {
+			e.stopPropagation();
+			clearAnnotationMarker();
+		});
+
+		header.parentElement?.insertBefore(marker, header);
+
+		annotationTarget = {
+			headerText,
+			headerLevel,
+			headerIndex,
+			articleId,
+			markerElement: marker
+		};
+
+		// Re-enable annotation mode since we have a marker
+		annotationMode = true;
+		inputMessage = getPersonaPrefix();
 	}
 
 	function handleNukeComplete(bucket: string) {
@@ -1419,8 +1691,6 @@
 					allMessages = allMessages.filter(m => !m.ai_response?.startsWith(`<!--content:${articleId}-->`));
 					totalMessageCount -= (beforeCount - allMessages.length);
 					await loadFileCharts();
-					// Restart file watching to stop watching the deleted file
-					startFileWatching();
 				}
 			} catch (error) {
 				articles = originalArticles;
@@ -1530,7 +1800,12 @@
 <div class="chat-container" style="--current-accent: {currentAccentColor}; --current-accent-bg: {currentAccentBg}">
 	<!-- Messages Area -->
 	<div class="messages-area">
-		<div class="messages-content">
+		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+		<div
+			class="messages-content"
+			class:annotation-mode={annotationMode}
+			onclick={handleAnnotationClick}
+		>
 			{#if hasMore}
 				<button class="load-more-btn" onclick={loadMoreMessages} disabled={isLoadingMore}>
 					{isLoadingMore ? 'Loading...' : 'Load older messages'}
@@ -1647,6 +1922,20 @@
 					<div class="icon-group">
 						<ScrollControls config={CHAT_CONFIG} />
 					</div>
+
+					<button
+						class="control-btn hit-target"
+						class:active={annotationMode}
+						title={annotationMode ? 'Exit annotation mode' : 'Annotate linked article'}
+						onclick={() => {
+							annotationMode = !annotationMode;
+							if (!annotationMode) {
+								clearAnnotationMarker();
+							}
+						}}
+					>
+						<Icon src={LuFilePenLine} size="11" />
+					</button>
 				</div>
 				<textarea
 					placeholder="Type your message..."
@@ -1962,5 +2251,69 @@
 	.load-more-btn:disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
+	}
+
+	/* Annotation mode styles */
+	.messages-content.annotation-mode {
+		cursor: crosshair;
+	}
+
+	.messages-content.annotation-mode :global(.ai-message) {
+		cursor: crosshair;
+	}
+
+	:global(.annotation-marker) {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 8px 12px;
+		margin: 12px 0;
+		background: var(--current-accent-bg);
+		border-left: 3px solid var(--current-accent);
+		border-radius: 0 6px 6px 0;
+		color: var(--current-accent);
+		font-size: 0.85rem;
+		animation: markerPulse 0.3s ease-out;
+		position: relative;
+	}
+
+	:global(.annotation-marker svg) {
+		flex-shrink: 0;
+	}
+
+	:global(.annotation-dismiss) {
+		position: absolute;
+		right: 8px;
+		top: 50%;
+		transform: translateY(-50%);
+		background: transparent;
+		border: none;
+		color: var(--current-accent);
+		font-size: 1.2rem;
+		font-weight: bold;
+		cursor: pointer;
+		opacity: 0;
+		transition: opacity 0.2s;
+		padding: 4px 8px;
+		line-height: 1;
+	}
+
+	:global(.annotation-marker:hover .annotation-dismiss) {
+		opacity: 0.7;
+	}
+
+	:global(.annotation-dismiss:hover) {
+		opacity: 1 !important;
+	}
+
+	@keyframes markerPulse {
+		0% {
+			opacity: 0;
+			transform: translateX(-10px);
+		}
+		100% {
+			opacity: 1;
+			transform: translateX(0);
+		}
 	}
 </style>
