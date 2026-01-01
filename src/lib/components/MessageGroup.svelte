@@ -3,6 +3,17 @@
 	import { LuStar, LuCopy, LuTrash2 } from 'svelte-icons-pack/lu';
 	import { renderMarkdown } from '$lib/markdown-renderer';
 
+	/**
+	 * Auto-link URLs in plain text
+	 * Shows standardized "link" label in pill badge style, full URL stored in database for LLM
+	 */
+	function autoLinkUrls(text: string): string {
+		const urlRegex = /(https?:\/\/[^\s<>"{}|\\^`[\]]+)/g;
+		return text.replace(urlRegex, (url) => {
+			return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="url-pill">click here</a>`;
+		});
+	}
+
 	// Reference to AI message container for attaching code copy handlers
 	let aiMessageContainer: HTMLDivElement;
 
@@ -206,7 +217,7 @@
 			{:else if personaName === 'alicja' && /\blog (this|it|the founder diary)\b/i.test(userMessage)}
 				Alicja, log this.
 			{:else}
-				{userMessage}
+				{@html autoLinkUrls(userMessage)}
 			{/if}
 		</div>
 	</div>
@@ -253,6 +264,20 @@
 		margin-right: var(--boss-card-margin-x);
 		border-radius: var(--boss-card-border-radius);
 		position: relative;
+	}
+
+	/* URL pill badge in boss message - neutral color to contrast accent background */
+	.boss-message :global(.url-pill) {
+		display: inline-block;
+		padding: 2px 8px;
+		border-radius: 10px;
+		background: hsl(var(--foreground) / 0.15);
+		color: hsl(var(--foreground));
+		font-size: 0.85em;
+		text-decoration: none;
+	}
+	.boss-message :global(.url-pill:hover) {
+		background: hsl(var(--foreground) / 0.25);
 	}
 
 	/* AI Message - no background */

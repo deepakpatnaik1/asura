@@ -11,6 +11,7 @@ import { parseRequestJson } from '$lib/api/parse-json';
 import { sseHeaders } from '$lib/api/stream-protocol';
 import { validationError } from '$lib/api/errors';
 import { createLogger } from '$lib/api/logger';
+import { runExtractTablesContentJob } from '$lib/calls/chat/extract-tables-content';
 
 /** Debounce delay to avoid rapid-fire updates */
 const DEBOUNCE_MS = 100;
@@ -143,6 +144,13 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 								}
 
 								const content = readFileSync(source_path, 'utf-8');
+
+								// Re-extract tables in background (don't await)
+								runExtractTablesContentJob({
+									contentId: id,
+									userId,
+									content
+								}).catch(err => log.error('Background table extraction failed', { error: err }));
 
 								// Emit update event
 								if (safeEnqueue(`data: ${JSON.stringify({

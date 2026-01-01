@@ -1,7 +1,7 @@
 /**
- * Extract Tables from AI Response
+ * Extract Tables from Content (Live-Linked Files)
  *
- * Background job that extracts markdown tables from AI responses,
+ * Extracts markdown tables from linked Obsidian files,
  * renders them to SVG, uploads to storage, and saves to charts table.
  */
 
@@ -25,34 +25,59 @@ function getSupabaseServiceRole(): SupabaseClient {
 	return supabaseServiceRole;
 }
 
-export interface ExtractTablesParams {
-	superjournalId: string;
+export interface ExtractTablesContentParams {
+	contentId: string;
 	userId: string;
-	aiResponse: string;
+	content: string;
 }
 
 /**
- * Extract tables from AI response and save to storage + database
+ * Extract tables from content and save to storage + database
+ * Clears existing tables for this content before inserting new ones
  */
-export async function runExtractTablesJob(params: ExtractTablesParams): Promise<void> {
-	const { superjournalId, userId, aiResponse } = params;
-	const log = createLogger('ExtractTables', userId);
+export async function runExtractTablesContentJob(params: ExtractTablesContentParams): Promise<void> {
+	const { contentId, userId, content } = params;
+	const log = createLogger('ExtractTablesContent', userId);
 	const supabase = getSupabaseServiceRole();
 
 	try {
-		// 1. Extract markdown tables from response
-		const tables = extractMarkdownTables(aiResponse);
+		// 1. Delete existing table charts for this content (in case file changed)
+		const { data: existingCharts } = await supabase
+			.from('article_charts')
+			.select('storage_path, thumbnail_path')
+			.eq('content_id', contentId)
+			.eq('user_id', userId);
+
+		if (existingCharts && existingCharts.length > 0) {
+			// Delete storage files
+			const pathsToDelete = existingCharts.flatMap(c => [c.storage_path, c.thumbnail_path].filter(Boolean));
+			if (pathsToDelete.length > 0) {
+				await supabase.storage.from('content').remove(pathsToDelete);
+			}
+
+			// Delete database records
+			await supabase
+				.from('article_charts')
+				.delete()
+				.eq('content_id', contentId)
+				.eq('user_id', userId);
+
+			log.info('Cleared existing table charts', { contentId, count: existingCharts.length });
+		}
+
+		// 2. Extract markdown tables from content
+		const tables = extractMarkdownTables(content);
 
 		if (tables.length === 0) {
-			log.info('No tables found in response', { superjournalId });
+			log.info('No tables found in content', { contentId });
 			return;
 		}
 
-		log.info('Found tables in response', { superjournalId, count: tables.length });
+		log.info('Found tables in content', { contentId, count: tables.length });
 
-		// 2. Process each table
+		// 3. Process each table
 		const chartRecords: Array<{
-			superjournal_id: string;
+			content_id: string;
 			user_id: string;
 			chart_index: number;
 			storage_path: string;
@@ -71,7 +96,7 @@ export async function runExtractTablesJob(params: ExtractTablesParams): Promise<
 				const thumbnailBuffer = await generateThumbnail(pngBuffer);
 
 				// Upload SVG to storage
-				const storagePath = `superjournal-charts/${userId}/${superjournalId}/table-${table.index}.svg`;
+				const storagePath = `content-charts/${userId}/${contentId}/table-${table.index}.svg`;
 				const { error: svgUploadError } = await supabase.storage
 					.from('content')
 					.upload(storagePath, svgBuffer, {
@@ -85,7 +110,7 @@ export async function runExtractTablesJob(params: ExtractTablesParams): Promise<
 				}
 
 				// Upload thumbnail to storage
-				const thumbnailPath = `superjournal-thumbnails/${userId}/${superjournalId}/table-${table.index}.jpg`;
+				const thumbnailPath = `content-thumbnails/${userId}/${contentId}/table-${table.index}.jpg`;
 				const { error: thumbUploadError } = await supabase.storage
 					.from('content')
 					.upload(thumbnailPath, thumbnailBuffer, {
@@ -99,7 +124,7 @@ export async function runExtractTablesJob(params: ExtractTablesParams): Promise<
 				}
 
 				chartRecords.push({
-					superjournal_id: superjournalId,
+					content_id: contentId,
 					user_id: userId,
 					chart_index: table.index,
 					storage_path: storagePath,
@@ -114,7 +139,7 @@ export async function runExtractTablesJob(params: ExtractTablesParams): Promise<
 			}
 		}
 
-		// 3. Insert records into database
+		// 4. Insert records into database
 		if (chartRecords.length > 0) {
 			const { error: insertError } = await supabase
 				.from('article_charts')
@@ -123,12 +148,12 @@ export async function runExtractTablesJob(params: ExtractTablesParams): Promise<
 			if (insertError) {
 				log.error('Failed to insert chart records', { error: insertError.message });
 			} else {
-				log.info('Saved table charts', { superjournalId, count: chartRecords.length });
+				log.info('Saved table charts', { contentId, count: chartRecords.length });
 			}
 		}
 	} catch (error) {
 		log.error('Table extraction failed', {
-			superjournalId,
+			contentId,
 			error: error instanceof Error ? error.message : 'Unknown'
 		});
 	}

@@ -18,6 +18,7 @@ import { DEFAULT_MODEL } from '$lib/config/models';
 import { FILE_ARTISAN_CUT_PROMPT } from '$lib/prompts/file-artisan-cut';
 import { databaseError, validationError, internalError } from '$lib/api/errors';
 import { createLogger } from '$lib/api/logger';
+import { runExtractTablesContentJob } from '$lib/calls/chat/extract-tables-content';
 import { htmlToMarkdown } from '$lib/capabilities/image-extraction';
 import { extractTitleFromHtml } from '$lib/capabilities';
 import { extractAndSaveCharts } from '$lib/capabilities/content-extraction';
@@ -172,6 +173,13 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				fileId: file.id,
 				title: file.title,
 				sourcePath: source_path
+			});
+
+			// Extract tables (await to ensure charts are ready before response)
+			await runExtractTablesContentJob({
+				contentId: file.id,
+				userId,
+				content: fileContent
 			});
 
 			return json({

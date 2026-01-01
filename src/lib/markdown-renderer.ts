@@ -155,11 +155,7 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 	const globalUrls: string[] = [];
 	processed = processed.replace(/https?:\/\/[^\s<>"]+/gi, (url) => {
 		const placeholder = `__GURL_${globalUrls.length}__`;
-		// For Reddit comment permalinks, show "Reply link"; for subreddits show r/name; otherwise domain
-		const isPermalink = /reddit\.com\/r\/\w+\/comments\//.test(url);
-		const redditMatch = url.match(/reddit\.com\/r\/(\w+)/);
-		const label = isPermalink ? 'Reply link' : redditMatch ? `r/${redditMatch[1]}` : url.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
-		globalUrls.push(`<a href="${url}" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">${label}</a>`);
+		globalUrls.push(`<a href="${url}" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">click here</a>`);
 		return placeholder;
 	});
 
@@ -306,8 +302,7 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 			rest = rest.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">$1</a>`);
 			// Auto-link bare URLs (exclude () for parenthetical URLs)
 			rest = rest.replace(/(?<!href="|]\()https?:\/\/[^\s<>"()]+/g, (url) => {
-				const redditMatch = url.match(/reddit\.com\/r\/(\w+)/);
-				const label = redditMatch ? `r/${redditMatch[1]}` : url.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+				const label = 'link';
 				return `<a href="${url}" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">${label}</a>`;
 			});
 			listIndent = num.length + 2; // "1. " = number + ". "
@@ -335,8 +330,7 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 			rest = rest.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">$1</a>`);
 			// Auto-link bare URLs (not already in markdown link) → pill badge
 			rest = rest.replace(/(?<!href="|]\()https?:\/\/[^\s<>"()]+/g, (url) => {
-				const redditMatch = url.match(/reddit\.com\/r\/(\w+)/);
-				const label = redditMatch ? `r/${redditMatch[1]}` : url.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+				const label = 'link';
 				return `<a href="${url}" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">${label}</a>`;
 			});
 			listIndent = 2; // "- " = 2 chars
@@ -426,8 +420,7 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 			rest = rest.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">$1</a>`);
 			// Auto-link bare URLs (not already in markdown link) → pill badge
 			rest = rest.replace(/(?<!href="|]\()https?:\/\/[^\s<>"()]+/g, (url) => {
-				const redditMatch = url.match(/reddit\.com\/r\/(\w+)/);
-				const label = redditMatch ? `r/${redditMatch[1]}` : url.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+				const label = 'link';
 				return `<a href="${url}" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">${label}</a>`;
 			});
 			listIndent = indent.length + 2; // existing indent + "- "
@@ -453,8 +446,7 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 			rest = rest.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">$1</a>`);
 			// Auto-link bare URLs (not already in markdown link) → pill badge
 			rest = rest.replace(/(?<!href="|]\()https?:\/\/[^\s<>"()]+/g, (url) => {
-				const redditMatch = url.match(/reddit\.com\/r\/(\w+)/);
-				const label = redditMatch ? `r/${redditMatch[1]}` : url.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+				const label = 'link';
 				return `<a href="${url}" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">${label}</a>`;
 			});
 			listIndent = indent.length + num.length + 2; // existing indent + number + ". "
@@ -478,13 +470,12 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 			// Reddit subreddit pattern: "r/Name (https://reddit.com/r/...)" → single badge
 			rest = rest.replace(/r\/\w+\s*\(https?:\/\/(?:www\.)?reddit\.com\/r\/(\w+)\/?(?:\?[^)]*)?\)/gi, (match, sub) => {
 				const url = `https://www.reddit.com/r/${sub}/`;
-				return `<a href="${url}" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">r/${sub}</a>`;
+				return `<a href="${url}" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">click here</a>`;
 			});
 			rest = rest.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">$1</a>`);
 			// Auto-link bare URLs (not already in markdown link) → pill badge
 			rest = rest.replace(/(?<!href="|]\()https?:\/\/[^\s<>"()]+/g, (url) => {
-				const redditMatch = url.match(/reddit\.com\/r\/(\w+)/);
-				const label = redditMatch ? `r/${redditMatch[1]}` : url.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+				const label = 'link';
 				return `<a href="${url}" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">${label}</a>`;
 			});
 			listIndent = 2; // "- " = 2 chars
@@ -509,8 +500,7 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 			rest = rest.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">$1</a>`);
 			// Auto-link bare URLs (not already in markdown link) → pill badge
 			rest = rest.replace(/(?<!href="|]\()https?:\/\/[^\s<>"()]+/g, (url) => {
-				const redditMatch = url.match(/reddit\.com\/r\/(\w+)/);
-				const label = redditMatch ? `r/${redditMatch[1]}` : url.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+				const label = 'link';
 				return `<a href="${url}" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">${label}</a>`;
 			});
 			listIndent = num.length + 2; // number + ". "
@@ -574,10 +564,7 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 		const urlPlaceholders: string[] = [];
 		escaped = escaped.replace(/https?:\/\/[^\s<>"]+/g, (url) => {
 			const placeholder = `__URL_${urlPlaceholders.length}__`;
-			// For Reddit URLs, show r/subreddit; otherwise show domain
-			const redditMatch = url.match(/reddit\.com\/r\/(\w+)/);
-			const label = redditMatch ? `r/${redditMatch[1]}` : url.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
-			urlPlaceholders.push(`<a href="${url}" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">${label}</a>`);
+			urlPlaceholders.push(`<a href="${url}" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">click here</a>`);
 			return placeholder;
 		});
 
@@ -612,7 +599,7 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 		// Reddit subreddit pattern: "r/Name (https://reddit.com/r/...)" → single badge
 		escaped = escaped.replace(/r\/\w+\s*\(https?:\/\/(?:www\.)?reddit\.com\/r\/(\w+)\/?(?:\?[^)]*)?\)/gi, (match, sub) => {
 			const url = `https://www.reddit.com/r/${sub}/`;
-			return `<a href="${url}" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">r/${sub}</a>`;
+			return `<a href="${url}" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">click here</a>`;
 		});
 		// Restore URL placeholders (protected from italic processing above)
 		for (let i = 0; i < urlPlaceholders.length; i++) {
