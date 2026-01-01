@@ -1215,12 +1215,12 @@
 						await tick();
 						scrollToLastTurn(CHAT_CONFIG);
 					} else if (data.originalSuperjournalId) {
-						// Entry already exists - scroll to it
+						// Entry already exists - scroll to it (top-aligned like turn navigation)
 						selectedPersona = 'system';
 						await tick();
 						const element = document.getElementById(`message-${data.originalSuperjournalId}`);
 						if (element) {
-							element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+							scrollToTurn(CHAT_CONFIG, element, { behavior: 'smooth' });
 						}
 					}
 				}

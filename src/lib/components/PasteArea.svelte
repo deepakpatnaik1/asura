@@ -3,7 +3,7 @@
 	 * PasteArea - Content paste area
 	 *
 	 * Accepts HTML (Firefox Reader Mode), plain text (markdown, Claude docs),
-	 * or drag & dropped images. Toggle controls ephemeral vs persistent storage.
+	 * or drag & dropped images. Tier selector at top: Ephemeral, Persistent, Canon.
 	 */
 
 	interface Props {
@@ -15,15 +15,22 @@
 
 	let { onClose, onSuccess, onImageUploaded }: Props = $props();
 
-	// Default to ephemeral (user can toggle to persistent)
-	let isPersistent = $state(false);
-	let isCanon = $state(false); // Canon = shared knowledge across all modes
+	// Tier selection: ephemeral (default), persistent (strategic), or canon
+	type Tier = 'ephemeral' | 'persistent' | 'canon';
+	let selectedTier = $state<Tier>('ephemeral');
 	let isProcessing = $state(false);
 	let processingStatus = $state('');
 	let processingError = $state<string | null>(null);
 	let pastedContent = $state('');
 	let pasteAreaRef: HTMLElement | null = $state(null);
 	let isDragging = $state(false);
+
+	// Auto-focus paste area on mount so cursor is ready
+	$effect(() => {
+		if (pasteAreaRef && !isProcessing) {
+			pasteAreaRef.focus();
+		}
+	});
 
 	const placeholder = 'Paste content or drop images here...';
 	const accentVar = 'var(--boss-accent)';
@@ -73,10 +80,10 @@
 		processingError = null;
 
 		try {
-			processingStatus = isPersistent ? 'Generating artisan cut...' : 'Processing...';
+			processingStatus = selectedTier !== 'ephemeral' ? 'Generating artisan cut...' : 'Processing...';
 
-			// Determine tier: canon > strategic > ephemeral
-			const tier = isCanon ? 'canon' : (isPersistent ? 'strategic' : 'ephemeral');
+			// Map tier selection to API tier value
+			const tier = selectedTier === 'canon' ? 'canon' : (selectedTier === 'persistent' ? 'strategic' : 'ephemeral');
 
 			const response = await fetch('/api/chat/files', {
 				method: 'POST',
@@ -208,7 +215,28 @@
 			</div>
 		</div>
 	{:else}
-		<!-- Paste Area - always visible, content shows through overlay -->
+		<!-- Tier Selector - at top, hidden during processing -->
+		{#if !isProcessing}
+			<div class="tier-selector">
+				<button
+					class="tier-option"
+					class:selected={selectedTier === 'ephemeral'}
+					onclick={() => selectedTier = 'ephemeral'}
+				>Ephemeral</button>
+				<button
+					class="tier-option"
+					class:selected={selectedTier === 'persistent'}
+					onclick={() => selectedTier = 'persistent'}
+				>Persistent</button>
+				<button
+					class="tier-option"
+					class:selected={selectedTier === 'canon'}
+					onclick={() => selectedTier = 'canon'}
+				>Canon</button>
+			</div>
+		{/if}
+
+		<!-- Paste Area -->
 		<div
 			class="paste-area"
 			class:dragging={isDragging}
@@ -221,39 +249,6 @@
 			data-placeholder={placeholder}
 			bind:this={pasteAreaRef}
 		></div>
-
-		<!-- Toggle - hidden during processing -->
-		{#if !isProcessing}
-			<div class="controls-row">
-				<div class="toggle-container">
-					<span class="toggle-label" class:active={!isPersistent}>Ephemeral</span>
-					<button
-						class="toggle-switch"
-						class:on={isPersistent}
-						onclick={() => { isPersistent = !isPersistent; if (!isPersistent) isCanon = false; }}
-						aria-label="Toggle persistent mode"
-					>
-						<span class="toggle-knob"></span>
-					</button>
-					<span class="toggle-label" class:active={isPersistent}>Persistent</span>
-				</div>
-
-				<label class="canon-checkbox" class:disabled={!isPersistent}>
-					<button
-						class="checkbox-btn"
-						class:checked={isCanon}
-						onclick={() => { if (isPersistent) { isCanon = !isCanon; pasteAreaRef?.focus(); } }}
-						aria-label="Toggle canon"
-						disabled={!isPersistent}
-					>
-						{#if isCanon}
-							<span class="checkmark">✓</span>
-						{/if}
-					</button>
-					<span class="checkbox-label" class:active={isCanon}>Canon</span>
-				</label>
-			</div>
-		{/if}
 
 		<!-- Processing Overlay - shows on top of content -->
 		{#if isProcessing}
@@ -453,117 +448,33 @@
 		opacity: 1;
 	}
 
-	/* Controls row */
-	.controls-row {
+	/* Tier Selector - segmented control at top */
+	.tier-selector {
 		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		margin-top: 12px;
-	}
-
-	/* Toggle */
-	.toggle-container {
-		display: flex;
-		align-items: center;
 		gap: 8px;
+		margin-bottom: 12px;
 	}
 
-	.toggle-label {
-		font-size: 1em;
-		color: hsl(var(--foreground));
-		opacity: 0.4;
-		transition: opacity 0.2s;
-	}
-
-	.toggle-label.active {
-		opacity: 1;
-	}
-
-	.toggle-switch {
-		position: relative;
-		width: 22px;
-		height: 12px;
-		background: hsl(var(--border));
-		border: 1px solid hsl(var(--foreground));
+	.tier-option {
+		flex: 1;
+		padding: 8px 12px;
+		background: transparent;
+		border: 1px solid hsl(var(--border));
 		border-radius: 6px;
 		cursor: pointer;
-		transition: background 0.2s;
-		padding: 0;
-	}
-
-	.toggle-switch.on {
-		background: var(--accent);
-		border-color: var(--accent);
-	}
-
-	.toggle-knob {
-		position: absolute;
-		top: 1px;
-		left: 1px;
-		width: 8px;
-		height: 8px;
-		background: hsl(var(--foreground));
-		border-radius: 50%;
-		transition: transform 0.2s;
-	}
-
-	.toggle-switch.on .toggle-knob {
-		transform: translateX(10px);
-		background: hsl(var(--background));
-	}
-
-	/* Canon checkbox */
-	.canon-checkbox {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		cursor: pointer;
-	}
-
-	.checkbox-btn {
-		width: 13px;
-		height: 13px;
-		border-radius: 2px;
-		border: 1px solid hsl(var(--border));
-		background: transparent;
-		cursor: pointer;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		color: hsl(var(--foreground));
 		transition: all 0.15s;
-		padding: 0;
+		font-size: 9pt;
+		font-weight: 500;
+		color: hsl(var(--foreground));
 	}
 
-	.checkbox-btn.checked {
+	.tier-option:hover {
+		border-color: hsl(var(--foreground) / 0.5);
+	}
+
+	.tier-option.selected {
 		background: var(--accent);
 		border-color: var(--accent);
-		opacity: 1;
-	}
-
-	.checkmark {
-		font-size: 9px;
 		color: hsl(var(--background));
-		font-weight: bold;
-	}
-
-	.checkbox-label {
-		font-size: 1em;
-		color: hsl(var(--foreground));
-		opacity: 0.4;
-		transition: opacity 0.2s;
-	}
-
-	.checkbox-label.active {
-		opacity: 1;
-	}
-
-	.canon-checkbox.disabled {
-		opacity: 0.3;
-		cursor: not-allowed;
-	}
-
-	.canon-checkbox.disabled .checkbox-btn {
-		cursor: not-allowed;
 	}
 </style>

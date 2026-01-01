@@ -168,7 +168,7 @@ const EVA_TOOLS: ToolName[] = [
  * Includes canon - she knows the product, trusts her not to leak
  * subreddit_registry - top 5 lowest-score subreddits for rotation
  */
-const ANANYA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic', 'canon', 'subreddit_registry'];
+const ANANYA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic', 'canon', 'active', 'subreddit_registry'];
 
 /**
  * Ananya tools: Reddit engagement + logging
