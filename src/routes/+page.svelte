@@ -2,7 +2,7 @@
 	import { Icon } from 'svelte-icons-pack';
 	import { LuPaperclip, LuFolder } from 'svelte-icons-pack/lu';
 	import { currentMessage, isLoading, sendMessage, abortCurrentMessage, lastMutations, lastWhiteboardMutations, lastCanvasMutations } from '$lib/stores/chat';
-	import { tick, onMount } from 'svelte';
+	import { tick, onMount, onDestroy } from 'svelte';
 	import { DEFAULT_PERSONA, PERSONAS } from '$lib/config/personas';
 	import { type CanvasType, getDefaultCanvasForPersona } from '$lib/config/canvases';
 	import { getPersonaAccentColor, getPersonaAccentBg } from '$lib/config/colors';
@@ -299,6 +299,106 @@
 	const totalLibrarySelections = $derived(
 		articles.filter(a => a.is_enabled && a.tier !== 'canon').length + selectedWhiteboardIds.length + selectedDesignerCanvasIds.length
 	);
+
+	// File watching for live-linked Obsidian files
+	let watchAbortController: AbortController | null = null;
+
+	/**
+	 * Extract article IDs from content markers in messages
+	 */
+	function getLinkedArticleIds(): string[] {
+		const markerRegex = /<!--content:([a-f0-9-]+)-->/g;
+		const ids = new Set<string>();
+		for (const msg of allMessages) {
+			let match;
+			while ((match = markerRegex.exec(msg.ai_response || '')) !== null) {
+				ids.add(match[1]);
+			}
+		}
+		return Array.from(ids);
+	}
+
+	/**
+	 * Start watching linked files via SSE
+	 * Auto-reconnects on connection drop (server restart, network issues)
+	 */
+	async function startFileWatching(isReconnect = false) {
+		const articleIds = getLinkedArticleIds();
+		if (articleIds.length === 0) return;
+
+		// Abort any existing connection
+		stopFileWatching();
+
+		watchAbortController = new AbortController();
+		const signal = watchAbortController.signal;
+
+		try {
+			const response = await fetch('/api/watch', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ article_ids: articleIds }),
+				signal
+			});
+
+			if (!response.ok || !response.body) return;
+
+			const reader = response.body.getReader();
+			const decoder = new TextDecoder();
+			let buffer = '';
+
+			while (true) {
+				const { done, value } = await reader.read();
+				if (done) break;
+
+				buffer += decoder.decode(value, { stream: true });
+				const lines = buffer.split('\n');
+				buffer = lines.pop() || '';
+
+				for (const line of lines) {
+					if (!line.trim() || line.startsWith(':')) continue;
+					if (line.startsWith('data: ')) {
+						try {
+							const event = JSON.parse(line.slice(6));
+							if (event.type === 'update' && event.article_id && event.content) {
+								// Update the message content in place
+								allMessages = allMessages.map(msg => {
+									if (msg.ai_response?.includes(`<!--content:${event.article_id}-->`)) {
+										return {
+											...msg,
+											ai_response: `<!--content:${event.article_id}-->\n${event.content}`
+										};
+									}
+									return msg;
+								});
+							}
+						} catch {
+							// Ignore parse errors
+						}
+					}
+				}
+			}
+
+			// Stream ended normally (server closed) - reconnect after delay
+			if (!signal.aborted) {
+				setTimeout(() => startFileWatching(true), 3000);
+			}
+		} catch (error) {
+			// Connection failed - reconnect after delay (unless intentionally aborted)
+			if (!signal.aborted) {
+				setTimeout(() => startFileWatching(true), 3000);
+			}
+		}
+	}
+
+	/**
+	 * Stop watching files
+	 */
+	function stopFileWatching() {
+		if (watchAbortController) {
+			watchAbortController.abort();
+			watchAbortController = null;
+		}
+	}
 
 	let pendingTimeouts: number[] = [];
 
@@ -728,6 +828,8 @@
 			await Promise.all([loadCharts(), loadWhiteboards(), loadDesignerCanvases(), loadArticles()]);
 			// Ensure ALL articles have message turns (handles Gettysburg workflow, direct SQL inserts, etc.)
 			await ensureAllArticlesHaveEntries();
+			// Start watching linked Obsidian files for live updates
+			startFileWatching();
 		})();
 
 		// Listen for nuke events from SettingsModal
@@ -746,6 +848,7 @@
 			whiteboardDeleteConfirm.cleanup();
 			designerCanvasDeleteConfirm.cleanup();
 			window.removeEventListener('nuke-complete', handleNukeEvent as EventListener);
+			stopFileWatching();
 		};
 	});
 
@@ -1316,6 +1419,8 @@
 					allMessages = allMessages.filter(m => !m.ai_response?.startsWith(`<!--content:${articleId}-->`));
 					totalMessageCount -= (beforeCount - allMessages.length);
 					await loadFileCharts();
+					// Restart file watching to stop watching the deleted file
+					startFileWatching();
 				}
 			} catch (error) {
 				articles = originalArticles;

@@ -2,11 +2,13 @@
  * Content Files API - List and Upload
  *
  * GET: List user's content files
- * POST: Upload and process pasted content, extract images and tables
+ * POST: Upload and process pasted content, or link to Obsidian file
  */
 
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
+import { existsSync, readFileSync } from 'fs';
+import { basename } from 'path';
 import { FIREWORKS_API_KEY } from '$env/static/private';
 import { requireAuth } from '$lib/api/require-auth';
 import { parseRequestJson } from '$lib/api/parse-json';
@@ -54,6 +56,25 @@ async function callFireworksArtisanCut(model: string, systemPrompt: string, cont
 const MAX_CONTENT_SIZE = 100 * 1024;
 
 /**
+ * Extract title from markdown content (first # heading) or use filename
+ */
+function extractTitleFromMarkdown(content: string, filePath?: string): string {
+	// Look for first # heading
+	const headingMatch = content.match(/^#\s+(.+)$/m);
+	if (headingMatch) {
+		return headingMatch[1].trim();
+	}
+
+	// Fall back to filename without extension
+	if (filePath) {
+		const filename = basename(filePath, '.md');
+		return filename;
+	}
+
+	return 'Untitled';
+}
+
+/**
  * GET /api/chat/files
  * List user's content files: non-canon first (newest first), canon at bottom
  */
@@ -78,7 +99,7 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 
 /**
  * POST /api/chat/files
- * Upload and process pasted content
+ * Upload and process pasted content, or link to Obsidian file
  */
 export const POST: RequestHandler = async ({ request, locals: { safeGetSession, supabase } }) => {
 	const auth = await requireAuth(safeGetSession);
@@ -88,11 +109,86 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 	const log = createLogger('FilesAPI', userId);
 
 	// Parse request body
-	const parseResult = await parseRequestJson<{ content: string; persistent?: boolean; tier?: string }>(request);
+	const parseResult = await parseRequestJson<{ content?: string; source_path?: string; persistent?: boolean; tier?: string }>(request);
 	if (!parseResult.success) return parseResult.error;
 
-	const { content, persistent = false, tier: requestTier } = parseResult.data;
+	const { content, source_path, persistent = false, tier: requestTier } = parseResult.data;
 
+	// Handle Obsidian file linking (source_path provided)
+	if (source_path) {
+		log.info('Linking Obsidian file', { sourcePath: source_path });
+
+		// Validate file exists and is readable
+		if (!existsSync(source_path)) {
+			return validationError(`File not found: ${source_path}`, 'source_path');
+		}
+
+		try {
+			// Read file content
+			const fileContent = readFileSync(source_path, 'utf-8');
+
+			// Extract title from markdown or filename
+			const title = extractTitleFromMarkdown(fileContent, source_path);
+
+			// Save to database with source_path (always ephemeral for linked files)
+			const { data: file, error: insertError } = await supabase
+				.from('articles')
+				.insert({
+					user_id: userId,
+					title: title.slice(0, 255),
+					raw_content: fileContent, // Store current content for fallback/search
+					source_path: source_path, // Store path for live reading
+					artisan_cut: null,
+					is_enabled: true,
+					tier: 'ephemeral'
+				})
+				.select('id, title')
+				.single();
+
+			if (insertError) {
+				log.error('Failed to save linked file', { error: insertError.message });
+				return databaseError('Failed to save linked file');
+			}
+
+			// Create superjournal entry
+			const { data: sjEntry, error: sjError } = await supabase
+				.from('superjournal')
+				.insert({
+					user_id: userId,
+					persona_name: 'system',
+					user_message: `Boss linked ${file.title}`,
+					ai_response: `<!--content:${file.id}-->`,
+					model_identifier: 'file-link',
+					content_id: file.id
+				})
+				.select('id')
+				.single();
+
+			if (sjError) {
+				log.warn('Failed to create superjournal entry', { error: sjError.message });
+			}
+
+			log.info('File linked successfully', {
+				fileId: file.id,
+				title: file.title,
+				sourcePath: source_path
+			});
+
+			return json({
+				success: true,
+				file_id: file.id,
+				title: file.title,
+				content: fileContent,
+				superjournal_id: sjEntry?.id,
+				linked: true
+			});
+		} catch (error) {
+			log.error('Failed to read file', { error: error instanceof Error ? error.message : 'Unknown' });
+			return validationError(`Cannot read file: ${source_path}`, 'source_path');
+		}
+	}
+
+	// Regular content upload (existing behavior)
 	// Determine tier: explicit tier > persistent flag > ephemeral default
 	const tier = requestTier || (persistent ? 'strategic' : 'ephemeral');
 

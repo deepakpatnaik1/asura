@@ -24,6 +24,13 @@
 	let pastedContent = $state('');
 	let pasteAreaRef: HTMLElement | null = $state(null);
 	let isDragging = $state(false);
+	let isFilePath = $state(false); // True when pasted content is an Obsidian file path
+
+	// Detect if content is a file path (starts with /, ends with .md, single line)
+	function detectFilePath(content: string): boolean {
+		const trimmed = content.trim();
+		return /^\/.*\.md$/.test(trimmed) && !trimmed.includes('\n');
+	}
 
 	// Auto-focus paste area on mount so cursor is ready
 	$effect(() => {
@@ -43,6 +50,23 @@
 
 		const html = event.clipboardData?.getData('text/html');
 		const text = event.clipboardData?.getData('text/plain');
+
+		// Check if pasted text is a file path (Obsidian "Copy path")
+		if (text && detectFilePath(text)) {
+			isFilePath = true;
+			pastedContent = text.trim();
+
+			const pasteArea = event.target as HTMLElement;
+			if (pasteArea) {
+				pasteArea.textContent = text.trim();
+			}
+
+			await processFilePath(text.trim());
+			return;
+		}
+
+		// Regular content paste
+		isFilePath = false;
 
 		// Determine content type:
 		// - If plain text looks like markdown, prefer it over HTML
@@ -72,6 +96,43 @@
 		}
 
 		await processContent(content);
+	}
+
+	async function processFilePath(sourcePath: string) {
+		isProcessing = true;
+		processingStatus = 'Linking to Obsidian file...';
+		processingError = null;
+
+		try {
+			const response = await fetch('/api/chat/files', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					source_path: sourcePath
+				})
+			});
+
+			if (!response.ok) {
+				const data = await response.json();
+				throw new Error(data.error?.message || 'Failed to link file');
+			}
+
+			const data = await response.json();
+
+			processingStatus = 'Linked!';
+			await new Promise((r) => setTimeout(r, 300));
+
+			// Success - close and notify parent
+			const id = data.file_id || data.article_id || data.id;
+			const title = data.title || 'Untitled';
+			const responseContent = data.content || '';
+			const superjournalId = data.superjournal_id;
+			onSuccess(id, title, responseContent, superjournalId);
+			onClose();
+		} catch (error) {
+			processingError = error instanceof Error ? error.message : 'Failed to link file';
+			isProcessing = false;
+		}
 	}
 
 	async function processContent(content: string) {
@@ -119,7 +180,11 @@
 
 	function handleRetry() {
 		if (pastedContent) {
-			processContent(pastedContent);
+			if (isFilePath) {
+				processFilePath(pastedContent);
+			} else {
+				processContent(pastedContent);
+			}
 		}
 	}
 
@@ -215,8 +280,8 @@
 			</div>
 		</div>
 	{:else}
-		<!-- Tier Selector - at top, hidden during processing -->
-		{#if !isProcessing}
+		<!-- Tier Selector - at top, hidden during processing or when file path detected -->
+		{#if !isProcessing && !isFilePath}
 			<div class="tier-selector">
 				<button
 					class="tier-option"

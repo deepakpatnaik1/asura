@@ -1,5 +1,6 @@
 import type { PageServerLoad } from './$types';
 import { redirect } from '@sveltejs/kit';
+import { existsSync, readFileSync } from 'fs';
 import { createLogger } from '$lib/api/logger';
 import { createQueryMonitor } from '$lib/api/query-monitor';
 
@@ -66,13 +67,28 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession, supabase 
 		const { data: contents } = await monitor.track('fetchContentForMarkers', async () =>
 			await supabase
 				.from('articles')
-				.select('id, raw_content')
+				.select('id, raw_content, source_path')
 				.in('id', contentIds)
 		);
 
 		if (contents) {
 			for (const c of contents) {
-				contentMap.set(c.id, c.raw_content || '');
+				// If source_path exists, read fresh content from disk (live-linked file)
+				if (c.source_path) {
+					try {
+						if (existsSync(c.source_path)) {
+							const freshContent = readFileSync(c.source_path, 'utf-8');
+							contentMap.set(c.id, freshContent);
+						} else {
+							contentMap.set(c.id, `> **File not found:** ${c.source_path}\n\nThe linked file may have been moved or deleted.`);
+						}
+					} catch {
+						contentMap.set(c.id, `> **Error reading file:** ${c.source_path}\n\nCannot access the linked file.`);
+					}
+				} else {
+					// Static content - use stored raw_content
+					contentMap.set(c.id, c.raw_content || '');
+				}
 			}
 		}
 	}
