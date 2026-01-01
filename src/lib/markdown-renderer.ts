@@ -187,7 +187,11 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 			// e.g., "> > text" has nest level 2, "> text" has nest level 1
 			const prefixMatch = line.match(/^((?:>\s*)+)/);
 			const nestLevel = prefixMatch ? (prefixMatch[1].match(/>/g) || []).length : 0;
-			const content = line.replace(/^(?:>\s*)+/, '').trim();
+			let content = line.replace(/^(?:>\s*)+/, '').trim();
+
+			// Strip Obsidian callout markers [!type] from start of content
+			// Keeps them in the file for Obsidian styling, but hides in Aether UI
+			content = content.replace(/^\[![\w-]+\]\s*/, '');
 
 			if (content) {
 				// Escape HTML

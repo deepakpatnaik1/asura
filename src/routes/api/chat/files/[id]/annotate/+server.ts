@@ -97,9 +97,9 @@ export const POST: RequestHandler = async ({ params, request, locals: { safeGetS
 		return validationError(`Header match has no index`, 'headerText');
 	}
 
-	// Build the annotation blockquote
-	// Format: > Boss's Feedback: text
-	const annotation = `> ${feedback.trim()}\n\n`;
+	// Build the annotation callout (Obsidian renders [!review] with styled background)
+	// Format: > [!review] Boss's Feedback: text
+	const annotation = `> [!review] ${feedback.trim()}\n\n`;
 
 	// Insert annotation before the header
 	const beforeHeader = content.slice(0, match.index);
