@@ -152,7 +152,8 @@ export const POST: RequestHandler = async ({ params, request, locals: { safeGetS
 		.eq('id', id)
 		.eq('user_id', userId);
 
-	return json({ success: true });
+	// Return the new content so UI can update immediately (don't wait for file watcher)
+	return json({ success: true, content: newContent, article_id: id });
 };
 
 /**

@@ -1002,6 +1002,21 @@
 				});
 
 				if (response.ok) {
+					const result = await response.json();
+
+					// Immediately update message content with the annotated file
+					if (result.content && result.article_id) {
+						allMessages = allMessages.map(msg => {
+							if (msg.ai_response?.includes(`<!--content:${result.article_id}-->`)) {
+								return {
+									...msg,
+									ai_response: `<!--content:${result.article_id}-->\n${result.content}`
+								};
+							}
+							return msg;
+						});
+					}
+
 					// Clear marker and exit annotation mode
 					clearAnnotationMarker();
 					annotationMode = false;
