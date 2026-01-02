@@ -86,6 +86,29 @@ export const POST: RequestHandler = async ({ params, request, locals: { safeGetS
 		// Ensure file ends with newlines, then add annotation
 		const trimmedContent = content.trimEnd();
 		newContent = trimmedContent + '\n\n' + annotation + '\n';
+	} else if (headerText === '__DIVIDER__') {
+		// Special case: insert before a horizontal rule (---, ***, or ___)
+		// These are dividers in markdown that render as <hr> in HTML
+		const dividerPattern = /^(---+|\*\*\*+|___+)\s*$/gm;
+
+		// Find all dividers and get the one at headerIndex
+		const matches = [...content.matchAll(dividerPattern)];
+		if (matches.length === 0) {
+			return validationError('No dividers found in file', 'headerText');
+		}
+		if (headerIndex >= matches.length) {
+			return validationError(`Divider index ${headerIndex} out of range (found ${matches.length} dividers)`, 'headerIndex');
+		}
+
+		const match = matches[headerIndex];
+		if (match.index === undefined) {
+			return validationError('Divider match has no index', 'headerText');
+		}
+
+		// Insert annotation before the divider
+		const beforeDivider = content.slice(0, match.index);
+		const dividerAndAfter = content.slice(match.index);
+		newContent = beforeDivider + annotation + '\n\n' + dividerAndAfter;
 	} else {
 		// Build the header pattern to find ALL matching headers
 		// Headers in markdown: # Title, ## Title, etc.

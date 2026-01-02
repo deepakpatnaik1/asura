@@ -1182,7 +1182,7 @@
 
 	/**
 	 * Handle click in messages area when annotation mode is active.
-	 * Finds the nearest following header and places a marker there.
+	 * Finds the nearest following section boundary (header or divider) and places a marker there.
 	 */
 	function handleAnnotationClick(event: MouseEvent) {
 		if (!annotationMode) return;
@@ -1210,23 +1210,23 @@
 
 		const articleId = contentMatch[1];
 
-		// Get all headers in this message
-		const allHeaders = messageText.querySelectorAll('h1, h2, h3, h4, h5, h6');
-		if (allHeaders.length === 0) return;
+		// Get all section boundaries: headers AND dividers (hr or flourish-divider class)
+		const allBoundaries = messageText.querySelectorAll('h1, h2, h3, h4, h5, h6, hr, .flourish-divider');
+		if (allBoundaries.length === 0) return;
 
-		// Find the NEXT header after the clicked element in document order
-		let header: HTMLElement | null = null;
+		// Find the NEXT boundary after the clicked element in document order
+		let boundary: HTMLElement | null = null;
 		let isEndOfDocument = false;
-		for (const h of allHeaders) {
-			const position = target.compareDocumentPosition(h);
+		for (const b of allBoundaries) {
+			const position = target.compareDocumentPosition(b);
 			if (position & Node.DOCUMENT_POSITION_FOLLOWING) {
-				header = h as HTMLElement;
+				boundary = b as HTMLElement;
 				break;
 			}
 		}
 
-		// If no header follows, this is the last section - marker goes after content
-		if (!header) {
+		// If no boundary follows, this is the last section - marker goes after content
+		if (!boundary) {
 			isEndOfDocument = true;
 		}
 
@@ -1248,7 +1248,7 @@
 			clearAnnotationMarker();
 		});
 
-		// Insert marker: before header if found, after last content element if end of document
+		// Insert marker: before boundary if found, after last content element if end of document
 		if (isEndOfDocument) {
 			// Find the last content element in the message
 			const lastElement = messageText.lastElementChild as HTMLElement;
@@ -1258,9 +1258,9 @@
 			} else {
 				messageText.appendChild(marker);
 			}
-		} else if (header) {
-			// Insert marker directly before the found header
-			header.parentElement?.insertBefore(marker, header);
+		} else if (boundary) {
+			// Insert marker directly before the found boundary (header or hr)
+			boundary.parentElement?.insertBefore(marker, boundary);
 		}
 
 		// Set annotation target
@@ -1273,22 +1273,36 @@
 			headerText = '__END__';
 			headerLevel = 0;
 			headerIndex = 0;
-		} else if (header) {
+		} else if (boundary?.tagName === 'HR' || boundary?.classList.contains('flourish-divider')) {
+			// Divider boundary (hr or flourish-divider) - count which occurrence (0-indexed)
+			headerText = '__DIVIDER__';
+			headerLevel = 0;
+			headerIndex = 0;
+			for (const b of allBoundaries) {
+				if (b === boundary) break;
+				if (b.tagName === 'HR' || b.classList.contains('flourish-divider')) {
+					headerIndex++;
+				}
+			}
+		} else if (boundary) {
+			// Header boundary
 			// Header structure: <h3><span>H3</span><span>Tier 1 Facts</span></h3>
 			// Get the content span (last child), not the label span
-			const levelMatch = header.tagName.match(/H(\d)/);
-			const contentSpan = header.querySelector('span:last-child');
-			headerText = contentSpan?.textContent?.trim() || header.textContent?.trim() || '';
+			const levelMatch = boundary.tagName.match(/H(\d)/);
+			const contentSpan = boundary.querySelector('span:last-child');
+			headerText = contentSpan?.textContent?.trim() || boundary.textContent?.trim() || '';
 			headerLevel = levelMatch ? parseInt(levelMatch[1]) : 2;
 
 			// Count which occurrence of this header (0-indexed)
 			// Headers with same text and level may appear multiple times (e.g., "Tier 1 Facts" per turn)
 			headerIndex = 0;
-			for (const h of allHeaders) {
-				if (h === header) break;
-				const hContentSpan = h.querySelector('span:last-child');
-				const hText = hContentSpan?.textContent?.trim() || h.textContent?.trim();
-				if (hText === headerText && h.tagName === header.tagName) {
+			for (const b of allBoundaries) {
+				if (b === boundary) break;
+				// Skip dividers when counting headers
+				if (b.tagName === 'HR' || b.classList.contains('flourish-divider')) continue;
+				const bContentSpan = b.querySelector('span:last-child');
+				const bText = bContentSpan?.textContent?.trim() || b.textContent?.trim();
+				if (bText === headerText && b.tagName === boundary.tagName) {
 					headerIndex++;
 				}
 			}
