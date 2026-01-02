@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Boss Card - Accent Color Preview</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: hsl(180, 6%, 10%);
+      color: hsl(180, 6%, 85%);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      padding: 40px;
+      min-height: 100vh;
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 40px;
+      font-weight: 400;
+      color: hsl(180, 6%, 70%);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+      gap: 30px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .card-wrapper {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .persona-label {
+      font-size: 0.85rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .boss-card {
+      background: var(--accent-bg);
+      border-radius: 8px;
+      padding: 16px 16px;
+      position: relative;
+    }
+
+    .turn-number {
+      font-size: 0.85em;
+      color: hsl(180, 6%, 50%);
+      opacity: 0.3;
+      margin-bottom: 12px;
+      text-transform: capitalize;
+      letter-spacing: 0.5px;
+    }
+
+    .boss-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .boss-label {
+      font-weight: 500;
+      color: var(--accent);
+      border-bottom: 1px solid var(--accent);
+      padding-bottom: 2px;
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .icon {
+      width: 11px;
+      height: 11px;
+      opacity: 0.6;
+      stroke: currentColor;
+      fill: none;
+    }
+
+    .timestamp {
+      font-size: 0.85em;
+      color: hsl(180, 6%, 50%);
+      opacity: 0.7;
+      margin-left: 8px;
+      font-family: Menlo, Monaco, 'Courier New', monospace;
+    }
+
+    .message {
+      line-height: 1.6;
+      color: hsl(180, 6%, 85%);
+    }
+
+    /* Persona colors */
+    .gunnar { --accent: rgb(200, 100, 60); --accent-bg: rgba(200, 100, 60, 0.08); }
+    .kirby { --accent: rgb(236, 72, 153); --accent-bg: rgba(236, 72, 153, 0.08); }
+    .samara { --accent: rgb(16, 185, 129); --accent-bg: rgba(16, 185, 129, 0.08); }
+    .alicja { --accent: rgb(56, 140, 220); --accent-bg: rgba(56, 140, 220, 0.08); }
+    .eva { --accent: rgb(255, 183, 197); --accent-bg: rgba(255, 183, 197, 0.08); }
+    .ananya { --accent: rgb(167, 139, 250); --accent-bg: rgba(167, 139, 250, 0.08); }
+
+    /* Candidate Boss colors */
+    .boss-amber { --accent: rgb(245, 158, 11); --accent-bg: rgba(245, 158, 11, 0.08); }
+    .boss-gold { --accent: rgb(234, 179, 8); --accent-bg: rgba(234, 179, 8, 0.08); }
+    .boss-honey { --accent: rgb(251, 191, 36); --accent-bg: rgba(251, 191, 36, 0.08); }
+
+    /* Red variants */
+    .boss-crimson { --accent: rgb(239, 68, 68); --accent-bg: rgba(239, 68, 68, 0.08); }
+    .boss-rose { --accent: rgb(244, 63, 94); --accent-bg: rgba(244, 63, 94, 0.08); }
+    .boss-scarlet { --accent: rgb(220, 38, 38); --accent-bg: rgba(220, 38, 38, 0.08); }
+
+    .divider {
+      margin: 50px 0;
+      border: none;
+      border-top: 1px solid hsl(180, 6%, 20%);
+    }
+
+    h2 {
+      text-align: center;
+      margin-bottom: 30px;
+      font-weight: 400;
+      color: hsl(180, 6%, 60%);
+    }
+  </style>
+</head>
+<body>
+  <h1>Boss Card - Accent Color Preview</h1>
+
+  <div class="grid">
+    <div class="card-wrapper">
+      <div class="persona-label gunnar" style="color: var(--accent)">Gunnar — Burnt Sienna</div>
+      <div class="boss-card gunnar">
+        <div class="turn-number">turn 139</div>
+        <div class="boss-row">
+          <span class="boss-label">Boss</span>
+          <div class="actions">
+            <svg class="icon" viewBox="0 0 24 24" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            <svg class="icon" viewBox="0 0 24 24" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <svg class="icon" viewBox="0 0 24 24" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            <span class="timestamp">Jan 2 at 2:03 PM</span>
+          </div>
+        </div>
+        <div class="message">Boss uploaded 7. Model Selection UI</div>
+      </div>
+    </div>
+
+    <div class="card-wrapper">
+      <div class="persona-label kirby" style="color: var(--accent)">Kirby — Hot Pink</div>
+      <div class="boss-card kirby">
+        <div class="turn-number">turn 139</div>
+        <div class="boss-row">
+          <span class="boss-label">Boss</span>
+          <div class="actions">
+            <svg class="icon" viewBox="0 0 24 24" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            <svg class="icon" viewBox="0 0 24 24" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <svg class="icon" viewBox="0 0 24 24" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            <span class="timestamp">Jan 2 at 2:03 PM</span>
+          </div>
+        </div>
+        <div class="message">Boss uploaded 7. Model Selection UI</div>
+      </div>
+    </div>
+
+    <div class="card-wrapper">
+      <div class="persona-label samara" style="color: var(--accent)">Samara — Emerald</div>
+      <div class="boss-card samara">
+        <div class="turn-number">turn 139</div>
+        <div class="boss-row">
+          <span class="boss-label">Boss</span>
+          <div class="actions">
+            <svg class="icon" viewBox="0 0 24 24" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            <svg class="icon" viewBox="0 0 24 24" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <svg class="icon" viewBox="0 0 24 24" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            <span class="timestamp">Jan 2 at 2:03 PM</span>
+          </div>
+        </div>
+        <div class="message">Boss uploaded 7. Model Selection UI</div>
+      </div>
+    </div>
+
+    <div class="card-wrapper">
+      <div class="persona-label alicja" style="color: var(--accent)">Alicja — Vibrant Blue</div>
+      <div class="boss-card alicja">
+        <div class="turn-number">turn 139</div>
+        <div class="boss-row">
+          <span class="boss-label">Boss</span>
+          <div class="actions">
+            <svg class="icon" viewBox="0 0 24 24" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            <svg class="icon" viewBox="0 0 24 24" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <svg class="icon" viewBox="0 0 24 24" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            <span class="timestamp">Jan 2 at 2:03 PM</span>
+          </div>
+        </div>
+        <div class="message">Boss uploaded 7. Model Selection UI</div>
+      </div>
+    </div>
+
+    <div class="card-wrapper">
+      <div class="persona-label eva" style="color: var(--accent)">Eva — Cherry Blossom</div>
+      <div class="boss-card eva">
+        <div class="turn-number">turn 139</div>
+        <div class="boss-row">
+          <span class="boss-label">Boss</span>
+          <div class="actions">
+            <svg class="icon" viewBox="0 0 24 24" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            <svg class="icon" viewBox="0 0 24 24" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <svg class="icon" viewBox="0 0 24 24" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            <span class="timestamp">Jan 2 at 2:03 PM</span>
+          </div>
+        </div>
+        <div class="message">Boss uploaded 7. Model Selection UI</div>
+      </div>
+    </div>
+
+    <div class="card-wrapper">
+      <div class="persona-label ananya" style="color: var(--accent)">Ananya — Violet</div>
+      <div class="boss-card ananya">
+        <div class="turn-number">turn 139</div>
+        <div class="boss-row">
+          <span class="boss-label">Boss</span>
+          <div class="actions">
+            <svg class="icon" viewBox="0 0 24 24" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            <svg class="icon" viewBox="0 0 24 24" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <svg class="icon" viewBox="0 0 24 24" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            <span class="timestamp">Jan 2 at 2:03 PM</span>
+          </div>
+        </div>
+        <div class="message">Boss uploaded 7. Model Selection UI</div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <h2>Candidate Boss Colors (Dedicated)</h2>
+
+  <div class="grid">
+    <div class="card-wrapper">
+      <div class="persona-label boss-amber" style="color: var(--accent)">Boss — Amber #F59E0B</div>
+      <div class="boss-card boss-amber">
+        <div class="turn-number">turn 139</div>
+        <div class="boss-row">
+          <span class="boss-label">Boss</span>
+          <div class="actions">
+            <svg class="icon" viewBox="0 0 24 24" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            <svg class="icon" viewBox="0 0 24 24" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <svg class="icon" viewBox="0 0 24 24" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            <span class="timestamp">Jan 2 at 2:03 PM</span>
+          </div>
+        </div>
+        <div class="message">Boss uploaded 7. Model Selection UI</div>
+      </div>
+    </div>
+
+    <div class="card-wrapper">
+      <div class="persona-label boss-gold" style="color: var(--accent)">Boss — Gold #EAB308</div>
+      <div class="boss-card boss-gold">
+        <div class="turn-number">turn 139</div>
+        <div class="boss-row">
+          <span class="boss-label">Boss</span>
+          <div class="actions">
+            <svg class="icon" viewBox="0 0 24 24" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            <svg class="icon" viewBox="0 0 24 24" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <svg class="icon" viewBox="0 0 24 24" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            <span class="timestamp">Jan 2 at 2:03 PM</span>
+          </div>
+        </div>
+        <div class="message">Boss uploaded 7. Model Selection UI</div>
+      </div>
+    </div>
+
+    <div class="card-wrapper">
+      <div class="persona-label boss-honey" style="color: var(--accent)">Boss — Honey #FBBF24</div>
+      <div class="boss-card boss-honey">
+        <div class="turn-number">turn 139</div>
+        <div class="boss-row">
+          <span class="boss-label">Boss</span>
+          <div class="actions">
+            <svg class="icon" viewBox="0 0 24 24" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            <svg class="icon" viewBox="0 0 24 24" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <svg class="icon" viewBox="0 0 24 24" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            <span class="timestamp">Jan 2 at 2:03 PM</span>
+          </div>
+        </div>
+        <div class="message">Boss uploaded 7. Model Selection UI</div>
+      </div>
+    </div>
+
+    <div class="card-wrapper">
+      <div class="persona-label boss-crimson" style="color: var(--accent)">Boss — Crimson #EF4444</div>
+      <div class="boss-card boss-crimson">
+        <div class="turn-number">turn 139</div>
+        <div class="boss-row">
+          <span class="boss-label">Boss</span>
+          <div class="actions">
+            <svg class="icon" viewBox="0 0 24 24" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            <svg class="icon" viewBox="0 0 24 24" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <svg class="icon" viewBox="0 0 24 24" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            <span class="timestamp">Jan 2 at 2:03 PM</span>
+          </div>
+        </div>
+        <div class="message">Boss uploaded 7. Model Selection UI</div>
+      </div>
+    </div>
+
+    <div class="card-wrapper">
+      <div class="persona-label boss-rose" style="color: var(--accent)">Boss — Rose #F43F5E</div>
+      <div class="boss-card boss-rose">
+        <div class="turn-number">turn 139</div>
+        <div class="boss-row">
+          <span class="boss-label">Boss</span>
+          <div class="actions">
+            <svg class="icon" viewBox="0 0 24 24" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            <svg class="icon" viewBox="0 0 24 24" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <svg class="icon" viewBox="0 0 24 24" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            <span class="timestamp">Jan 2 at 2:03 PM</span>
+          </div>
+        </div>
+        <div class="message">Boss uploaded 7. Model Selection UI</div>
+      </div>
+    </div>
+
+    <div class="card-wrapper">
+      <div class="persona-label boss-scarlet" style="color: var(--accent)">Boss — Scarlet #DC2626</div>
+      <div class="boss-card boss-scarlet">
+        <div class="turn-number">turn 139</div>
+        <div class="boss-row">
+          <span class="boss-label">Boss</span>
+          <div class="actions">
+            <svg class="icon" viewBox="0 0 24 24" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            <svg class="icon" viewBox="0 0 24 24" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <svg class="icon" viewBox="0 0 24 24" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            <span class="timestamp">Jan 2 at 2:03 PM</span>
+          </div>
+        </div>
+        <div class="message">Boss uploaded 7. Model Selection UI</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

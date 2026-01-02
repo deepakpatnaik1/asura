@@ -1,4 +1,4 @@
-import { getPersonaAccentColor, getPersonaAccentBg, CODE_BLOCK_BG, TABLE_BORDER } from '$lib/config/colors';
+import { getPersonaAccentColor, getPersonaAccentBg, CODE_BLOCK_BG, TABLE_BORDER, BOSS_ACCENT, BOSS_ACCENT_BG } from '$lib/config/colors';
 import { DEFAULT_PERSONA } from '$lib/config/personas';
 
 /**
@@ -182,6 +182,13 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 		const lines = match.trim().split('\n');
 		const processedLines: string[] = [];
 
+		// Detect if this is a Boss feedback callout ([!review])
+		const firstLine = lines[0] || '';
+		const isBossCallout = /^\s*>\s*\[!review\]/i.test(firstLine);
+		// Use Boss colors for [!review] callouts, persona colors otherwise
+		const quoteAccent = isBossCallout ? BOSS_ACCENT : ACCENT;
+		const quoteAccentBg = isBossCallout ? BOSS_ACCENT_BG : ACCENT_BG;
+
 		for (const line of lines) {
 			// Count nesting level (number of > at start, with optional spaces between)
 			// e.g., "> > text" has nest level 2, "> text" has nest level 1
@@ -217,8 +224,8 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 				formatted = formatted.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 				formatted = formatted.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
 				formatted = formatted.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
-				formatted = formatted.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${ACCENT}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
-				formatted = formatted.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">$1</a>`);
+				formatted = formatted.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${quoteAccent}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
+				formatted = formatted.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${quoteAccentBg}; color: ${quoteAccent}; font-size: 0.85em; text-decoration: none;">$1</a>`);
 				// Restore inline code from placeholders
 				for (let i = 0; i < quoteCodePlaceholders.length; i++) {
 					formatted = formatted.replace(`%%QUOTECODE${i}%%`, quoteCodePlaceholders[i]);
@@ -231,7 +238,11 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 		}
 
 		const placeholder = `__QUOTE_${blockQuotes.length}__`;
-		blockQuotes.push(`<div style="border-left: 3px solid ${ACCENT}; padding-left: 1em; margin: 0.5em 0; opacity: 0.9; font-style: italic;">${processedLines.join('')}</div>`);
+		// Boss callouts get amber background + border, regular quotes just get border
+		const quoteStyle = isBossCallout
+			? `background: ${quoteAccentBg}; border-left: 3px solid ${quoteAccent}; padding: 1em; margin: 0.5em 0; border-radius: 0 8px 8px 0; font-style: italic;`
+			: `border-left: 3px solid ${quoteAccent}; padding-left: 1em; margin: 0.5em 0; opacity: 0.9; font-style: italic;`;
+		blockQuotes.push(`<div style="${quoteStyle}">${processedLines.join('')}</div>`);
 		return placeholder + '\n';
 	});
 
