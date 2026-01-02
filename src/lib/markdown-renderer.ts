@@ -1,4 +1,4 @@
-import { getPersonaAccentColor, getPersonaAccentBg, CODE_BLOCK_BG, TABLE_BORDER, BOSS_ACCENT, BOSS_ACCENT_BG } from '$lib/config/colors';
+import { getPersonaAccentColor, getPersonaAccentBg, CODE_BLOCK_BG, TABLE_BORDER, BOSS_ACCENT, BOSS_ACCENT_BG, RED_CLAUDE_ACCENT, RED_CLAUDE_ACCENT_BG, BLUE_CLAUDE_ACCENT, BLUE_CLAUDE_ACCENT_BG } from '$lib/config/colors';
 import { DEFAULT_PERSONA } from '$lib/config/personas';
 
 /**
@@ -117,6 +117,41 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 	// Normalize asterisk bullets to dash bullets (both are valid markdown)
 	// Handle both top-level (*) and indented (    *) bullets
 	processed = processed.replace(/^(\s*)\*\s+/gm, '$1- ');
+
+	// IMPORTANT: Extract fenced containers FIRST, before code blocks
+	// This ensures the inner content has raw ```code``` blocks that get
+	// processed independently when we recursively render
+	const fencedContainers: string[] = [];
+	const fencedContainerRegex = /^:::(red|blue|boss|review)\n([\s\S]*?)^:::$/gm;
+	processed = processed.replace(fencedContainerRegex, (match, type, innerContent) => {
+		const placeholder = `__FENCED_${fencedContainers.length}__`;
+
+		// Determine colors based on type
+		let containerAccent: string;
+		let containerAccentBg: string;
+		switch (type.toLowerCase()) {
+			case 'red':
+				containerAccent = RED_CLAUDE_ACCENT;
+				containerAccentBg = RED_CLAUDE_ACCENT_BG;
+				break;
+			case 'blue':
+				containerAccent = BLUE_CLAUDE_ACCENT;
+				containerAccentBg = BLUE_CLAUDE_ACCENT_BG;
+				break;
+			case 'boss':
+			case 'review':
+				containerAccent = BOSS_ACCENT;
+				containerAccentBg = BOSS_ACCENT_BG;
+				break;
+			default:
+				containerAccent = ACCENT;
+				containerAccentBg = ACCENT_BG;
+		}
+
+		// Store for later processing (inner content will be rendered recursively)
+		fencedContainers.push(JSON.stringify({ type, innerContent: innerContent.trim(), containerAccent, containerAccentBg }));
+		return placeholder + '\n';
+	});
 
 	// Render fenced code blocks with placeholders (protect from escaping)
 	const codeBlocks: string[] = [];
@@ -666,7 +701,7 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 
 	// Wrap each line in a div for consistent line spacing (skip block elements - they handle their own spacing)
 	processed = collapsed.map(r => {
-		if (r.startsWith('__TABLE_') || r.startsWith('__CODE_') || r.startsWith('__QUOTE_')) {
+		if (r.startsWith('__TABLE_') || r.startsWith('__CODE_') || r.startsWith('__QUOTE_') || r.startsWith('__FENCED_')) {
 			return r; // Block elements handle their own spacing
 		}
 		return `<div style="min-height: 1.6em;">${r}</div>`;
@@ -690,6 +725,20 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 	// Restore global URL placeholders
 	for (let i = 0; i < globalUrls.length; i++) {
 		processed = processed.replace(`__GURL_${i}__`, globalUrls[i]);
+	}
+
+	// Restore fenced container HTML from placeholders (with recursive rendering)
+	for (let i = 0; i < fencedContainers.length; i++) {
+		const { type, innerContent, containerAccent, containerAccentBg } = JSON.parse(fencedContainers[i]);
+
+		// Recursively render the inner content as full markdown
+		const renderedInner = await renderMarkdown(innerContent, persona);
+
+		// Build the styled container
+		const containerStyle = `background: ${containerAccentBg}; border-left: 3px solid ${containerAccent}; padding: 1em; margin: 0.5em 0; border-radius: 0 8px 8px 0;`;
+		const containerHtml = `<div style="${containerStyle}">${renderedInner}</div>`;
+
+		processed = processed.replace(`__FENCED_${i}__`, containerHtml);
 	}
 
 	return `<div style="white-space: pre-wrap; font-family: inherit; margin: 0;">${processed}</div>`;
