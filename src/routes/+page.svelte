@@ -1739,8 +1739,6 @@
 	}
 
 	async function handleFilePasteSuccess(fileId: string, title: string, content: string, superjournalId?: string) {
-		console.log('[Files] Saved:', title, fileId, superjournalId);
-
 		if (superjournalId) {
 			const now = new Date().toISOString();
 			allMessages = [...allMessages, {

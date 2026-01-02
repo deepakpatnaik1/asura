@@ -71,8 +71,6 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 		return json(defaults);
 	}
 
-	console.log('[Settings API] Returning data:', JSON.stringify(data));
-
 	return json(data);
 };
 

@@ -110,13 +110,6 @@ export async function editWithFal(params: ImageEditParams): Promise<{ imageBase6
 		};
 	}
 
-	// Log request details for debugging
-	const isDataUri = imageInput.startsWith('data:');
-	console.log(`[edit-fal] Model: ${model}`);
-	console.log(`[edit-fal] Prompt: ${prompt}`);
-	console.log(`[edit-fal] Image input: ${isDataUri ? `data URI (${Math.round(imageInput.length / 1024)}KB)` : imageInput}`);
-	console.log(`[edit-fal] Params: seed=${seed}, steps=${numInferenceSteps}, cfg=${cfgScale}${!isKontext ? `, strength=${strength}` : ''}`);
-
 	const response = await fetch(url, {
 		method: 'POST',
 		headers: {
@@ -133,7 +126,6 @@ export async function editWithFal(params: ImageEditParams): Promise<{ imageBase6
 	}
 
 	const data = await response.json();
-	console.log(`[edit-fal] Response:`, JSON.stringify(data, null, 2).slice(0, 500));
 
 	// Fal.ai returns images array with url
 	if (!data.images || !data.images[0] || !data.images[0].url) {

@@ -163,17 +163,14 @@
 	// Load images for image elements
 	$effect(() => {
 		const imageElements = elements.filter((el) => el.type === 'image' && el.src);
-		console.log('[DesignerCanvas] Loading images:', imageElements.length, 'elements');
 		for (const el of imageElements) {
 			if (el.src && !imageCache.has(el.src)) {
-				console.log('[DesignerCanvas] Loading image:', el.id, el.src?.substring(0, 50));
 				const img = new window.Image();
 				// Only set crossOrigin for external URLs, not data URLs
 				if (!el.src.startsWith('data:')) {
 					img.crossOrigin = 'anonymous';
 				}
 				img.onload = () => {
-					console.log('[DesignerCanvas] Image loaded:', el.id);
 					imageCache = new Map(imageCache).set(el.src!, img);
 				};
 				img.onerror = (e) => {
@@ -294,8 +291,6 @@
 			if (onImagePaste && result.imageCode && result.imageUrl) {
 				onImagePaste(result.imageCode, result.imageUrl);
 			}
-
-			console.log(`[Drop] Image added with code: ${result.imageCode}`);
 		} catch (error) {
 			console.error('[Drop] Error:', error);
 		} finally {

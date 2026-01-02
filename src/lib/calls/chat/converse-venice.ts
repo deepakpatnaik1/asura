@@ -46,8 +46,6 @@ export async function* converseStreamVenice(
 ): AsyncGenerator<string, ConverseResult, unknown> {
 	const { personaPrompt, context, message, model, maxTokens, temperature, chartImage } = params;
 
-	console.log(`[Venice] Starting stream for model: ${model}`);
-
 	if (!VENICE_API_KEY) {
 		throw new Error('VENICE_API_KEY not configured');
 	}
@@ -152,8 +150,6 @@ export async function* converseStreamVenice(
 				}
 			}
 		}
-
-		console.log(`[Venice] Stream finished`);
 	}
 
 	yield* processStream(messages);

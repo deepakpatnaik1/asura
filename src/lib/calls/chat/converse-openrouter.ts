@@ -59,9 +59,6 @@ export async function* converseStreamOpenRouter(
 ): AsyncGenerator<string, ConverseResult, unknown> {
 	const { personaPrompt, context, message, model, maxTokens, temperature, chartImage, tools, toolExecutor } = params;
 
-	console.log(`[OpenRouter] Starting stream for model: ${model}`);
-	console.log(`[OpenRouter] Tools passed: ${tools?.map(t => t.name).join(', ') || 'none'}`);
-
 	// Build system prompt (no caching on OpenRouter)
 	const systemPrompt = `${personaPrompt}\n\n${CONVERSE_PROMPT}`;
 
@@ -224,8 +221,6 @@ export async function* converseStreamOpenRouter(
 				}
 			}
 		}
-
-		console.log(`[OpenRouter] Stream finished. finishReason: ${finishReason}, toolCalls: ${accumulatedToolCalls.size}`);
 
 		// Check if we have tool calls to execute
 		if (finishReason === 'tool_calls' && accumulatedToolCalls.size > 0) {

@@ -157,8 +157,6 @@
 			models = await modelsRes.json();
 			const settings = await settingsRes.json();
 
-			console.log('[SettingsModal] Settings received:', settings);
-
 			// Build new overrides object to ensure reactivity
 			// No fallback logic - NULL values surface as empty (shows errors immediately)
 			const newOverrides: Record<OverrideKey, string> = {
@@ -198,8 +196,6 @@
 				}
 			}
 			uncensoredFlags = newFlags;
-
-			console.log('[SettingsModal] Overrides built:', newOverrides);
 
 			// Replace entire object to ensure reactivity
 			modelOverrides = newOverrides;
@@ -322,9 +318,7 @@
 
 	// Group text generation models by provider, sorted alphabetically within each group
 	const modelsByProvider = $derived.by(() => {
-		console.log('[DEBUG] modelsByProvider computing, models count:', models.length);
 		const textModels = models.filter((m) => m.model_type === 'text_generation');
-		console.log('[DEBUG] text models found:', textModels.length);
 
 		// Group by provider
 		const grouped = textModels.reduce((acc, model) => {
@@ -355,9 +349,7 @@
 
 	// Group embedding models by provider (for Embeddings dropdown)
 	const embeddingModelsByProvider = $derived.by(() => {
-		console.log('[DEBUG] embeddingModelsByProvider computing, models count:', models.length);
 		const embeddingModels = models.filter((m) => m.model_type === 'embedding');
-		console.log('[DEBUG] embedding models found:', embeddingModels.length, embeddingModels.map(m => m.model_name));
 
 		// Group by provider
 		const grouped = embeddingModels.reduce((acc, model) => {
