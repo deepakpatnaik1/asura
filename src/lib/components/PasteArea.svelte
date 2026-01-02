@@ -302,6 +302,7 @@
 		{/if}
 
 		<!-- Paste Area -->
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div
 			class="paste-area"
 			class:dragging={isDragging}
@@ -313,6 +314,9 @@
 			ondrop={handleDrop}
 			data-placeholder={placeholder}
 			bind:this={pasteAreaRef}
+			role="textbox"
+			aria-label="Paste content here"
+			aria-multiline="true"
 		></div>
 
 		<!-- Processing Overlay - shows on top of content -->

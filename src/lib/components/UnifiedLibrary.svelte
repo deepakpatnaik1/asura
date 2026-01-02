@@ -685,14 +685,6 @@
 		text-align: left;
 	}
 
-	.title-btn.openable {
-		cursor: pointer;
-	}
-
-	.title-btn.openable:hover .item-title {
-		text-decoration: underline;
-	}
-
 	.item-title {
 		font-size: 0.9em;
 		color: hsl(var(--foreground));

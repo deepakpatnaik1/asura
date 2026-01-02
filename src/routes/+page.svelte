@@ -1216,6 +1216,7 @@
 
 		// Find the NEXT header after the clicked element in document order
 		let header: HTMLElement | null = null;
+		let isEndOfDocument = false;
 		for (const h of allHeaders) {
 			const position = target.compareDocumentPosition(h);
 			if (position & Node.DOCUMENT_POSITION_FOLLOWING) {
@@ -1224,12 +1225,10 @@
 			}
 		}
 
-		// If no header is after the target, use the last header
-		if (!header && allHeaders.length > 0) {
-			header = allHeaders[allHeaders.length - 1] as HTMLElement;
+		// If no header follows, this is the last section - marker goes after content
+		if (!header) {
+			isEndOfDocument = true;
 		}
-
-		if (!header) return;
 
 		// Remove existing marker if any
 		clearAnnotationMarker();
@@ -1249,27 +1248,52 @@
 			clearAnnotationMarker();
 		});
 
-		// Insert marker directly before the found header
-		header.parentElement?.insertBefore(marker, header);
+		// Insert marker: before header if found, after last content element if end of document
+		if (isEndOfDocument) {
+			// Find the last content element in the message
+			const lastElement = messageText.lastElementChild as HTMLElement;
+			if (lastElement) {
+				// Insert after the last element
+				lastElement.parentElement?.insertBefore(marker, lastElement.nextSibling);
+			} else {
+				messageText.appendChild(marker);
+			}
+		} else if (header) {
+			// Insert marker directly before the found header
+			header.parentElement?.insertBefore(marker, header);
+		}
 
 		// Set annotation target
-		// Header structure: <h3><span>H3</span><span>Tier 1 Facts</span></h3>
-		// Get the content span (last child), not the label span
-		const levelMatch = header.tagName.match(/H(\d)/);
-		const contentSpan = header.querySelector('span:last-child');
-		const headerText = contentSpan?.textContent?.trim() || header.textContent?.trim() || '';
-		const headerLevel = levelMatch ? parseInt(levelMatch[1]) : 2;
+		let headerText: string;
+		let headerLevel: number;
+		let headerIndex: number;
 
-		// Count which occurrence of this header (0-indexed)
-		// Headers with same text and level may appear multiple times (e.g., "Tier 1 Facts" per turn)
-		let headerIndex = 0;
-		for (const h of allHeaders) {
-			if (h === header) break;
-			const hContentSpan = h.querySelector('span:last-child');
-			const hText = hContentSpan?.textContent?.trim() || h.textContent?.trim();
-			if (hText === headerText && h.tagName === header.tagName) {
-				headerIndex++;
+		if (isEndOfDocument) {
+			// Special marker for end-of-document: append to file
+			headerText = '__END__';
+			headerLevel = 0;
+			headerIndex = 0;
+		} else if (header) {
+			// Header structure: <h3><span>H3</span><span>Tier 1 Facts</span></h3>
+			// Get the content span (last child), not the label span
+			const levelMatch = header.tagName.match(/H(\d)/);
+			const contentSpan = header.querySelector('span:last-child');
+			headerText = contentSpan?.textContent?.trim() || header.textContent?.trim() || '';
+			headerLevel = levelMatch ? parseInt(levelMatch[1]) : 2;
+
+			// Count which occurrence of this header (0-indexed)
+			// Headers with same text and level may appear multiple times (e.g., "Tier 1 Facts" per turn)
+			headerIndex = 0;
+			for (const h of allHeaders) {
+				if (h === header) break;
+				const hContentSpan = h.querySelector('span:last-child');
+				const hText = hContentSpan?.textContent?.trim() || h.textContent?.trim();
+				if (hText === headerText && h.tagName === header.tagName) {
+					headerIndex++;
+				}
 			}
+		} else {
+			return; // No valid target
 		}
 
 		annotationTarget = {

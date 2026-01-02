@@ -52,6 +52,7 @@
 <svelte:document onclick={handleClickOutside} onkeydown={(e) => e.key === 'Escape' && isOpen && (isOpen = false)} />
 
 <div class="persona-dropdown-container">
+	<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 	<div
 		class="persona-dropdown"
 		class:interactive

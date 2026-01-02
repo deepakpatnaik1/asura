@@ -84,15 +84,16 @@
 	let fixedPadding = $derived(BASE_PADDING * inverseScale);
 	let fixedWidth = $derived(BASE_WIDTH * inverseScale);
 
-	// Konva components (loaded dynamically)
-	let Stage: any;
-	let Layer: any;
-	let Rect: any;
-	let Text: any;
-	let Group: any;
-	let Line: any;
-	let Arrow: any;
-	let Image: any;
+	// Konva components (loaded dynamically for SSR compatibility)
+	// Using $state() for reactivity when components load in onMount
+	let Stage = $state<any>(null);
+	let Layer = $state<any>(null);
+	let Rect = $state<any>(null);
+	let Text = $state<any>(null);
+	let Group = $state<any>(null);
+	let Line = $state<any>(null);
+	let Arrow = $state<any>(null);
+	let Image = $state<any>(null);
 
 	// Cleanup reference
 	let resizeObserver: ResizeObserver | null = null;
@@ -465,11 +466,11 @@
 
 <CanvasFrame>
 	{#snippet content()}
-		<div class="canvas-container" bind:this={containerEl} ondragover={handleDragOver} ondrop={handleDrop}>
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div class="canvas-container" bind:this={containerEl} ondragover={handleDragOver} ondrop={handleDrop} role="application" aria-label="Design canvas - drag and drop images here">
 			{#if mounted && Stage}
 				{#if canvas}
-					<svelte:component
-						this={Stage}
+					<Stage
 						width={stageWidth}
 						height={stageHeight}
 						x={stageX}
@@ -481,7 +482,7 @@
 						ondragend={handleStageDragEnd}
 						onclick={handleStageClick}
 					>
-						<svelte:component this={Layer}>
+						<Layer>
 							{#each elements as element (element.id)}
 								{#if element.type === 'note'}
 									<!-- Note: card with text - zoom-invariant -->
@@ -489,16 +490,14 @@
 									{@const textStr = typeof element.text === 'string' ? element.text : ''}
 									{@const boxHeight = Math.max(100 * inverseScale, (textStr.length || 0) * 0.4 * inverseScale)}
 									{@const ribbonHeight = 14 * inverseScale}
-									<svelte:component
-										this={Group}
+									<Group
 										x={element.x}
 										y={element.y}
 										draggable={true}
 										ondragend={(e: any) => handleDragEnd(element.id, e)}
 										onclick={() => handleSelect(element.id)}
 									>
-										<svelte:component
-											this={Rect}
+										<Rect
 											width={boxWidth}
 											height={boxHeight}
 											fill={element.fill || '#4a3a5a'}
@@ -512,8 +511,7 @@
 												: element.stroke || 'transparent'}
 											strokeWidth={element.strokeWidth || 2}
 										/>
-										<svelte:component
-											this={Text}
+										<Text
 											text={element.text || ''}
 											x={fixedPadding}
 											y={fixedPadding}
@@ -527,16 +525,14 @@
 										<!-- Code ribbons at top and bottom -->
 										{#if element.code}
 											<!-- Top ribbon -->
-											<svelte:component
-												this={Rect}
+											<Rect
 												x={0}
 												y={0}
 												width={boxWidth}
 												height={ribbonHeight}
 												fill="rgba(0,0,0,0.5)"
 											/>
-											<svelte:component
-												this={Text}
+											<Text
 												x={0}
 												y={0}
 												width={boxWidth}
@@ -550,16 +546,14 @@
 												verticalAlign="middle"
 											/>
 											<!-- Bottom ribbon -->
-											<svelte:component
-												this={Rect}
+											<Rect
 												x={0}
 												y={boxHeight - ribbonHeight}
 												width={boxWidth}
 												height={ribbonHeight}
 												fill="rgba(0,0,0,0.5)"
 											/>
-											<svelte:component
-												this={Text}
+											<Text
 												x={0}
 												y={boxHeight - ribbonHeight}
 												width={boxWidth}
@@ -573,11 +567,10 @@
 												verticalAlign="middle"
 											/>
 										{/if}
-									</svelte:component>
+									</Group>
 								{:else if element.type === 'label'}
 									<!-- Label: standalone text - zoom-invariant -->
-									<svelte:component
-										this={Text}
+									<Text
 										x={element.x}
 										y={element.y}
 										text={element.text || ''}
@@ -591,8 +584,7 @@
 									/>
 								{:else if element.type === 'line'}
 									<!-- Line: connects two points -->
-									<svelte:component
-										this={Line}
+									<Line
 										points={[
 											element.from?.[0] || 0,
 											element.from?.[1] || 0,
@@ -605,8 +597,7 @@
 									/>
 								{:else if element.type === 'arrow'}
 									<!-- Arrow: line with pointer -->
-									<svelte:component
-										this={Arrow}
+									<Arrow
 										points={[
 											element.from?.[0] || 0,
 											element.from?.[1] || 0,
@@ -625,16 +616,14 @@
 									{@const groupWidth = element.width || 426}
 									{@const groupHeight = element.height || 150}
 									{@const ribbonHeight = 14 * inverseScale}
-									<svelte:component
-										this={Group}
+									<Group
 										x={element.x}
 										y={element.y}
 										draggable={true}
 										ondragend={(e: any) => handleDragEnd(element.id, e)}
 										onclick={() => handleSelect(element.id)}
 									>
-										<svelte:component
-											this={Rect}
+										<Rect
 											width={groupWidth}
 											height={groupHeight}
 											fill={element.fill || 'rgba(20,20,20,0.8)'}
@@ -645,8 +634,7 @@
 											cornerRadius={4}
 										/>
 										{#if element.label}
-											<svelte:component
-												this={Text}
+											<Text
 												x={fixedPadding}
 												y={-18 * inverseScale}
 												text={element.label}
@@ -659,16 +647,14 @@
 										<!-- Code ribbons at top and bottom -->
 										{#if element.code}
 											<!-- Top ribbon -->
-											<svelte:component
-												this={Rect}
+											<Rect
 												x={0}
 												y={0}
 												width={groupWidth}
 												height={ribbonHeight}
 												fill="rgba(0,0,0,0.5)"
 											/>
-											<svelte:component
-												this={Text}
+											<Text
 												x={0}
 												y={0}
 												width={groupWidth}
@@ -682,16 +668,14 @@
 												verticalAlign="middle"
 											/>
 											<!-- Bottom ribbon -->
-											<svelte:component
-												this={Rect}
+											<Rect
 												x={0}
 												y={groupHeight - ribbonHeight}
 												width={groupWidth}
 												height={ribbonHeight}
 												fill="rgba(0,0,0,0.5)"
 											/>
-											<svelte:component
-												this={Text}
+											<Text
 												x={0}
 												y={groupHeight - ribbonHeight}
 												width={groupWidth}
@@ -705,26 +689,23 @@
 												verticalAlign="middle"
 											/>
 										{/if}
-									</svelte:component>
+									</Group>
 								{:else if element.type === 'image' && element.src && imageCache.has(element.src)}
 									<!-- Image: displays loaded image with code label and optional selection border -->
-									<svelte:component
-										this={Group}
+									<Group
 										x={element.x}
 										y={element.y}
 										draggable={true}
 										ondragend={(e: any) => handleDragEnd(element.id, e)}
 										onclick={() => handleSelect(element.id)}
 									>
-										<svelte:component
-											this={Image}
+										<Image
 											image={imageCache.get(element.src)}
 											width={element.width || 426}
 											height={element.height || 200}
 										/>
 										{#if selectedId === element.id}
-											<svelte:component
-												this={Rect}
+											<Rect
 												width={element.width || 426}
 												height={element.height || 200}
 												stroke="#fff"
@@ -736,16 +717,14 @@
 										{#if element.code}
 											{@const ribbonHeight = 14 * inverseScale}
 											<!-- Top ribbon -->
-											<svelte:component
-												this={Rect}
+											<Rect
 												x={0}
 												y={0}
 												width={element.width || 426}
 												height={ribbonHeight}
 												fill="rgba(0,0,0,0.5)"
 											/>
-											<svelte:component
-												this={Text}
+											<Text
 												x={0}
 												y={0}
 												width={element.width || 426}
@@ -759,16 +738,14 @@
 												verticalAlign="middle"
 											/>
 											<!-- Bottom ribbon -->
-											<svelte:component
-												this={Rect}
+											<Rect
 												x={0}
 												y={(element.height || 200) - ribbonHeight}
 												width={element.width || 426}
 												height={ribbonHeight}
 												fill="rgba(0,0,0,0.5)"
 											/>
-											<svelte:component
-												this={Text}
+											<Text
 												x={0}
 												y={(element.height || 200) - ribbonHeight}
 												width={element.width || 426}
@@ -782,7 +759,7 @@
 												verticalAlign="middle"
 											/>
 										{/if}
-									</svelte:component>
+									</Group>
 								{:else if element.type === 'text'}
 									<!-- Text: character field with heading - zoom-invariant -->
 									{@const boxWidth = fixedWidth}
@@ -791,16 +768,14 @@
 									{@const boxHeight = Math.max(200 * inverseScale, (textStr2.length || 0) * 0.4 * inverseScale) + headerHeight}
 									{@const ribbonHeight = 14 * inverseScale}
 									{@const fieldLabel = element.field ? element.field.charAt(0).toUpperCase() + element.field.slice(1) : 'Text'}
-									<svelte:component
-										this={Group}
+									<Group
 										x={element.x}
 										y={element.y}
 										draggable={true}
 										ondragend={(e: any) => handleDragEnd(element.id, e)}
 										onclick={() => handleSelect(element.id)}
 									>
-										<svelte:component
-											this={Rect}
+										<Rect
 											width={boxWidth}
 											height={boxHeight}
 											fill="#1a1a1a"
@@ -809,8 +784,7 @@
 											cornerRadius={6}
 										/>
 										<!-- Field heading -->
-										<svelte:component
-											this={Text}
+										<Text
 											text={fieldLabel}
 											x={fixedPadding}
 											y={ribbonHeight + fixedPadding * 0.5}
@@ -821,8 +795,7 @@
 											fontStyle="bold"
 										/>
 										<!-- Content text -->
-										<svelte:component
-											this={Text}
+										<Text
 											text={element.text || ''}
 											x={fixedPadding}
 											y={ribbonHeight + headerHeight}
@@ -836,16 +809,14 @@
 										<!-- Code ribbons at top and bottom -->
 										{#if element.code}
 											<!-- Top ribbon -->
-											<svelte:component
-												this={Rect}
+											<Rect
 												x={0}
 												y={0}
 												width={boxWidth}
 												height={ribbonHeight}
 												fill="rgba(0,0,0,0.5)"
 											/>
-											<svelte:component
-												this={Text}
+											<Text
 												x={0}
 												y={0}
 												width={boxWidth}
@@ -859,16 +830,14 @@
 												verticalAlign="middle"
 											/>
 											<!-- Bottom ribbon -->
-											<svelte:component
-												this={Rect}
+											<Rect
 												x={0}
 												y={boxHeight - ribbonHeight}
 												width={boxWidth}
 												height={ribbonHeight}
 												fill="rgba(0,0,0,0.5)"
 											/>
-											<svelte:component
-												this={Text}
+											<Text
 												x={0}
 												y={boxHeight - ribbonHeight}
 												width={boxWidth}
@@ -882,7 +851,7 @@
 												verticalAlign="middle"
 											/>
 										{/if}
-									</svelte:component>
+									</Group>
 								{:else if element.type === 'prompt'}
 									<!-- Prompt: image generation prompt with heading - teal styling -->
 									{@const boxWidth = fixedWidth}
@@ -894,16 +863,14 @@
 								{@const boxHeight = Math.max(120 * inverseScale, (promptText?.length || 0) * 0.4 * inverseScale) + headerHeight}
 									{@const ribbonHeight = 14 * inverseScale}
 									{@const promptLabel = element.promptIndex !== undefined ? `Prompt ${element.promptIndex + 1}` : 'Prompt'}
-									<svelte:component
-										this={Group}
+									<Group
 										x={element.x}
 										y={element.y}
 										draggable={true}
 										ondragend={(e: any) => handleDragEnd(element.id, e)}
 										onclick={() => handleSelect(element.id)}
 									>
-										<svelte:component
-											this={Rect}
+										<Rect
 											width={boxWidth}
 											height={boxHeight}
 											fill="rgba(20, 60, 60, 0.95)"
@@ -912,8 +879,7 @@
 											cornerRadius={6}
 										/>
 										<!-- Prompt heading -->
-										<svelte:component
-											this={Text}
+										<Text
 											text={promptLabel}
 											x={fixedPadding}
 											y={ribbonHeight + fixedPadding * 0.5}
@@ -924,8 +890,7 @@
 											fontStyle="bold"
 										/>
 										<!-- Content text -->
-										<svelte:component
-											this={Text}
+										<Text
 											text={promptText}
 											x={fixedPadding}
 											y={ribbonHeight + headerHeight}
@@ -939,16 +904,14 @@
 										<!-- Code ribbons at top and bottom -->
 										{#if element.code}
 											<!-- Top ribbon -->
-											<svelte:component
-												this={Rect}
+											<Rect
 												x={0}
 												y={0}
 												width={boxWidth}
 												height={ribbonHeight}
 												fill="rgba(0,0,0,0.5)"
 											/>
-											<svelte:component
-												this={Text}
+											<Text
 												x={0}
 												y={0}
 												width={boxWidth}
@@ -962,16 +925,14 @@
 												verticalAlign="middle"
 											/>
 											<!-- Bottom ribbon -->
-											<svelte:component
-												this={Rect}
+											<Rect
 												x={0}
 												y={boxHeight - ribbonHeight}
 												width={boxWidth}
 												height={ribbonHeight}
 												fill="rgba(0,0,0,0.5)"
 											/>
-											<svelte:component
-												this={Text}
+											<Text
 												x={0}
 												y={boxHeight - ribbonHeight}
 												width={boxWidth}
@@ -985,11 +946,11 @@
 												verticalAlign="middle"
 											/>
 										{/if}
-									</svelte:component>
+									</Group>
 								{/if}
 							{/each}
-						</svelte:component>
-					</svelte:component>
+						</Layer>
+					</Stage>
 				{:else}
 					<div class="empty-state"></div>
 				{/if}

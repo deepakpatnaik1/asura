@@ -714,10 +714,6 @@
 		color: var(--accent-color);
 	}
 
-	.pane-header .count {
-		opacity: 0.6;
-	}
-
 	.sync-button,
 	.connect-button,
 	.disconnect-button {
@@ -977,12 +973,6 @@
 		font-style: italic;
 	}
 
-	.todo-progress {
-		font-size: var(--font-caption);
-		color: var(--accent-color);
-		font-weight: var(--font-weight-medium);
-	}
-
 	.todo-child {
 		padding-left: var(--spacing-md);
 	}
@@ -1001,13 +991,6 @@
 	/* Gray out children when parent is completed (regardless of child's own status) */
 	.todo-item.parent-completed .todo-text {
 		color: hsl(var(--foreground) / 0.2);
-	}
-
-	.empty-state {
-		font-size: var(--font-body);
-		color: hsl(var(--muted-foreground) / 0.5);
-		font-style: italic;
-		padding: var(--spacing-md) 0;
 	}
 
 	.empty-month {

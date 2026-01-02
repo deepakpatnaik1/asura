@@ -8,15 +8,15 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase } }) => {
-	const { session } = await safeGetSession();
-	if (!session) {
+	const { user } = await safeGetSession();
+	if (!user) {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
 
 	const { data: tags, error } = await supabase
 		.from('canvas_planner_tags')
 		.select('name')
-		.eq('user_id', session.user.id)
+		.eq('user_id', user.id)
 		.order('name', { ascending: true });
 
 	if (error) {

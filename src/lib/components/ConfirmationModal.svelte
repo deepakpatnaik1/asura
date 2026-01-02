@@ -19,8 +19,15 @@
 </script>
 
 {#if isOpen}
-	<div class="modal-overlay" onclick={onCancel}>
-		<div class="modal-content" onclick={(e) => e.stopPropagation()}>
+	<div
+		class="modal-overlay"
+		onclick={onCancel}
+		onkeydown={(e) => e.key === 'Escape' && onCancel()}
+		role="dialog"
+		aria-modal="true"
+		tabindex="-1"
+	>
+		<div class="modal-content" onclick={(e) => e.stopPropagation()} role="document">
 			<p class="modal-text">{message}</p>
 			<div class="progress-container">
 				<div class="progress-bar" style="width: {progress}%"></div>

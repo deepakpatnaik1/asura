@@ -8,12 +8,12 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supabase } }) => {
-	const { session } = await safeGetSession();
-	if (!session) {
+	const { user } = await safeGetSession();
+	if (!user) {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
 
-	const userId = session.user.id;
+	const userId = user.id;
 
 	const { data: entries, error } = await supabase
 		.from('canvas_planner_diary')

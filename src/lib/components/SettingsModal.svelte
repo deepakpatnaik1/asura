@@ -509,8 +509,15 @@
 <svelte:document onkeydown={(e) => e.key === 'Escape' && open && onClose()} />
 
 {#if open}
-	<div class="modal-overlay" onclick={handleOverlayClick} role="dialog" aria-modal="true">
-		<div class="modal-content" onclick={(e) => e.stopPropagation()}>
+	<div
+		class="modal-overlay"
+		onclick={handleOverlayClick}
+		onkeydown={(e) => e.key === 'Escape' && onClose()}
+		role="dialog"
+		aria-modal="true"
+		tabindex="-1"
+	>
+		<div class="modal-content" onclick={(e) => e.stopPropagation()} role="document">
 			<!-- Header -->
 			<div class="modal-header">
 				<h2>Settings</h2>
@@ -937,22 +944,6 @@
 		transform: rotate(45deg);
 	}
 
-	.two-column-row {
-		display: flex;
-		gap: 120px;
-	}
-
-	.column {
-		flex: 1;
-		min-width: 0;
-	}
-
-	.placeholder-box {
-		border: 1px solid hsl(var(--border));
-		min-height: 80px;
-		padding: 12px;
-	}
-
 	/* Footer icons */
 	.footer-icons {
 		display: flex;
@@ -1019,73 +1010,6 @@
 		opacity: 1;
 	}
 
-	.settings-section {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 12px;
-		margin-bottom: 24px;
-		width: 257px;
-		margin-left: 13px;
-	}
-
-	.settings-section.inner {
-		width: 100%;
-		margin-left: 0;
-		margin-bottom: 8px;
-		justify-content: space-between;
-	}
-
-	.settings-section.inner:last-child {
-		margin-bottom: 0;
-	}
-
-	.settings-section.inner select {
-		flex: none;
-		width: 150px;
-	}
-
-	.settings-section label {
-		font-weight: 400;
-		color: hsl(var(--muted-foreground));
-		font-size: 8pt;
-		white-space: nowrap;
-	}
-
-	.settings-section select {
-		flex: none;
-		width: 150px;
-		padding: 3px 20px 3px 6px;
-		background: #000;
-		background-image: url("data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 12 12' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M3 5L6 8L9 5' stroke='%23666' stroke-width='1' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-		background-repeat: no-repeat;
-		background-position: right 6px center;
-		border: 1px solid hsl(var(--border));
-		border-radius: 0;
-		color: hsl(var(--foreground));
-		font-family: inherit;
-		font-size: 8pt;
-		cursor: pointer;
-		appearance: none;
-	}
-
-	.settings-section select:focus {
-		outline: none;
-		border-color: hsl(var(--border));
-	}
-
-	.settings-section select optgroup {
-		font-weight: 600;
-		font-style: normal;
-		color: hsl(var(--muted-foreground));
-		background: hsl(var(--background));
-	}
-
-	.settings-section select option {
-		font-weight: 400;
-		padding-left: 8px;
-	}
-
 	.loading-state {
 		text-align: center;
 		padding: 40px;
@@ -1105,32 +1029,6 @@
 	.nuke-wrapper {
 		position: relative;
 		margin-left: auto;
-	}
-
-	.top-row {
-		display: flex;
-		justify-content: space-between;
-		margin-bottom: 24px;
-	}
-
-	.top-row .settings-section:last-child {
-		margin-left: 0;
-		margin-right: 12px;
-	}
-
-	/* All Models Section */
-	.all-models-section {
-		width: 400px;
-		flex-shrink: 0;
-	}
-
-	.all-models-section label {
-		display: block;
-		font-weight: 400;
-		color: hsl(var(--muted-foreground));
-		font-size: 8pt;
-		margin-bottom: 8px;
-		margin-left: 13px;
 	}
 
 	/*

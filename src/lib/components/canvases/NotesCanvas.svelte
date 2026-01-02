@@ -61,15 +61,16 @@
 	// Selection state
 	let selectedId = $state<string | null>(null);
 
-	// Konva components (loaded dynamically)
-	let Stage: any;
-	let Layer: any;
-	let Rect: any;
-	let Text: any;
-	let Group: any;
-	let Line: any;
-	let Arrow: any;
-	let Image: any;
+	// Konva components (loaded dynamically for SSR compatibility)
+	// Using $state() for reactivity when components load in onMount
+	let Stage = $state<any>(null);
+	let Layer = $state<any>(null);
+	let Rect = $state<any>(null);
+	let Text = $state<any>(null);
+	let Group = $state<any>(null);
+	let Line = $state<any>(null);
+	let Arrow = $state<any>(null);
+	let Image = $state<any>(null);
 
 	// Cleanup reference
 	let resizeObserver: ResizeObserver | null = null;
@@ -256,8 +257,7 @@
 		<div class="canvas-container" bind:this={containerEl}>
 			{#if mounted && Stage}
 				{#if whiteboard}
-					<svelte:component
-						this={Stage}
+					<Stage
 						width={stageWidth}
 						height={stageHeight}
 						x={stageX}
@@ -270,20 +270,18 @@
 						onclick={handleStageClick}
 						ondblclick={handleDblClick}
 					>
-						<svelte:component this={Layer}>
+						<Layer>
 							{#each elements as element (element.id)}
 								{#if element.type === 'note'}
 									<!-- Note: card with text -->
-									<svelte:component
-										this={Group}
+									<Group
 										x={element.x}
 										y={element.y}
 										draggable={true}
 										ondragend={(e: any) => handleDragEnd(element.id, e)}
 										onclick={() => handleSelect(element.id)}
 									>
-										<svelte:component
-											this={Rect}
+										<Rect
 											width={element.width || 150}
 											height={element.height || 100}
 											fill={element.fill || '#3a3a3a'}
@@ -297,8 +295,7 @@
 												: element.stroke || 'transparent'}
 											strokeWidth={element.strokeWidth || 2}
 										/>
-										<svelte:component
-											this={Text}
+										<Text
 											text={element.text || ''}
 											x={10}
 											y={10}
@@ -309,11 +306,10 @@
 											fill="#d9d9d9"
 											wrap="word"
 										/>
-									</svelte:component>
+									</Group>
 								{:else if element.type === 'label'}
 									<!-- Label: standalone text -->
-									<svelte:component
-										this={Text}
+									<Text
 										x={element.x}
 										y={element.y}
 										text={element.text || ''}
@@ -326,8 +322,7 @@
 									/>
 								{:else if element.type === 'line'}
 									<!-- Line: connects two points -->
-									<svelte:component
-										this={Line}
+									<Line
 										points={[
 											element.from?.[0] || 0,
 											element.from?.[1] || 0,
@@ -340,8 +335,7 @@
 									/>
 								{:else if element.type === 'arrow'}
 									<!-- Arrow: line with pointer -->
-									<svelte:component
-										this={Arrow}
+									<Arrow
 										points={[
 											element.from?.[0] || 0,
 											element.from?.[1] || 0,
@@ -357,16 +351,14 @@
 									/>
 								{:else if element.type === 'group'}
 									<!-- Group: outline style with colored border + translucent fill -->
-									<svelte:component
-										this={Group}
+									<Group
 										x={element.x}
 										y={element.y}
 										draggable={true}
 										ondragend={(e: any) => handleDragEnd(element.id, e)}
 										onclick={() => handleSelect(element.id)}
 									>
-										<svelte:component
-											this={Rect}
+										<Rect
 											width={element.width || 200}
 											height={element.height || 150}
 											fill={element.fill || 'rgba(20,20,20,0.8)'}
@@ -377,8 +369,7 @@
 											cornerRadius={4}
 										/>
 										{#if element.label}
-											<svelte:component
-												this={Text}
+											<Text
 												x={8}
 												y={-18}
 												text={element.label}
@@ -387,26 +378,23 @@
 												fill={element.stroke || '#5a5a5a'}
 											/>
 										{/if}
-									</svelte:component>
+									</Group>
 								{:else if element.type === 'image' && element.src && imageCache.has(element.src)}
 									<!-- Image: displays loaded image with optional selection border -->
-									<svelte:component
-										this={Group}
+									<Group
 										x={element.x}
 										y={element.y}
 										draggable={true}
 										ondragend={(e: any) => handleDragEnd(element.id, e)}
 										onclick={() => handleSelect(element.id)}
 									>
-										<svelte:component
-											this={Image}
+										<Image
 											image={imageCache.get(element.src)}
 											width={element.width || 200}
 											height={element.height || 200}
 										/>
 										{#if selectedId === element.id}
-											<svelte:component
-												this={Rect}
+											<Rect
 												width={element.width || 200}
 												height={element.height || 200}
 												stroke="#fff"
@@ -414,11 +402,11 @@
 												cornerRadius={4}
 											/>
 										{/if}
-									</svelte:component>
+									</Group>
 								{/if}
 							{/each}
-						</svelte:component>
-					</svelte:component>
+						</Layer>
+					</Stage>
 				{:else}
 					<div class="empty-state"></div>
 				{/if}
@@ -490,11 +478,6 @@
 		color: rgba(100, 140, 120, 0.8);
 		font-size: 0.875rem;
 		gap: 4px;
-	}
-
-	.empty-state .hint {
-		font-size: 0.75rem;
-		opacity: 0.6;
 	}
 
 	/* Whiteboard picker footer */

@@ -15,8 +15,8 @@ function formatTimestamp(dateString: string): string {
 }
 
 export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supabase } }) => {
-	const { session } = await safeGetSession();
-	if (!session) {
+	const { user } = await safeGetSession();
+	if (!user) {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
 

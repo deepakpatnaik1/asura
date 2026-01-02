@@ -104,12 +104,6 @@
 		min-width: 0;
 	}
 
-	.footer-padding-top,
-	.footer-padding-bottom {
-		height: var(--footer-padding);
-		flex-shrink: 0;
-	}
-
 	.footer-content {
 		flex: 1;
 		display: flex;

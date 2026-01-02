@@ -75,36 +75,45 @@ export const POST: RequestHandler = async ({ params, request, locals: { safeGetS
 		return databaseError(`Failed to read file: ${article.source_path}`);
 	}
 
-	// Build the header pattern to find ALL matching headers
-	// Headers in markdown: # Title, ## Title, etc.
-	const headerPrefix = '#'.repeat(headerLevel);
-	const headerPattern = new RegExp(
-		`^${headerPrefix}\\s+${escapeRegExp(headerText)}\\s*$`,
-		'gm'
-	);
-
-	// Find all matches and get the one at headerIndex
-	const matches = [...content.matchAll(headerPattern)];
-	if (matches.length === 0) {
-		return validationError(`Header not found: ${headerPrefix} ${headerText}`, 'headerText');
-	}
-	if (headerIndex >= matches.length) {
-		return validationError(`Header index ${headerIndex} out of range (found ${matches.length} matches)`, 'headerIndex');
-	}
-
-	const match = matches[headerIndex];
-	if (match.index === undefined) {
-		return validationError(`Header match has no index`, 'headerText');
-	}
-
 	// Build the annotation callout (Obsidian renders [!review] with styled background)
 	// Format: > [!review] Boss's Feedback: text
-	const annotation = `> [!review] ${feedback.trim()}\n\n`;
+	const annotation = `> [!review] ${feedback.trim()}`;
 
-	// Insert annotation before the header
-	const beforeHeader = content.slice(0, match.index);
-	const headerAndAfter = content.slice(match.index);
-	const newContent = beforeHeader + annotation + headerAndAfter;
+	let newContent: string;
+
+	// Special case: __END__ means append to end of file
+	if (headerText === '__END__') {
+		// Ensure file ends with newlines, then add annotation
+		const trimmedContent = content.trimEnd();
+		newContent = trimmedContent + '\n\n' + annotation + '\n';
+	} else {
+		// Build the header pattern to find ALL matching headers
+		// Headers in markdown: # Title, ## Title, etc.
+		const headerPrefix = '#'.repeat(headerLevel);
+		const headerPattern = new RegExp(
+			`^${headerPrefix}\\s+${escapeRegExp(headerText)}\\s*$`,
+			'gm'
+		);
+
+		// Find all matches and get the one at headerIndex
+		const matches = [...content.matchAll(headerPattern)];
+		if (matches.length === 0) {
+			return validationError(`Header not found: ${headerPrefix} ${headerText}`, 'headerText');
+		}
+		if (headerIndex >= matches.length) {
+			return validationError(`Header index ${headerIndex} out of range (found ${matches.length} matches)`, 'headerIndex');
+		}
+
+		const match = matches[headerIndex];
+		if (match.index === undefined) {
+			return validationError(`Header match has no index`, 'headerText');
+		}
+
+		// Insert annotation before the header
+		const beforeHeader = content.slice(0, match.index);
+		const headerAndAfter = content.slice(match.index);
+		newContent = beforeHeader + annotation + '\n\n' + headerAndAfter;
+	}
 
 	// Write the file back
 	try {

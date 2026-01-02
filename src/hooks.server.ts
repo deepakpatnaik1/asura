@@ -54,26 +54,26 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	/**
 	 * Safe session retrieval with JWT validation
-	 * Calls getUser() to verify JWT is valid before returning session
+	 *
+	 * SECURITY: Validates user with getUser() FIRST (contacts auth server).
+	 * Only after verification do we retrieve session for access tokens.
+	 * The returned user is from getUser() (verified), never from session.user (unverified).
 	 */
 	event.locals.safeGetSession = async () => {
-		const {
-			data: { session }
-		} = await event.locals.supabase.auth.getSession();
-
-		if (!session) {
-			return { session: null, user: null };
-		}
-
+		// First: Verify user with Supabase Auth server (source of truth)
 		const {
 			data: { user },
 			error
 		} = await event.locals.supabase.auth.getUser();
 
-		if (error) {
-			// JWT invalid or expired
+		if (error || !user) {
 			return { session: null, user: null };
 		}
+
+		// User is authenticated - get session for access tokens
+		const {
+			data: { session }
+		} = await event.locals.supabase.auth.getSession();
 
 		return { session, user };
 	};
