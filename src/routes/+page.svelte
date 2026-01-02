@@ -1759,7 +1759,7 @@
 			setTimeout(() => scrollToLastTurn(CHAT_CONFIG), 100);
 		}
 
-		if (showLibrary) loadArticles();
+		await loadArticles(); // Always refresh to update badge count
 		await loadFileCharts();
 		forceCanvas = 'carousel'; // Switch to carousel when content is pasted
 	}
