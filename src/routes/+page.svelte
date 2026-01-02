@@ -1669,6 +1669,18 @@
 		}
 	}
 
+	async function scrollToArticle(articleId: string) {
+		// Find the message that contains this article's content
+		const message = allMessages.find(m => m.ai_response?.includes(`<!--content:${articleId}-->`));
+		if (!message) return;
+
+		// Scroll to the message element
+		const element = document.getElementById(`message-${message.id}`);
+		if (element) {
+			scrollToTurn(CHAT_CONFIG, element, { behavior: 'smooth' });
+		}
+	}
+
 	async function clearAllArticles() {
 		const enabledArticles = articles.filter(a => a.is_enabled);
 		if (enabledArticles.length === 0) return;
@@ -1934,6 +1946,7 @@
 							<UnifiedLibrary
 								{articles}
 								onArticleToggle={toggleArticle}
+								onArticleSelect={scrollToArticle}
 								onArticleRename={renameArticle}
 								onArticleDelete={handleArticleDeleteClick}
 								onArticleStar={starArticle}

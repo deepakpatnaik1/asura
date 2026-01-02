@@ -45,6 +45,7 @@
 		// Articles
 		articles: Article[];
 		onArticleToggle?: (id: string, currentState: boolean) => void;
+		onArticleSelect?: (id: string) => void;
 		onArticleRename?: (id: string, newTitle: string) => void;
 		onArticleDelete: (id: string, event: MouseEvent) => void;
 		onArticleStar?: (id: string, currentState: boolean) => void;
@@ -80,6 +81,7 @@
 	let {
 		articles,
 		onArticleToggle,
+		onArticleSelect,
 		onArticleRename,
 		onArticleDelete,
 		onArticleStar,
@@ -149,6 +151,16 @@
 		event.stopPropagation();
 		if (onArticleToggle) {
 			onArticleToggle(item.id, item.is_enabled ?? false);
+		}
+	}
+
+	function handleArticleRowClick(item: Article, event: MouseEvent) {
+		// Don't trigger if clicking on interactive elements (they have their own handlers)
+		const target = event.target as HTMLElement;
+		if (target.closest('button') || target.closest('input')) return;
+
+		if (onArticleSelect) {
+			onArticleSelect(item.id);
 		}
 	}
 
@@ -312,7 +324,8 @@
 			{/if}
 			<div class="column-items">
 				{#each articles as item (item.id)}
-					<div class="item" class:active={item.is_enabled}>
+					<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+					<div class="item" class:active={item.is_enabled} onclick={(e) => handleArticleRowClick(item, e)}>
 						{#if item.tier === 'canon'}
 							<span class="toggle-spacer"></span>
 						{:else}
@@ -615,6 +628,7 @@
 		border-left: 2px solid transparent;
 		transition: all 0.15s ease;
 		border-bottom: 1px solid hsl(var(--border) / 0.2);
+		cursor: pointer;
 	}
 
 	.item:last-child {
