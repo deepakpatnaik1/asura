@@ -30,6 +30,8 @@ function processInlineFormatting(text: string, accent: string, accentBg: string)
 
 	// Bold
 	result = result.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+	// Strikethrough (accent-colored line for readability)
+	result = result.replace(/~~(.+?)~~/g, `<del style="text-decoration-color: ${accent};">$1</del>`);
 	// Italic (asterisk and underscore) - safe now that code spans are placeholders
 	result = result.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
 	result = result.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
@@ -255,8 +257,9 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 					quoteCodePlaceholders.push(`<code style="${quoteCodeStyle}">${identifier}</code>`);
 					return placeholder;
 				});
-				// Apply inline formatting (bold, italic) - safe now that code spans are placeholders
+				// Apply inline formatting (bold, strikethrough, italic) - safe now that code spans are placeholders
 				formatted = formatted.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+				formatted = formatted.replace(/~~(.+?)~~/g, `<del style="text-decoration-color: ${quoteAccent};">$1</del>`);
 				formatted = formatted.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
 				formatted = formatted.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
 				formatted = formatted.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${quoteAccent}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
@@ -344,6 +347,7 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 				.replace(/</g, '&lt;')
 				.replace(/>/g, '&gt;');
 			rest = rest.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+			rest = rest.replace(/~~(.+?)~~/g, `<del style="text-decoration-color: ${ACCENT};">$1</del>`);
 			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
 			rest = rest.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
 			rest = rest.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em; word-break: break-word;">$1</code>`);
@@ -372,6 +376,7 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 				.replace(/</g, '&lt;')
 				.replace(/>/g, '&gt;');
 			rest = rest.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+			rest = rest.replace(/~~(.+?)~~/g, `<del style="text-decoration-color: ${ACCENT};">$1</del>`);
 			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
 			rest = rest.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
 			rest = rest.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em; word-break: break-word;">$1</code>`);
@@ -426,8 +431,9 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 				headerCodePlaceholders.push(`<code style="${headerCodeStyle}">${identifier}</code>`);
 				return placeholder;
 			});
-			// Process inline formatting (bold, italic) within headers
+			// Process inline formatting (bold, strikethrough, italic) within headers
 			content = content.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+			content = content.replace(/~~(.+?)~~/g, `<del style="text-decoration-color: ${ACCENT};">$1</del>`);
 			content = content.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
 			content = content.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
 			// Restore inline code from placeholders
@@ -464,6 +470,7 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 				.replace(/</g, '&lt;')
 				.replace(/>/g, '&gt;');
 			rest = rest.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+			rest = rest.replace(/~~(.+?)~~/g, `<del style="text-decoration-color: ${ACCENT};">$1</del>`);
 			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
 			rest = rest.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
 			rest = rest.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em; word-break: break-word;">$1</code>`);
@@ -490,6 +497,7 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 				.replace(/</g, '&lt;')
 				.replace(/>/g, '&gt;');
 			rest = rest.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+			rest = rest.replace(/~~(.+?)~~/g, `<del style="text-decoration-color: ${ACCENT};">$1</del>`);
 			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
 			rest = rest.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
 			rest = rest.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em; word-break: break-word;">$1</code>`);
@@ -514,6 +522,7 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 				.replace(/</g, '&lt;')
 				.replace(/>/g, '&gt;');
 			rest = rest.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+			rest = rest.replace(/~~(.+?)~~/g, `<del style="text-decoration-color: ${ACCENT};">$1</del>`);
 			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
 			rest = rest.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
 			rest = rest.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em; word-break: break-word;">$1</code>`);
@@ -544,6 +553,7 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 				.replace(/</g, '&lt;')
 				.replace(/>/g, '&gt;');
 			rest = rest.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+			rest = rest.replace(/~~(.+?)~~/g, `<del style="text-decoration-color: ${ACCENT};">$1</del>`);
 			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
 			rest = rest.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
 			rest = rest.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em; word-break: break-word;">$1</code>`);
@@ -578,8 +588,9 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 				boldUrlPlaceholders.push(url);
 				return placeholder;
 			});
-			// Handle inline formatting in the rest (bold first, then italic with lookbehind)
+			// Handle inline formatting in the rest (bold first, then strikethrough, then italic with lookbehind)
 			rest = rest.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+			rest = rest.replace(/~~(.+?)~~/g, `<del style="text-decoration-color: ${ACCENT};">$1</del>`);
 			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
 			rest = rest.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
 			rest = rest.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em; word-break: break-word;">$1</code>`);
@@ -636,9 +647,11 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 			return placeholder;
 		});
 
-		// Bold first (non-greedy to handle nested italic), then italic
+		// Bold first (non-greedy to handle nested italic), then strikethrough, then italic
 		// Bold uses (.+?) to allow asterisks inside (for nested *italic*)
 		escaped = escaped.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+		// Strikethrough (accent-colored line for readability)
+		escaped = escaped.replace(/~~(.+?)~~/g, `<del style="text-decoration-color: ${ACCENT};">$1</del>`);
 		// Italic: both *text* and _text_ syntax - safe now that code spans are placeholders
 		// Asterisk italic uses (?<!\*) negative lookbehind to avoid matching ** as *
 		escaped = escaped.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
