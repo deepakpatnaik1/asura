@@ -108,10 +108,17 @@ function renderTable(tableMatch: string, accent: string, tableIndex: number): st
 
 /**
  * EXPERIMENT: Raw output with selective formatting
+ * @param overrideAccent - Optional accent color override (used for fenced containers)
+ * @param overrideAccentBg - Optional accent bg override (used for fenced containers)
  */
-export async function renderMarkdown(markdown: string, persona: string = DEFAULT_PERSONA): Promise<string> {
-	const ACCENT = getPersonaAccentColor(persona);
-	const ACCENT_BG = getPersonaAccentBg(persona);
+export async function renderMarkdown(
+	markdown: string,
+	persona: string = DEFAULT_PERSONA,
+	overrideAccent?: string,
+	overrideAccentBg?: string
+): Promise<string> {
+	const ACCENT = overrideAccent || getPersonaAccentColor(persona);
+	const ACCENT_BG = overrideAccentBg || getPersonaAccentBg(persona);
 
 	// Strip content markers (<!--content:uuid-->) used for lazy loading
 	let processed = markdown.replace(/<!--content:[a-f0-9-]+-->\n?/gi, '');
@@ -744,8 +751,8 @@ export async function renderMarkdown(markdown: string, persona: string = DEFAULT
 	for (let i = 0; i < fencedContainers.length; i++) {
 		const { type, innerContent, containerAccent, containerAccentBg } = JSON.parse(fencedContainers[i]);
 
-		// Recursively render the inner content as full markdown
-		const renderedInner = await renderMarkdown(innerContent, persona);
+		// Recursively render inner content using container's colors (not outer persona's)
+		const renderedInner = await renderMarkdown(innerContent, persona, containerAccent, containerAccentBg);
 
 		// Build the styled container
 		const containerStyle = `background: ${containerAccentBg}; border-left: 3px solid ${containerAccent}; padding: 1em; margin: 0.5em 0; border-radius: 0 8px 8px 0;`;
