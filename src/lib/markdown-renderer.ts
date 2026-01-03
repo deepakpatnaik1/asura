@@ -353,12 +353,23 @@ export async function renderMarkdown(
 				.replace(/&/g, '&amp;')
 				.replace(/</g, '&lt;')
 				.replace(/>/g, '&gt;');
+			// Extract inline code as placeholders FIRST (protect from italic processing)
+			const numBoldCodePlaceholders: string[] = [];
+			const numBoldCodeStyle = `background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em; word-break: break-word;`;
+			rest = rest.replace(/`([^`]+)`/g, (_, code) => {
+				const placeholder = `%%NUMBOLDCODE${numBoldCodePlaceholders.length}%%`;
+				numBoldCodePlaceholders.push(`<code style="${numBoldCodeStyle}">${code}</code>`);
+				return placeholder;
+			});
+			rest = rest.replace(/\b([a-zA-Z][a-zA-Z0-9]*_[a-zA-Z0-9_]+)\b/g, (_, identifier) => {
+				const placeholder = `%%NUMBOLDCODE${numBoldCodePlaceholders.length}%%`;
+				numBoldCodePlaceholders.push(`<code style="${numBoldCodeStyle}">${identifier}</code>`);
+				return placeholder;
+			});
 			rest = rest.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 			rest = rest.replace(/~~(.+?)~~/g, `<del style="text-decoration-color: ${ACCENT};">$1</del>`);
 			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
 			rest = rest.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
-			rest = rest.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em; word-break: break-word;">$1</code>`);
-			rest = rest.replace(/\b([a-zA-Z][a-zA-Z0-9]*_[a-zA-Z0-9_]+)\b/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em; word-break: break-word;">$1</code>`);
 			rest = rest.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${ACCENT}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
 			rest = rest.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">$1</a>`);
 			// Auto-link bare URLs (exclude () for parenthetical URLs)
@@ -366,6 +377,10 @@ export async function renderMarkdown(
 				const label = 'link';
 				return `<a href="${url}" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">${label}</a>`;
 			});
+			// Restore inline code from placeholders
+			for (let i = 0; i < numBoldCodePlaceholders.length; i++) {
+				rest = rest.replace(`%%NUMBOLDCODE${i}%%`, numBoldCodePlaceholders[i]);
+			}
 			listIndent = num.length + 2; // "1. " = number + ". "
 			results.push(`<span style="display: flex; margin-left: 1.5em;"><span style="color: ${ACCENT}; font-weight: bold; flex-shrink: 0; margin-right: 0.5em;">${num}.</span><span><strong style="color: ${ACCENT};">${boldText}</strong>${rest}</span></span>`);
 			continue;
@@ -382,12 +397,23 @@ export async function renderMarkdown(
 				.replace(/&/g, '&amp;')
 				.replace(/</g, '&lt;')
 				.replace(/>/g, '&gt;');
+			// Extract inline code as placeholders FIRST (protect from italic processing)
+			const bulletBoldCodePlaceholders: string[] = [];
+			const bulletBoldCodeStyle = `background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em; word-break: break-word;`;
+			rest = rest.replace(/`([^`]+)`/g, (_, code) => {
+				const placeholder = `%%BULBOLDCODE${bulletBoldCodePlaceholders.length}%%`;
+				bulletBoldCodePlaceholders.push(`<code style="${bulletBoldCodeStyle}">${code}</code>`);
+				return placeholder;
+			});
+			rest = rest.replace(/\b([a-zA-Z][a-zA-Z0-9]*_[a-zA-Z0-9_]+)\b/g, (_, identifier) => {
+				const placeholder = `%%BULBOLDCODE${bulletBoldCodePlaceholders.length}%%`;
+				bulletBoldCodePlaceholders.push(`<code style="${bulletBoldCodeStyle}">${identifier}</code>`);
+				return placeholder;
+			});
 			rest = rest.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 			rest = rest.replace(/~~(.+?)~~/g, `<del style="text-decoration-color: ${ACCENT};">$1</del>`);
 			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
 			rest = rest.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
-			rest = rest.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em; word-break: break-word;">$1</code>`);
-			rest = rest.replace(/\b([a-zA-Z][a-zA-Z0-9]*_[a-zA-Z0-9_]+)\b/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em; word-break: break-word;">$1</code>`);
 			rest = rest.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${ACCENT}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
 			rest = rest.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">$1</a>`);
 			// Auto-link bare URLs (not already in markdown link) → pill badge
@@ -395,6 +421,10 @@ export async function renderMarkdown(
 				const label = 'link';
 				return `<a href="${url}" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">${label}</a>`;
 			});
+			// Restore inline code from placeholders
+			for (let i = 0; i < bulletBoldCodePlaceholders.length; i++) {
+				rest = rest.replace(`%%BULBOLDCODE${i}%%`, bulletBoldCodePlaceholders[i]);
+			}
 			listIndent = 2; // "- " = 2 chars
 			results.push(`<span style="display: flex; margin-left: 1.5em;"><span style="color: ${ACCENT}; flex-shrink: 0; margin-right: 0.5em;">◦</span><span><strong style="color: ${ACCENT};">${boldText}</strong>${rest}</span></span>`);
 			continue;
@@ -476,12 +506,23 @@ export async function renderMarkdown(
 				.replace(/&/g, '&amp;')
 				.replace(/</g, '&lt;')
 				.replace(/>/g, '&gt;');
+			// Extract inline code as placeholders FIRST (protect from italic processing)
+			const subBulletCodePlaceholders: string[] = [];
+			const subBulletCodeStyle = `background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em; word-break: break-word;`;
+			rest = rest.replace(/`([^`]+)`/g, (_, code) => {
+				const placeholder = `%%SUBBULCODE${subBulletCodePlaceholders.length}%%`;
+				subBulletCodePlaceholders.push(`<code style="${subBulletCodeStyle}">${code}</code>`);
+				return placeholder;
+			});
+			rest = rest.replace(/\b([a-zA-Z][a-zA-Z0-9]*_[a-zA-Z0-9_]+)\b/g, (_, identifier) => {
+				const placeholder = `%%SUBBULCODE${subBulletCodePlaceholders.length}%%`;
+				subBulletCodePlaceholders.push(`<code style="${subBulletCodeStyle}">${identifier}</code>`);
+				return placeholder;
+			});
 			rest = rest.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 			rest = rest.replace(/~~(.+?)~~/g, `<del style="text-decoration-color: ${ACCENT};">$1</del>`);
 			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
 			rest = rest.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
-			rest = rest.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em; word-break: break-word;">$1</code>`);
-			rest = rest.replace(/\b([a-zA-Z][a-zA-Z0-9]*_[a-zA-Z0-9_]+)\b/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em; word-break: break-word;">$1</code>`);
 			rest = rest.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${ACCENT}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
 			rest = rest.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">$1</a>`);
 			// Auto-link bare URLs (not already in markdown link) → pill badge
@@ -489,6 +530,10 @@ export async function renderMarkdown(
 				const label = 'link';
 				return `<a href="${url}" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">${label}</a>`;
 			});
+			// Restore inline code from placeholders
+			for (let i = 0; i < subBulletCodePlaceholders.length; i++) {
+				rest = rest.replace(`%%SUBBULCODE${i}%%`, subBulletCodePlaceholders[i]);
+			}
 			listIndent = indent.length + 2; // existing indent + "- "
 			results.push(`<span style="display: flex; margin-left: 3em;"><span style="color: ${ACCENT}; flex-shrink: 0; margin-right: 0.5em;">◦</span><span>${rest}</span></span>`);
 			continue;
@@ -503,12 +548,23 @@ export async function renderMarkdown(
 				.replace(/&/g, '&amp;')
 				.replace(/</g, '&lt;')
 				.replace(/>/g, '&gt;');
+			// Extract inline code as placeholders FIRST (protect from italic processing)
+			const subNumCodePlaceholders: string[] = [];
+			const subNumCodeStyle = `background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em; word-break: break-word;`;
+			rest = rest.replace(/`([^`]+)`/g, (_, code) => {
+				const placeholder = `%%SUBNUMCODE${subNumCodePlaceholders.length}%%`;
+				subNumCodePlaceholders.push(`<code style="${subNumCodeStyle}">${code}</code>`);
+				return placeholder;
+			});
+			rest = rest.replace(/\b([a-zA-Z][a-zA-Z0-9]*_[a-zA-Z0-9_]+)\b/g, (_, identifier) => {
+				const placeholder = `%%SUBNUMCODE${subNumCodePlaceholders.length}%%`;
+				subNumCodePlaceholders.push(`<code style="${subNumCodeStyle}">${identifier}</code>`);
+				return placeholder;
+			});
 			rest = rest.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 			rest = rest.replace(/~~(.+?)~~/g, `<del style="text-decoration-color: ${ACCENT};">$1</del>`);
 			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
 			rest = rest.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
-			rest = rest.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em; word-break: break-word;">$1</code>`);
-			rest = rest.replace(/\b([a-zA-Z][a-zA-Z0-9]*_[a-zA-Z0-9_]+)\b/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em; word-break: break-word;">$1</code>`);
 			rest = rest.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${ACCENT}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
 			rest = rest.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">$1</a>`);
 			// Auto-link bare URLs (not already in markdown link) → pill badge
@@ -516,6 +572,10 @@ export async function renderMarkdown(
 				const label = 'link';
 				return `<a href="${url}" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">${label}</a>`;
 			});
+			// Restore inline code from placeholders
+			for (let i = 0; i < subNumCodePlaceholders.length; i++) {
+				rest = rest.replace(`%%SUBNUMCODE${i}%%`, subNumCodePlaceholders[i]);
+			}
 			listIndent = indent.length + num.length + 2; // existing indent + number + ". "
 			results.push(`<span style="display: flex; margin-left: 3em;"><span style="color: ${ACCENT}; flex-shrink: 0; margin-right: 0.5em;">${num}.</span><span>${rest}</span></span>`);
 			continue;
@@ -528,12 +588,23 @@ export async function renderMarkdown(
 				.replace(/&/g, '&amp;')
 				.replace(/</g, '&lt;')
 				.replace(/>/g, '&gt;');
+			// Extract inline code as placeholders FIRST (protect from italic processing)
+			const bulletCodePlaceholders: string[] = [];
+			const bulletCodeStyle = `background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em; word-break: break-word;`;
+			rest = rest.replace(/`([^`]+)`/g, (_, code) => {
+				const placeholder = `%%BULLETCODE${bulletCodePlaceholders.length}%%`;
+				bulletCodePlaceholders.push(`<code style="${bulletCodeStyle}">${code}</code>`);
+				return placeholder;
+			});
+			rest = rest.replace(/\b([a-zA-Z][a-zA-Z0-9]*_[a-zA-Z0-9_]+)\b/g, (_, identifier) => {
+				const placeholder = `%%BULLETCODE${bulletCodePlaceholders.length}%%`;
+				bulletCodePlaceholders.push(`<code style="${bulletCodeStyle}">${identifier}</code>`);
+				return placeholder;
+			});
 			rest = rest.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 			rest = rest.replace(/~~(.+?)~~/g, `<del style="text-decoration-color: ${ACCENT};">$1</del>`);
 			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
 			rest = rest.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
-			rest = rest.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em; word-break: break-word;">$1</code>`);
-			rest = rest.replace(/\b([a-zA-Z][a-zA-Z0-9]*_[a-zA-Z0-9_]+)\b/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em; word-break: break-word;">$1</code>`);
 			rest = rest.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${ACCENT}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
 			// Reddit subreddit pattern: "r/Name (https://reddit.com/r/...)" → single badge
 			rest = rest.replace(/r\/\w+\s*\(https?:\/\/(?:www\.)?reddit\.com\/r\/(\w+)\/?(?:\?[^)]*)?\)/gi, (match, sub) => {
@@ -546,6 +617,10 @@ export async function renderMarkdown(
 				const label = 'link';
 				return `<a href="${url}" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">${label}</a>`;
 			});
+			// Restore inline code from placeholders
+			for (let i = 0; i < bulletCodePlaceholders.length; i++) {
+				rest = rest.replace(`%%BULLETCODE${i}%%`, bulletCodePlaceholders[i]);
+			}
 			listIndent = 2; // "- " = 2 chars
 			results.push(`<span style="display: flex; margin-left: 1.5em;"><span style="color: ${ACCENT}; font-weight: bold; flex-shrink: 0; margin-right: 0.5em;">◦</span><span>${rest}</span></span>`);
 			continue;
@@ -559,12 +634,23 @@ export async function renderMarkdown(
 				.replace(/&/g, '&amp;')
 				.replace(/</g, '&lt;')
 				.replace(/>/g, '&gt;');
+			// Extract inline code as placeholders FIRST (protect from italic processing)
+			const numCodePlaceholders: string[] = [];
+			const numCodeStyle = `background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em; word-break: break-word;`;
+			rest = rest.replace(/`([^`]+)`/g, (_, code) => {
+				const placeholder = `%%NUMCODE${numCodePlaceholders.length}%%`;
+				numCodePlaceholders.push(`<code style="${numCodeStyle}">${code}</code>`);
+				return placeholder;
+			});
+			rest = rest.replace(/\b([a-zA-Z][a-zA-Z0-9]*_[a-zA-Z0-9_]+)\b/g, (_, identifier) => {
+				const placeholder = `%%NUMCODE${numCodePlaceholders.length}%%`;
+				numCodePlaceholders.push(`<code style="${numCodeStyle}">${identifier}</code>`);
+				return placeholder;
+			});
 			rest = rest.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 			rest = rest.replace(/~~(.+?)~~/g, `<del style="text-decoration-color: ${ACCENT};">$1</del>`);
 			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
 			rest = rest.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
-			rest = rest.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em; word-break: break-word;">$1</code>`);
-			rest = rest.replace(/\b([a-zA-Z][a-zA-Z0-9]*_[a-zA-Z0-9_]+)\b/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em; word-break: break-word;">$1</code>`);
 			rest = rest.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${ACCENT}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
 			rest = rest.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">$1</a>`);
 			// Auto-link bare URLs (not already in markdown link) → pill badge
@@ -572,6 +658,10 @@ export async function renderMarkdown(
 				const label = 'link';
 				return `<a href="${url}" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">${label}</a>`;
 			});
+			// Restore inline code from placeholders
+			for (let i = 0; i < numCodePlaceholders.length; i++) {
+				rest = rest.replace(`%%NUMCODE${i}%%`, numCodePlaceholders[i]);
+			}
 			listIndent = num.length + 2; // number + ". "
 			results.push(`<span style="display: flex; margin-left: 1.5em;"><span style="color: ${ACCENT}; font-weight: bold; flex-shrink: 0; margin-right: 0.5em;">${num}.</span><span>${rest}</span></span>`);
 			continue;
@@ -595,15 +685,30 @@ export async function renderMarkdown(
 				boldUrlPlaceholders.push(url);
 				return placeholder;
 			});
+			// Extract inline code as placeholders FIRST (protect from italic processing)
+			const boldStartCodePlaceholders: string[] = [];
+			const boldStartCodeStyle = `background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em; word-break: break-word;`;
+			rest = rest.replace(/`([^`]+)`/g, (_, code) => {
+				const placeholder = `%%BOLDSTARTCODE${boldStartCodePlaceholders.length}%%`;
+				boldStartCodePlaceholders.push(`<code style="${boldStartCodeStyle}">${code}</code>`);
+				return placeholder;
+			});
+			rest = rest.replace(/\b([a-zA-Z][a-zA-Z0-9]*_[a-zA-Z0-9_]+)\b/g, (_, identifier) => {
+				const placeholder = `%%BOLDSTARTCODE${boldStartCodePlaceholders.length}%%`;
+				boldStartCodePlaceholders.push(`<code style="${boldStartCodeStyle}">${identifier}</code>`);
+				return placeholder;
+			});
 			// Handle inline formatting in the rest (bold first, then strikethrough, then italic with lookbehind)
 			rest = rest.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 			rest = rest.replace(/~~(.+?)~~/g, `<del style="text-decoration-color: ${ACCENT};">$1</del>`);
 			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
 			rest = rest.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
-			rest = rest.replace(/`([^`]+)`/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em; word-break: break-word;">$1</code>`);
-			rest = rest.replace(/\b([a-zA-Z][a-zA-Z0-9]*_[a-zA-Z0-9_]+)\b/g, `<code style="background: ${CODE_BLOCK_BG}; padding: 2px 6px; border-radius: 3px; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9em; word-break: break-word;">$1</code>`);
 			rest = rest.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${ACCENT}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
 			rest = rest.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">$1</a>`);
+			// Restore inline code from placeholders
+			for (let i = 0; i < boldStartCodePlaceholders.length; i++) {
+				rest = rest.replace(`%%BOLDSTARTCODE${i}%%`, boldStartCodePlaceholders[i]);
+			}
 			// Restore URLs and render as clickable links (full URL as label for readability)
 			for (let i = 0; i < boldUrlPlaceholders.length; i++) {
 				const url = boldUrlPlaceholders[i];
