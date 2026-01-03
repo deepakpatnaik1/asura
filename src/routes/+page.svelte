@@ -1860,7 +1860,11 @@
 	}
 </script>
 
-<div class="chat-container" style="--current-accent: {currentAccentColor}; --current-accent-bg: {currentAccentBg}">
+<script context="module">
+	import { BOSS_ACCENT, BOSS_ACCENT_BG } from '$lib/config/colors';
+</script>
+
+<div class="chat-container" style="--current-accent: {currentAccentColor}; --current-accent-bg: {currentAccentBg}; --boss-accent: {BOSS_ACCENT}; --boss-accent-bg: {BOSS_ACCENT_BG}">
 	<!-- Messages Area -->
 	<div class="messages-area">
 		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
@@ -2332,10 +2336,10 @@
 		gap: 8px;
 		padding: 8px 12px;
 		margin: 12px 0;
-		background: var(--current-accent-bg);
-		border-left: 3px solid var(--current-accent);
+		background: var(--boss-accent-bg);
+		border-left: 3px solid var(--boss-accent);
 		border-radius: 0 6px 6px 0;
-		color: var(--current-accent);
+		color: var(--boss-accent);
 		font-size: 0.85rem;
 		animation: markerPulse 0.3s ease-out;
 		position: relative;
@@ -2352,7 +2356,7 @@
 		transform: translateY(-50%);
 		background: transparent;
 		border: none;
-		color: var(--current-accent);
+		color: var(--boss-accent);
 		font-size: 1.2rem;
 		font-weight: bold;
 		cursor: pointer;
