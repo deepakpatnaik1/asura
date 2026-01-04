@@ -33,8 +33,9 @@ function processInlineFormatting(text: string, accent: string, accentBg: string)
 	// Strikethrough (accent-colored line for readability)
 	result = result.replace(/~~(.+?)~~/g, `<del style="text-decoration-color: ${accent};">$1</del>`);
 	// Italic (asterisk and underscore) - safe now that code spans are placeholders
-	result = result.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
-	result = result.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
+	// Action beats get accent color for visual distinction
+	result = result.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, `<em style="color: ${accent};">$1</em>`);
+	result = result.replace(/(?<!_)_([^_]+)_(?!_)/g, `<em style="color: ${accent};">$1</em>`);
 	// Links
 	result = result.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="color: ${accent}; text-decoration: none;">$1</a>`);
 
@@ -267,8 +268,8 @@ export async function renderMarkdown(
 				// Apply inline formatting (bold, strikethrough, italic) - safe now that code spans are placeholders
 				formatted = formatted.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 				formatted = formatted.replace(/~~(.+?)~~/g, `<del style="text-decoration-color: ${quoteAccent};">$1</del>`);
-				formatted = formatted.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
-				formatted = formatted.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
+				formatted = formatted.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, `<em style="color: ${quoteAccent};">$1</em>`);
+				formatted = formatted.replace(/(?<!_)_([^_]+)_(?!_)/g, `<em style="color: ${quoteAccent};">$1</em>`);
 				formatted = formatted.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${quoteAccent}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
 				formatted = formatted.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${quoteAccentBg}; color: ${quoteAccent}; font-size: 0.85em; text-decoration: none;">$1</a>`);
 				// Restore inline code from placeholders
@@ -301,6 +302,9 @@ export async function renderMarkdown(
 
 	// Track indentation for continuation lines
 	let listIndent = 0;
+
+	// Normalize line endings (AI models sometimes generate CRLF)
+	processed = processed.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 
 	// Process line by line with state tracking
 	const lines = processed.split('\n');
@@ -335,7 +339,7 @@ export async function renderMarkdown(
 				.replace(/</g, '&lt;')
 				.replace(/>/g, '&gt;');
 			// Handle inline italics within bold heading
-			content = content.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+			content = content.replace(/\*([^*]+)\*/g, `<em style="color: ${ACCENT};">$1</em>`);
 			listIndent = 0; // Reset - not a list item
 			results.push(`<strong style="color: ${ACCENT};">${content}</strong>`);
 			continue;
@@ -368,8 +372,8 @@ export async function renderMarkdown(
 			});
 			rest = rest.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 			rest = rest.replace(/~~(.+?)~~/g, `<del style="text-decoration-color: ${ACCENT};">$1</del>`);
-			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
-			rest = rest.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
+			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, `<em style="color: ${ACCENT};">$1</em>`);
+			rest = rest.replace(/(?<!_)_([^_]+)_(?!_)/g, `<em style="color: ${ACCENT};">$1</em>`);
 			rest = rest.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${ACCENT}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
 			rest = rest.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">$1</a>`);
 			// Auto-link bare URLs (exclude () for parenthetical URLs)
@@ -412,8 +416,8 @@ export async function renderMarkdown(
 			});
 			rest = rest.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 			rest = rest.replace(/~~(.+?)~~/g, `<del style="text-decoration-color: ${ACCENT};">$1</del>`);
-			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
-			rest = rest.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
+			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, `<em style="color: ${ACCENT};">$1</em>`);
+			rest = rest.replace(/(?<!_)_([^_]+)_(?!_)/g, `<em style="color: ${ACCENT};">$1</em>`);
 			rest = rest.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${ACCENT}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
 			rest = rest.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">$1</a>`);
 			// Auto-link bare URLs (not already in markdown link) → pill badge
@@ -432,7 +436,8 @@ export async function renderMarkdown(
 
 		// Standalone italic line (action beats) → accent colored italic
 		// Supports both *text* and _text_ syntax
-		const italicMatch = line.match(/^(\*|_)([^*_]+)\1$/);
+		// Allow optional leading/trailing whitespace (common in AI-generated text)
+		const italicMatch = line.match(/^\s*(\*|_)([^*_]+)\1\s*$/);
 		if (italicMatch) {
 			const content = italicMatch[2]
 				.replace(/&/g, '&amp;')
@@ -471,8 +476,8 @@ export async function renderMarkdown(
 			// Process inline formatting (bold, strikethrough, italic) within headers
 			content = content.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 			content = content.replace(/~~(.+?)~~/g, `<del style="text-decoration-color: ${ACCENT};">$1</del>`);
-			content = content.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
-			content = content.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
+			content = content.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, `<em style="color: ${ACCENT};">$1</em>`);
+			content = content.replace(/(?<!_)_([^_]+)_(?!_)/g, `<em style="color: ${ACCENT};">$1</em>`);
 			// Restore inline code from placeholders
 			for (let i = 0; i < headerCodePlaceholders.length; i++) {
 				content = content.replace(`%%HDRCODE${i}%%`, headerCodePlaceholders[i]);
@@ -521,8 +526,8 @@ export async function renderMarkdown(
 			});
 			rest = rest.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 			rest = rest.replace(/~~(.+?)~~/g, `<del style="text-decoration-color: ${ACCENT};">$1</del>`);
-			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
-			rest = rest.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
+			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, `<em style="color: ${ACCENT};">$1</em>`);
+			rest = rest.replace(/(?<!_)_([^_]+)_(?!_)/g, `<em style="color: ${ACCENT};">$1</em>`);
 			rest = rest.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${ACCENT}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
 			rest = rest.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">$1</a>`);
 			// Auto-link bare URLs (not already in markdown link) → pill badge
@@ -563,8 +568,8 @@ export async function renderMarkdown(
 			});
 			rest = rest.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 			rest = rest.replace(/~~(.+?)~~/g, `<del style="text-decoration-color: ${ACCENT};">$1</del>`);
-			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
-			rest = rest.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
+			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, `<em style="color: ${ACCENT};">$1</em>`);
+			rest = rest.replace(/(?<!_)_([^_]+)_(?!_)/g, `<em style="color: ${ACCENT};">$1</em>`);
 			rest = rest.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${ACCENT}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
 			rest = rest.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">$1</a>`);
 			// Auto-link bare URLs (not already in markdown link) → pill badge
@@ -603,8 +608,8 @@ export async function renderMarkdown(
 			});
 			rest = rest.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 			rest = rest.replace(/~~(.+?)~~/g, `<del style="text-decoration-color: ${ACCENT};">$1</del>`);
-			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
-			rest = rest.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
+			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, `<em style="color: ${ACCENT};">$1</em>`);
+			rest = rest.replace(/(?<!_)_([^_]+)_(?!_)/g, `<em style="color: ${ACCENT};">$1</em>`);
 			rest = rest.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${ACCENT}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
 			// Reddit subreddit pattern: "r/Name (https://reddit.com/r/...)" → single badge
 			rest = rest.replace(/r\/\w+\s*\(https?:\/\/(?:www\.)?reddit\.com\/r\/(\w+)\/?(?:\?[^)]*)?\)/gi, (match, sub) => {
@@ -649,8 +654,8 @@ export async function renderMarkdown(
 			});
 			rest = rest.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 			rest = rest.replace(/~~(.+?)~~/g, `<del style="text-decoration-color: ${ACCENT};">$1</del>`);
-			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
-			rest = rest.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
+			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, `<em style="color: ${ACCENT};">$1</em>`);
+			rest = rest.replace(/(?<!_)_([^_]+)_(?!_)/g, `<em style="color: ${ACCENT};">$1</em>`);
 			rest = rest.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${ACCENT}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
 			rest = rest.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">$1</a>`);
 			// Auto-link bare URLs (not already in markdown link) → pill badge
@@ -701,8 +706,8 @@ export async function renderMarkdown(
 			// Handle inline formatting in the rest (bold first, then strikethrough, then italic with lookbehind)
 			rest = rest.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 			rest = rest.replace(/~~(.+?)~~/g, `<del style="text-decoration-color: ${ACCENT};">$1</del>`);
-			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
-			rest = rest.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
+			rest = rest.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, `<em style="color: ${ACCENT};">$1</em>`);
+			rest = rest.replace(/(?<!_)_([^_]+)_(?!_)/g, `<em style="color: ${ACCENT};">$1</em>`);
 			rest = rest.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${ACCENT}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
 			rest = rest.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${ACCENT_BG}; color: ${ACCENT}; font-size: 0.85em; text-decoration: none;">$1</a>`);
 			// Restore inline code from placeholders
@@ -766,9 +771,10 @@ export async function renderMarkdown(
 		escaped = escaped.replace(/~~(.+?)~~/g, `<del style="text-decoration-color: ${ACCENT};">$1</del>`);
 		// Italic: both *text* and _text_ syntax - safe now that code spans are placeholders
 		// Asterisk italic uses (?<!\*) negative lookbehind to avoid matching ** as *
-		escaped = escaped.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
+		// Action beats get accent color for visual distinction
+		escaped = escaped.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, `<em style="color: ${ACCENT};">$1</em>`);
 		// Underscore italic uses (?<!_) negative lookbehind (though __ bold is rare)
-		escaped = escaped.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
+		escaped = escaped.replace(/(?<!_)_([^_]+)_(?!_)/g, `<em style="color: ${ACCENT};">$1</em>`);
 		// Images ![alt](url) → inline image
 		escaped = escaped.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${ACCENT}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
 		// Links [text](url) → pill badge style like tool calls
