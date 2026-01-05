@@ -307,16 +307,13 @@
 		created_at: string;
 	}
 	let articles = $state<Article[]>([]);
-	let isDeletingArticle = $state(false);
 
 	// Confirmation composables
 	const deleteConfirm = createConfirmation();
 	const articleDeleteConfirm = createConfirmation();
 	const chartDeleteConfirm = createConfirmation();
 	const whiteboardDeleteConfirm = createConfirmation();
-	let isDeletingWhiteboard = $state(false);
 	const designerCanvasDeleteConfirm = createConfirmation();
-	let isDeletingDesignerCanvas = $state(false);
 
 	// Total selections for library badge (exclude canon - always injected)
 	const totalLibrarySelections = $derived(
@@ -704,7 +701,6 @@
 	function handleDesignerCanvasDeleteClick(canvasId: string, event: MouseEvent) {
 		event.stopPropagation();
 		designerCanvasDeleteConfirm.start(canvasId, async () => {
-			isDeletingDesignerCanvas = true;
 			const originalCanvases = designerCanvases;
 			designerCanvases = designerCanvases.filter(c => c.id !== canvasId);
 			if (viewingDesignerCanvasId === canvasId) {
@@ -718,8 +714,6 @@
 				}
 			} catch (error) {
 				designerCanvases = originalCanvases;
-			} finally {
-				isDeletingDesignerCanvas = false;
 			}
 		});
 	}
@@ -1671,7 +1665,6 @@
 	function handleWhiteboardDeleteClick(whiteboardId: string, event: MouseEvent) {
 		event.stopPropagation();
 		whiteboardDeleteConfirm.start(whiteboardId, async () => {
-			isDeletingWhiteboard = true;
 			const originalWhiteboards = whiteboards;
 			whiteboards = whiteboards.filter(wb => wb.id !== whiteboardId);
 			// Selection auto-updates via derived when whiteboard is removed from array
@@ -1686,8 +1679,6 @@
 				}
 			} catch (error) {
 				whiteboards = originalWhiteboards;
-			} finally {
-				isDeletingWhiteboard = false;
 			}
 		});
 	}
@@ -1886,8 +1877,6 @@
 	function handleArticleDeleteClick(articleId: string, event: MouseEvent) {
 		event.stopPropagation();
 		articleDeleteConfirm.start(articleId, async () => {
-			isDeletingArticle = true;
-
 			// If we're deleting the watched article, stop watching
 			if (watchedArticleId === articleId) {
 				setWatchedArticle(null);
@@ -1908,8 +1897,6 @@
 				}
 			} catch (error) {
 				articles = originalArticles;
-			} finally {
-				isDeletingArticle = false;
 			}
 		});
 	}
@@ -2109,7 +2096,6 @@
 								onArticleDelete={handleArticleDeleteClick}
 								onArticleStar={starArticle}
 								onArticleClear={clearAllArticles}
-								isDeletingArticle={isDeletingArticle}
 
 								{whiteboards}
 								selectedWhiteboardIds={selectedWhiteboardIds}
@@ -2119,7 +2105,6 @@
 								onWhiteboardDelete={handleWhiteboardDeleteClick}
 								onWhiteboardStar={starWhiteboard}
 								onWhiteboardClear={clearWhiteboardSelection}
-								isDeletingWhiteboard={isDeletingWhiteboard}
 
 								{designerCanvases}
 								selectedDesignerCanvasIds={selectedDesignerCanvasIds}
@@ -2129,7 +2114,6 @@
 								onDesignerCanvasDelete={handleDesignerCanvasDeleteClick}
 								onDesignerCanvasStar={starDesignerCanvas}
 								onDesignerCanvasClear={clearDesignerCanvasSelection}
-								isDeletingDesignerCanvas={isDeletingDesignerCanvas}
 
 								onClose={() => showLibrary = false}
 							/>

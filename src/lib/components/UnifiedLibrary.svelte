@@ -11,7 +11,7 @@
 	 */
 	import { tick } from 'svelte';
 	import { Icon } from 'svelte-icons-pack';
-	import { LuTrash2, LuCheck, LuStar } from 'svelte-icons-pack/lu';
+	import { LuTrash2, LuCheck, LuStar, LuEye } from 'svelte-icons-pack/lu';
 
 	// Types
 	interface Article {
@@ -20,6 +20,7 @@
 		is_enabled?: boolean;
 		is_starred?: boolean;
 		tier?: string;
+		source_path?: string | null; // Set when linked to Obsidian file
 		created_at: string;
 	}
 
@@ -44,13 +45,14 @@
 	interface Props {
 		// Articles
 		articles: Article[];
+		watchedArticleId?: string | null; // Single article being watched for live updates
 		onArticleToggle?: (id: string, currentState: boolean) => void;
+		onArticleWatch?: (id: string | null) => void; // Set/clear watched article
 		onArticleSelect?: (id: string) => void;
 		onArticleRename?: (id: string, newTitle: string) => void;
 		onArticleDelete: (id: string, event: MouseEvent) => void;
 		onArticleStar?: (id: string, currentState: boolean) => void;
 		onArticleClear?: () => void;
-		isDeletingArticle?: boolean;
 
 		// Whiteboards
 		whiteboards: Whiteboard[];
@@ -61,7 +63,6 @@
 		onWhiteboardDelete?: (id: string, event: MouseEvent) => void;
 		onWhiteboardStar?: (id: string, currentState: boolean) => void;
 		onWhiteboardClear?: () => void;
-		isDeletingWhiteboard?: boolean;
 
 		// Designer Canvases
 		designerCanvases?: DesignerCanvas[];
@@ -72,7 +73,6 @@
 		onDesignerCanvasDelete?: (id: string, event: MouseEvent) => void;
 		onDesignerCanvasStar?: (id: string, currentState: boolean) => void;
 		onDesignerCanvasClear?: () => void;
-		isDeletingDesignerCanvas?: boolean;
 
 		// Close handler for click-outside
 		onClose?: () => void;
@@ -80,13 +80,14 @@
 
 	let {
 		articles,
+		watchedArticleId = null,
 		onArticleToggle,
+		onArticleWatch,
 		onArticleSelect,
 		onArticleRename,
 		onArticleDelete,
 		onArticleStar,
 		onArticleClear,
-		isDeletingArticle = false,
 
 		whiteboards,
 		selectedWhiteboardIds,
@@ -96,7 +97,6 @@
 		onWhiteboardDelete,
 		onWhiteboardStar,
 		onWhiteboardClear,
-		isDeletingWhiteboard = false,
 
 		designerCanvases = [],
 		selectedDesignerCanvasIds = [],
@@ -106,7 +106,6 @@
 		onDesignerCanvasDelete,
 		onDesignerCanvasStar,
 		onDesignerCanvasClear,
-		isDeletingDesignerCanvas = false,
 		onClose
 	}: Props = $props();
 
@@ -199,6 +198,15 @@
 		event.stopPropagation();
 		if (onArticleStar) {
 			onArticleStar(item.id, item.is_starred ?? false);
+		}
+	}
+
+	function handleArticleWatch(item: Article, event: MouseEvent) {
+		event.stopPropagation();
+		if (onArticleWatch) {
+			// Toggle: if already watched, stop; otherwise watch this one
+			const newWatchId = watchedArticleId === item.id ? null : item.id;
+			onArticleWatch(newWatchId);
 		}
 	}
 
@@ -366,11 +374,22 @@
 						>
 							<Icon src={LuStar} size="11" />
 						</button>
+						{#if item.source_path}
+							<button
+								class="watch-btn"
+								class:active={watchedArticleId === item.id}
+								onclick={(e) => handleArticleWatch(item, e)}
+								title={watchedArticleId === item.id ? 'Stop watching' : 'Watch for live updates'}
+							>
+								<Icon src={LuEye} size="11" />
+							</button>
+						{:else}
+							<span class="watch-spacer"></span>
+						{/if}
 						<button
 							class="delete-btn"
 							onclick={(e) => onArticleDelete(item.id, e)}
 							title="Delete"
-							disabled={isDeletingArticle}
 						>
 							<Icon src={LuTrash2} size="11" />
 						</button>
@@ -434,7 +453,6 @@
 								class="delete-btn"
 								onclick={(e) => onWhiteboardDelete(wb.id, e)}
 								title="Delete"
-								disabled={isDeletingWhiteboard}
 							>
 								<Icon src={LuTrash2} size="11" />
 							</button>
@@ -499,7 +517,6 @@
 								class="delete-btn"
 								onclick={(e) => onDesignerCanvasDelete(canvas.id, e)}
 								title="Delete"
-								disabled={isDeletingDesignerCanvas}
 							>
 								<Icon src={LuTrash2} size="11" />
 							</button>
@@ -761,6 +778,43 @@
 		fill: var(--boss-accent);
 	}
 
+	.watch-btn {
+		flex-shrink: 0;
+		width: 20px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: transparent;
+		border: none;
+		color: hsl(var(--muted-foreground));
+		cursor: pointer;
+		transition: all 0.15s ease;
+		opacity: 0;
+	}
+
+	.item:hover .watch-btn {
+		opacity: 0.5;
+	}
+
+	.watch-btn:hover {
+		opacity: 1;
+		color: var(--boss-accent);
+	}
+
+	.watch-btn.active {
+		opacity: 1;
+		color: var(--boss-accent);
+	}
+
+	.watch-btn.active :global(svg) {
+		fill: var(--boss-accent);
+	}
+
+	.watch-spacer {
+		flex-shrink: 0;
+		width: 20px;
+	}
+
 	.delete-btn {
 		flex-shrink: 0;
 		width: 24px;
@@ -782,10 +836,5 @@
 	.delete-btn:hover {
 		background: rgba(239, 68, 68, 0.1);
 		color: rgb(239, 68, 68);
-	}
-
-	.delete-btn:disabled {
-		opacity: 0.3;
-		cursor: not-allowed;
 	}
 </style>

@@ -21,14 +21,13 @@
 
 	interface Props {
 		items: ContentItem[];
-		isDeleting: boolean;
 		onToggle?: (itemId: string, currentState: boolean) => void;
 		onRename?: (itemId: string, newTitle: string) => void;
 		onDelete: (itemId: string, event: MouseEvent) => void;
 		onClear?: () => void;
 	}
 
-	let { items, isDeleting, onToggle, onRename, onDelete, onClear }: Props = $props();
+	let { items, onToggle, onRename, onDelete, onClear }: Props = $props();
 
 	// Check if there's anything to clear (any enabled items)
 	const hasSelection = $derived(items.some(item => item.is_enabled));
@@ -137,7 +136,6 @@
 					class="delete-btn"
 					onclick={(e) => onDelete(item.id, e)}
 					title="Delete"
-					disabled={isDeleting}
 				>
 					<Icon src={LuTrash2} size="11" />
 				</button>
@@ -313,10 +311,5 @@
 	.delete-btn:hover {
 		background: rgba(239, 68, 68, 0.1);
 		color: rgb(239, 68, 68);
-	}
-
-	.delete-btn:disabled {
-		opacity: 0.3;
-		cursor: not-allowed;
 	}
 </style>
