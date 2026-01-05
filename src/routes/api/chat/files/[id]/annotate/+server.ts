@@ -86,6 +86,48 @@ export const POST: RequestHandler = async ({ params, request, locals: { safeGetS
 		// Ensure file ends with newlines, then add annotation
 		const trimmedContent = content.trimEnd();
 		newContent = trimmedContent + '\n\n' + annotation + '\n';
+	} else if (headerText === '__FENCED__') {
+		// Insert AFTER the Nth fenced container (:::type\n...\n:::)
+		// Find all fenced containers and get the one at headerIndex
+		const fencedPattern = /^:::(red|blue|boss|review)\n[\s\S]*?^:::$/gm;
+		const matches = [...content.matchAll(fencedPattern)];
+		if (matches.length === 0) {
+			return validationError('No fenced containers found in file', 'headerText');
+		}
+		if (headerIndex >= matches.length) {
+			return validationError(`Fenced container index ${headerIndex} out of range (found ${matches.length} containers)`, 'headerIndex');
+		}
+
+		const match = matches[headerIndex];
+		if (match.index === undefined) {
+			return validationError('Fenced container match has no index', 'headerText');
+		}
+
+		// Insert annotation AFTER the fenced container (after the closing :::)
+		const endOfFenced = match.index + match[0].length;
+		const beforeFenced = content.slice(0, endOfFenced);
+		const afterFenced = content.slice(endOfFenced);
+		newContent = beforeFenced + '\n\n' + annotation + afterFenced;
+	} else if (headerText === '__BEFORE_FENCED__') {
+		// Insert BEFORE the Nth fenced container
+		const fencedPattern = /^:::(red|blue|boss|review)\n[\s\S]*?^:::$/gm;
+		const matches = [...content.matchAll(fencedPattern)];
+		if (matches.length === 0) {
+			return validationError('No fenced containers found in file', 'headerText');
+		}
+		if (headerIndex >= matches.length) {
+			return validationError(`Fenced container index ${headerIndex} out of range (found ${matches.length} containers)`, 'headerIndex');
+		}
+
+		const match = matches[headerIndex];
+		if (match.index === undefined) {
+			return validationError('Fenced container match has no index', 'headerText');
+		}
+
+		// Insert annotation BEFORE the fenced container
+		const beforeFenced = content.slice(0, match.index);
+		const fencedAndAfter = content.slice(match.index);
+		newContent = beforeFenced + annotation + '\n\n' + fencedAndAfter;
 	} else if (headerText === '__DIVIDER__') {
 		// Special case: insert before a horizontal rule (---, ***, or ___)
 		// These are dividers in markdown that render as <hr> in HTML

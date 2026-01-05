@@ -15,6 +15,7 @@
 	import CanvasContainer from '$lib/components/CanvasContainer.svelte';
 	import PasteArea from '$lib/components/PasteArea.svelte';
 	import UnifiedLibrary from '$lib/components/UnifiedLibrary.svelte';
+	import ServerStatusLED from '$lib/components/ServerStatusLED.svelte';
 	
 	// Receive loaded data from server
 	let { data } = $props();
@@ -1200,11 +1201,12 @@
 	/**
 	 * Handle click in messages area when annotation mode is active.
 	 * Finds the nearest following section boundary (header or divider) and places a marker there.
+	 * If click is inside a fenced container (:::red/blue/boss), escapes to place marker after it.
 	 */
 	function handleAnnotationClick(event: MouseEvent) {
 		if (!annotationMode) return;
 
-		const target = event.target as HTMLElement;
+		let target = event.target as HTMLElement;
 
 		// Don't annotate if clicking on buttons, interactive elements, or dismiss button
 		if (target.closest('button') || target.closest('a') || target.closest('.annotation-dismiss')) return;
@@ -1227,14 +1229,26 @@
 
 		const articleId = contentMatch[1];
 
-		// Get all section boundaries: headers AND dividers (hr or flourish-divider class)
-		const allBoundaries = messageText.querySelectorAll('h1, h2, h3, h4, h5, h6, hr, .flourish-divider');
+		// Check if click is inside a fenced container (:::red/blue/boss)
+		// If so, escape to the container itself so marker goes AFTER it
+		const fencedContainer = target.closest('.fenced-container') as HTMLElement | null;
+		let clickedFencedContainer: HTMLElement | null = null;
+		if (fencedContainer && messageText.contains(fencedContainer)) {
+			clickedFencedContainer = fencedContainer;
+			// Use the fenced container as the reference point for finding boundaries
+			target = fencedContainer;
+		}
+
+		// Get all section boundaries: headers, dividers, AND fenced containers
+		const allBoundaries = messageText.querySelectorAll('h1, h2, h3, h4, h5, h6, hr, .flourish-divider, .fenced-container');
 		if (allBoundaries.length === 0) return;
 
-		// Find the NEXT boundary after the clicked element in document order
+		// Find the NEXT boundary after the reference element in document order
 		let boundary: HTMLElement | null = null;
 		let isEndOfDocument = false;
 		for (const b of allBoundaries) {
+			// Skip the clicked fenced container itself when looking for next boundary
+			if (b === clickedFencedContainer) continue;
 			const position = target.compareDocumentPosition(b);
 			if (position & Node.DOCUMENT_POSITION_FOLLOWING) {
 				boundary = b as HTMLElement;
@@ -1265,8 +1279,11 @@
 			clearAnnotationMarker();
 		});
 
-		// Insert marker: before boundary if found, after last content element if end of document
-		if (isEndOfDocument) {
+		// Insert marker: special handling for fenced containers, otherwise before boundary or at end
+		if (clickedFencedContainer) {
+			// Always insert marker immediately AFTER the clicked fenced container
+			clickedFencedContainer.parentElement?.insertBefore(marker, clickedFencedContainer.nextSibling);
+		} else if (isEndOfDocument) {
 			// Find the last content element in the message
 			const lastElement = messageText.lastElementChild as HTMLElement;
 			if (lastElement) {
@@ -1285,7 +1302,19 @@
 		let headerLevel: number;
 		let headerIndex: number;
 
-		if (isEndOfDocument) {
+		if (clickedFencedContainer) {
+			// Clicked on a fenced container - insert AFTER it
+			// Count which fenced container this is (0-indexed)
+			headerText = '__FENCED__';
+			headerLevel = 0;
+			headerIndex = 0;
+			for (const b of allBoundaries) {
+				if (b === clickedFencedContainer) break;
+				if (b.classList.contains('fenced-container')) {
+					headerIndex++;
+				}
+			}
+		} else if (isEndOfDocument) {
 			// Special marker for end-of-document: append to file
 			headerText = '__END__';
 			headerLevel = 0;
@@ -1298,6 +1327,18 @@
 			for (const b of allBoundaries) {
 				if (b === boundary) break;
 				if (b.tagName === 'HR' || b.classList.contains('flourish-divider')) {
+					headerIndex++;
+				}
+			}
+		} else if (boundary?.classList.contains('fenced-container')) {
+			// Next boundary is a fenced container - insert before it means after the previous content
+			// For now, use the next fenced container as the target
+			headerText = '__BEFORE_FENCED__';
+			headerLevel = 0;
+			headerIndex = 0;
+			for (const b of allBoundaries) {
+				if (b === boundary) break;
+				if (b.classList.contains('fenced-container')) {
 					headerIndex++;
 				}
 			}
@@ -1315,8 +1356,8 @@
 			headerIndex = 0;
 			for (const b of allBoundaries) {
 				if (b === boundary) break;
-				// Skip dividers when counting headers
-				if (b.tagName === 'HR' || b.classList.contains('flourish-divider')) continue;
+				// Skip dividers and fenced containers when counting headers
+				if (b.tagName === 'HR' || b.classList.contains('flourish-divider') || b.classList.contains('fenced-container')) continue;
 				const bContentSpan = b.querySelector('span:last-child');
 				const bText = bContentSpan?.textContent?.trim() || b.textContent?.trim();
 				if (bText === headerText && b.tagName === boundary.tagName) {
@@ -1403,24 +1444,6 @@
 		const messageText = messageElement.querySelector('.message-text');
 		if (!messageText) return;
 
-		// Find the header by text content and index (use last span to skip H3 label)
-		const allHeaders = messageText.querySelectorAll(`h${headerLevel}`);
-		let header: HTMLElement | null = null;
-		let matchCount = 0;
-		for (const h of allHeaders) {
-			const contentSpan = h.querySelector('span:last-child');
-			const hText = contentSpan?.textContent?.trim() || h.textContent?.trim();
-			if (hText === headerText) {
-				if (matchCount === headerIndex) {
-					header = h as HTMLElement;
-					break;
-				}
-				matchCount++;
-			}
-		}
-
-		if (!header) return;
-
 		// Create marker element with dismiss button
 		const marker = document.createElement('div');
 		marker.className = 'annotation-marker';
@@ -1435,7 +1458,63 @@
 			clearAnnotationMarker();
 		});
 
-		header.parentElement?.insertBefore(marker, header);
+		let targetElement: HTMLElement | null = null;
+		let insertAfter = false;
+
+		if (headerText === '__FENCED__') {
+			// Find the Nth fenced container and insert marker after it
+			const fencedContainers = messageText.querySelectorAll('.fenced-container');
+			if (headerIndex < fencedContainers.length) {
+				targetElement = fencedContainers[headerIndex] as HTMLElement;
+				insertAfter = true;
+			}
+		} else if (headerText === '__BEFORE_FENCED__') {
+			// Find the Nth fenced container and insert marker before it
+			const fencedContainers = messageText.querySelectorAll('.fenced-container');
+			if (headerIndex < fencedContainers.length) {
+				targetElement = fencedContainers[headerIndex] as HTMLElement;
+				insertAfter = false;
+			}
+		} else if (headerText === '__DIVIDER__') {
+			// Find the Nth divider
+			const dividers = messageText.querySelectorAll('hr, .flourish-divider');
+			if (headerIndex < dividers.length) {
+				targetElement = dividers[headerIndex] as HTMLElement;
+				insertAfter = false;
+			}
+		} else if (headerText === '__END__') {
+			// Insert at end of content
+			const lastElement = messageText.lastElementChild as HTMLElement;
+			if (lastElement) {
+				targetElement = lastElement;
+				insertAfter = true;
+			}
+		} else {
+			// Header-based target
+			const allHeaders = messageText.querySelectorAll(`h${headerLevel}`);
+			let matchCount = 0;
+			for (const h of allHeaders) {
+				const contentSpan = h.querySelector('span:last-child');
+				const hText = contentSpan?.textContent?.trim() || h.textContent?.trim();
+				if (hText === headerText) {
+					if (matchCount === headerIndex) {
+						targetElement = h as HTMLElement;
+						insertAfter = false;
+						break;
+					}
+					matchCount++;
+				}
+			}
+		}
+
+		if (!targetElement) return;
+
+		// Insert marker before or after target element
+		if (insertAfter) {
+			targetElement.parentElement?.insertBefore(marker, targetElement.nextSibling);
+		} else {
+			targetElement.parentElement?.insertBefore(marker, targetElement);
+		}
 
 		annotationTarget = {
 			headerText,
@@ -1992,9 +2071,7 @@
 						onSelect={selectPersona}
 					/>
 
-					<div class="icon-group">
-						<ScrollControls config={CHAT_CONFIG} />
-					</div>
+					<ScrollControls config={CHAT_CONFIG} />
 
 					<button
 						class="control-btn hit-target"
@@ -2010,6 +2087,7 @@
 						<Icon src={LuFilePenLine} size="11" />
 					</button>
 
+					<ServerStatusLED />
 				</div>
 				<textarea
 					placeholder="Type your message..."
@@ -2212,12 +2290,6 @@
 		color: var(--current-accent);
 	}
 
-	.icon-group {
-		display: flex;
-		align-items: center;
-		gap: var(--action-icon-gap);
-		margin-left: 12px;
-	}
 
 	.input-container {
 		position: absolute;

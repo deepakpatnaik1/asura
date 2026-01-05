@@ -865,9 +865,9 @@ export async function renderMarkdown(
 		// Recursively render inner content using container's colors (not outer persona's)
 		const renderedInner = await renderMarkdown(innerContent, persona, containerAccent, containerAccentBg);
 
-		// Build the styled container
+		// Build the styled container with class for annotation targeting
 		const containerStyle = `background: ${containerAccentBg}; border-left: 3px solid ${containerAccent}; padding: 1em; margin: 0.5em 0; border-radius: 0 8px 8px 0;`;
-		const containerHtml = `<div style="${containerStyle}">${renderedInner}</div>`;
+		const containerHtml = `<div class="fenced-container fenced-${type}" style="${containerStyle}">${renderedInner}</div>`;
 
 		processed = processed.replace(`__FENCED_${i}__`, containerHtml);
 	}

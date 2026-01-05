@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { Icon } from 'svelte-icons-pack';
-	import { LuChevronDown } from 'svelte-icons-pack/lu';
 	import { getPersonaAccentColor } from '$lib/config/colors';
 	import { PERSONA_NAMES, PERSONAS } from '$lib/config/personas';
 
@@ -64,9 +62,6 @@
 		style="--selected-accent: {accentColor}"
 	>
 		<span class="persona-name">{displayName}</span>
-		{#if interactive}
-			<Icon src={LuChevronDown} size="11" />
-		{/if}
 	</div>
 
 	{#if isOpen && interactive}
@@ -96,8 +91,6 @@
 	.persona-dropdown {
 		display: flex;
 		align-items: center;
-		gap: 4px;
-		margin-left: 4px;
 		opacity: 0.7;
 		transition: opacity 0.2s;
 		padding: 4px;
@@ -121,6 +114,7 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		width: 52px; /* Fixed width for longest name (Gunnar/Samara/Alicja) */
+		text-align: center;
 	}
 
 	.dropdown-menu {
