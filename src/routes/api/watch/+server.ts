@@ -13,8 +13,8 @@ import { sseHeaders } from '$lib/api/stream-protocol';
 import { validationError } from '$lib/api/errors';
 import { createLogger } from '$lib/api/logger';
 
-/** Debounce delay to avoid rapid-fire updates */
-const DEBOUNCE_MS = 100;
+/** Debounce delay to avoid rapid-fire updates (500ms = patient, waits for typing to settle) */
+const DEBOUNCE_MS = 500;
 
 /** Keep-alive interval */
 const KEEPALIVE_MS = 10000;
@@ -120,12 +120,17 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 
 			// Initialize chokidar watcher
 			// awaitWriteFinish helps with atomic saves - waits for file to stabilize
+			// Patient settings: 500ms stability, 200ms poll = checks 2.5x/sec instead of 20x/sec
+			log.info('Starting chokidar watcher', {
+				fileCount: pathsToWatch.length,
+				samplePath: pathsToWatch[0]?.slice(-60)
+			});
 			const watcher = chokidar.watch(pathsToWatch, {
 				persistent: true,
 				ignoreInitial: true,
 				awaitWriteFinish: {
-					stabilityThreshold: 100,
-					pollInterval: 50
+					stabilityThreshold: 500,
+					pollInterval: 200
 				},
 				// Don't use polling - rely on native FSEvents on macOS
 				usePolling: false
@@ -133,8 +138,12 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 
 			// Handle file changes
 			watcher.on('change', (filePath: string) => {
+				log.info('Chokidar detected change', { filePath: filePath.slice(-50) });
 				const articleId = pathToId.get(filePath);
-				if (!articleId) return;
+				if (!articleId) {
+					log.warn('No article ID for path', { filePath: filePath.slice(-50) });
+					return;
+				}
 
 				// Debounce rapid changes
 				const existingTimer = debounceTimers.get(articleId);
@@ -150,6 +159,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 					try {
 						// Read fresh content
 						if (!existsSync(filePath)) {
+							log.warn('File deleted during watch', { articleId: articleId.slice(0,8) });
 							safeEnqueue(`data: ${JSON.stringify({
 								type: 'error',
 								article_id: articleId,
@@ -159,13 +169,17 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 						}
 
 						const content = readFileSync(filePath, 'utf-8');
+						log.info('Sending SSE update', { articleId: articleId.slice(0,8), contentLength: content.length });
 
 						// Emit update event
-						safeEnqueue(`data: ${JSON.stringify({
+						const sent = safeEnqueue(`data: ${JSON.stringify({
 							type: 'update',
 							article_id: articleId,
 							content
 						})}\n\n`);
+						if (!sent) {
+							log.warn('SSE update failed - stream closed', { articleId: articleId.slice(0,8) });
+						}
 					} catch (readError) {
 						safeEnqueue(`data: ${JSON.stringify({
 							type: 'error',
@@ -174,6 +188,11 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 						})}\n\n`);
 					}
 				}, DEBOUNCE_MS));
+			});
+
+			// Log when watcher is ready
+			watcher.on('ready', () => {
+				log.info('Chokidar watcher ready', { watchedPaths: pathsToWatch.length });
 			});
 
 			// Handle watcher errors

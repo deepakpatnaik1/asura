@@ -303,6 +303,7 @@
 		is_enabled: boolean;
 		tier?: string;
 		pending_annotation?: PendingAnnotation | null;
+		source_path?: string | null; // Set when linked to Obsidian file
 		created_at: string;
 	}
 	let articles = $state<Article[]>([]);
@@ -323,31 +324,63 @@
 	);
 
 	// File watching for live-linked Obsidian files
+	// STRICT: Only ONE file is watched at a time. Set via Content Library toggle.
+	// Persisted to user_settings.watched_article_id
+	let watchedArticleId: string | null = $state(data.watchedArticleId || null);
 	let watchAbortController: AbortController | null = null;
+	let watchRetryCount = 0;
+	let lastOwnWriteTime = 0; // Track when we write to avoid echo chamber
 
 	/**
-	 * Extract article IDs from content markers in messages
+	 * Set which article to watch. Only one at a time.
+	 * Automatically restarts the file watcher.
+	 * Persists to user_settings for page reload survival.
 	 */
-	function getLinkedArticleIds(): string[] {
-		const markerRegex = /<!--content:([a-f0-9-]+)-->/g;
-		const ids = new Set<string>();
-		for (const msg of allMessages) {
-			let match;
-			while ((match = markerRegex.exec(msg.ai_response || '')) !== null) {
-				ids.add(match[1]);
-			}
+	function setWatchedArticle(articleId: string | null) {
+		const wasWatching = watchedArticleId;
+		watchedArticleId = articleId;
+		console.log('[SSE] Watched article changed:', wasWatching?.slice(0,8), '->', articleId?.slice(0,8));
+
+		// Persist to database (fire and forget)
+		fetch('/api/settings', {
+			method: 'PUT',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ watched_article_id: articleId })
+		}).catch(err => console.error('Failed to persist watched article:', err));
+
+		// Restart watching with new target
+		stopFileWatching();
+		if (articleId) {
+			startFileWatching();
 		}
-		return Array.from(ids);
 	}
 
 	/**
-	 * Start watching linked files via SSE
-	 * Auto-reconnects on connection drop (server restart, network issues)
+	 * Mark that we just wrote to a file (to ignore the echo from file watcher)
+	 */
+	function markOwnWrite() {
+		lastOwnWriteTime = Date.now();
+	}
+
+	/**
+	 * Check if a file update is likely our own echo (within 2 seconds of our write)
+	 */
+	function isOwnWriteEcho(): boolean {
+		return Date.now() - lastOwnWriteTime < 2000;
+	}
+
+	/**
+	 * Start watching the single watched file via SSE
+	 * Connection stays open until explicitly stopped or server dies
+	 * Only reconnects on actual network errors, with exponential backoff
 	 */
 	async function startFileWatching() {
-		const articleIds = getLinkedArticleIds();
-		console.log('[SSE] Starting watch for', articleIds.length, 'files');
-		if (articleIds.length === 0) return;
+		if (!watchedArticleId) {
+			console.log('[SSE] No article to watch');
+			return;
+		}
+		const articleIds = [watchedArticleId];
+		console.log('[SSE] Starting watch for:', watchedArticleId.slice(0,8));
 
 		// Abort any existing connection
 		stopFileWatching();
@@ -360,10 +393,14 @@
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ article_ids: articleIds }),
-				signal
+				signal,
+				credentials: 'same-origin'
 			});
 
 			if (!response.ok || !response.body) return;
+
+			// Connection successful - reset retry count
+			watchRetryCount = 0;
 
 			const reader = response.body.getReader();
 			const decoder = new TextDecoder();
@@ -384,6 +421,11 @@
 							const event = JSON.parse(line.slice(6));
 							console.log('[SSE]', event.type, event.article_id?.slice(0,8) || '');
 							if (event.type === 'update' && event.article_id && event.content) {
+								// Skip updates that are echoes of our own writes
+								if (isOwnWriteEcho()) {
+									console.log('[SSE] Ignoring own write echo');
+									continue;
+								}
 								// Update the message content in place
 								allMessages = allMessages.map(msg => {
 									if (msg.ai_response?.includes(`<!--content:${event.article_id}-->`)) {
@@ -402,14 +444,20 @@
 				}
 			}
 
-			// Stream ended normally (server closed) - reconnect after delay
+			// Stream ended - reconnect after delay (unless we intentionally stopped)
 			if (!signal.aborted) {
-				setTimeout(() => startFileWatching(), 3000);
+				console.log('[SSE] Stream ended, reconnecting in 5s');
+				setTimeout(() => startFileWatching(), 5000);
 			}
-		} catch {
-			// Connection failed - reconnect after delay (unless intentionally aborted)
-			if (!watchAbortController?.signal.aborted) {
-				setTimeout(() => startFileWatching(), 3000);
+		} catch (error) {
+			// Connection failed - only reconnect if we didn't intentionally abort
+			// Use the captured `signal` (not watchAbortController) to check THIS connection's state
+			if (!signal.aborted) {
+				// Exponential backoff: 5s, 10s, 20s, 40s, max 60s
+				watchRetryCount++;
+				const backoffMs = Math.min(5000 * Math.pow(2, watchRetryCount - 1), 60000);
+				console.log(`[SSE] Connection error, retry #${watchRetryCount} in ${backoffMs/1000}s`);
+				setTimeout(() => startFileWatching(), backoffMs);
 			}
 		}
 	}
@@ -422,6 +470,7 @@
 			watchAbortController.abort();
 			watchAbortController = null;
 		}
+		watchRetryCount = 0;
 	}
 
 	let pendingTimeouts: number[] = [];
@@ -852,8 +901,10 @@
 			await Promise.all([loadCharts(), loadWhiteboards(), loadDesignerCanvases(), loadArticles()]);
 			// Ensure ALL articles have message turns (handles Gettysburg workflow, direct SQL inserts, etc.)
 			await ensureAllArticlesHaveEntries();
-			// Start watching linked Obsidian files for live updates
-			startFileWatching();
+			// Resume file watching if there's a persisted watched article
+			if (watchedArticleId) {
+				startFileWatching();
+			}
 			// Restore annotation marker if one was saved (must run after DOM is rendered)
 			await tick();
 			restoreAnnotationMarker();
@@ -993,6 +1044,8 @@
 			resetTextareaHeight();
 
 			try {
+				// Mark that we're about to write, so file watcher ignores the echo
+				markOwnWrite();
 				const response = await fetch(`/api/chat/files/${annotationTarget.articleId}/annotate`, {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
@@ -1708,6 +1761,7 @@
 
 		try {
 			if (!currentState) {
+				// Enabling this article (does NOT auto-watch - user must click eye icon)
 				const response = await fetch(`/api/chat/files/${articleId}/open`, { method: 'POST' });
 				if (!response.ok) {
 					articles = articles.map((a) => a.id === articleId ? { ...a, is_enabled: currentState } : a);
@@ -1734,6 +1788,11 @@
 					}
 				}
 			} else {
+				// Disabling this article - if it was being watched, stop watching
+				if (watchedArticleId === articleId) {
+					setWatchedArticle(null);
+				}
+
 				const response = await fetch(`/api/chat/files/${articleId}`, {
 					method: 'PUT',
 					headers: { 'Content-Type': 'application/json' },
@@ -1765,6 +1824,9 @@
 	async function clearAllArticles() {
 		const enabledArticles = articles.filter(a => a.is_enabled);
 		if (enabledArticles.length === 0) return;
+
+		// Stop watching
+		setWatchedArticle(null);
 
 		articles = articles.map(a => ({ ...a, is_enabled: false }));
 
@@ -1825,6 +1887,12 @@
 		event.stopPropagation();
 		articleDeleteConfirm.start(articleId, async () => {
 			isDeletingArticle = true;
+
+			// If we're deleting the watched article, stop watching
+			if (watchedArticleId === articleId) {
+				setWatchedArticle(null);
+			}
+
 			const originalArticles = articles;
 			articles = articles.filter((a) => a.id !== articleId);
 
@@ -1867,8 +1935,8 @@
 
 		await loadArticles(); // Always refresh to update badge count
 
-		// Restart file watching to include the new linked file
-		startFileWatching();
+		// Set the newly pasted file as THE watched file (single-file watching)
+		setWatchedArticle(fileId);
 		await loadFileCharts();
 		forceCanvas = 'carousel'; // Switch to carousel when content is pasted
 	}
@@ -2033,7 +2101,9 @@
 						{#if showLibrary}
 							<UnifiedLibrary
 								{articles}
+								{watchedArticleId}
 								onArticleToggle={toggleArticle}
+								onArticleWatch={setWatchedArticle}
 								onArticleSelect={scrollToArticle}
 								onArticleRename={renameArticle}
 								onArticleDelete={handleArticleDeleteClick}

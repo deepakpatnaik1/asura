@@ -89,7 +89,10 @@ export const settingsUpdateSchema = z.object({
 	compression_uncensored_samara: z.boolean().optional(),
 	compression_uncensored_alicja: z.boolean().optional(),
 	compression_uncensored_eva: z.boolean().optional(),
-	compression_uncensored_ananya: z.boolean().optional()
+	compression_uncensored_ananya: z.boolean().optional(),
+
+	// Live-linked article watch state
+	watched_article_id: z.string().uuid().nullable().optional()
 }).refine(
 	(data) => Object.keys(data).length > 0,
 	{ message: 'At least one field must be provided' }
