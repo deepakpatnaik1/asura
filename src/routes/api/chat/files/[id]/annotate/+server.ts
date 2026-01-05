@@ -75,9 +75,9 @@ export const POST: RequestHandler = async ({ params, request, locals: { safeGetS
 		return databaseError(`Failed to read file: ${article.source_path}`);
 	}
 
-	// Build the annotation callout (Obsidian renders [!review] with styled background)
-	// Format: > [!review] Boss's Feedback: text
-	const annotation = `> [!review] ${feedback.trim()}`;
+	// Build the annotation as a fenced container (same syntax as Red/Blue Claude)
+	// Format: :::boss\ntext\n:::
+	const annotation = `:::boss\n${feedback.trim()}\n:::`;
 
 	let newContent: string;
 
