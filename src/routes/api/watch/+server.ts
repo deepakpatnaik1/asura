@@ -1,10 +1,11 @@
 /**
  * File Watch API - SSE endpoint for live Obsidian file updates
  *
- * POST: Start watching linked files, stream updates when they change
+ * Uses chokidar for reliable file watching on macOS (handles atomic saves)
  */
 
-import { watchFile, unwatchFile, existsSync, readFileSync, statSync } from 'fs';
+import chokidar from 'chokidar';
+import { existsSync, readFileSync } from 'fs';
 import type { RequestHandler } from './$types';
 import { requireAuth } from '$lib/api/require-auth';
 import { parseRequestJson } from '$lib/api/parse-json';
@@ -65,10 +66,29 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		return new Response(stream, { headers: sseHeaders() });
 	}
 
-	// Track watched paths for cleanup
-	const watchedPaths: string[] = [];
+	// Build path -> article_id map for quick lookup
+	const pathToId = new Map<string, string>();
+	const pathsToWatch: string[] = [];
 
-	// Create SSE stream with file watchers
+	for (const article of linkedArticles) {
+		if (existsSync(article.source_path)) {
+			pathToId.set(article.source_path, article.id);
+			pathsToWatch.push(article.source_path);
+		}
+	}
+
+	if (pathsToWatch.length === 0) {
+		const stream = new ReadableStream({
+			start(controller) {
+				const encoder = new TextEncoder();
+				controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done', message: 'No valid files to watch' })}\n\n`));
+				controller.close();
+			}
+		});
+		return new Response(stream, { headers: sseHeaders() });
+	}
+
+	// Create SSE stream with chokidar file watcher
 	const stream = new ReadableStream({
 		start(controller) {
 			const encoder = new TextEncoder();
@@ -89,7 +109,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			}
 
 			// Send initial connection success
-			safeEnqueue(`data: ${JSON.stringify({ type: 'connected', watching: linkedArticles.length })}\n\n`);
+			safeEnqueue(`data: ${JSON.stringify({ type: 'connected', watching: pathsToWatch.length })}\n\n`);
 
 			// Keep-alive heartbeat
 			const keepAlive = setInterval(() => {
@@ -98,76 +118,76 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				}
 			}, KEEPALIVE_MS);
 
-			// Set up watcher for each linked file using watchFile (polls, more reliable on macOS)
-			for (const article of linkedArticles) {
-				const { id, source_path } = article;
+			// Initialize chokidar watcher
+			// awaitWriteFinish helps with atomic saves - waits for file to stabilize
+			const watcher = chokidar.watch(pathsToWatch, {
+				persistent: true,
+				ignoreInitial: true,
+				awaitWriteFinish: {
+					stabilityThreshold: 100,
+					pollInterval: 50
+				},
+				// Don't use polling - rely on native FSEvents on macOS
+				usePolling: false
+			});
 
-				if (!existsSync(source_path)) {
-					continue;
+			// Handle file changes
+			watcher.on('change', (filePath: string) => {
+				const articleId = pathToId.get(filePath);
+				if (!articleId) return;
+
+				// Debounce rapid changes
+				const existingTimer = debounceTimers.get(articleId);
+				if (existingTimer) {
+					clearTimeout(existingTimer);
 				}
 
-				try {
-					// Get initial mtime
-					let lastMtime = statSync(source_path).mtimeMs;
+				debounceTimers.set(articleId, setTimeout(() => {
+					debounceTimers.delete(articleId);
 
-					// watchFile polls the file stat every 500ms
-					watchFile(source_path, { interval: 500 }, (curr, prev) => {
-						// Only trigger if mtime actually changed
-						if (curr.mtimeMs === lastMtime) return;
-						lastMtime = curr.mtimeMs;
+					if (!isStreamOpen) return;
 
-						// Debounce rapid changes
-						const existingTimer = debounceTimers.get(id);
-						if (existingTimer) {
-							clearTimeout(existingTimer);
+					try {
+						// Read fresh content
+						if (!existsSync(filePath)) {
+							safeEnqueue(`data: ${JSON.stringify({
+								type: 'error',
+								article_id: articleId,
+								error: 'File deleted'
+							})}\n\n`);
+							return;
 						}
 
-						debounceTimers.set(id, setTimeout(() => {
-							debounceTimers.delete(id);
+						const content = readFileSync(filePath, 'utf-8');
 
-							if (!isStreamOpen) return;
+						// Emit update event
+						safeEnqueue(`data: ${JSON.stringify({
+							type: 'update',
+							article_id: articleId,
+							content
+						})}\n\n`);
+					} catch (readError) {
+						safeEnqueue(`data: ${JSON.stringify({
+							type: 'error',
+							article_id: articleId,
+							error: 'Failed to read file'
+						})}\n\n`);
+					}
+				}, DEBOUNCE_MS));
+			});
 
-							try {
-								// Read fresh content
-								if (!existsSync(source_path)) {
-									safeEnqueue(`data: ${JSON.stringify({
-										type: 'error',
-										article_id: id,
-										error: 'File deleted'
-									})}\n\n`);
-									return;
-								}
-
-								const content = readFileSync(source_path, 'utf-8');
-
-								// Emit update event
-								safeEnqueue(`data: ${JSON.stringify({
-									type: 'update',
-									article_id: id,
-									content
-								})}\n\n`);
-							} catch (readError) {
-								safeEnqueue(`data: ${JSON.stringify({
-									type: 'error',
-									article_id: id,
-									error: 'Failed to read file'
-								})}\n\n`);
-							}
-						}, DEBOUNCE_MS));
-					});
-
-					watchedPaths.push(source_path);
-				} catch {
-					// Skip files that can't be watched
-				}
-			}
+			// Handle watcher errors
+			watcher.on('error', (error: unknown) => {
+				const message = error instanceof Error ? error.message : String(error);
+				log.error('Chokidar watcher error', { error: message });
+			});
 
 			// Cleanup on abort
 			request.signal.addEventListener('abort', () => {
 				isStreamOpen = false;
 				clearInterval(keepAlive);
 				debounceTimers.forEach(timer => clearTimeout(timer));
-				watchedPaths.forEach(path => unwatchFile(path));
+				watcher.close();
 				try {
 					controller.close();
 				} catch {

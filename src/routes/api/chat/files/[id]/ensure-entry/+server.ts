@@ -52,16 +52,17 @@ export const POST: RequestHandler = async ({ params, locals: { safeGetSession, s
 	}
 
 	// Check if superjournal entry already exists
-	const { data: existingEntry } = await supabase
+	// Note: Don't use .single() - it errors on 0 rows AND on 2+ rows,
+	// which caused duplicate creation during the server restart experiment (Jan 5, 2026)
+	const { data: existingEntries } = await supabase
 		.from('superjournal')
 		.select('id')
 		.eq('content_id', id)
 		.eq('user_id', userId)
-		.limit(1)
-		.single();
+		.limit(1);
 
-	// If entry exists, nothing to do
-	if (existingEntry) {
+	// If any entry exists, nothing to do
+	if (existingEntries && existingEntries.length > 0) {
 		return json({
 			success: true,
 			existed: true

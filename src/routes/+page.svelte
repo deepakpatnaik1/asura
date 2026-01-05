@@ -345,6 +345,7 @@
 	 */
 	async function startFileWatching() {
 		const articleIds = getLinkedArticleIds();
+		console.log('[SSE] Starting watch for', articleIds.length, 'files');
 		if (articleIds.length === 0) return;
 
 		// Abort any existing connection
@@ -380,6 +381,7 @@
 					if (line.startsWith('data: ')) {
 						try {
 							const event = JSON.parse(line.slice(6));
+							console.log('[SSE]', event.type, event.article_id?.slice(0,8) || '');
 							if (event.type === 'update' && event.article_id && event.content) {
 								// Update the message content in place
 								allMessages = allMessages.map(msg => {
@@ -1785,6 +1787,9 @@
 		}
 
 		await loadArticles(); // Always refresh to update badge count
+
+		// Restart file watching to include the new linked file
+		startFileWatching();
 		await loadFileCharts();
 		forceCanvas = 'carousel'; // Switch to carousel when content is pasted
 	}
@@ -2004,6 +2009,7 @@
 					>
 						<Icon src={LuFilePenLine} size="11" />
 					</button>
+
 				</div>
 				<textarea
 					placeholder="Type your message..."

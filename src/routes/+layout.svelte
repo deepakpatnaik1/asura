@@ -3,10 +3,10 @@
 	import { onMount, tick } from 'svelte';
 	import { page } from '$app/stores';
 	import { Icon } from 'svelte-icons-pack';
-	import { LuLogOut, LuSettings, LuWifiOff } from 'svelte-icons-pack/lu';
+	import { LuLogOut, LuSettings } from 'svelte-icons-pack/lu';
 	import SettingsModal from '$lib/components/SettingsModal.svelte';
 	import ErrorBoundary from '$lib/components/ErrorBoundary.svelte';
-	import { isConnected, initConnectivityListeners, cleanupConnectivityListeners } from '$lib/stores/connectivity';
+	import { initConnectivityListeners, cleanupConnectivityListeners } from '$lib/stores/connectivity';
 	import { fetchWithRetry } from '$lib/utils/fetch-with-retry';
 
 	let { children } = $props();
@@ -64,14 +64,6 @@
 			</button>
 		</div>
 	</aside>
-	{/if}
-
-	<!-- Offline indicator -->
-	{#if !$isConnected && !isLoginPage}
-		<div class="offline-banner">
-			<Icon src={LuWifiOff} size="14" />
-			<span>You're offline</span>
-		</div>
 	{/if}
 
 	<!-- Main content -->
@@ -155,23 +147,4 @@
 		height: 100vh;
 	}
 
-	/* Offline banner */
-	.offline-banner {
-		position: fixed;
-		top: 0;
-		left: 50%;
-		transform: translateX(-50%);
-		background: hsl(var(--destructive));
-		color: hsl(var(--destructive-foreground));
-		padding: 8px 16px;
-		border-radius: 0 0 8px 8px;
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		font-family: "iA Writer Quattro V", system-ui, -apple-system, sans-serif;
-		font-size: 12px;
-		font-weight: 500;
-		z-index: 1000;
-		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-	}
 </style>

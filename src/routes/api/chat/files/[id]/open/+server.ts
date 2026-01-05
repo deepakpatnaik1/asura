@@ -56,21 +56,22 @@ export const POST: RequestHandler = async ({ params, locals: { safeGetSession, s
 		.eq('user_id', userId);
 
 	// Find the original superjournal entry for this content
-	const { data: originalEntry } = await supabase
+	// Note: Don't use .single() - it errors on 0 rows AND on 2+ rows,
+	// which caused duplicate creation during the server restart experiment (Jan 5, 2026)
+	const { data: originalEntries } = await supabase
 		.from('superjournal')
 		.select('id')
 		.eq('content_id', id)
 		.eq('user_id', userId)
 		.order('created_at', { ascending: true })
-		.limit(1)
-		.single();
+		.limit(1);
 
 	// If original entry exists, return ID for scroll navigation
-	if (originalEntry) {
+	if (originalEntries && originalEntries.length > 0) {
 		return json({
 			success: true,
 			existed: true,
-			originalSuperjournalId: originalEntry.id
+			originalSuperjournalId: originalEntries[0].id
 		});
 	}
 

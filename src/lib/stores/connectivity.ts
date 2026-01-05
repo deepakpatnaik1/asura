@@ -12,7 +12,7 @@ export const isConnected = derived(
 	([$isOnline, $isApiReachable]) => $isOnline && $isApiReachable
 );
 
-// Event handlers (stored for cleanup)
+// Event handlers
 function handleOnline() {
 	isOnline.set(true);
 	checkApiConnectivity();
@@ -24,6 +24,10 @@ function handleOffline() {
 }
 
 let listenersInitialized = false;
+let healthCheckInterval: ReturnType<typeof setInterval> | null = null;
+
+/** Polling interval for health checks (10 seconds) */
+const HEALTH_CHECK_INTERVAL_MS = 10000;
 
 /** Initialize connectivity listeners (call from root layout) */
 export function initConnectivityListeners(): void {
@@ -32,6 +36,11 @@ export function initConnectivityListeners(): void {
 	isOnline.set(navigator.onLine);
 	window.addEventListener('online', handleOnline);
 	window.addEventListener('offline', handleOffline);
+
+	// Start periodic health checks
+	checkApiConnectivity();
+	healthCheckInterval = setInterval(checkApiConnectivity, HEALTH_CHECK_INTERVAL_MS);
+
 	listenersInitialized = true;
 }
 
@@ -41,6 +50,12 @@ export function cleanupConnectivityListeners(): void {
 
 	window.removeEventListener('online', handleOnline);
 	window.removeEventListener('offline', handleOffline);
+
+	if (healthCheckInterval) {
+		clearInterval(healthCheckInterval);
+		healthCheckInterval = null;
+	}
+
 	listenersInitialized = false;
 }
 
