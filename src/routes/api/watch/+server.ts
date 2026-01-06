@@ -128,12 +128,10 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			const watcher = chokidar.watch(pathsToWatch, {
 				persistent: true,
 				ignoreInitial: true,
-				awaitWriteFinish: {
-					stabilityThreshold: 500,
-					pollInterval: 200
-				},
-				// Don't use polling - rely on native FSEvents on macOS
-				usePolling: false
+				// Use polling to reliably catch Obsidian's atomic saves (write temp → rename)
+				// FSEvents misses renames; polling checks mtime every 1s
+				usePolling: true,
+				interval: 1000
 			});
 
 			// Handle file changes
