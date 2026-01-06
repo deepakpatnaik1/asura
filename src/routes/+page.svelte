@@ -327,6 +327,8 @@
 	let watchAbortController: AbortController | null = null;
 	let watchRetryCount = 0;
 	let lastOwnWriteTime = 0; // Track when we write to avoid echo chamber
+	let heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
+	const HEARTBEAT_TIMEOUT_MS = 20000; // Server sends keep-alive every 10s, expect within 20s
 
 	/**
 	 * Set which article to watch. Only one at a time.
@@ -344,6 +346,9 @@
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ watched_article_id: articleId })
 		}).catch(err => console.error('Failed to persist watched article:', err));
+
+		// User intentionally changed target - reset backoff counter
+		watchRetryCount = 0;
 
 		// Restart watching with new target
 		stopFileWatching();
@@ -364,6 +369,35 @@
 	 */
 	function isOwnWriteEcho(): boolean {
 		return Date.now() - lastOwnWriteTime < 2000;
+	}
+
+	/**
+	 * Reset the heartbeat timer. Called whenever data arrives from SSE.
+	 * If no data arrives within HEARTBEAT_TIMEOUT_MS, connection is assumed dead.
+	 */
+	function resetHeartbeat() {
+		if (heartbeatTimer) {
+			clearTimeout(heartbeatTimer);
+		}
+		heartbeatTimer = setTimeout(() => {
+			console.log('[SSE] No heartbeat received, connection presumed dead');
+			// Use backoff to prevent reconnection storm if network is down
+			watchRetryCount++;
+			const backoffMs = Math.min(5000 * Math.pow(2, watchRetryCount - 1), 60000);
+			console.log(`[SSE] Reconnecting in ${backoffMs / 1000}s (retry #${watchRetryCount})`);
+			stopFileWatching();
+			setTimeout(() => startFileWatching(), backoffMs);
+		}, HEARTBEAT_TIMEOUT_MS);
+	}
+
+	/**
+	 * Clear the heartbeat timer (called when stopping watch)
+	 */
+	function clearHeartbeat() {
+		if (heartbeatTimer) {
+			clearTimeout(heartbeatTimer);
+			heartbeatTimer = null;
+		}
 	}
 
 	/**
@@ -406,6 +440,9 @@
 			while (true) {
 				const { done, value } = await reader.read();
 				if (done) break;
+
+				// Data received - reset heartbeat timer (connection is alive)
+				resetHeartbeat();
 
 				buffer += decoder.decode(value, { stream: true });
 				const lines = buffer.split('\n');
@@ -463,11 +500,13 @@
 	 * Stop watching files
 	 */
 	function stopFileWatching() {
+		clearHeartbeat();
 		if (watchAbortController) {
 			watchAbortController.abort();
 			watchAbortController = null;
 		}
-		watchRetryCount = 0;
+		// Note: Don't reset watchRetryCount here - it's used for backoff across reconnects
+		// Only reset on successful connection (line ~431)
 	}
 
 	let pendingTimeouts: number[] = [];
