@@ -1030,6 +1030,11 @@
 	async function handleSend() {
 		if (!inputMessage.trim() || $isLoading) return;
 
+		// Don't send if input is just the persona prefix (e.g., "Samara," with no actual message)
+		const prefix = getPersonaPrefix().trim();
+		const trimmedInput = inputMessage.trim();
+		if (trimmedInput === prefix || trimmedInput === prefix.replace(/,\s*$/, '')) return;
+
 		const message = inputMessage.trim();
 
 		// Check if we're submitting an annotation (write-back mode)
