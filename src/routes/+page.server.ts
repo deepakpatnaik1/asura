@@ -1,5 +1,4 @@
 import type { PageServerLoad } from './$types';
-import { redirect } from '@sveltejs/kit';
 import { existsSync, readFileSync } from 'fs';
 import { createLogger } from '$lib/api/logger';
 import { createQueryMonitor } from '$lib/api/query-monitor';
@@ -18,11 +17,7 @@ function formatTimestamp(dateString: string): string {
 }
 
 export const load: PageServerLoad = async ({ locals: { safeGetSession, supabase } }) => {
-	const { session, user } = await safeGetSession();
-
-	if (!session) {
-		throw redirect(303, '/login');
-	}
+	const { user } = await safeGetSession();
 
 	const log = createLogger('PageLoad', user?.id);
 	const monitor = createQueryMonitor(log, 100);

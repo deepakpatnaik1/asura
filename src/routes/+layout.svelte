@@ -1,41 +1,17 @@
 <script lang="ts">
 	import '../app.css';
 	import { onMount, tick } from 'svelte';
-	import { page } from '$app/stores';
 	import { Icon } from 'svelte-icons-pack';
-	import { LuLogOut, LuSettings } from 'svelte-icons-pack/lu';
+	import { LuSettings } from 'svelte-icons-pack/lu';
 	import SettingsModal from '$lib/components/SettingsModal.svelte';
 	import ErrorBoundary from '$lib/components/ErrorBoundary.svelte';
 	import { initConnectivityListeners, cleanupConnectivityListeners } from '$lib/stores/connectivity';
-	import { fetchWithRetry } from '$lib/utils/fetch-with-retry';
 
 	let { children } = $props();
 	let showSettings = $state(false);
 
 	// FOUC prevention
 	let mounted = $state(false);
-
-	// Check if current route is login page (hide chrome)
-	let isLoginPage = $derived($page.url.pathname === '/login');
-
-	// Logout handler (moved from +page.svelte)
-	async function handleLogout() {
-		try {
-			const { response } = await fetchWithRetry('/api/auth/logout', {
-				method: 'POST'
-			}, { maxRetries: 2 });
-
-			if (response.ok || response.redirected) {
-				window.location.href = '/login';
-			} else {
-				// Still redirect even on error - session may already be invalid
-				window.location.href = '/login';
-			}
-		} catch {
-			// Still redirect to login page even if API fails
-			window.location.href = '/login';
-		}
-	}
 
 	onMount(() => {
 		// Initialize connectivity listeners
@@ -52,19 +28,14 @@
 </script>
 
 <div class="app-layout" class:mounted={mounted}>
-	<!-- Sidebar (hidden on login) -->
-	{#if !isLoginPage}
+	<!-- Sidebar -->
 	<aside class="sidebar">
 		<div class="sidebar-bottom">
 			<button class="sidebar-icon hit-target" onclick={() => showSettings = true} title="Settings">
 				<Icon src={LuSettings} size="18" />
 			</button>
-			<button class="sidebar-icon hit-target" onclick={handleLogout} title="Sign out">
-				<Icon src={LuLogOut} size="18" />
-			</button>
 		</div>
 	</aside>
-	{/if}
 
 	<!-- Main content -->
 	<div class="main-content">

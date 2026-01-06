@@ -5,6 +5,19 @@ import type { Handle } from '@sveltejs/kit';
 import { validateCsrf, requiresCsrfProtection } from '$lib/api/csrf';
 
 /**
+ * Hardcoded user for localhost-only single-user mode.
+ * No Google OAuth needed — app is local development tool only.
+ */
+const LOCALHOST_USER = {
+	id: '8288224b-40c0-41e3-aa30-5bd704533524',
+	email: 'boss@localhost',
+	app_metadata: {},
+	user_metadata: {},
+	aud: 'authenticated',
+	created_at: '2024-01-01T00:00:00.000Z'
+} as const;
+
+/**
  * Server-side authentication hook with security hardening
  *
  * Security features:
@@ -46,36 +59,27 @@ export const handle: Handle = async ({ event, resolve }) => {
 			getAll: () => event.cookies.getAll(),
 			setAll: (cookiesToSet) => {
 				cookiesToSet.forEach(({ name, value, options }) => {
-					event.cookies.set(name, value, { ...options, path: '/' });
+					try {
+						event.cookies.set(name, value, { ...options, path: '/' });
+					} catch {
+						// Ignore cookie errors during SSE streaming
+						// This happens when Supabase auth tries to refresh tokens mid-stream
+					}
 				});
 			}
 		}
 	});
 
 	/**
-	 * Safe session retrieval with JWT validation
-	 *
-	 * SECURITY: Validates user with getUser() FIRST (contacts auth server).
-	 * Only after verification do we retrieve session for access tokens.
-	 * The returned user is from getUser() (verified), never from session.user (unverified).
+	 * Localhost-only mode: Always return hardcoded user.
+	 * No OAuth, no session validation — single-user local tool.
 	 */
 	event.locals.safeGetSession = async () => {
-		// First: Verify user with Supabase Auth server (source of truth)
-		const {
-			data: { user },
-			error
-		} = await event.locals.supabase.auth.getUser();
-
-		if (error || !user) {
-			return { session: null, user: null };
-		}
-
-		// User is authenticated - get session for access tokens
-		const {
-			data: { session }
-		} = await event.locals.supabase.auth.getSession();
-
-		return { session, user };
+		// Always authenticated as the localhost user
+		return {
+			session: { user: LOCALHOST_USER } as any,
+			user: LOCALHOST_USER as any
+		};
 	};
 
 	// =========================================================================
