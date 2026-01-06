@@ -57,7 +57,7 @@ import {
 } from '$lib/roles/design-lead';
 import { refreshAccessToken } from '$lib/api/google-calendar';
 import { BRAVE_SEARCH_TOOL, executeBraveSearch } from '$lib/api/brave-search';
-import { REDDIT_TOOLS, executeRedditTool, isRedditTool } from '$lib/api/reddit-tools';
+import { REDDIT_TOOLS, executeRedditTool, isRedditTool } from '$lib/channels/reddit';
 import { ENGAGEMENT_TOOLS, executeEngagementTool, isEngagementTool } from '$lib/roles/community-manager/engagement';
 import { parseToolIntents, hasToolIntents } from '$lib/api/tool-intent-parser';
 import { createClient } from '@supabase/supabase-js';

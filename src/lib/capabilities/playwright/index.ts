@@ -25,7 +25,6 @@
 export {
 	ensureBrowser,
 	closeBrowser,
-	saveCookies,
 	isBrowserRunning,
 	getCurrentUrl
 } from './session';

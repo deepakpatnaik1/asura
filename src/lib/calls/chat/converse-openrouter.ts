@@ -13,10 +13,19 @@ import { BRAVE_SEARCH_TOOL, executeBraveSearch } from '$lib/api/brave-search';
 import { convertToolsToOpenAI, type OpenAIToolCall } from './provider';
 import type { ConverseParams, ConverseResult } from './converse';
 
+/** OpenAI-compatible message content for vision */
+type OpenAIMessageContent =
+	| string
+	| null
+	| Array<
+			| { type: 'text'; text: string }
+			| { type: 'image_url'; image_url: { url: string } }
+	  >;
+
 /** OpenAI-compatible message format */
 interface OpenAIMessage {
 	role: 'system' | 'user' | 'assistant' | 'tool';
-	content: string | null;
+	content: OpenAIMessageContent;
 	tool_calls?: OpenAIToolCall[];
 	tool_call_id?: string;
 }
@@ -65,9 +74,23 @@ export async function* converseStreamOpenRouter(
 	// Build user prompt with context
 	const fullUserPrompt = converseUserPrompt(context, message);
 
-	// Note: OpenRouter vision support varies by model
+	// Build user message content - include chart image if provided
+	let userContent: OpenAIMessageContent;
 	if (chartImage) {
-		console.warn('[OpenRouter] Chart images not yet supported for OpenRouter models');
+		userContent = [
+			{
+				type: 'image_url',
+				image_url: {
+					url: `data:${chartImage.mediaType};base64,${chartImage.base64}`
+				}
+			},
+			{
+				type: 'text',
+				text: `[Referring to the image above]\n\n${fullUserPrompt}`
+			}
+		];
+	} else {
+		userContent = fullUserPrompt;
 	}
 
 	// Convert Anthropic tools to OpenAI format
@@ -77,7 +100,7 @@ export async function* converseStreamOpenRouter(
 	// Initial messages
 	const messages: OpenAIMessage[] = [
 		{ role: 'system', content: systemPrompt },
-		{ role: 'user', content: fullUserPrompt }
+		{ role: 'user', content: userContent }
 	];
 
 	let fullResponse = '';

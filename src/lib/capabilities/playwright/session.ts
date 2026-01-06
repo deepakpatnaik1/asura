@@ -74,9 +74,3 @@ export async function getCurrentUrl(): Promise<string | null> {
 	if (!page || page.isClosed()) return null;
 	return page.url();
 }
-
-// saveCookies is no longer needed - persistent context handles this automatically
-// Keeping export for backwards compatibility but it's a no-op
-export async function saveCookies(): Promise<void> {
-	// No-op: launchPersistentContext handles persistence automatically
-}

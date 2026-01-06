@@ -24,7 +24,7 @@
 	 */
 
 	import type { Snippet } from 'svelte';
-	import { CANVAS_CONFIG } from '$lib/config/canvas';
+	import { CANVAS } from '$lib/config/layout';
 
 	interface Props {
 		content: Snippet;
@@ -33,13 +33,13 @@
 
 	let { content, footer }: Props = $props();
 
-	const { framePadding, footer: footerConfig, debug } = CANVAS_CONFIG;
+	const { framePadding, footer: footerConfig, debug } = CANVAS;
 </script>
 
 <div
 	class="canvas-frame"
 	style:--frame-padding="{framePadding}px"
-	style:--footer-padding="{footerConfig.padding}px"
+	style:--footer-padding="{footerConfig.topPadding}px"
 	style:--footer-content-height="{footerConfig.contentHeight}px"
 	style:background={debug.enabled ? debug.frameColor : 'transparent'}
 >

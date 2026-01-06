@@ -5,7 +5,7 @@
  * No page snapshots, no DOM dumps - just the extracted data.
  */
 
-import { ensureBrowser, saveCookies } from './session';
+import { ensureBrowser } from './session';
 
 export interface ExecuteOptions {
 	/** Wait time in ms after navigation (default: 2000) */
@@ -59,11 +59,7 @@ export async function executeScript<T>(
 		}
 
 		// Execute the script
-		// The script should be a function that returns data
 		const data = await page.evaluate(script);
-
-		// Save cookies after successful operation
-		await saveCookies();
 
 		return {
 			success: true,
@@ -104,7 +100,6 @@ export async function navigateTo(
 		const page = await ensureBrowser();
 		await page.goto(url, { waitUntil: 'domcontentloaded' });
 		await page.waitForTimeout(waitMs);
-		await saveCookies();
 
 		return {
 			success: true,
