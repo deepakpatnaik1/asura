@@ -2,49 +2,37 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { browser } from '$app/environment';
 
-	const POLL_INTERVAL = 10000;
-	const FAILURE_THRESHOLD = 3;
-	const TIMEOUT = 10000;
-
 	let healthy = $state(true);
-	let consecutiveFailures = 0;
-	let pollInterval: ReturnType<typeof setInterval> | null = null;
+	let eventSource: EventSource | null = null;
 
-	async function checkHealth() {
+	function connect() {
 		if (!browser) return;
 
-		try {
-			const res = await fetch('/api/health', {
-				signal: AbortSignal.timeout(TIMEOUT)
-			});
+		eventSource = new EventSource('/api/health/stream');
 
-			if (res.ok) {
-				consecutiveFailures = 0;
-				healthy = true;
-			} else {
-				handleFailure();
-			}
-		} catch {
-			handleFailure();
-		}
-	}
+		eventSource.addEventListener('heartbeat', (event) => {
+			const data = JSON.parse(event.data);
+			// Green if server responds, even if DB is degraded
+			// (server being alive is what matters for not losing messages)
+			healthy = true;
+		});
 
-	function handleFailure() {
-		consecutiveFailures++;
-		if (consecutiveFailures >= FAILURE_THRESHOLD) {
+		eventSource.onerror = () => {
+			// Connection dropped - server is dead
 			healthy = false;
-		}
+
+			// Close and attempt reconnect after a short delay
+			eventSource?.close();
+			setTimeout(connect, 2000);
+		};
 	}
 
 	onMount(() => {
-		checkHealth();
-		pollInterval = setInterval(checkHealth, POLL_INTERVAL);
+		connect();
 	});
 
 	onDestroy(() => {
-		if (pollInterval) {
-			clearInterval(pollInterval);
-		}
+		eventSource?.close();
 	});
 </script>
 
