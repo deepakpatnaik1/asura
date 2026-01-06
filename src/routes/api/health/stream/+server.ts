@@ -14,11 +14,15 @@ const HEARTBEAT_INTERVAL = 5000;
 
 export const GET: RequestHandler = async ({ locals: { supabase } }) => {
 	let interval: ReturnType<typeof setInterval> | null = null;
+	let closed = false;
 	const encoder = new TextEncoder();
 
 	const stream = new ReadableStream({
 		start(controller) {
 			const sendHeartbeat = async () => {
+				// Don't enqueue if stream is closed
+				if (closed) return;
+
 				try {
 					// Check database connectivity
 					const { error } = await supabase.from('models').select('model_identifier').limit(1);
@@ -29,9 +33,10 @@ export const GET: RequestHandler = async ({ locals: { supabase } }) => {
 						timestamp: new Date().toISOString()
 					});
 
-					controller.enqueue(encoder.encode(`event: heartbeat\ndata: ${data}\n\n`));
+					if (!closed) controller.enqueue(encoder.encode(`event: heartbeat\ndata: ${data}\n\n`));
 				} catch {
 					// Server is alive but DB check failed
+					if (closed) return;
 					const data = JSON.stringify({
 						status: 'degraded',
 						timestamp: new Date().toISOString()
@@ -48,6 +53,7 @@ export const GET: RequestHandler = async ({ locals: { supabase } }) => {
 		},
 		cancel() {
 			// Client disconnected - clear the interval
+			closed = true;
 			if (interval) {
 				clearInterval(interval);
 				interval = null;
