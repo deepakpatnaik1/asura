@@ -129,6 +129,9 @@
 
 			// Dispatch window event for cross-component communication
 			window.dispatchEvent(new CustomEvent('nuke-complete', { detail: { bucket } }));
+
+			// Refresh counts to update UI
+			fetchCounts();
 		} catch (err) {
 			console.error('Nuke error:', err);
 		}
