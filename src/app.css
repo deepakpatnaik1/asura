@@ -34,9 +34,10 @@
     --prose-body: 0 0% 85%;
 
     /* Boss message specific (Chat Mode) */
-    /* Source: src/lib/config/colors.ts - CHAT_ACCENT, CHAT_ACCENT_BG */
-    --boss-bg: rgba(217, 133, 107, 0.08);
-    --boss-accent: rgb(217, 133, 107);
+    /* Source: src/lib/config/colors.ts - BOSS_ACCENT, BOSS_ACCENT_BG */
+    /* Amber #F59E0B - matches team.md visual identity */
+    --boss-bg: rgba(245, 158, 11, 0.08);
+    --boss-accent: rgb(245, 158, 11);
 
     /* E-Reader accent (applied when in reader mode) */
     /* Source: src/lib/config/colors.ts - READER_ACCENT, READER_ACCENT_BG */
@@ -108,7 +109,7 @@
 
     --action-bar-offset-x: 16px;
     --action-bar-offset-y: 16px;
-    --action-icon-gap: 8px;
+    --action-icon-gap: 4px;
 
     --input-bottom-offset: 0px;
     --input-padding: 12px;

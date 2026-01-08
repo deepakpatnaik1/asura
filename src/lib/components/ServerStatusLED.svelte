@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { browser } from '$app/environment';
+	import { Icon } from 'svelte-icons-pack';
+	import { LuCircle } from 'svelte-icons-pack/lu';
 
 	let healthy = $state(true);
 	let eventSource: EventSource | null = null;
@@ -36,31 +38,35 @@
 	});
 </script>
 
-<div
-	class="led"
+<span
+	class="led-wrapper"
 	class:healthy
 	class:down={!healthy}
 	title={healthy ? 'Server healthy' : 'Server down'}
-></div>
+>
+	<Icon src={LuCircle} size="11" />
+</span>
 
 <style>
-	.led {
-		width: 8px;
-		height: 8px;
-		border-radius: 50%;
-		flex-shrink: 0;
-		margin-left: 6px;
-		position: relative;
-		z-index: 1;
+	.led-wrapper {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 4px;
 	}
 
-	.led.healthy {
-		background-color: #22c55e;
-		box-shadow: 0 0 6px 2px rgba(34, 197, 94, 0.5);
+	.led-wrapper :global(svg) {
+		fill: currentColor;
+		stroke: none;
 	}
 
-	.led.down {
-		background-color: #ef4444;
-		box-shadow: 0 0 6px 2px rgba(239, 68, 68, 0.5);
+	.led-wrapper.healthy {
+		color: #22c55e;
+		filter: drop-shadow(0 0 4px rgba(34, 197, 94, 0.7));
+	}
+
+	.led-wrapper.down {
+		color: #ef4444;
+		filter: drop-shadow(0 0 4px rgba(239, 68, 68, 0.7));
 	}
 </style>

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Icon } from 'svelte-icons-pack';
-	import { LuPaperclip, LuFolder, LuFilePenLine } from 'svelte-icons-pack/lu';
+	import { LuPaperclip, LuFolder, LuFilePenLine, LuLock, LuLockOpen } from 'svelte-icons-pack/lu';
 	import { currentMessage, isLoading, sendMessage, abortCurrentMessage, lastMutations, lastWhiteboardMutations, lastCanvasMutations } from '$lib/stores/chat';
 	import { tick, onMount, onDestroy } from 'svelte';
 	import { DEFAULT_PERSONA, PERSONAS } from '$lib/config/personas';
@@ -288,6 +288,9 @@
 
 	// Annotation mode state (for write-back feature)
 	let annotationMode = $state(false);
+
+	// RTF lock mode - prevents accidental sends during RTF workflow
+	let rtfLockMode = $state(false);
 	interface AnnotationTarget {
 		headerText: string;
 		headerLevel: number;
@@ -1190,7 +1193,9 @@
 	function handleKeyDown(event: KeyboardEvent) {
 		if (event.key === 'Enter' && !event.shiftKey) {
 			event.preventDefault();
-			handleSend();
+			if (!rtfLockMode) {
+				handleSend();
+			}
 		}
 	}
 
@@ -2249,11 +2254,22 @@
 						<Icon src={LuFilePenLine} size="11" />
 					</button>
 
+					<button
+						class="control-btn hit-target"
+						class:active={rtfLockMode}
+						class:rtf-lock={rtfLockMode}
+						title={rtfLockMode ? 'Unlock input (RTF mode off)' : 'Lock input (RTF mode)'}
+						onclick={() => rtfLockMode = !rtfLockMode}
+					>
+						<Icon src={rtfLockMode ? LuLock : LuLockOpen} size="11" />
+					</button>
+
 					<ServerStatusLED />
 				</div>
 				<textarea
-					placeholder="Type your message..."
+					placeholder={rtfLockMode ? 'Input locked — RTF mode active' : 'Type your message...'}
 					class="message-input"
+					class:rtf-locked={rtfLockMode}
 					rows="1"
 					bind:this={textareaRef}
 					bind:value={inputMessage}
@@ -2262,8 +2278,8 @@
 					disabled={$isLoading}
 				></textarea>
 			</div>
-			<button class="send-button" onclick={handleSend} disabled={$isLoading}>
-				{$isLoading ? 'Sending...' : 'Send'}
+			<button class="send-button" onclick={handleSend} disabled={$isLoading || rtfLockMode}>
+				{$isLoading ? 'Sending...' : rtfLockMode ? 'Lock' : 'Send'}
 			</button>
 		</div>
 	</div>
@@ -2449,9 +2465,23 @@
 
 	.control-btn.active {
 		opacity: 1;
-		color: var(--current-accent);
+		color: var(--boss-accent);
 	}
 
+	.control-btn.rtf-lock {
+		color: hsl(0 70% 50%);
+		opacity: 1;
+	}
+
+	.message-input.rtf-locked {
+		border-color: hsl(0 50% 40% / 0.5);
+		background: hsl(0 30% 15% / 0.3);
+	}
+
+	.message-input.rtf-locked::placeholder {
+		color: hsl(0 50% 60%);
+		opacity: 0.8;
+	}
 
 	.input-container {
 		position: absolute;

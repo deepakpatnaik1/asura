@@ -66,7 +66,7 @@
 		onmouseup={stopHold}
 		onmouseleave={stopHold}
 	>
-		<Icon src={LuArrowDown} size="13" />
+		<Icon src={LuArrowDown} size="11" />
 	</button>
 	<button
 		class="control-btn hit-target"
@@ -75,7 +75,7 @@
 		onmouseup={stopHold}
 		onmouseleave={stopHold}
 	>
-		<Icon src={LuArrowUp} size="13" />
+		<Icon src={LuArrowUp} size="11" />
 	</button>
 </div>
 
