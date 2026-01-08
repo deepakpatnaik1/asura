@@ -2465,7 +2465,7 @@
 
 	.control-btn.active {
 		opacity: 1;
-		color: var(--boss-accent);
+		color: var(--current-accent);
 	}
 
 	.control-btn.rtf-lock {
