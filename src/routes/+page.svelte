@@ -1075,7 +1075,9 @@
 	});
 
 	async function handleSend() {
-		if (!inputMessage.trim() || $isLoading || rtfLockMode) return;
+		// RTF lock blocks regular sends, but allows annotation/feedback workflow
+		const isAnnotationSend = annotationMode && annotationTarget;
+		if (!inputMessage.trim() || $isLoading || (rtfLockMode && !isAnnotationSend)) return;
 
 		// Don't send if input is just the persona prefix (e.g., "Samara," with no actual message)
 		const prefix = getPersonaPrefix().trim();
@@ -1193,7 +1195,9 @@
 	function handleKeyDown(event: KeyboardEvent) {
 		if (event.key === 'Enter' && !event.shiftKey) {
 			event.preventDefault();
-			if (!rtfLockMode) {
+			// RTF lock blocks regular sends, but allows annotation/feedback workflow
+			const isAnnotationSend = annotationMode && annotationTarget;
+			if (!rtfLockMode || isAnnotationSend) {
 				handleSend();
 			}
 		}
