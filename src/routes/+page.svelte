@@ -1078,14 +1078,10 @@
 		const trimmedInput = inputMessage.trim();
 		if (trimmedInput === prefix || trimmedInput === prefix.replace(/,\s*$/, '')) return;
 
-		// Exit focus mode before sending (restore normal conversation view)
-		if (focusedMessageId) {
-			focusedMessageId = null;
-		}
-
 		const message = inputMessage.trim();
 
 		// Check if we're submitting an annotation (write-back mode)
+		// Note: Annotations should NOT exit focus mode - user is still reading
 		if (annotationMode && annotationTarget) {
 			inputMessage = getPersonaPrefix();
 			resetTextareaHeight();
@@ -1133,7 +1129,11 @@
 			return;
 		}
 
-		// Normal message flow
+		// Normal message flow - exit focus mode (user is starting new conversation)
+		if (focusedMessageId) {
+			focusedMessageId = null;
+		}
+
 		inputMessage = getPersonaPrefix();
 		resetTextareaHeight();
 
