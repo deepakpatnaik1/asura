@@ -43,7 +43,7 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 	const { data, error } = await supabase
 		.from('user_settings')
 		.select(
-			`default_model, selected_persona, watched_article_id,
+			`default_model, selected_persona, watched_article_id, focused_message_id,
 			 model_gunnar, model_kirby, model_samara, model_alicja, model_eva, model_ananya,
 			 model_embeddings, model_compression, model_chat_compression,
 			 model_character_planning, model_image_gen, model_image_edit,
@@ -98,6 +98,7 @@ export const PUT: RequestHandler = async ({ request, locals: { safeGetSession, s
 	if (validatedData.default_model !== undefined) updateData.default_model = validatedData.default_model;
 	if (validatedData.selected_persona !== undefined) updateData.selected_persona = validatedData.selected_persona;
 	if (validatedData.watched_article_id !== undefined) updateData.watched_article_id = validatedData.watched_article_id;
+	if (validatedData.focused_message_id !== undefined) updateData.focused_message_id = validatedData.focused_message_id;
 
 	// Model overrides - check each column
 	for (const col of MODEL_COLUMNS) {

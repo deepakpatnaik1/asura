@@ -92,7 +92,10 @@ export const settingsUpdateSchema = z.object({
 	compression_uncensored_ananya: z.boolean().optional(),
 
 	// Live-linked article watch state
-	watched_article_id: z.string().uuid().nullable().optional()
+	watched_article_id: z.string().uuid().nullable().optional(),
+
+	// Focus mode persistence
+	focused_message_id: z.string().uuid().nullable().optional()
 }).refine(
 	(data) => Object.keys(data).length > 0,
 	{ message: 'At least one field must be provided' }

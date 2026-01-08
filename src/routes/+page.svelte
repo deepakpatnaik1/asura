@@ -62,7 +62,8 @@
 	let whiteboardRefreshTrigger = $state(0);
 
 	// Focus mode state (immersive single-turn reading)
-	let focusedMessageId = $state<string | null>(null);
+	// Persisted to user_settings.focused_message_id for refresh survival
+	let focusedMessageId = $state<string | null>(data.focusedMessageId || null);
 	let savedScrollPosition = $state<number>(0);
 
 	// Whiteboard state for notes canvas
@@ -1132,6 +1133,12 @@
 		// Normal message flow - exit focus mode (user is starting new conversation)
 		if (focusedMessageId) {
 			focusedMessageId = null;
+			// Persist exit to database
+			fetch('/api/settings', {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ focused_message_id: null })
+			}).catch(err => console.error('Failed to persist focus mode exit:', err));
 		}
 
 		inputMessage = getPersonaPrefix();
@@ -1261,6 +1268,7 @@
 
 	/**
 	 * Toggle focus mode for a message (immersive single-turn reading)
+	 * Persists to database so focus mode survives browser refresh
 	 */
 	function handleFocusToggle(messageId: string) {
 		if (focusedMessageId === messageId) {
@@ -1279,6 +1287,13 @@
 				if (container) container.scrollTop = 0;
 			});
 		}
+
+		// Persist to database (fire and forget)
+		fetch('/api/settings', {
+			method: 'PUT',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ focused_message_id: focusedMessageId })
+		}).catch(err => console.error('Failed to persist focus mode:', err));
 	}
 
 	/**
@@ -2036,6 +2051,12 @@
 			tick().then(() => {
 				setTimeout(() => scrollToLastTurn(CHAT_CONFIG), 50);
 			});
+			// Persist exit to database
+			fetch('/api/settings', {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ focused_message_id: null })
+			}).catch(err => console.error('Failed to persist focus mode exit:', err));
 			return;
 		}
 		if (event.key === 'Escape' && showLibrary) {
