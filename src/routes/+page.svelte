@@ -61,6 +61,10 @@
 	let calendarRefreshTrigger = $state(0);
 	let whiteboardRefreshTrigger = $state(0);
 
+	// Focus mode state (immersive single-turn reading)
+	let focusedMessageId = $state<string | null>(null);
+	let savedScrollPosition = $state<number>(0);
+
 	// Whiteboard state for notes canvas
 	import type { WhiteboardState } from '$lib/api/whiteboard-tools';
 	interface Whiteboard {
@@ -1074,6 +1078,11 @@
 		const trimmedInput = inputMessage.trim();
 		if (trimmedInput === prefix || trimmedInput === prefix.replace(/,\s*$/, '')) return;
 
+		// Exit focus mode before sending (restore normal conversation view)
+		if (focusedMessageId) {
+			focusedMessageId = null;
+		}
+
 		const message = inputMessage.trim();
 
 		// Check if we're submitting an annotation (write-back mode)
@@ -1248,6 +1257,28 @@
 					starredIds = new Set([...starredIds].filter(id => id !== messageId));
 				}
 			});
+	}
+
+	/**
+	 * Toggle focus mode for a message (immersive single-turn reading)
+	 */
+	function handleFocusToggle(messageId: string) {
+		if (focusedMessageId === messageId) {
+			// Exit focus mode - scroll to latest message
+			focusedMessageId = null;
+			tick().then(() => {
+				setTimeout(() => scrollToLastTurn(CHAT_CONFIG), 50);
+			});
+		} else {
+			// Enter focus mode
+			const container = document.querySelector('.messages-area') as HTMLElement;
+			if (container) savedScrollPosition = container.scrollTop;
+			focusedMessageId = messageId;
+			// Scroll to top of focused message after DOM updates
+			tick().then(() => {
+				if (container) container.scrollTop = 0;
+			});
+		}
 	}
 
 	/**
@@ -1999,6 +2030,14 @@
 	}
 
 	function handleKeydown(event: KeyboardEvent) {
+		// Focus mode has highest priority for Escape
+		if (event.key === 'Escape' && focusedMessageId) {
+			focusedMessageId = null;
+			tick().then(() => {
+				setTimeout(() => scrollToLastTurn(CHAT_CONFIG), 50);
+			});
+			return;
+		}
 		if (event.key === 'Escape' && showLibrary) {
 			showLibrary = false;
 			textareaRef?.focus();
@@ -2049,39 +2088,43 @@
 
 <div class="chat-container" style="--current-accent: {currentAccentColor}; --current-accent-bg: {currentAccentBg}; --boss-accent: {BOSS_ACCENT}; --boss-accent-bg: {BOSS_ACCENT_BG}">
 	<!-- Messages Area -->
-	<div class="messages-area">
+	<div class="messages-area" class:focus-mode={focusedMessageId}>
 		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
 		<div
 			class="messages-content"
 			class:annotation-mode={annotationMode}
 			onclick={handleAnnotationClick}
 		>
-			{#if hasMore}
+			{#if hasMore && !focusedMessageId}
 				<button class="load-more-btn" onclick={loadMoreMessages} disabled={isLoadingMore}>
 					{isLoadingMore ? 'Loading...' : 'Load older messages'}
 				</button>
 			{/if}
 
 			{#each allMessages as msg, index}
-				{@const msgAccentColor = getPersonaAccentColor(msg.persona_name)}
-				{@const msgAccentBg = getPersonaAccentBg(msg.persona_name)}
-				<MessageGroup
-					messageId={msg.id}
-					userMessage={msg.user_message}
-					aiResponse={msg.ai_response}
-					personaName={msg.persona_name}
-					accentColor={msgAccentColor}
-					accentBg={msgAccentBg}
-					turnNumber={getAbsoluteTurnNumber(index)}
-					timestamp={msg.formatted_timestamp}
-					isStarred={starredIds.has(msg.id)}
-					isCopied={copiedMessageId === msg.id}
-					showActions={true}
-					onStar={() => handleStarToggle(msg.id)}
-					onCopy={() => handleCopyTurn(msg.id, msg.user_message, msg.ai_response, msg.persona_name)}
-					onDelete={() => handleMessageDeleteClick(msg.id)}
-					onTableClick={handleTableClick}
-				/>
+				{#if !focusedMessageId || focusedMessageId === msg.id}
+					{@const msgAccentColor = getPersonaAccentColor(msg.persona_name)}
+					{@const msgAccentBg = getPersonaAccentBg(msg.persona_name)}
+					<MessageGroup
+						messageId={msg.id}
+						userMessage={msg.user_message}
+						aiResponse={msg.ai_response}
+						personaName={msg.persona_name}
+						accentColor={msgAccentColor}
+						accentBg={msgAccentBg}
+						turnNumber={getAbsoluteTurnNumber(index)}
+						timestamp={msg.formatted_timestamp}
+						isStarred={starredIds.has(msg.id)}
+						isCopied={copiedMessageId === msg.id}
+						isFocused={focusedMessageId === msg.id}
+						showActions={true}
+						onStar={() => handleStarToggle(msg.id)}
+						onCopy={() => handleCopyTurn(msg.id, msg.user_message, msg.ai_response, msg.persona_name)}
+						onDelete={() => handleMessageDeleteClick(msg.id)}
+						onFocus={() => handleFocusToggle(msg.id)}
+						onTableClick={handleTableClick}
+					/>
+				{/if}
 			{/each}
 
 			{#if $isLoading && $currentMessage}

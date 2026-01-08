@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Icon } from 'svelte-icons-pack';
-	import { LuStar, LuCopy, LuTrash2 } from 'svelte-icons-pack/lu';
+	import { LuStar, LuCopy, LuTrash2, LuMaximize2 } from 'svelte-icons-pack/lu';
 	import { renderMarkdown } from '$lib/markdown-renderer';
 
 	/**
@@ -50,6 +50,10 @@
 		onCopy?: () => void;
 		/** Delete button click handler */
 		onDelete?: () => void;
+		/** Whether this message is in focus mode */
+		isFocused?: boolean;
+		/** Focus button click handler */
+		onFocus?: () => void;
 		/** Table click handler (for opening chart in lightbox) */
 		onTableClick?: (messageId: string | undefined, tableIndex: number) => void;
 	}
@@ -71,6 +75,8 @@
 		onStar,
 		onCopy,
 		onDelete,
+		isFocused = false,
+		onFocus,
 		onTableClick
 	}: Props = $props();
 
@@ -185,6 +191,17 @@
 								onclick={onStar}
 							>
 								<Icon src={LuStar} size="11" color={isStarred ? accentColor : undefined} />
+							</button>
+						{/if}
+						{#if onFocus}
+							<button
+								class="action-btn hit-target"
+								class:active={isFocused}
+								style={isFocused ? `color: ${accentColor};` : ''}
+								title={isFocused ? 'Exit focus' : 'Focus'}
+								onclick={onFocus}
+							>
+								<Icon src={LuMaximize2} size="11" color={isFocused ? accentColor : undefined} />
 							</button>
 						{/if}
 						{#if onCopy}
