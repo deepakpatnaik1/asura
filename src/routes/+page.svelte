@@ -1075,7 +1075,7 @@
 	});
 
 	async function handleSend() {
-		if (!inputMessage.trim() || $isLoading) return;
+		if (!inputMessage.trim() || $isLoading || rtfLockMode) return;
 
 		// Don't send if input is just the persona prefix (e.g., "Samara," with no actual message)
 		const prefix = getPersonaPrefix().trim();
@@ -2278,8 +2278,8 @@
 					disabled={$isLoading}
 				></textarea>
 			</div>
-			<button class="send-button" onclick={handleSend} disabled={$isLoading || rtfLockMode}>
-				{$isLoading ? 'Sending...' : rtfLockMode ? 'Lock' : 'Send'}
+			<button class="send-button" onclick={handleSend} disabled={$isLoading}>
+				{$isLoading ? 'Sending...' : 'Send'}
 			</button>
 		</div>
 	</div>
@@ -2512,7 +2512,7 @@
 		border-radius: 6px;
 		padding: 12px 16px;
 		outline: none;
-		transition: border-color 0.2s;
+		transition: border-color 0.2s, background 0.2s;
 		resize: none;
 		min-height: 44px;
 		max-height: 500px;
