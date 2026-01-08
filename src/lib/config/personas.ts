@@ -96,7 +96,7 @@ export interface Persona {
 }
 
 /**
- * Gunnar: Full memory pyramid + productivity data (todos, diary)
+ * Gunnar: Full memory pyramid (no productivity data - that's Alicja's domain)
  */
 const GUNNAR_CHUNKS: ContextChunk[] = [
 	'working',
@@ -104,9 +104,7 @@ const GUNNAR_CHUNKS: ContextChunk[] = [
 	'starred',
 	'semantic',
 	'canon',
-	'active',
-	'todos',
-	'diary'
+	'active'
 ];
 
 /**
@@ -127,9 +125,9 @@ const KIRBY_CHUNKS: ContextChunk[] = [
 const SAMARA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic', 'canon', 'active'];
 
 /**
- * Alicja: Scribe - productivity data + her own conversation memory
+ * Alicja: Chief of Staff - needs productivity data in context for ID lookups
  */
-const ALICJA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic', 'active', 'todos', 'diary', 'tags', 'calendar', 'fitness'];
+const ALICJA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic', 'active', 'todos', 'diary', 'tags'];
 
 /**
  * Gunnar whiteboard tools

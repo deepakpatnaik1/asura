@@ -45,11 +45,6 @@ npx supabase start   # Start all containers
 npx supabase stop    # Stop containers (preserves data)
 ```
 
-**Dev login (bypasses Google OAuth):**
-```
-http://localhost:5173/auth/dev-login
-```
-
 Run migrations:
 ```bash
 PGPASSWORD=postgres psql -h localhost -p 54322 -U postgres -d postgres -f supabase/migrations/MIGRATION_FILE.sql

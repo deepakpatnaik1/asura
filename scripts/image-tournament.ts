@@ -13,87 +13,68 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 // Load environment variables
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const FAL_API_KEY = process.env.FAL_API_KEY;
 const VENICE_API_KEY = process.env.VENICE_API_KEY;
 const MODELSLAB_API_KEY = process.env.MODELSLAB_API_KEY;
 
 const OUTPUT_DIR = '/tmp/image-tournament';
 
-// Image models to test
-const IMAGE_MODELS = [
-	{ name: 'FLUX Pro 1.1', id: 'fal-ai/flux-pro/v1.1', provider: 'fal' },
-	{ name: 'FLUX.1 Dev', id: 'fal-ai/flux/dev', provider: 'fal' },
-	{ name: 'FLUX.1 Schnell', id: 'fal-ai/flux/schnell', provider: 'fal' },
-	{ name: 'Realistic Vision V6', id: 'fal-ai/realistic-vision', provider: 'fal' },
-	{ name: 'Stable Diffusion XL', id: 'fal-ai/fast-sdxl', provider: 'fal' },
-	{ name: 'Lustify SDXL', id: 'lustify-sdxl', provider: 'venice' },
-	{ name: 'FLUX Dev Uncensored', id: 'flux-dev-uncensored', provider: 'venice' },
-	{ name: 'Deliberate v3', id: 'deliberate-v3', provider: 'modelslab' },
-	{ name: 'EpicRealism Natural Sin', id: 'epicrealism-natural-sin', provider: 'modelslab' },
-	{ name: 'Juggernaut XL v9', id: 'juggernaut-xl-v9', provider: 'modelslab' },
-	{ name: 'Realistic Vision v5.1', id: 'realistic-vision-v51', provider: 'modelslab' },
+// Architecture types for prompt selection
+type Architecture = 'flux' | 'flux2' | 'sdxl' | 'sd15' | 'sd35';
+
+// Image models to test (14 total: 4 Flux, 5 SDXL, 3 SD1.5, 2 SD3.5)
+// Note: Removed Venice flux-dev and flux-dev-uncensored (deprecated Oct 2025)
+// Note: Replaced SDXL Turbo with SDXL Lightning (deprecated)
+const IMAGE_MODELS: Array<{ name: string; id: string; provider: string; arch: Architecture }> = [
+	// Flux models (4)
+	{ name: 'FLUX Pro 1.1', id: 'fal-ai/flux-pro/v1.1', provider: 'fal', arch: 'flux' },
+	{ name: 'FLUX.1 Dev', id: 'fal-ai/flux/dev', provider: 'fal', arch: 'flux' },
+	{ name: 'FLUX.1 Schnell', id: 'fal-ai/flux/schnell', provider: 'fal', arch: 'flux' },
+	{ name: 'FLUX.2 Turbo', id: 'fal-ai/flux-2/turbo', provider: 'fal', arch: 'flux2' },
+	// SDXL models (5)
+	{ name: 'Stable Diffusion XL', id: 'fal-ai/fast-sdxl', provider: 'fal', arch: 'sdxl' },
+	{ name: 'SDXL Lightning', id: 'fal-ai/fast-lightning-sdxl', provider: 'fal', arch: 'sdxl' },
+	{ name: 'Lustify SDXL', id: 'lustify-sdxl', provider: 'venice', arch: 'sdxl' },
+	{ name: 'Juggernaut XL', id: 'juggernaut-xl', provider: 'modelslab', arch: 'sdxl' },
+	{ name: 'EpicRealism XL', id: 'epicrealism-xl', provider: 'modelslab', arch: 'sdxl' },
+	// SD1.5 models (3)
+	{ name: 'Realistic Vision V6', id: 'fal-ai/realistic-vision', provider: 'fal', arch: 'sd15' },
+	{ name: 'Realistic Vision v5.1', id: 'realistic-vision-v51', provider: 'modelslab', arch: 'sd15' },
+	{ name: 'Deliberate v3', id: 'deliberate-v3', provider: 'modelslab', arch: 'sd15' },
+	// SD3.5 models (2)
+	{ name: 'SD3.5 Large', id: 'fal-ai/stable-diffusion-v35-large', provider: 'fal', arch: 'sd35' },
+	{ name: 'SD3.5 Medium', id: 'fal-ai/stable-diffusion-v35-medium', provider: 'fal', arch: 'sd35' },
 ];
 
-// Character planning prompt
-const CHARACTER_SYSTEM_PROMPT = `You are a character designer for an adult AI companion app.
+// Architecture-specific prompts (from Blue's research)
+const PROMPTS: Record<Architecture, { positive: string; negative: string }> = {
+	flux: {
+		positive: `IMG_1025.HEIC, candid medium shot of a 25-year-old woman with warm brown eyes and honey-blonde hair loosely tied back. Natural, imperfect skin texture with visible pores and light freckles across her nose. Soft grey cotton sweater, relaxed posture. Warm diffused lighting from window on left, soft shadows on jawline. Shot on 35mm film, f/1.8, shallow depth of field, slight film grain. Cinematic, intimate mood.`,
+		negative: 'bad hands, deformed, blurry, watermark, text'
+	},
+	flux2: {
+		positive: `IMG_1025.HEIC, candid medium shot of a 25-year-old woman with warm brown eyes and honey-blonde hair loosely tied back. Natural, imperfect skin texture with visible pores and light freckles across her nose. Soft grey cotton sweater, relaxed posture. Warm diffused lighting from window on left, soft shadows on jawline. Shot on 35mm film, f/1.8, shallow depth of field, slight film grain. Cinematic, intimate mood.`,
+		negative: 'bad hands, deformed, blurry, watermark, text'
+	},
+	sdxl: {
+		positive: `Photo of a beautiful 25 year old woman, warm brown eyes, honey-blonde hair in messy bun, natural look, no heavy makeup. Detailed skin, subsurface scattering, natural pores. Soft grey sweater, cozy morning vibe. Shot on Sony A7R IV, 85mm lens, f/2.8, soft window lighting, shallow depth of field. (masterpiece:1.2), (best quality), raw photo, hyperrealistic, 8k uhd.`,
+		negative: '(worst quality:1.2), (bad quality:1.2), cartoon, anime, 3d, painting, illustration, cgi, plastic skin, smooth skin, bad anatomy, bad hands, extra fingers, text, watermark'
+	},
+	sd15: {
+		positive: `RAW photo, close up portrait of a 25 year old woman, warm brown eyes, honey-blonde hair, natural look, no makeup, soft grey sweater, window lighting, soft shadows, film grain, dslr, 8k, extremely detailed, highly detailed skin, skin pores, sharp focus, (intricate details:1.2), (fujifilm:1.1)`,
+		negative: '(deformed iris, deformed pupils, semi-realistic, cgi, 3d, render, sketch, cartoon, drawing, anime:1.4), text, cropped, out of frame, worst quality, low quality, jpeg artifacts, ugly, duplicate, morbid, mutilated, extra fingers, mutated hands, poorly drawn hands, poorly drawn face, mutation, deformed, blurry, bad anatomy, bad proportions, extra limbs, cloned face, disfigured, gross proportions, malformed limbs, missing arms, missing legs, extra arms, extra legs, fused fingers, too many fingers, long neck'
+	},
+	sd35: {
+		positive: `IMG_1025.HEIC, candid medium shot of a 25-year-old woman with warm brown eyes and honey-blonde hair loosely tied back. Natural, imperfect skin texture with visible pores and light freckles across her nose. Soft grey cotton sweater, relaxed posture. Warm diffused lighting from window on left, soft shadows on jawline. Shot on 35mm film, f/1.8, shallow depth of field, slight film grain. Cinematic, intimate mood.`,
+		negative: 'bad hands, deformed, blurry, watermark, text, ugly, low quality'
+	}
+};
 
-Given a character description, create a complete character sheet.
-
-Output valid JSON with this structure:
-{
-  "name": "Character name",
-  "personality": "2-3 sentences about personality and kinks",
-  "physical_anchors": {
-    "face": "face shape and features",
-    "eyes": "eye color and shape",
-    "hair": "color, length, style",
-    "skin": "tone and texture",
-    "body": "body type, breasts, ass",
-    "distinctive": "unique features like tattoos, piercings"
-  },
-  "image_prompt": "A detailed prompt for generating an image of this character. Include: physical description, clothing/state of dress, pose, setting, lighting. Make it detailed enough for an image generator."
-}
-
-Output ONLY the JSON, no other text.`;
-
-const CHARACTER_USER_PROMPT = `Mei, 22, Japanese-American, fitness influencer, cute face, big natural breasts, toned body with visible abs, round firm ass`;
-
-interface CharacterSheet {
-	name: string;
-	personality: string;
-	physical_anchors: {
-		face: string;
-		eyes: string;
-		hair: string;
-		skin: string;
-		body: string;
-		distinctive: string;
-	};
-	image_prompt: string;
-}
-
-function getTestCharacter(): CharacterSheet {
-	// Hardcoded test character for image tournament
-	// Focus is on testing image models, not character generation
-	return {
-		name: 'Mei',
-		personality: 'Energetic fitness influencer with a playful streak. Enjoys teasing and showing off her physique.',
-		physical_anchors: {
-			face: 'Cute face with high cheekbones, large expressive eyes, full lips',
-			eyes: 'Almond-shaped bright brown eyes',
-			hair: 'Long wavy dark brown hair, often in a high ponytail',
-			skin: 'Fair skin with a healthy glow, smooth and flawless',
-			body: 'Toned athletic body with visible abs, big natural breasts, round firm ass',
-			distinctive: 'Small cherry blossom tattoo on left hip, belly button piercing'
-		},
-		image_prompt: 'Beautiful 22 year old Japanese-American fitness influencer named Mei, cute face with high cheekbones and full lips, big expressive brown eyes, long wavy dark brown hair in a high ponytail, toned athletic body with visible abs, big natural breasts, round firm ass, wearing a tight black sports bra and matching yoga shorts, standing in a modern gym with natural lighting from large windows, confident playful smile, photorealistic, grainy film texture, 8k detail'
-	};
-}
-
-async function generateWithFal(prompt: string, modelId: string): Promise<Buffer> {
+async function generateWithFal(prompt: string, negativePrompt: string, modelId: string): Promise<Buffer> {
 	const isSchnell = modelId.includes('schnell');
-	const steps = isSchnell ? 4 : 28;
+	const isTurbo = modelId.includes('turbo');
+	const isLightning = modelId.includes('lightning');
+	const steps = isSchnell ? 4 : isLightning ? 4 : isTurbo ? 8 : 28;
 
 	const response = await fetch(`https://fal.run/${modelId}`, {
 		method: 'POST',
@@ -103,7 +84,7 @@ async function generateWithFal(prompt: string, modelId: string): Promise<Buffer>
 		},
 		body: JSON.stringify({
 			prompt,
-			negative_prompt: 'bad hands, deformed, blurry, watermark, text, ugly, old',
+			negative_prompt: negativePrompt,
 			image_size: { width: 768, height: 1024 },
 			num_inference_steps: steps,
 			seed: Math.floor(Math.random() * 2147483647),
@@ -128,7 +109,7 @@ async function generateWithFal(prompt: string, modelId: string): Promise<Buffer>
 	return Buffer.from(await imageResponse.arrayBuffer());
 }
 
-async function generateWithVenice(prompt: string, modelId: string): Promise<Buffer> {
+async function generateWithVenice(prompt: string, negativePrompt: string, modelId: string): Promise<Buffer> {
 	const response = await fetch('https://api.venice.ai/api/v1/image/generate', {
 		method: 'POST',
 		headers: {
@@ -138,7 +119,7 @@ async function generateWithVenice(prompt: string, modelId: string): Promise<Buff
 		body: JSON.stringify({
 			model: modelId,
 			prompt,
-			negative_prompt: 'bad hands, deformed, blurry, watermark, text, ugly, old',
+			negative_prompt: negativePrompt,
 			width: 768,
 			height: 1024,
 			steps: 25,
@@ -169,7 +150,7 @@ async function generateWithVenice(prompt: string, modelId: string): Promise<Buff
 	throw new Error('No image data in Venice response');
 }
 
-async function generateWithModelsLab(prompt: string, modelId: string): Promise<Buffer> {
+async function generateWithModelsLab(prompt: string, negativePrompt: string, modelId: string): Promise<Buffer> {
 	const response = await fetch('https://modelslab.com/api/v6/images/text2img', {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
@@ -177,7 +158,7 @@ async function generateWithModelsLab(prompt: string, modelId: string): Promise<B
 			key: MODELSLAB_API_KEY,
 			model_id: modelId,
 			prompt,
-			negative_prompt: 'bad hands, deformed, blurry, watermark, text, ugly, old',
+			negative_prompt: negativePrompt,
 			width: '768',
 			height: '1024',
 			samples: '1',
@@ -231,26 +212,46 @@ async function generateWithModelsLab(prompt: string, modelId: string): Promise<B
 	return Buffer.from(await imageResponse.arrayBuffer());
 }
 
-async function generateImage(prompt: string, model: typeof IMAGE_MODELS[0]): Promise<Buffer> {
+async function generateImage(model: typeof IMAGE_MODELS[0]): Promise<{ buffer: Buffer; latencyMs: number }> {
+	const prompts = PROMPTS[model.arch];
+	const startTime = Date.now();
+
+	let buffer: Buffer;
 	switch (model.provider) {
 		case 'fal':
-			return generateWithFal(prompt, model.id);
+			buffer = await generateWithFal(prompts.positive, prompts.negative, model.id);
+			break;
 		case 'venice':
-			return generateWithVenice(prompt, model.id);
+			buffer = await generateWithVenice(prompts.positive, prompts.negative, model.id);
+			break;
 		case 'modelslab':
-			return generateWithModelsLab(prompt, model.id);
+			buffer = await generateWithModelsLab(prompts.positive, prompts.negative, model.id);
+			break;
 		default:
 			throw new Error(`Unknown provider: ${model.provider}`);
 	}
+
+	return { buffer, latencyMs: Date.now() - startTime };
 }
 
-function generateHTML(character: CharacterSheet): string {
+function generateHTML(results: Array<{ model: string; arch: string; avgLatencyMs: number; successCount: number }>): string {
 	const modelDirs = fs.readdirSync(OUTPUT_DIR).filter(d =>
 		fs.statSync(path.join(OUTPUT_DIR, d)).isDirectory()
 	).sort();
 
+	// Create a lookup from dir name to model info
+	const modelLookup = new Map<string, typeof IMAGE_MODELS[0]>();
+	for (const m of IMAGE_MODELS) {
+		const dirName = m.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+		modelLookup.set(dirName, m);
+	}
+
 	let modelsHtml = '';
 	for (const dir of modelDirs) {
+		const model = modelLookup.get(dir);
+		const result = results.find(r => r.model.toLowerCase().replace(/[^a-z0-9]+/g, '-') === dir);
+		const latencyStr = result && result.successCount > 0 ? `${(result.avgLatencyMs / 1000).toFixed(1)}s avg` : 'FAILED';
+
 		const images = fs.readdirSync(path.join(OUTPUT_DIR, dir))
 			.filter(f => f.endsWith('.png'))
 			.sort();
@@ -261,7 +262,7 @@ function generateHTML(character: CharacterSheet): string {
 
 		modelsHtml += `
     <div class="model-row">
-      <h2>${dir}</h2>
+      <h2>${model?.name || dir} <span class="arch">${model?.arch || '?'}</span> <span class="latency">${latencyStr}</span></h2>
       <div class="images">
         ${imagesHtml}
       </div>
@@ -271,7 +272,7 @@ function generateHTML(character: CharacterSheet): string {
 	return `<!DOCTYPE html>
 <html>
 <head>
-  <title>Image Tournament - ${character.name}</title>
+  <title>Image Tournament - Round 1</title>
   <style>
     * { box-sizing: border-box; }
     body {
@@ -282,22 +283,37 @@ function generateHTML(character: CharacterSheet): string {
       padding: 20px;
     }
     h1 { text-align: center; margin-bottom: 10px; }
-    .prompt {
+    .info {
       background: #2a2a2a;
       padding: 15px;
       border-radius: 8px;
       margin-bottom: 30px;
-      max-width: 800px;
+      max-width: 900px;
       margin-left: auto;
       margin-right: auto;
     }
-    .prompt h3 { margin: 0 0 10px 0; color: #888; }
-    .prompt p { margin: 0; line-height: 1.5; }
+    .info h3 { margin: 0 0 10px 0; color: #888; }
+    .info p { margin: 0 0 10px 0; line-height: 1.5; font-size: 14px; }
     .model-row { margin-bottom: 40px; }
     .model-row h2 {
       margin: 0 0 15px 0;
       padding-bottom: 10px;
       border-bottom: 1px solid #333;
+    }
+    .arch {
+      font-size: 14px;
+      color: #888;
+      font-weight: normal;
+      background: #333;
+      padding: 2px 8px;
+      border-radius: 4px;
+      margin-left: 10px;
+    }
+    .latency {
+      font-size: 14px;
+      color: #4ade80;
+      font-weight: normal;
+      margin-left: 10px;
     }
     .images {
       display: flex;
@@ -331,11 +347,13 @@ function generateHTML(character: CharacterSheet): string {
   </style>
 </head>
 <body>
-  <h1>Image Tournament: ${character.name}</h1>
+  <h1>Image Tournament: Round 1</h1>
 
-  <div class="prompt">
-    <h3>Image Prompt</h3>
-    <p>${character.image_prompt}</p>
+  <div class="info">
+    <h3>Tournament Setup</h3>
+    <p><strong>Models:</strong> ${IMAGE_MODELS.length} total (4 Flux, 5 SDXL, 3 SD1.5, 2 SD3.5)</p>
+    <p><strong>Prompts:</strong> Architecture-specific (natural language for Flux/SD3.5, keyword-style for SDXL/SD1.5)</p>
+    <p><strong>Judge on:</strong> Photorealism, attractiveness, speed</p>
   </div>
 
   ${modelsHtml}
@@ -362,7 +380,6 @@ function generateHTML(character: CharacterSheet): string {
 
 async function main() {
 	// Check API keys
-	if (!OPENROUTER_API_KEY) throw new Error('OPENROUTER_API_KEY not set');
 	if (!FAL_API_KEY) throw new Error('FAL_API_KEY not set');
 	if (!VENICE_API_KEY) throw new Error('VENICE_API_KEY not set');
 	if (!MODELSLAB_API_KEY) throw new Error('MODELSLAB_API_KEY not set');
@@ -373,17 +390,21 @@ async function main() {
 	}
 	fs.mkdirSync(OUTPUT_DIR, { recursive: true });
 
-	// Step 1: Get test character
-	const character = getTestCharacter();
-	console.log('Character:', character.name);
-	console.log('Image prompt:', character.image_prompt);
-	console.log('\n' + '='.repeat(80) + '\n');
+	// Step 1: Log tournament info
+	console.log('Model Tournament - Architecture-Specific Prompts');
+	console.log('='.repeat(60));
+	console.log(`\nModels: ${IMAGE_MODELS.length}`);
+	console.log('Architectures: flux, flux2, sdxl, sd15, sd35');
+	console.log('\n' + '='.repeat(60) + '\n');
 
-	// Save character JSON
+	// Save prompts JSON for reference
 	fs.writeFileSync(
-		path.join(OUTPUT_DIR, 'character.json'),
-		JSON.stringify(character, null, 2)
+		path.join(OUTPUT_DIR, 'prompts.json'),
+		JSON.stringify(PROMPTS, null, 2)
 	);
+
+	// Track results with latency
+	const results: Array<{ model: string; arch: string; avgLatencyMs: number; successCount: number }> = [];
 
 	// Step 2: Generate images for each model
 	for (const model of IMAGE_MODELS) {
@@ -391,25 +412,49 @@ async function main() {
 		const modelDir = path.join(OUTPUT_DIR, dirName);
 		fs.mkdirSync(modelDir, { recursive: true });
 
-		console.log(`\n${model.name} (${model.provider})`);
+		console.log(`\n${model.name} (${model.provider}, ${model.arch})`);
+
+		const latencies: number[] = [];
+		let successCount = 0;
 
 		for (let i = 1; i <= 3; i++) {
 			process.stdout.write(`  Image ${i}/3... `);
 			try {
-				const imageBuffer = await generateImage(character.image_prompt, model);
+				const { buffer, latencyMs } = await generateImage(model);
 				const imagePath = path.join(modelDir, `${i}.png`);
-				fs.writeFileSync(imagePath, imageBuffer);
-				console.log('✓');
+				fs.writeFileSync(imagePath, buffer);
+				latencies.push(latencyMs);
+				successCount++;
+				console.log(`✓ ${(latencyMs / 1000).toFixed(1)}s`);
 			} catch (error) {
 				console.log(`✗ ${error instanceof Error ? error.message : error}`);
 			}
 		}
+
+		const avgLatency = latencies.length > 0 ? latencies.reduce((a, b) => a + b, 0) / latencies.length : 0;
+		results.push({ model: model.name, arch: model.arch, avgLatencyMs: avgLatency, successCount });
+	}
+
+	// Save results JSON
+	fs.writeFileSync(path.join(OUTPUT_DIR, 'results.json'), JSON.stringify(results, null, 2));
+
+	// Print summary table
+	console.log('\n' + '='.repeat(60));
+	console.log('\nLatency Summary:');
+	console.log('-'.repeat(60));
+	results.sort((a, b) => a.avgLatencyMs - b.avgLatencyMs);
+	for (const r of results) {
+		if (r.successCount > 0) {
+			console.log(`  ${r.model.padEnd(25)} ${r.arch.padEnd(6)} ${(r.avgLatencyMs / 1000).toFixed(1)}s avg`);
+		} else {
+			console.log(`  ${r.model.padEnd(25)} ${r.arch.padEnd(6)} FAILED`);
+		}
 	}
 
 	// Step 3: Generate HTML gallery
-	console.log('\n' + '='.repeat(80));
+	console.log('\n' + '='.repeat(60));
 	console.log('\nGenerating HTML gallery...');
-	const html = generateHTML(character);
+	const html = generateHTML(results);
 	fs.writeFileSync(path.join(OUTPUT_DIR, 'index.html'), html);
 
 	console.log(`\nDone! Open: file://${OUTPUT_DIR}/index.html`);
