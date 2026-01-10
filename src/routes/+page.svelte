@@ -36,6 +36,9 @@
 	// Currently selected persona (determines who receives next message)
 	let selectedPersona = $state<string>(data.selectedPersona || DEFAULT_PERSONA);
 
+	// Default content owner for PasteArea (persisted to user_settings)
+	let defaultContentOwner = $state<string>(data.defaultContentOwner || 'system');
+
 	// Accent color for current persona (send button, input bar)
 	const currentAccentColor = $derived(getPersonaAccentColor(selectedPersona));
 	const currentAccentBg = $derived(getPersonaAccentBg(selectedPersona));
@@ -1040,6 +1043,77 @@
 			});
 		} catch (error) {
 			console.error('Failed to save persona:', error);
+		}
+	}
+
+	// Handle content owner change from PasteArea
+	// Switches persona selector, persists owner, and triggers auto-prompt for persona owners
+	async function handleContentOwnerChange(newOwner: string, fileId: string) {
+		// Update local state
+		defaultContentOwner = newOwner;
+
+		// Switch to that persona if it's a real persona (not system/canon)
+		const isPersonaOwner = !!PERSONAS[newOwner];
+		if (isPersonaOwner) {
+			selectedPersona = newOwner;
+		}
+
+		// Persist both to database
+		try {
+			await fetch('/api/settings', {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					selected_persona: selectedPersona,
+					default_content_owner: newOwner
+				})
+			});
+		} catch (error) {
+			console.error('Failed to save content owner:', error);
+		}
+
+		// Auto-prompt: if owner is a persona, trigger them to respond to the uploaded content
+		if (isPersonaOwner && fileId) {
+			// Get persona display name for direct prompt
+			const displayName = PERSONAS[newOwner].displayName;
+			const autoPrompt = `${displayName}, see this file. Respond to Boss contextually.`;
+
+			// Clear input (don't leave stale prefix)
+			inputMessage = '';
+			resetTextareaHeight();
+
+			// Send the auto-prompt with the uploaded file as context
+			await sendMessage(
+				autoPrompt,
+				newOwner,
+				undefined, // no chart
+				undefined, // no chart source
+				[fileId],  // include just-uploaded file as context
+				undefined, // no whiteboards
+				undefined  // no designer canvases
+			);
+
+			// Add the response to the message list (same as handleSend)
+			if ($currentMessage) {
+				const now = new Date().toISOString();
+				const messageId = $currentMessage.superjournal_id || crypto.randomUUID();
+
+				allMessages = [...allMessages, {
+					id: messageId,
+					user_message: $currentMessage.boss,
+					ai_response: $currentMessage.ai,
+					persona_name: newOwner,
+					created_at: now,
+					is_starred: false
+				}];
+				totalMessageCount++;
+
+				await tick();
+				scrollToLastTurn(CHAT_CONFIG);
+			}
+
+			// Reset input to persona prefix for follow-up
+			inputMessage = getPersonaPrefix();
 		}
 	}
 
@@ -2316,6 +2390,8 @@
 		<PasteArea
 			onClose={() => showFilePaste = false}
 			onSuccess={handleFilePasteSuccess}
+			onOwnerChange={handleContentOwnerChange}
+			defaultOwner={defaultContentOwner}
 		/>
 	{/if}
 

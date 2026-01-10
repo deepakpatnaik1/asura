@@ -97,7 +97,10 @@ export const settingsUpdateSchema = z.object({
 	watched_article_id: z.string().uuid().nullable().optional(),
 
 	// Focus mode persistence
-	focused_message_id: z.string().uuid().nullable().optional()
+	focused_message_id: z.string().uuid().nullable().optional(),
+
+	// Content ownership (PasteArea default owner)
+	default_content_owner: z.string().optional()
 }).refine(
 	(data) => Object.keys(data).length > 0,
 	{ message: 'At least one field must be provided' }

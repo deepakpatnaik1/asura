@@ -104,11 +104,11 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession, supabase 
 		};
 	});
 
-	// Fetch user settings (for selected_persona, watched_article_id, focused_message_id)
+	// Fetch user settings (for selected_persona, watched_article_id, focused_message_id, default_content_owner)
 	const { data: settings } = await monitor.track('fetchSettings', async () =>
 		await supabase
 			.from('user_settings')
-			.select('selected_persona, default_model, watched_article_id, focused_message_id')
+			.select('selected_persona, default_model, watched_article_id, focused_message_id, default_content_owner')
 			.eq('user_id', user!.id)
 			.single()
 	);
@@ -133,6 +133,7 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession, supabase 
 		selectedPersona: settings?.selected_persona || 'gunnar',
 		defaultModel: settings?.default_model || 'claude-haiku-4-5-20251001',
 		watchedArticleId: settings?.watched_article_id || null,
-		focusedMessageId: settings?.focused_message_id || null
+		focusedMessageId: settings?.focused_message_id || null,
+		defaultContentOwner: settings?.default_content_owner || 'system'
 	};
 };

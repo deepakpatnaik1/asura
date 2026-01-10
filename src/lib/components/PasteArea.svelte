@@ -3,20 +3,41 @@
 	 * PasteArea - Content paste area
 	 *
 	 * Accepts HTML (Firefox Reader Mode), plain text (markdown, Claude docs),
-	 * or drag & dropped images. Tier selector at top: Ephemeral, Persistent, Canon.
+	 * or drag & dropped images/PDFs. Two dropdowns: Lifecycle and Owner.
+	 * Format is auto-detected. Default owner is "Unassigned" (system).
+	 * Scan processing triggers for Felix-owned images.
 	 */
 	import { tick } from 'svelte';
 
 	interface Props {
 		onClose: () => void;
 		onSuccess: (id: string, title: string, content: string, superjournalId?: string) => void;
+		onOwnerChange?: (owner: string, fileId: string) => void;
+		defaultOwner?: string;
 	}
 
-	let { onClose, onSuccess }: Props = $props();
+	let { onClose, onSuccess, onOwnerChange, defaultOwner = 'system' }: Props = $props();
 
-	// Tier selection: ephemeral (default), persistent (strategic), canon, or scan
-	type Tier = 'ephemeral' | 'persistent' | 'canon' | 'scan';
-	let selectedTier = $state<Tier>('ephemeral');
+	// Lifecycle: ephemeral (default) or persistent
+	type Lifecycle = 'ephemeral' | 'persistent';
+	let lifecycle = $state<Lifecycle>('ephemeral');
+
+	// Owner: which persona owns this content (system = unassigned, canon = shared by all)
+	type Owner = 'system' | 'felix' | 'gunnar' | 'kirby' | 'samara' | 'alicja' | 'eva' | 'ananya' | 'canon';
+	let owner = $state<Owner>((defaultOwner as Owner) || 'system');
+
+	// Owner display names and colors
+	const ownerConfig: Record<Owner, { label: string; color: string }> = {
+		system: { label: 'System', color: 'hsl(var(--border))' },
+		felix: { label: 'Felix', color: 'var(--felix-accent, #f59e0b)' },
+		gunnar: { label: 'Gunnar', color: 'var(--gunnar-accent, #3b82f6)' },
+		kirby: { label: 'Kirby', color: 'var(--kirby-accent, #ec4899)' },
+		samara: { label: 'Samara', color: 'var(--samara-accent, #10b981)' },
+		alicja: { label: 'Alicja', color: 'var(--alicja-accent, #8b5cf6)' },
+		eva: { label: 'Eva', color: 'var(--eva-accent, #f43f5e)' },
+		ananya: { label: 'Ananya', color: 'var(--ananya-accent, #06b6d4)' },
+		canon: { label: 'Canon', color: 'var(--boss-accent)' }
+	};
 	let isProcessing = $state(false);
 	let processingStatus = $state('');
 	let processingError = $state<string | null>(null);
@@ -38,13 +59,11 @@
 		}
 	});
 
-	// Dynamic placeholder based on tier
-	const placeholder = $derived(
-		selectedTier === 'scan'
-			? 'Drop a scan here (receipt, invoice, letter, etc.)...'
-			: 'Paste content or drop images/PDFs here...'
-	);
-	const accentVar = 'var(--boss-accent)';
+	// Placeholder text
+	const placeholder = 'Paste content or drop images/PDFs here...';
+
+	// Accent color based on owner
+	const accentVar = $derived(ownerConfig[owner].color);
 
 	// Supported image types
 	const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'];
@@ -135,6 +154,10 @@
 			const responseContent = data.content || '';
 			const superjournalId = data.superjournal_id;
 			onSuccess(id, title, responseContent, superjournalId);
+			// Notify parent of owner change for persona switching, persistence, and auto-prompt
+			if (owner !== 'system' && owner !== 'canon' && onOwnerChange) {
+				onOwnerChange(owner, id);
+			}
 			onClose();
 		} catch (error) {
 			processingError = error instanceof Error ? error.message : 'Failed to link file';
@@ -148,17 +171,19 @@
 		processingError = null;
 
 		try {
-			processingStatus = selectedTier !== 'ephemeral' ? 'Generating artisan cut...' : 'Processing...';
+			processingStatus = lifecycle === 'persistent' ? 'Generating artisan cut...' : 'Processing...';
 
-			// Map tier selection to API tier value
-			const tier = selectedTier === 'canon' ? 'canon' : (selectedTier === 'persistent' ? 'strategic' : 'ephemeral');
+			// Map lifecycle/owner to API tier value
+			// Canon owner → tier='canon', otherwise lifecycle determines tier
+			const tier = owner === 'canon' ? 'canon' : (lifecycle === 'persistent' ? 'strategic' : 'ephemeral');
 
 			const response = await fetch('/api/chat/files', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					content,
-					tier
+					tier,
+					owner: owner !== 'canon' ? owner : undefined // Pass owner for Phase 3
 				})
 			});
 
@@ -178,6 +203,10 @@
 			const responseContent = data.content || '';
 			const superjournalId = data.superjournal_id;
 			onSuccess(id, title, responseContent, superjournalId);
+			// Notify parent of owner change for persona switching, persistence, and auto-prompt
+			if (owner !== 'system' && owner !== 'canon' && onOwnerChange) {
+				onOwnerChange(owner, id);
+			}
 			onClose();
 		} catch (error) {
 			processingError = error instanceof Error ? error.message : 'Upload failed';
@@ -251,12 +280,8 @@
 			return;
 		}
 
-		// Route based on tier
-		if (selectedTier === 'scan') {
-			await processScan(imageFile);
-		} else {
-			await uploadImage(imageFile);
-		}
+		// All images go through regular upload — no automatic Grok processing
+		await uploadImage(imageFile);
 	}
 
 	async function uploadImage(file: File) {
@@ -267,6 +292,11 @@
 		try {
 			const formData = new FormData();
 			formData.append('image', file);
+
+			// Pass owner for Phase 3 (images ignore lifecycle)
+			if (owner !== 'system') {
+				formData.append('owner', owner);
+			}
 
 			const response = await fetch('/api/chat/files/upload', {
 				method: 'POST',
@@ -289,49 +319,13 @@
 			const content = data.content || '';
 			const superjournalId = data.superjournal_id;
 			onSuccess(id, title, content, superjournalId);
+			// Notify parent of owner change for persona switching, persistence, and auto-prompt
+			if (owner !== 'system' && owner !== 'canon' && onOwnerChange) {
+				onOwnerChange(owner, id);
+			}
 			onClose();
 		} catch (error) {
 			processingError = error instanceof Error ? error.message : 'Upload failed';
-			isProcessing = false;
-		}
-	}
-
-	async function processScan(file: File) {
-		isProcessing = true;
-		processingStatus = 'Uploading scan...';
-		processingError = null;
-
-		try {
-			const formData = new FormData();
-			formData.append('image', file);
-
-			// Upload and process scan via dedicated endpoint
-			const response = await fetch('/api/chat/files/scan', {
-				method: 'POST',
-				body: formData
-			});
-
-			if (!response.ok) {
-				const data = await response.json();
-				throw new Error(data.error?.message || 'Scan processing failed');
-			}
-
-			processingStatus = 'Extracting information...';
-
-			const data = await response.json();
-
-			processingStatus = 'Done!';
-			await new Promise((r) => setTimeout(r, 300));
-
-			// Success - close and notify parent
-			const id = data.file_id || data.article_id || data.id;
-			const title = data.title || 'Untitled Scan';
-			const content = data.content || '';
-			const superjournalId = data.superjournal_id;
-			onSuccess(id, title, content, superjournalId);
-			onClose();
-		} catch (error) {
-			processingError = error instanceof Error ? error.message : 'Scan processing failed';
 			isProcessing = false;
 		}
 	}
@@ -345,15 +339,14 @@
 			const formData = new FormData();
 			formData.append('pdf', file);
 
-			// Map tier selection to API tier value
-			const tier =
-				selectedTier === 'canon'
-					? 'canon'
-					: selectedTier === 'persistent'
-						? 'strategic'
-						: 'ephemeral';
-
+			// Map lifecycle/owner to API tier value
+			const tier = owner === 'canon' ? 'canon' : (lifecycle === 'persistent' ? 'strategic' : 'ephemeral');
 			formData.append('tier', tier);
+
+			// Pass owner for Phase 3
+			if (owner !== 'canon') {
+				formData.append('owner', owner);
+			}
 
 			const response = await fetch('/api/chat/files/pdf', {
 				method: 'POST',
@@ -378,6 +371,10 @@
 			const content = data.content || '';
 			const superjournalId = data.superjournal_id;
 			onSuccess(id, title, content, superjournalId);
+			// Notify parent of owner change for persona switching, persistence, and auto-prompt
+			if (owner !== 'system' && owner !== 'canon' && onOwnerChange) {
+				onOwnerChange(owner, id);
+			}
 			onClose();
 		} catch (error) {
 			processingError = error instanceof Error ? error.message : 'PDF processing failed';
@@ -399,29 +396,43 @@
 			</div>
 		</div>
 	{:else}
-		<!-- Tier Selector - at top, hidden during processing or when file path detected -->
+		<!-- Dropdowns - at top, hidden during processing or when file path detected -->
 		{#if !isProcessing && !isFilePath}
-			<div class="tier-selector">
-				<button
-					class="tier-option"
-					class:selected={selectedTier === 'ephemeral'}
-					onclick={() => selectedTier = 'ephemeral'}
-				>Ephemeral</button>
-				<button
-					class="tier-option"
-					class:selected={selectedTier === 'persistent'}
-					onclick={() => selectedTier = 'persistent'}
-				>Persistent</button>
-				<button
-					class="tier-option"
-					class:selected={selectedTier === 'canon'}
-					onclick={() => selectedTier = 'canon'}
-				>Canon</button>
-				<button
-					class="tier-option"
-					class:selected={selectedTier === 'scan'}
-					onclick={() => selectedTier = 'scan'}
-				>Scan</button>
+			<div class="dropdown-row">
+				<!-- Lifecycle Dropdown -->
+				<div class="dropdown-group">
+					<label class="dropdown-label" for="lifecycle-select">Lifecycle</label>
+					<select
+						id="lifecycle-select"
+						class="dropdown"
+						bind:value={lifecycle}
+					>
+						<option value="ephemeral">Ephemeral</option>
+						<option value="persistent">Persistent</option>
+					</select>
+				</div>
+
+				<!-- Owner Dropdown -->
+				<div class="dropdown-group">
+					<label class="dropdown-label" for="owner-select">Owner</label>
+					<select
+						id="owner-select"
+						class="dropdown"
+						bind:value={owner}
+					>
+						<option value="system">{ownerConfig.system.label}</option>
+						<option disabled>─────────</option>
+						<option value="felix">{ownerConfig.felix.label}</option>
+						<option value="gunnar">{ownerConfig.gunnar.label}</option>
+						<option value="kirby">{ownerConfig.kirby.label}</option>
+						<option value="samara">{ownerConfig.samara.label}</option>
+						<option value="alicja">{ownerConfig.alicja.label}</option>
+						<option value="eva">{ownerConfig.eva.label}</option>
+						<option value="ananya">{ownerConfig.ananya.label}</option>
+						<option disabled>─────────</option>
+						<option value="canon">{ownerConfig.canon.label}</option>
+					</select>
+				</div>
 			</div>
 		{/if}
 
@@ -641,33 +652,53 @@
 		opacity: 1;
 	}
 
-	/* Tier Selector - segmented control at top */
-	.tier-selector {
+	/* Dropdown Row - two dropdowns side by side */
+	.dropdown-row {
 		display: flex;
-		gap: 8px;
+		gap: 16px;
 		margin-bottom: 12px;
 	}
 
-	.tier-option {
+	.dropdown-group {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
 		flex: 1;
+	}
+
+	.dropdown-label {
+		font-size: 8pt;
+		color: hsl(var(--foreground) / 0.6);
+	}
+
+	.dropdown {
 		padding: 8px 12px;
 		background: transparent;
 		border: 1px solid hsl(var(--border));
 		border-radius: 6px;
 		cursor: pointer;
-		transition: all 0.15s;
-		font-size: 9pt;
+		font-size: 8pt;
 		font-weight: 500;
 		color: hsl(var(--foreground));
+		appearance: none;
+		background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+		background-repeat: no-repeat;
+		background-position: right 10px center;
+		padding-right: 32px;
 	}
 
-	.tier-option:hover {
+	.dropdown:hover {
 		border-color: hsl(var(--foreground) / 0.5);
 	}
 
-	.tier-option.selected {
-		background: var(--accent);
+	.dropdown:focus {
+		outline: none;
 		border-color: var(--accent);
-		color: hsl(var(--background));
 	}
+
+	.dropdown option {
+		background: hsl(var(--background));
+		color: hsl(var(--foreground));
+	}
+
 </style>
