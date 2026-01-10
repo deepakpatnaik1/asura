@@ -131,6 +131,13 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			// Extract title from markdown or filename
 			const title = extractTitleFromMarkdown(fileContent, source_path);
 
+			// Deselect all existing content before selecting new one
+			await supabase
+				.from('articles')
+				.update({ is_enabled: false })
+				.eq('user_id', userId)
+				.eq('is_enabled', true);
+
 			// Save to database with source_path (always ephemeral for linked files)
 			const { data: file, error: insertError } = await supabase
 				.from('articles')
@@ -298,6 +305,13 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			// Ephemeral: Extract title from HTML directly, no artisan cut
 			title = await extractTitleFromHtml(content);
 		}
+
+		// Deselect all existing content before selecting new one
+		await supabase
+			.from('articles')
+			.update({ is_enabled: false })
+			.eq('user_id', userId)
+			.eq('is_enabled', true);
 
 		// Save to database (store readable text, not raw HTML)
 		const { data: file, error: insertError } = await supabase

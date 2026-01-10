@@ -11,6 +11,7 @@ export { PERSONA_SAMARA } from './personas/samara';
 export { PERSONA_ALICJA } from './personas/alicja';
 export { PERSONA_EVA } from './personas/eva';
 export { PERSONA_ANANYA } from './personas/ananya';
+export { PERSONA_FELIX } from './personas/felix';
 
 import { PERSONA_GUNNAR } from './personas/gunnar';
 import { PERSONA_KIRBY } from './personas/kirby';
@@ -18,6 +19,7 @@ import { PERSONA_SAMARA } from './personas/samara';
 import { PERSONA_ALICJA } from './personas/alicja';
 import { PERSONA_EVA } from './personas/eva';
 import { PERSONA_ANANYA } from './personas/ananya';
+import { PERSONA_FELIX } from './personas/felix';
 
 /** Lookup map for persona prompts by name */
 const PERSONA_PROMPTS: Record<string, string> = {
@@ -26,7 +28,8 @@ const PERSONA_PROMPTS: Record<string, string> = {
 	samara: PERSONA_SAMARA,
 	alicja: PERSONA_ALICJA,
 	eva: PERSONA_EVA,
-	ananya: PERSONA_ANANYA
+	ananya: PERSONA_ANANYA,
+	felix: PERSONA_FELIX
 };
 
 /**
@@ -52,8 +55,8 @@ function formatCurrentTime(): string {
 export function getPersonaPrompt(personaName: string): string {
 	let prompt = PERSONA_PROMPTS[personaName] || PERSONA_GUNNAR;
 
-	// Inject current time for Alicja
-	if (personaName === 'alicja') {
+	// Inject current time for productivity personas (Alicja, Felix)
+	if (personaName === 'alicja' || personaName === 'felix') {
 		prompt = prompt.replace('{{CURRENT_TIME}}', formatCurrentTime());
 	}
 

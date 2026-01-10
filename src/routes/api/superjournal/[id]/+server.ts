@@ -85,6 +85,58 @@ export const DELETE: RequestHandler = async ({ params, locals: { supabase, safeG
 	const { id } = params;
 
 	try {
+		// First, check if this message has a linked article (via content_id or content marker)
+		const { data: message } = await supabase
+			.from('superjournal')
+			.select('content_id, ai_response')
+			.eq('id', id)
+			.eq('user_id', userId)
+			.single();
+
+		let articleIdToDelete: string | null = null;
+
+		if (message) {
+			// Check content_id column (PDFs, scans, image uploads)
+			if (message.content_id) {
+				articleIdToDelete = message.content_id;
+			} else if (message.ai_response) {
+				// Check for old content marker pattern <!--content:uuid-->
+				const markerMatch = message.ai_response.match(/<!--content:([a-f0-9-]+)-->/);
+				if (markerMatch) {
+					articleIdToDelete = markerMatch[1];
+				}
+			}
+		}
+
+		// Delete linked article if found (this cascades to charts and cleans up storage)
+		if (articleIdToDelete) {
+			// Fetch charts for storage cleanup
+			const { data: charts } = await supabase
+				.from('article_charts')
+				.select('storage_path, thumbnail_path')
+				.eq('content_id', articleIdToDelete)
+				.eq('user_id', userId);
+
+			// Delete files from storage
+			const storagePaths: string[] = [];
+			if (charts && charts.length > 0) {
+				for (const chart of charts) {
+					if (chart.storage_path) storagePaths.push(chart.storage_path);
+					if (chart.thumbnail_path) storagePaths.push(chart.thumbnail_path);
+				}
+			}
+			if (storagePaths.length > 0) {
+				await supabase.storage.from('content').remove(storagePaths);
+			}
+
+			// Delete the article (FK cascade handles charts)
+			await supabase
+				.from('articles')
+				.delete()
+				.eq('id', articleIdToDelete)
+				.eq('user_id', userId);
+		}
+
 		// Delete from superjournal (cascade will handle journal)
 		// CRITICAL: Include user_id check to prevent cross-user deletions
 		const { error } = await supabase
@@ -97,7 +149,7 @@ export const DELETE: RequestHandler = async ({ params, locals: { supabase, safeG
 			return databaseError('Failed to delete message');
 		}
 
-		return json({ success: true, id });
+		return json({ success: true, id, deleted_article_id: articleIdToDelete });
 	} catch (error) {
 		return internalError();
 	}

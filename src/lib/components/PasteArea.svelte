@@ -5,18 +5,17 @@
 	 * Accepts HTML (Firefox Reader Mode), plain text (markdown, Claude docs),
 	 * or drag & dropped images. Tier selector at top: Ephemeral, Persistent, Canon.
 	 */
+	import { tick } from 'svelte';
 
 	interface Props {
 		onClose: () => void;
 		onSuccess: (id: string, title: string, content: string, superjournalId?: string) => void;
-		/** Callback when an image is uploaded */
-		onImageUploaded?: () => void;
 	}
 
-	let { onClose, onSuccess, onImageUploaded }: Props = $props();
+	let { onClose, onSuccess }: Props = $props();
 
-	// Tier selection: ephemeral (default), persistent (strategic), or canon
-	type Tier = 'ephemeral' | 'persistent' | 'canon';
+	// Tier selection: ephemeral (default), persistent (strategic), canon, or scan
+	type Tier = 'ephemeral' | 'persistent' | 'canon' | 'scan';
 	let selectedTier = $state<Tier>('ephemeral');
 	let isProcessing = $state(false);
 	let processingStatus = $state('');
@@ -39,11 +38,19 @@
 		}
 	});
 
-	const placeholder = 'Paste content or drop images here...';
+	// Dynamic placeholder based on tier
+	const placeholder = $derived(
+		selectedTier === 'scan'
+			? 'Drop a scan here (receipt, invoice, letter, etc.)...'
+			: 'Paste content or drop images/PDFs here...'
+	);
 	const accentVar = 'var(--boss-accent)';
 
 	// Supported image types
 	const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'];
+
+	// Supported document types (PDFs)
+	const PDF_TYPE = 'application/pdf';
 
 	async function handlePaste(event: ClipboardEvent) {
 		event.preventDefault();
@@ -223,14 +230,33 @@
 		const files = event.dataTransfer?.files;
 		if (!files || files.length === 0) return;
 
-		// Get first image file
-		const imageFile = Array.from(files).find((f) => IMAGE_TYPES.includes(f.type));
-		if (!imageFile) {
-			processingError = 'Please drop an image file (JPEG, PNG, GIF, WebP, or SVG)';
+		// Show spinner immediately to eliminate the "stuck" feeling
+		isProcessing = true;
+		processingStatus = 'Processing...';
+		await tick(); // Force DOM update before async work
+
+		// Check for PDF first
+		const pdfFile = Array.from(files).find((f) => f.type === PDF_TYPE);
+		if (pdfFile) {
+			await processPdf(pdfFile);
 			return;
 		}
 
-		await uploadImage(imageFile);
+		// Get first image file
+		const imageFile = Array.from(files).find((f) => IMAGE_TYPES.includes(f.type));
+		if (!imageFile) {
+			isProcessing = false;
+			processingStatus = '';
+			processingError = 'Please drop an image or PDF file';
+			return;
+		}
+
+		// Route based on tier
+		if (selectedTier === 'scan') {
+			await processScan(imageFile);
+		} else {
+			await uploadImage(imageFile);
+		}
 	}
 
 	async function uploadImage(file: File) {
@@ -252,16 +278,109 @@
 				throw new Error(data.error?.message || 'Upload failed');
 			}
 
+			const data = await response.json();
+
 			processingStatus = 'Done!';
 			await new Promise((r) => setTimeout(r, 300));
 
-			// Notify parent that an image was uploaded (to refresh carousel)
-			if (onImageUploaded) {
-				onImageUploaded();
-			}
+			// Success - close and notify parent (consistent with PDF/scan workflow)
+			const id = data.file_id || data.id;
+			const title = data.title || 'Uploaded Image';
+			const content = data.content || '';
+			const superjournalId = data.superjournal_id;
+			onSuccess(id, title, content, superjournalId);
 			onClose();
 		} catch (error) {
 			processingError = error instanceof Error ? error.message : 'Upload failed';
+			isProcessing = false;
+		}
+	}
+
+	async function processScan(file: File) {
+		isProcessing = true;
+		processingStatus = 'Uploading scan...';
+		processingError = null;
+
+		try {
+			const formData = new FormData();
+			formData.append('image', file);
+
+			// Upload and process scan via dedicated endpoint
+			const response = await fetch('/api/chat/files/scan', {
+				method: 'POST',
+				body: formData
+			});
+
+			if (!response.ok) {
+				const data = await response.json();
+				throw new Error(data.error?.message || 'Scan processing failed');
+			}
+
+			processingStatus = 'Extracting information...';
+
+			const data = await response.json();
+
+			processingStatus = 'Done!';
+			await new Promise((r) => setTimeout(r, 300));
+
+			// Success - close and notify parent
+			const id = data.file_id || data.article_id || data.id;
+			const title = data.title || 'Untitled Scan';
+			const content = data.content || '';
+			const superjournalId = data.superjournal_id;
+			onSuccess(id, title, content, superjournalId);
+			onClose();
+		} catch (error) {
+			processingError = error instanceof Error ? error.message : 'Scan processing failed';
+			isProcessing = false;
+		}
+	}
+
+	async function processPdf(file: File) {
+		isProcessing = true;
+		processingStatus = 'Uploading PDF...';
+		processingError = null;
+
+		try {
+			const formData = new FormData();
+			formData.append('pdf', file);
+
+			// Map tier selection to API tier value
+			const tier =
+				selectedTier === 'canon'
+					? 'canon'
+					: selectedTier === 'persistent'
+						? 'strategic'
+						: 'ephemeral';
+
+			formData.append('tier', tier);
+
+			const response = await fetch('/api/chat/files/pdf', {
+				method: 'POST',
+				body: formData
+			});
+
+			if (!response.ok) {
+				const data = await response.json();
+				throw new Error(data.error?.message || 'PDF processing failed');
+			}
+
+			processingStatus = 'Extracting text...';
+
+			const data = await response.json();
+
+			processingStatus = 'Done!';
+			await new Promise((r) => setTimeout(r, 300));
+
+			// Success - close and notify parent
+			const id = data.file_id || data.article_id || data.id;
+			const title = data.title || 'Untitled PDF';
+			const content = data.content || '';
+			const superjournalId = data.superjournal_id;
+			onSuccess(id, title, content, superjournalId);
+			onClose();
+		} catch (error) {
+			processingError = error instanceof Error ? error.message : 'PDF processing failed';
 			isProcessing = false;
 		}
 	}
@@ -298,6 +417,11 @@
 					class:selected={selectedTier === 'canon'}
 					onclick={() => selectedTier = 'canon'}
 				>Canon</button>
+				<button
+					class="tier-option"
+					class:selected={selectedTier === 'scan'}
+					onclick={() => selectedTier = 'scan'}
+				>Scan</button>
 			</div>
 		{/if}
 

@@ -1,8 +1,8 @@
 /**
- * Image Upload API
+ * Scan Upload API
  *
- * POST: Accept drag & drop image uploads, store in Supabase and create chart entry.
- * Images appear in the carousel and can be sent to AI for analysis.
+ * POST: Accept scanned document images (receipts, invoices, letters, etc.),
+ * extract information using Grok vision, and store with artisan cut.
  */
 
 import { json } from '@sveltejs/kit';
@@ -16,15 +16,100 @@ import {
 	uploadSvgToStorage,
 	optimizeImage
 } from '$lib/capabilities/image-extraction';
+import { SCAN_ARTISAN_CUT_PROMPT } from '$lib/prompts/scan-artisan-cut';
+import { OPENROUTER_API_KEY } from '$env/static/private';
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'];
 const MAX_SIZE = 50 * 1024 * 1024; // 50MB (will be optimized down)
 
+// Grok 4.1 Fast via OpenRouter for vision extraction
+const SCAN_MODEL = 'x-ai/grok-4.1-fast';
+
 /**
- * POST /api/chat/files/upload
+ * Extract information from scan using Grok vision
+ */
+async function extractFromScan(
+	base64Image: string,
+	mediaType: string
+): Promise<{ title: string; artisanCut: string }> {
+	const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+			'HTTP-Referer': 'https://aether.vercel.app',
+			'X-Title': 'Aether'
+		},
+		body: JSON.stringify({
+			model: SCAN_MODEL,
+			messages: [
+				{
+					role: 'system',
+					content: SCAN_ARTISAN_CUT_PROMPT
+				},
+				{
+					role: 'user',
+					content: [
+						{
+							type: 'image_url',
+							image_url: {
+								url: `data:${mediaType};base64,${base64Image}`
+							}
+						},
+						{
+							type: 'text',
+							text: 'Extract all information from this scanned document.'
+						}
+					]
+				}
+			],
+			max_tokens: 4096,
+			temperature: 0.3 // Low temperature for accurate extraction
+		})
+	});
+
+	if (!response.ok) {
+		const errorText = await response.text();
+		throw new Error(`Vision API error: ${response.status} - ${errorText}`);
+	}
+
+	const data = await response.json();
+	const content = data.choices?.[0]?.message?.content || '';
+
+	// Parse JSON response
+	try {
+		// Handle potential markdown code fencing
+		let jsonStr = content;
+		if (jsonStr.startsWith('```json')) {
+			jsonStr = jsonStr.slice(7);
+		} else if (jsonStr.startsWith('```')) {
+			jsonStr = jsonStr.slice(3);
+		}
+		if (jsonStr.endsWith('```')) {
+			jsonStr = jsonStr.slice(0, -3);
+		}
+		jsonStr = jsonStr.trim();
+
+		const parsed = JSON.parse(jsonStr);
+		return {
+			title: parsed.title || 'Untitled Scan',
+			artisanCut: JSON.stringify(parsed, null, 2)
+		};
+	} catch {
+		// If JSON parsing fails, use the raw content
+		console.warn('Failed to parse scan extraction as JSON, using raw content');
+		return {
+			title: 'Untitled Scan',
+			artisanCut: content
+		};
+	}
+}
+
+/**
+ * POST /api/chat/files/scan
  *
  * Accepts FormData with 'image' file.
- * Creates a content entry + chart record for the uploaded image.
+ * Extracts information using Grok vision, stores image and creates content entry.
  */
 export const POST: RequestHandler = async ({ request, locals: { safeGetSession, supabase } }) => {
 	const auth = await requireAuth(safeGetSession);
@@ -65,19 +150,24 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		// Optimize raster images (resize to 1568px max, compress to JPEG/PNG)
 		let imageBuffer: Buffer;
 		let ext: string;
+		let mediaType: string;
 
 		if (isSvg) {
 			imageBuffer = rawBuffer;
 			ext = 'svg';
+			mediaType = 'image/svg+xml';
 		} else {
 			const optimized = await optimizeImage(rawBuffer);
 			imageBuffer = optimized.buffer;
 			ext = optimized.isPng ? 'png' : 'jpg';
+			mediaType = optimized.isPng ? 'image/png' : 'image/jpeg';
 		}
 
-		// Extract filename for alt text (without extension)
-		const originalName = imageFile.name || 'Uploaded image';
-		const altText = originalName.replace(/\.[^/.]+$/, '');
+		// Convert to base64 for vision API
+		const base64Image = imageBuffer.toString('base64');
+
+		// Extract information using Grok vision
+		const { title, artisanCut } = await extractFromScan(base64Image, mediaType);
 
 		// Deselect all existing content before selecting new one
 		await supabase
@@ -86,15 +176,16 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			.eq('user_id', userId)
 			.eq('is_enabled', true);
 
-		// 1. Create a minimal content entry (required for the charts FK)
+		// Create content entry with scan tier
 		const { data: contentData, error: contentError } = await supabase
 			.from('articles')
 			.insert({
 				user_id: userId,
-				title: altText,
-				raw_content: `[Uploaded image: ${originalName}]`,
-				artisan_cut: `[Image: ${altText}]`,
-				is_enabled: true // Enabled so image appears in carousel
+				title: title,
+				raw_content: `[Scanned document: ${title}]`,
+				artisan_cut: artisanCut,
+				tier: 'scan',
+				is_enabled: true
 			})
 			.select('id')
 			.single();
@@ -107,33 +198,32 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		const contentId = contentData.id;
 		const bucket = 'content';
 
-		// 2. Upload image to storage
-		const imagePath = `images/${userId}/${contentId}/upload-1.${ext}`;
+		// Upload image to storage
+		const imagePath = `scans/${userId}/${contentId}/scan.${ext}`;
 		if (isSvg) {
 			await uploadSvgToStorage(imageBuffer, bucket, imagePath);
 		} else {
 			await uploadImageToStorage(imageBuffer, bucket, imagePath);
 		}
 
-		// 3. Generate and upload thumbnail
-		let thumbnailPath = `thumbnails/${userId}/${contentId}/upload-1.jpg`;
+		// Generate and upload thumbnail
+		let thumbnailPath = `thumbnails/${userId}/${contentId}/scan.jpg`;
 		try {
 			const thumbnailBuffer = await generateThumbnail(imageBuffer);
 			await uploadThumbnailToStorage(thumbnailBuffer, bucket, thumbnailPath);
 		} catch (thumbErr) {
-			// SVGs may fail thumbnail generation, use original as fallback
 			console.warn('Thumbnail generation failed, using original:', thumbErr);
 			thumbnailPath = imagePath;
 		}
 
-		// 4. Create chart record
+		// Create chart record (so scan appears in carousel)
 		const { error: chartError } = await supabase.from('article_charts').insert({
 			content_id: contentId,
 			user_id: userId,
 			chart_index: 1,
 			storage_path: imagePath,
 			thumbnail_path: thumbnailPath,
-			alt_text: altText
+			alt_text: title
 		});
 
 		if (chartError) {
@@ -143,14 +233,14 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			return databaseError('Failed to create chart entry');
 		}
 
-		// 5. Create superjournal entry (consistent with PDF/scan workflow)
+		// Create superjournal entry (no content marker - scan image lives in canvas, not message turn)
 		const { data: sjData, error: sjError } = await supabase
 			.from('superjournal')
 			.insert({
 				user_id: userId,
-				persona_name: 'system',
-				user_message: `Boss uploaded image: ${altText}`,
-				ai_response: `Image uploaded: **${altText}**. View in canvas →`,
+				persona_name: 'felix', // Scans belong to Felix
+				user_message: `Boss uploaded scan: ${title}`,
+				ai_response: `Scan uploaded: **${title}**. View in canvas →`,
 				content_id: contentId
 			})
 			.select('id')
@@ -165,12 +255,12 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			success: true,
 			id: contentId,
 			file_id: contentId,
-			title: altText,
-			content: `Image uploaded: **${altText}**. View in canvas →`,
+			title: title,
+			content: `Scan uploaded: **${title}**. View in canvas →`,
 			superjournal_id: sjData?.id
 		});
 	} catch (error) {
-		console.error('Upload error:', error);
-		return databaseError('Failed to upload image');
+		console.error('Scan processing error:', error);
+		return databaseError(error instanceof Error ? error.message : 'Failed to process scan');
 	}
 };

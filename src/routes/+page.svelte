@@ -1219,8 +1219,18 @@
 			try {
 				const response = await fetch(`/api/superjournal/${messageId}`, { method: 'DELETE' });
 				if (!response.ok) throw new Error('Delete failed');
+
+				const result = await response.json();
+
+				// Remove message from UI
 				allMessages = allMessages.filter(msg => msg.id !== messageId);
 				totalMessageCount--;
+
+				// If a linked article was also deleted, remove it from articles list and reload charts
+				if (result.deleted_article_id) {
+					articles = articles.filter(a => a.id !== result.deleted_article_id);
+					await loadFileCharts();
+				}
 			} catch (err) {
 				console.error('[Message] Delete failed:', err);
 			}
@@ -1900,8 +1910,11 @@
 	}
 
 	async function scrollToArticle(articleId: string) {
-		// Find the message that contains this article's content
-		const message = allMessages.find(m => m.ai_response?.includes(`<!--content:${articleId}-->`));
+		// Find the message linked to this article (both old content marker and new content_id patterns)
+		const message = allMessages.find(m =>
+			m.ai_response?.includes(`<!--content:${articleId}-->`) ||
+			m.content_id === articleId
+		);
 		if (!message) return;
 
 		// Scroll to the message element
@@ -1990,7 +2003,11 @@
 					articles = originalArticles;
 				} else {
 					const beforeCount = allMessages.length;
-					allMessages = allMessages.filter(m => !m.ai_response?.startsWith(`<!--content:${articleId}-->`));
+					// Remove messages linked to this article (both old content marker and new content_id patterns)
+					allMessages = allMessages.filter(m =>
+						!m.ai_response?.includes(`<!--content:${articleId}-->`) &&
+						m.content_id !== articleId
+					);
 					totalMessageCount -= (beforeCount - allMessages.length);
 					await loadFileCharts();
 				}
@@ -2025,6 +2042,13 @@
 		setWatchedArticle(fileId);
 		await loadFileCharts();
 		forceCanvas = 'carousel'; // Switch to carousel when content is pasted
+
+		// Auto-open lightbox to first chart if content has visual elements
+		const firstChartIndex = allCharts.findIndex((c) => c.file_id === fileId);
+		if (firstChartIndex !== -1) {
+			selectedChartIndex = firstChartIndex;
+			showLightbox = true;
+		}
 	}
 
 	function handleChartDeleteClick(chartId: string) {
@@ -2292,10 +2316,6 @@
 		<PasteArea
 			onClose={() => showFilePaste = false}
 			onSuccess={handleFilePasteSuccess}
-			onImageUploaded={async () => {
-				await loadFileCharts();
-				forceCanvas = 'carousel';
-			}}
 		/>
 	{/if}
 

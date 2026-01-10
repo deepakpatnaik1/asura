@@ -52,7 +52,7 @@
 
 <div class="scroll-controls">
 	<button
-		class="control-btn hit-target"
+		class="control-btn"
 		class:active={autoScroll.isActive}
 		title={autoScroll.isActive ? 'Stop auto-scroll' : 'Start auto-scroll'}
 		onclick={autoScroll.toggle}
@@ -60,7 +60,7 @@
 		<Icon src={autoScroll.isActive ? LuPause : LuPlay} size="11" />
 	</button>
 	<button
-		class="control-btn hit-target"
+		class="control-btn"
 		title="Next turn (hold for continuous)"
 		onmousedown={() => startHold('next')}
 		onmouseup={stopHold}
@@ -69,7 +69,7 @@
 		<Icon src={LuArrowDown} size="11" />
 	</button>
 	<button
-		class="control-btn hit-target"
+		class="control-btn"
 		title="Previous turn (hold for continuous)"
 		onmousedown={() => startHold('prev')}
 		onmouseup={stopHold}

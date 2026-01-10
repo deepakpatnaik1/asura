@@ -41,6 +41,8 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supab
 		.eq('user_id', userId)
 		.not('content_id', 'is', null)
 		.order('is_pinned', { ascending: false })
+		.order('content_id', { ascending: true }) // Group pages from same document
+		.order('chart_index', { ascending: true }) // Pages in order within document
 		.order('created_at', { ascending: false });
 
 	// Filter by specific content IDs if provided

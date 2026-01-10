@@ -198,6 +198,36 @@ const ALICJA_TOOLS: ToolName[] = [
 ];
 
 /**
+ * Felix: Money to-dos persona - financial, bureaucratic, business admin
+ * Same context and tools as Alicja (retiring her ~end of month)
+ */
+const FELIX_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic', 'active', 'todos', 'diary', 'tags'];
+
+/**
+ * Felix tools: Same as Alicja - full productivity suite
+ */
+const FELIX_TOOLS: ToolName[] = [
+	'create_todo',
+	'complete_todo',
+	'reopen_todo',
+	'update_todo',
+	'delete_todo',
+	'create_tag',
+	'delete_tag',
+	'rename_tag',
+	'merge_tags',
+	'log_diary',
+	'update_diary',
+	'delete_diary',
+	'log_fitness',
+	'list_calendar_events',
+	'create_calendar_event',
+	'update_calendar_event',
+	'delete_calendar_event',
+	'check_calendar_availability'
+];
+
+/**
  * Persona configurations
  */
 export const PERSONAS: Record<string, Persona> = {
@@ -261,6 +291,16 @@ export const PERSONAS: Record<string, Persona> = {
 		compression: true,
 		tools: ANANYA_TOOLS
 	},
+	felix: {
+		name: 'felix',
+		displayName: 'Felix',
+		accentColor: getPaletteColor('felix'),
+		model: null, // Will use Grok 4.1 Fast once configured
+		systemPrompt: 'felix', // Money to-dos persona
+		contextChunks: FELIX_CHUNKS,
+		compression: true,
+		tools: FELIX_TOOLS
+	},
 	system: {
 		name: 'system',
 		displayName: 'System',
@@ -276,7 +316,7 @@ export const PERSONAS: Record<string, Persona> = {
 /**
  * Persona names as const array for type safety
  */
-export const PERSONA_NAMES = ['gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya'] as const;
+export const PERSONA_NAMES = ['gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya', 'felix'] as const;
 export type PersonaName = (typeof PERSONA_NAMES)[number];
 
 /**

@@ -134,12 +134,22 @@ export const DELETE: RequestHandler = async ({ params, locals: { safeGetSession,
 		await supabase.storage.from('content').remove(storagePaths);
 	}
 
-	// 3. DELETE ASSOCIATED SUPERJOURNAL ENTRY (content marker in ai_response)
-	await supabase
-		.from('superjournal')
-		.delete()
-		.eq('user_id', userId)
-		.like('ai_response', `<!--content:${id}-->%`);
+	// 3. DELETE ASSOCIATED SUPERJOURNAL ENTRIES
+	// Two patterns: old (content marker in ai_response) and new (content_id column)
+	await Promise.all([
+		// Old pattern: <!--content:uuid--> in ai_response
+		supabase
+			.from('superjournal')
+			.delete()
+			.eq('user_id', userId)
+			.like('ai_response', `%<!--content:${id}-->%`),
+		// New pattern: content_id column (used by PDF, scan, image uploads)
+		supabase
+			.from('superjournal')
+			.delete()
+			.eq('user_id', userId)
+			.eq('content_id', id)
+	]);
 
 	// 4. DELETE CONTENT FROM DATABASE (CASCADE handles charts via FK)
 	// No mode filter - user owns the content, ID is unique
