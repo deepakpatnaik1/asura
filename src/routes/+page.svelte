@@ -1048,7 +1048,7 @@
 
 	// Handle content owner change from PasteArea
 	// Switches persona selector, persists owner, and triggers auto-prompt for persona owners
-	async function handleContentOwnerChange(newOwner: string, fileId: string) {
+	async function handleContentOwnerChange(newOwner: string, fileId: string, chartId?: string) {
 		// Update local state
 		defaultContentOwner = newOwner;
 
@@ -1082,13 +1082,14 @@
 			inputMessage = '';
 			resetTextareaHeight();
 
-			// Send the auto-prompt with the uploaded file as context
+			// Send the auto-prompt with the uploaded content as context
+			// Images need chart_id (for vision API), text files need article_ids
 			await sendMessage(
 				autoPrompt,
 				newOwner,
-				undefined, // no chart
-				undefined, // no chart source
-				[fileId],  // include just-uploaded file as context
+				chartId,           // chart_id for images (vision API)
+				chartId ? 'file' as const : undefined,  // chart_source
+				chartId ? undefined : [fileId],  // article_ids for text content only
 				undefined, // no whiteboards
 				undefined  // no designer canvases
 			);

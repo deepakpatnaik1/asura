@@ -12,7 +12,7 @@
 	interface Props {
 		onClose: () => void;
 		onSuccess: (id: string, title: string, content: string, superjournalId?: string) => void;
-		onOwnerChange?: (owner: string, fileId: string) => void;
+		onOwnerChange?: (owner: string, fileId: string, chartId?: string) => void;
 		defaultOwner?: string;
 	}
 
@@ -318,10 +318,12 @@
 			const title = data.title || 'Uploaded Image';
 			const content = data.content || '';
 			const superjournalId = data.superjournal_id;
+			const chartId = data.chart_id; // For vision API - images need chart_id, not article_id
 			onSuccess(id, title, content, superjournalId);
 			// Notify parent of owner change for persona switching, persistence, and auto-prompt
+			// Pass chartId so images can be sent to vision API
 			if (owner !== 'system' && owner !== 'canon' && onOwnerChange) {
-				onOwnerChange(owner, id);
+				onOwnerChange(owner, id, chartId);
 			}
 			onClose();
 		} catch (error) {

@@ -126,22 +126,24 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			thumbnailPath = imagePath;
 		}
 
-		// 4. Create chart record
-		const { error: chartError } = await supabase.from('article_charts').insert({
+		// 4. Create chart record (return ID for vision API)
+		const { data: chartData, error: chartError } = await supabase.from('article_charts').insert({
 			content_id: contentId,
 			user_id: userId,
 			chart_index: 1,
 			storage_path: imagePath,
 			thumbnail_path: thumbnailPath,
 			alt_text: altText
-		});
+		}).select('id').single();
 
-		if (chartError) {
+		if (chartError || !chartData) {
 			console.error('Chart insert error:', chartError);
 			// Clean up - delete the content entry
 			await supabase.from('articles').delete().eq('id', contentId);
 			return databaseError('Failed to create chart entry');
 		}
+
+		const chartId = chartData.id;
 
 		// 5. Create superjournal entry (consistent with PDF/scan workflow)
 		const { data: sjData, error: sjError } = await supabase
@@ -165,6 +167,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			success: true,
 			id: contentId,
 			file_id: contentId,
+			chart_id: chartId,
+			is_image: true,
 			title: altText,
 			content: `Image uploaded: **${altText}**. View in canvas →`,
 			superjournal_id: sjData?.id
