@@ -407,7 +407,7 @@
 							<Icon src={LuStar} size="11" />
 						</button>
 						{#if item.source_path}
-							{#if item.owner}
+							{#if item.owner && item.owner !== 'system'}
 								<span class="watch-spacer"></span>
 							{:else}
 								<button
@@ -491,7 +491,7 @@
 						>
 							<Icon src={LuStar} size="11" />
 						</button>
-						{#if item.source_path && !item.owner}
+						{#if item.source_path && (!item.owner || item.owner === 'system')}
 							<button
 								class="watch-btn"
 								class:active={watchedArticleId === item.id}
