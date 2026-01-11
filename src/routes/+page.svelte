@@ -598,7 +598,25 @@
 	// Fetch file charts
 	async function loadFileCharts() {
 		try {
-			const response = await fetch('/api/chat/files/charts?enabled_only=true');
+			// Collect IDs from enabled articles
+			const enabledIds = articles.filter(a => a.is_enabled).map(a => a.id);
+
+			// Extract content IDs from displayed messages (content markers)
+			const displayedIds: string[] = [];
+			for (const msg of allMessages) {
+				const match = msg.ai_response?.match(/<!--content:([a-f0-9-]+)-->/);
+				if (match) displayedIds.push(match[1]);
+			}
+
+			// Combine and dedupe - show charts for enabled OR displayed content
+			const allIds = [...new Set([...enabledIds, ...displayedIds])];
+
+			if (allIds.length === 0) {
+				fileCharts = [];
+				return;
+			}
+
+			const response = await fetch(`/api/chat/files/charts?file_ids=${allIds.join(',')}`);
 			if (response.ok) {
 				const data = await response.json();
 				fileCharts = (data.charts || []).map((chart: Chart & { file_id: string }) => ({
