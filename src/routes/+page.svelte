@@ -36,8 +36,9 @@
 	// Currently selected persona (determines who receives next message)
 	let selectedPersona = $state<string>(data.selectedPersona || DEFAULT_PERSONA);
 
-	// Default content owner for PasteArea (persisted to user_settings)
-	let defaultContentOwner = $state<string>(data.defaultContentOwner || 'system');
+	// Last paste settings (persisted to user_settings)
+	let lastContentOwner = $state<string>(data.lastContentOwner || 'system');
+	let lastContentLifecycle = $state<string>(data.lastContentLifecycle || 'ephemeral');
 
 	// Accent color for current persona (send button, input bar)
 	const currentAccentColor = $derived(getPersonaAccentColor(selectedPersona));
@@ -1091,11 +1092,12 @@
 		}
 	}
 
-	// Handle content owner change from PasteArea
-	// Switches persona selector, persists owner, and triggers auto-prompt for persona owners
-	async function handleContentOwnerChange(newOwner: string, fileId: string, chartId?: string) {
+	// Handle paste completion from PasteArea
+	// Saves last selections, switches persona selector, and triggers auto-prompt for persona owners
+	async function handlePasteComplete(newOwner: string, newLifecycle: string, fileId: string, chartId?: string) {
 		// Update local state
-		defaultContentOwner = newOwner;
+		lastContentOwner = newOwner;
+		lastContentLifecycle = newLifecycle;
 
 		// Switch to that persona if it's a real persona (not system/canon)
 		const isPersonaOwner = !!PERSONAS[newOwner];
@@ -1103,18 +1105,19 @@
 			selectedPersona = newOwner;
 		}
 
-		// Persist both to database
+		// Persist to database (always save last selections)
 		try {
 			await fetch('/api/settings', {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					selected_persona: selectedPersona,
-					default_content_owner: newOwner
+					last_content_owner: newOwner,
+					last_content_lifecycle: newLifecycle
 				})
 			});
 		} catch (error) {
-			console.error('Failed to save content owner:', error);
+			console.error('Failed to save paste settings:', error);
 		}
 
 		// Auto-prompt: if owner is a persona, trigger them to respond to the uploaded content
@@ -2436,8 +2439,9 @@
 		<PasteArea
 			onClose={() => showFilePaste = false}
 			onSuccess={handleFilePasteSuccess}
-			onOwnerChange={handleContentOwnerChange}
-			defaultOwner={defaultContentOwner}
+			onPasteComplete={handlePasteComplete}
+			lastOwner={lastContentOwner}
+			lastLifecycle={lastContentLifecycle}
 		/>
 	{/if}
 

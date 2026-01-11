@@ -101,7 +101,8 @@ export const PUT: RequestHandler = async ({ request, locals: { safeGetSession, s
 	if (validatedData.selected_persona !== undefined) updateData.selected_persona = validatedData.selected_persona;
 	if (validatedData.watched_article_id !== undefined) updateData.watched_article_id = validatedData.watched_article_id;
 	if (validatedData.focused_message_id !== undefined) updateData.focused_message_id = validatedData.focused_message_id;
-	if (validatedData.default_content_owner !== undefined) updateData.default_content_owner = validatedData.default_content_owner;
+	if (validatedData.last_content_owner !== undefined) updateData.last_content_owner = validatedData.last_content_owner;
+	if (validatedData.last_content_lifecycle !== undefined) updateData.last_content_lifecycle = validatedData.last_content_lifecycle;
 
 	// Model overrides - check each column
 	for (const col of MODEL_COLUMNS) {

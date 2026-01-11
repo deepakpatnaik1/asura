@@ -12,19 +12,20 @@
 	interface Props {
 		onClose: () => void;
 		onSuccess: (id: string, title: string, content: string, superjournalId?: string) => void;
-		onOwnerChange?: (owner: string, fileId: string, chartId?: string) => void;
-		defaultOwner?: string;
+		onPasteComplete?: (owner: string, lifecycle: string, fileId: string, chartId?: string) => void;
+		lastOwner?: string;
+		lastLifecycle?: string;
 	}
 
-	let { onClose, onSuccess, onOwnerChange, defaultOwner = 'system' }: Props = $props();
+	let { onClose, onSuccess, onPasteComplete, lastOwner = 'system', lastLifecycle = 'ephemeral' }: Props = $props();
 
-	// Lifecycle: ephemeral (default) or persistent
+	// Lifecycle: ephemeral (default) or persistent - initialized from last selection
 	type Lifecycle = 'ephemeral' | 'persistent';
-	let lifecycle = $state<Lifecycle>('ephemeral');
+	let lifecycle = $state<Lifecycle>((lastLifecycle as Lifecycle) || 'ephemeral');
 
-	// Owner: which persona owns this content (system = unassigned, canon = shared by all)
+	// Owner: which persona owns this content - initialized from last selection
 	type Owner = 'system' | 'felix' | 'gunnar' | 'kirby' | 'samara' | 'alicja' | 'eva' | 'ananya' | 'canon';
-	let owner = $state<Owner>((defaultOwner as Owner) || 'system');
+	let owner = $state<Owner>((lastOwner as Owner) || 'system');
 
 	// Owner display names and colors
 	const ownerConfig: Record<Owner, { label: string; color: string }> = {
@@ -154,9 +155,9 @@
 			const responseContent = data.content || '';
 			const superjournalId = data.superjournal_id;
 			onSuccess(id, title, responseContent, superjournalId);
-			// Notify parent of owner change for persona switching, persistence, and auto-prompt
-			if (owner !== 'system' && owner !== 'canon' && onOwnerChange) {
-				onOwnerChange(owner, id);
+			// Save last selections and trigger auto-prompt for persona owners
+			if (onPasteComplete) {
+				onPasteComplete(owner, lifecycle, id);
 			}
 			onClose();
 		} catch (error) {
@@ -203,9 +204,9 @@
 			const responseContent = data.content || '';
 			const superjournalId = data.superjournal_id;
 			onSuccess(id, title, responseContent, superjournalId);
-			// Notify parent of owner change for persona switching, persistence, and auto-prompt
-			if (owner !== 'system' && owner !== 'canon' && onOwnerChange) {
-				onOwnerChange(owner, id);
+			// Save last selections and trigger auto-prompt for persona owners
+			if (onPasteComplete) {
+				onPasteComplete(owner, lifecycle, id);
 			}
 			onClose();
 		} catch (error) {
@@ -320,10 +321,10 @@
 			const superjournalId = data.superjournal_id;
 			const chartId = data.chart_id; // For vision API - images need chart_id, not article_id
 			onSuccess(id, title, content, superjournalId);
-			// Notify parent of owner change for persona switching, persistence, and auto-prompt
+			// Save last selections and trigger auto-prompt for persona owners
 			// Pass chartId so images can be sent to vision API
-			if (owner !== 'system' && owner !== 'canon' && onOwnerChange) {
-				onOwnerChange(owner, id, chartId);
+			if (onPasteComplete) {
+				onPasteComplete(owner, lifecycle, id, chartId);
 			}
 			onClose();
 		} catch (error) {
@@ -373,9 +374,9 @@
 			const content = data.content || '';
 			const superjournalId = data.superjournal_id;
 			onSuccess(id, title, content, superjournalId);
-			// Notify parent of owner change for persona switching, persistence, and auto-prompt
-			if (owner !== 'system' && owner !== 'canon' && onOwnerChange) {
-				onOwnerChange(owner, id);
+			// Save last selections and trigger auto-prompt for persona owners
+			if (onPasteComplete) {
+				onPasteComplete(owner, lifecycle, id);
 			}
 			onClose();
 		} catch (error) {
