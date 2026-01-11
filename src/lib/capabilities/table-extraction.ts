@@ -116,15 +116,21 @@ function extractCaption(text: string, matchIndex: number): string | undefined {
  * | Header | Header |
  * |--------|--------|
  * | Cell   | Cell   |
+ *
+ * Also handles tables inside blockquotes by stripping > prefixes first.
  */
 export function extractMarkdownTables(text: string, startIndex: number = 0): ParsedTable[] {
 	const tables: ParsedTable[] = [];
 	const tableRegex = /^(\|[^\n]+\|)\s*\n(\|[-:\s|]+\|)\s*\n((?:\|[^\n]+\|\s*\n?)+)/gm;
 
+	// Pre-process: strip blockquote prefixes so tables inside blockquotes are found
+	// This converts "> | Header |" to "| Header |"
+	const processedText = text.replace(/^>\s*/gm, '');
+
 	let match;
 	let tableIndex = 0;
 
-	while ((match = tableRegex.exec(text)) !== null) {
+	while ((match = tableRegex.exec(processedText)) !== null) {
 		const headerLine = match[1];
 		const dataLines = match[3].trim().split('\n');
 
@@ -148,8 +154,8 @@ export function extractMarkdownTables(text: string, startIndex: number = 0): Par
 
 		if (rows.length === 0) continue;
 
-		// Extract caption from preceding text
-		const caption = extractCaption(text, match.index);
+		// Extract caption from preceding text (use processed text for consistent indexing)
+		const caption = extractCaption(processedText, match.index);
 
 		tables.push({
 			index: startIndex + tableIndex + 1,

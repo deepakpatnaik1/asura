@@ -108,18 +108,44 @@ function renderTable(tableMatch: string, accent: string, tableIndex: number): st
 }
 
 /**
+ * Render context for tracking state across recursive calls
+ */
+interface RenderContext {
+	tableIndex: number;
+}
+
+/**
+ * Placeholder entry for position-ordered restoration
+ * This ensures table indices are assigned in document order, not extraction order
+ */
+interface PlaceholderEntry {
+	placeholder: string;
+	position: number;
+	type: 'fenced' | 'code' | 'table' | 'quote' | 'url';
+	html?: string;  // Pre-rendered HTML (for code, url)
+	data?: unknown; // Type-specific data for deferred rendering (fenced, table, quote)
+}
+
+/**
  * EXPERIMENT: Raw output with selective formatting
  * @param overrideAccent - Optional accent color override (used for fenced containers)
  * @param overrideAccentBg - Optional accent bg override (used for fenced containers)
+ * @param context - Optional shared context for tracking table indices across recursive calls
  */
 export async function renderMarkdown(
 	markdown: string,
 	persona: string = DEFAULT_PERSONA,
 	overrideAccent?: string,
-	overrideAccentBg?: string
+	overrideAccentBg?: string,
+	context?: RenderContext
 ): Promise<string> {
+	// Use shared context if provided, otherwise create local one
+	const ctx = context || { tableIndex: 0 };
 	const ACCENT = overrideAccent || getPersonaAccentColor(persona);
 	const ACCENT_BG = overrideAccentBg || getPersonaAccentBg(persona);
+
+	// Unified placeholder registry for position-ordered restoration
+	const placeholders: PlaceholderEntry[] = [];
 
 	// Strip content markers (<!--content:uuid-->) used for lazy loading
 	let processed = markdown.replace(/<!--content:[a-f0-9-]+-->\n?/gi, '');
@@ -209,11 +235,12 @@ export async function renderMarkdown(
 	processed = enforceSentenceCase(processed);
 
 	// Render markdown tables with placeholders (protect from escaping)
+	// Use ctx.tableIndex for click-to-lightbox linking (shared across recursive calls)
 	const tables: string[] = [];
 	const tableRegex = /^(\|[^\n]+\|)\s*\n(\|[-:\s|]+\|)\s*\n((?:\|[^\n]+\|[ \t]*\n?)+)/gm;
 	processed = processed.replace(tableRegex, (match) => {
-		const tableIndex = tables.length;
-		const placeholder = `__TABLE_${tableIndex}__`;
+		const tableIndex = ctx.tableIndex++;
+		const placeholder = `__TABLE_${tables.length}__`;
 		tables.push(renderTable(match, ACCENT, tableIndex));
 		// Ensure newline after placeholder so next line starts fresh
 		return placeholder + '\n';
@@ -225,7 +252,6 @@ export async function renderMarkdown(
 	processed = processed.replace(blockQuoteRegex, (match) => {
 		// Parse the block quote, handling nesting
 		const lines = match.trim().split('\n');
-		const processedLines: string[] = [];
 
 		// Detect if this is a Boss feedback callout ([!review])
 		const firstLine = lines[0] || '';
@@ -234,18 +260,45 @@ export async function renderMarkdown(
 		const quoteAccent = isBossCallout ? BOSS_ACCENT : ACCENT;
 		const quoteAccentBg = isBossCallout ? BOSS_ACCENT_BG : ACCENT_BG;
 
+		// First pass: strip > prefixes and collect raw content lines
+		const strippedLines: string[] = [];
 		for (const line of lines) {
-			// Count nesting level (number of > at start, with optional spaces between)
-			// e.g., "> > text" has nest level 2, "> text" has nest level 1
-			const prefixMatch = line.match(/^((?:>\s*)+)/);
-			const nestLevel = prefixMatch ? (prefixMatch[1].match(/>/g) || []).length : 0;
-			let content = line.replace(/^(?:>\s*)+/, '').trim();
-
+			let content = line.replace(/^(?:>\s*)+/, '');
 			// Strip Obsidian callout markers [!type] from start of content
-			// Keeps them in the file for Obsidian styling, but hides in Aether UI
 			content = content.replace(/^\[![\w-]+\]\s*/, '');
+			strippedLines.push(content);
+		}
 
-			if (content) {
+		// Join stripped content to detect tables
+		const strippedContent = strippedLines.join('\n');
+
+		// Detect and render tables within blockquote content
+		// Use ctx.tableIndex for click-to-lightbox linking (shared across recursive calls)
+		const quoteTableRegex = /^(\|[^\n]+\|)\s*\n(\|[-:\s|]+\|)\s*\n((?:\|[^\n]+\|[ \t]*\n?)+)/gm;
+		const quoteTables: string[] = [];
+		const contentWithTablePlaceholders = strippedContent.replace(quoteTableRegex, (tableMatch) => {
+			const localIndex = quoteTables.length;
+			const tableIndex = ctx.tableIndex++;
+			quoteTables.push(renderTable(tableMatch, quoteAccent, tableIndex));
+			return `__QUOTETABLE_${localIndex}__`;
+		});
+
+		// Second pass: process line by line (now with table placeholders)
+		const processedLines: string[] = [];
+		const contentLines = contentWithTablePlaceholders.split('\n');
+
+		for (let i = 0; i < contentLines.length; i++) {
+			const content = contentLines[i];
+
+			// Check if this line is a table placeholder
+			const tablePlaceholderMatch = content.match(/^__QUOTETABLE_(\d+)__$/);
+			if (tablePlaceholderMatch) {
+				const tableIdx = parseInt(tablePlaceholderMatch[1], 10);
+				processedLines.push(quoteTables[tableIdx]);
+				continue;
+			}
+
+			if (content.trim()) {
 				// Escape HTML
 				let formatted = content
 					.replace(/&/g, '&amp;')
@@ -273,13 +326,11 @@ export async function renderMarkdown(
 				formatted = formatted.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, `<span style="display: inline-block; padding: 4px 10px; border-radius: 6px; background: ${CODE_BLOCK_BG}; color: ${quoteAccent}; font-size: 0.85em; margin: 0.5em 0;">[image: $1]</span>`);
 				formatted = formatted.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="$2" target="_blank" rel="noopener" style="display: inline-block; padding: 2px 8px; border-radius: 10px; background: ${quoteAccentBg}; color: ${quoteAccent}; font-size: 0.85em; text-decoration: none;">$1</a>`);
 				// Restore inline code from placeholders
-				for (let i = 0; i < quoteCodePlaceholders.length; i++) {
-					formatted = formatted.replace(`%%QUOTECODE${i}%%`, quoteCodePlaceholders[i]);
+				for (let j = 0; j < quoteCodePlaceholders.length; j++) {
+					formatted = formatted.replace(`%%QUOTECODE${j}%%`, quoteCodePlaceholders[j]);
 				}
 
-				// Indent nested quotes
-				const indent = nestLevel > 1 ? `margin-left: ${(nestLevel - 1) * 1.5}em;` : '';
-				processedLines.push(`<div style="${indent}">${formatted}</div>`);
+				processedLines.push(`<div>${formatted}</div>`);
 			}
 		}
 
@@ -863,7 +914,8 @@ export async function renderMarkdown(
 		const { type, innerContent, containerAccent, containerAccentBg } = JSON.parse(fencedContainers[i]);
 
 		// Recursively render inner content using container's colors (not outer persona's)
-		const renderedInner = await renderMarkdown(innerContent, persona, containerAccent, containerAccentBg);
+		// Pass shared context so table indices continue correctly
+		const renderedInner = await renderMarkdown(innerContent, persona, containerAccent, containerAccentBg, ctx);
 
 		// Build the styled container with class for annotation targeting
 		const containerStyle = `background: ${containerAccentBg}; border-left: 3px solid ${containerAccent}; padding: 1em; margin: 0.5em 0; border-radius: 0 8px 8px 0;`;
