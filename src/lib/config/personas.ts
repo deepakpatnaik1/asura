@@ -127,7 +127,7 @@ const SAMARA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic
 /**
  * Alicja: Chief of Staff - needs productivity data in context for ID lookups
  */
-const ALICJA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic', 'active', 'todos', 'diary', 'tags'];
+const ALICJA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic', 'canon', 'active', 'todos', 'diary', 'tags'];
 
 /**
  * Gunnar whiteboard tools
@@ -144,7 +144,7 @@ const GUNNAR_TOOLS: ToolName[] = [
 /**
  * Eva: Character designer - minimal but not stateless
  */
-const EVA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'active'];
+const EVA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic', 'canon', 'active'];
 
 /**
  * Eva canvas tools (parallel to Gunnar's whiteboard tools)
@@ -201,7 +201,7 @@ const ALICJA_TOOLS: ToolName[] = [
  * Felix: Money to-dos persona - financial, bureaucratic, business admin
  * Same context and tools as Alicja (retiring her ~end of month)
  */
-const FELIX_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic', 'active', 'todos', 'diary', 'tags'];
+const FELIX_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic', 'canon', 'active', 'todos', 'diary', 'tags'];
 
 /**
  * Felix tools: Same as Alicja - full productivity suite

@@ -581,9 +581,63 @@ export async function buildContext(
 	return { context: finalContext, components, stats };
 }
 
-// Format timestamp for context (ISO 8601 format for precise temporal reasoning)
+// Format timestamp for context (human-readable, natural phrasing)
 function formatTimestamp(dateString: string): string {
-	return new Date(dateString).toISOString();
+	const date = new Date(dateString);
+	const now = new Date();
+	const diffMs = now.getTime() - date.getTime();
+	const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+	// Get time of day bucket
+	const hour = date.getHours();
+	let timeOfDay: string;
+	if (hour >= 5 && hour < 12) {
+		timeOfDay = 'morning';
+	} else if (hour >= 12 && hour < 17) {
+		timeOfDay = 'afternoon';
+	} else if (hour >= 17 && hour < 21) {
+		timeOfDay = 'evening';
+	} else {
+		timeOfDay = 'night';
+	}
+
+	// Today
+	if (date.toDateString() === now.toDateString()) {
+		if (diffMs < 60 * 60 * 1000) {
+			// Less than an hour ago
+			const mins = Math.floor(diffMs / (1000 * 60));
+			return mins <= 1 ? 'just now' : `${mins} minutes ago`;
+		}
+		return `this ${timeOfDay}`;
+	}
+
+	// Yesterday
+	const yesterday = new Date(now);
+	yesterday.setDate(yesterday.getDate() - 1);
+	if (date.toDateString() === yesterday.toDateString()) {
+		return `yesterday ${timeOfDay}`;
+	}
+
+	// Within the last week (use day name)
+	if (diffDays < 7) {
+		const dayName = date.toLocaleDateString('en-US', { weekday: 'long' });
+		return `${dayName} ${timeOfDay}`;
+	}
+
+	// Within the last 2 weeks
+	if (diffDays < 14) {
+		return 'last week';
+	}
+
+	// Within the last month
+	if (diffDays < 30) {
+		const weeks = Math.floor(diffDays / 7);
+		return `${weeks} weeks ago`;
+	}
+
+	// Older
+	const months = Math.floor(diffDays / 30);
+	return months === 1 ? 'last month' : `${months} months ago`;
 }
 
 // Format Superjournal history (recent full turns)
