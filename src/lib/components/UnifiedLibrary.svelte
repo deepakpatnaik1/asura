@@ -1,11 +1,12 @@
 <script lang="ts">
 	/**
-	 * UnifiedLibrary - Three-column dropdown for all selectable content
+	 * UnifiedLibrary - Four-column dropdown for all selectable content
 	 *
 	 * Columns:
-	 * 1. Articles - pasted articles/documents
-	 * 2. Whiteboards - Gunnar's scratch pads
-	 * 3. Designer Canvases - Eva's character canvases
+	 * 1. Artisan Cut - canon + strategic articles
+	 * 2. Raw - ephemeral articles (no artisan cut)
+	 * 3. Whiteboards - Gunnar's scratch pads
+	 * 4. Designer Canvases - Eva's character canvases
 	 *
 	 * All selections go into AI context for next message turn.
 	 */
@@ -108,6 +109,19 @@
 		onDesignerCanvasClear,
 		onClose
 	}: Props = $props();
+
+	// Split articles into curated (canon + strategic) and raw (ephemeral)
+	// Canon always at bottom of curated pane
+	const curatedArticles = $derived(
+		articles
+			.filter((a) => a.tier === 'canon' || a.tier === 'strategic')
+			.sort((a, b) => {
+				if (a.tier === 'canon' && b.tier !== 'canon') return 1;
+				if (a.tier !== 'canon' && b.tier === 'canon') return -1;
+				return 0; // Keep original order within same tier
+			})
+	);
+	const rawArticles = $derived(articles.filter((a) => a.tier === 'ephemeral' || !a.tier));
 
 	// Derived state
 	const hasArticleSelection = $derived(articles.some((a) => a.is_enabled));
@@ -321,17 +335,17 @@
 		</div>
 	{/if}
 	<div class="columns-container">
-		<!-- Articles Column -->
+		<!-- Artisan Cut Articles Column (canon + strategic) -->
 		<div class="column">
-		<div class="column-header">Articles</div>
-		{#if articles.length === 0}
-			<div class="column-empty">No articles</div>
+		<div class="column-header">Artisan Cut</div>
+		{#if curatedArticles.length === 0}
+			<div class="column-empty">No artisan cut articles</div>
 		{:else}
 			{#if onArticleClear && hasArticleSelection}
 				<button class="clear-btn" onclick={onArticleClear}>Clear</button>
 			{/if}
 			<div class="column-items">
-				{#each articles as item (item.id)}
+				{#each curatedArticles as item (item.id)}
 					<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
 					<div class="item" class:active={item.is_enabled} onclick={(e) => handleArticleRowClick(item, e)}>
 						{#if item.tier === 'canon'}
@@ -348,6 +362,77 @@
 								{/if}
 							</button>
 						{/if}
+						<div class="item-info">
+							{#if editingArticleId === item.id}
+								<input
+									type="text"
+									class="title-input"
+									bind:value={editingArticleTitle}
+									bind:this={articleInputRef}
+									onkeydown={handleArticleKeydown}
+									onblur={saveArticleEdit}
+									onclick={(e) => e.stopPropagation()}
+								/>
+							{:else}
+								<button class="title-btn" onclick={(e) => startArticleEdit(item, e)}>
+									<span class="item-title">{item.title}</span>
+								</button>
+							{/if}
+							<span class="item-date">{formatDate(item.created_at)}</span>
+						</div>
+						<button
+							class="star-btn"
+							class:active={item.is_starred}
+							onclick={(e) => handleArticleStar(item, e)}
+							title={item.is_starred ? 'Remove bookmark' : 'Bookmark'}
+						>
+							<Icon src={LuStar} size="11" />
+						</button>
+						{#if item.source_path}
+							<button
+								class="watch-btn"
+								class:active={watchedArticleId === item.id}
+								onclick={(e) => handleArticleWatch(item, e)}
+								title={watchedArticleId === item.id ? 'Stop watching' : 'Watch for live updates'}
+							>
+								<Icon src={LuEye} size="11" />
+							</button>
+						{:else}
+							<span class="watch-spacer"></span>
+						{/if}
+						<button
+							class="delete-btn"
+							onclick={(e) => onArticleDelete(item.id, e)}
+							title="Delete"
+						>
+							<Icon src={LuTrash2} size="11" />
+						</button>
+					</div>
+				{/each}
+			</div>
+		{/if}
+	</div>
+
+	<!-- Raw Articles Column (ephemeral) -->
+	<div class="column">
+		<div class="column-header">Raw</div>
+		{#if rawArticles.length === 0}
+			<div class="column-empty">No raw articles</div>
+		{:else}
+			<div class="column-items">
+				{#each rawArticles as item (item.id)}
+					<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+					<div class="item" class:active={item.is_enabled} onclick={(e) => handleArticleRowClick(item, e)}>
+						<button
+							class="toggle-btn"
+							class:active={item.is_enabled}
+							onclick={(e) => handleArticleToggle(item, e)}
+							title={item.is_enabled ? 'Remove from context' : 'Add to context'}
+						>
+							{#if item.is_enabled}
+								<Icon src={LuCheck} size="9" />
+							{/if}
+						</button>
 						<div class="item-info">
 							{#if editingArticleId === item.id}
 								<input
@@ -543,7 +628,7 @@
 		position: fixed;
 		bottom: 80px;
 		left: 72px;
-		width: min(900px, calc(100vw - 144px));
+		width: min(1100px, calc(100vw - 144px));
 		max-height: 400px;
 		display: flex;
 		flex-direction: column;
@@ -578,7 +663,7 @@
 
 	.columns-container {
 		display: grid;
-		grid-template-columns: repeat(3, minmax(0, 1fr));
+		grid-template-columns: repeat(4, minmax(0, 1fr));
 		flex: 1;
 		min-height: 0;
 	}
@@ -674,13 +759,13 @@
 		align-items: center;
 		justify-content: center;
 		color: hsl(var(--foreground));
-		opacity: 0.4;
+		opacity: 0.7;
 		transition: all 0.15s;
 		flex-shrink: 0;
 	}
 
 	.toggle-btn:hover {
-		opacity: 0.8;
+		opacity: 1;
 	}
 
 	.toggle-btn.active {
