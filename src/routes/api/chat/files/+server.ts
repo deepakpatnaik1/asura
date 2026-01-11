@@ -215,7 +215,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 					source_path: source_path, // Store path for live reading
 					artisan_cut: artisanCut,
 					artisan_cut_at: artisanCutAt,
-					is_enabled: true,
+					is_enabled: !owner, // Don't auto-select if owner is set (owner bypass handles injection)
 					tier,
 					owner
 				})
@@ -392,7 +392,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				title: title.slice(0, 255),
 				raw_content: readableContent,
 				artisan_cut: artisanCut,
-				is_enabled: true, // Auto-select on paste
+				is_enabled: !owner, // Don't auto-select if owner is set (owner bypass handles injection)
 				tier,
 				owner
 			})
