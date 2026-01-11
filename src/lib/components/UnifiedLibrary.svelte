@@ -22,6 +22,7 @@
 		is_starred?: boolean;
 		tier?: string;
 		source_path?: string | null; // Set when linked to Obsidian file
+		owner?: string | null; // Persona name if owner-assigned
 		created_at: string;
 	}
 
@@ -406,14 +407,18 @@
 							<Icon src={LuStar} size="11" />
 						</button>
 						{#if item.source_path}
-							<button
-								class="watch-btn"
-								class:active={watchedArticleId === item.id}
-								onclick={(e) => handleArticleWatch(item, e)}
-								title={watchedArticleId === item.id ? 'Stop watching' : 'Watch for live updates'}
-							>
-								<Icon src={LuEye} size="11" />
-							</button>
+							{#if item.owner}
+								<span class="watch-spacer"></span>
+							{:else}
+								<button
+									class="watch-btn"
+									class:active={watchedArticleId === item.id}
+									onclick={(e) => handleArticleWatch(item, e)}
+									title={watchedArticleId === item.id ? 'Stop watching' : 'Watch for live updates'}
+								>
+									<Icon src={LuEye} size="11" />
+								</button>
+							{/if}
 							<button
 								class="refresh-btn"
 								class:refreshing={refreshingArticleId === item.id}
@@ -486,7 +491,7 @@
 						>
 							<Icon src={LuStar} size="11" />
 						</button>
-						{#if item.source_path}
+						{#if item.source_path && !item.owner}
 							<button
 								class="watch-btn"
 								class:active={watchedArticleId === item.id}

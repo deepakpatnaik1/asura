@@ -313,9 +313,11 @@
 		id: string;
 		title: string;
 		is_enabled: boolean;
+		is_starred?: boolean;
 		tier?: string;
 		pending_annotation?: PendingAnnotation | null;
 		source_path?: string | null; // Set when linked to Obsidian file
+		owner?: string | null; // Persona name if owner-assigned
 		created_at: string;
 	}
 	let articles = $state<Article[]>([]);
