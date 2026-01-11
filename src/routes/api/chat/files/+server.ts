@@ -86,7 +86,7 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 
 	const { data, error } = await supabase
 		.from('articles')
-		.select('id, title, is_enabled, is_starred, tier, pending_annotation, source_path, created_at')
+		.select('id, title, is_enabled, is_starred, tier, pending_annotation, source_path, created_at, owner')
 		.eq('user_id', userId)
 		.order('tier', { ascending: false }) // strategic > gettysburg > ephemeral > canon (alphabetically descending, so canon last)
 		.order('created_at', { ascending: false }); // Newest first within each group
@@ -110,10 +110,10 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 	const log = createLogger('FilesAPI', userId);
 
 	// Parse request body
-	const parseResult = await parseRequestJson<{ content?: string; source_path?: string; persistent?: boolean; tier?: string }>(request);
+	const parseResult = await parseRequestJson<{ content?: string; source_path?: string; persistent?: boolean; tier?: string; owner?: string }>(request);
 	if (!parseResult.success) return parseResult.error;
 
-	const { content, source_path, persistent = false, tier: requestTier } = parseResult.data;
+	const { content, source_path, persistent = false, tier: requestTier, owner = 'system' } = parseResult.data;
 
 	// Handle Obsidian file linking (source_path provided)
 	if (source_path) {
@@ -148,7 +148,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 					source_path: source_path, // Store path for live reading
 					artisan_cut: null,
 					is_enabled: true,
-					tier: 'ephemeral'
+					tier: 'ephemeral',
+					owner
 				})
 				.select('id, title')
 				.single();
@@ -322,7 +323,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				raw_content: readableContent,
 				artisan_cut: artisanCut,
 				is_enabled: true, // Auto-select on paste
-				tier
+				tier,
+				owner
 			})
 			.select('id, title')
 			.single();

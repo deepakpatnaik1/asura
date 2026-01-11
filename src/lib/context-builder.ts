@@ -151,28 +151,41 @@ export async function buildContext(
 
 	// Priority 0.5: Active library items (content, whiteboards, canvases)
 	if (hasChunk('active')) {
-		// Load selected content (articles)
-		if (contentIds && contentIds.length > 0) {
-			const { data: contentData } = await supabase
+		// Load selected content (articles) AND owner-assigned content for this persona
+		// Owner-assigned content is always injected (until manually deleted)
+		const [selectedResult, ownedResult] = await Promise.all([
+			contentIds && contentIds.length > 0
+				? supabase
+						.from('articles')
+						.select('id, title, raw_content, artisan_cut')
+						.in('id', contentIds)
+						.eq('user_id', userId)
+				: Promise.resolve({ data: [] }),
+			supabase
 				.from('articles')
-				.select('title, raw_content, artisan_cut')
-				.in('id', contentIds)
-				.eq('user_id', userId);
+				.select('id, title, raw_content, artisan_cut')
+				.eq('user_id', userId)
+				.eq('owner', personaName)
+		]);
 
-			if (contentData && contentData.length > 0) {
-				const articlesText = contentData
-					.map((item) => {
-						const articleContent = item.artisan_cut || item.raw_content;
-						return articleContent ? `[${item.title}]\n${articleContent}` : null;
-					})
-					.filter(Boolean)
-					.join('\n\n---\n\n');
+		// Merge and dedupe by ID (selected takes precedence)
+		const selectedIds = new Set((selectedResult.data || []).map((a) => a.id));
+		const ownedArticles = (ownedResult.data || []).filter((a) => !selectedIds.has(a.id));
+		const allArticles = [...(selectedResult.data || []), ...ownedArticles];
 
-				if (articlesText) {
-					const filesText = `--- ACTIVE CONTENT ---\n${articlesText}\n\n`;
-					components.files = filesText;
-					totalTokens += estimateTokens(filesText);
-				}
+		if (allArticles.length > 0) {
+			const articlesText = allArticles
+				.map((item) => {
+					const articleContent = item.artisan_cut || item.raw_content;
+					return articleContent ? `[${item.title}]\n${articleContent}` : null;
+				})
+				.filter(Boolean)
+				.join('\n\n---\n\n');
+
+			if (articlesText) {
+				const filesText = `--- ACTIVE CONTENT ---\n${articlesText}\n\n`;
+				components.files = filesText;
+				totalTokens += estimateTokens(filesText);
 			}
 		}
 

@@ -40,6 +40,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 	}
 
 	const imageFile = formData.get('image') as File | null;
+	const owner = (formData.get('owner') as string) || 'system';
+
 	if (!imageFile) {
 		return validationError('No image file provided');
 	}
@@ -94,7 +96,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				title: altText,
 				raw_content: `[Uploaded image: ${originalName}]`,
 				artisan_cut: `[Image: ${altText}]`,
-				is_enabled: true // Enabled so image appears in carousel
+				is_enabled: true, // Enabled so image appears in carousel
+				owner
 			})
 			.select('id')
 			.single();

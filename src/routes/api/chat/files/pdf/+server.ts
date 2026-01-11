@@ -113,10 +113,11 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		return validationError('PDF too large. Maximum size is 50MB.');
 	}
 
-	// Get tier from form data (default: ephemeral)
+	// Get tier and owner from form data
 	const tierParam = formData.get('tier') as string | null;
 	const tier = tierParam === 'canon' ? 'canon' : tierParam === 'strategic' ? 'strategic' : 'ephemeral';
 	const persistent = tier === 'strategic' || tier === 'canon';
+	const owner = (formData.get('owner') as string) || 'system';
 
 	log.info('Processing PDF upload', {
 		filename: pdfFile.name,
@@ -246,7 +247,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				raw_content: extractedText,
 				artisan_cut: artisanCut,
 				is_enabled: true,
-				tier
+				tier,
+				owner
 			})
 			.select('id, title')
 			.single();
