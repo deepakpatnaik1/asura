@@ -598,20 +598,8 @@
 	// Fetch file charts
 	async function loadFileCharts() {
 		try {
-			// Extract content IDs from displayed messages (content markers)
-			// Charts show for content visible in chat, not based on library selection
-			const displayedIds: string[] = [];
-			for (const msg of allMessages) {
-				const match = msg.ai_response?.match(/<!--content:([a-f0-9-]+)-->/);
-				if (match) displayedIds.push(match[1]);
-			}
-
-			if (displayedIds.length === 0) {
-				fileCharts = [];
-				return;
-			}
-
-			const response = await fetch(`/api/chat/files/charts?file_ids=${displayedIds.join(',')}`);
+			// Charts show only for selected articles (is_enabled = true)
+			const response = await fetch('/api/chat/files/charts?enabled_only=true');
 			if (response.ok) {
 				const data = await response.json();
 				fileCharts = (data.charts || []).map((chart: Chart & { file_id: string }) => ({
