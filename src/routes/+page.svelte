@@ -1095,9 +1095,11 @@
 	// Handle paste completion from PasteArea
 	// Saves last selections, switches persona selector, and triggers auto-prompt for persona owners
 	async function handlePasteComplete(newOwner: string, newLifecycle: string, fileId: string, chartId?: string) {
+		console.log('[handlePasteComplete] Called with:', { newOwner, newLifecycle, fileId });
 		// Update local state
 		lastContentOwner = newOwner;
 		lastContentLifecycle = newLifecycle;
+		console.log('[handlePasteComplete] Local state updated:', { lastContentOwner, lastContentLifecycle });
 
 		// Switch to that persona if it's a real persona (not system/canon)
 		const isPersonaOwner = !!PERSONAS[newOwner] && newOwner !== 'system' && newOwner !== 'canon';
@@ -1106,16 +1108,22 @@
 		}
 
 		// Persist to database (always save last selections)
+		// Only include selected_persona if it's a valid persona (not 'system')
+		const settingsPayload: Record<string, string> = {
+			last_content_owner: newOwner,
+			last_content_lifecycle: newLifecycle
+		};
+		if (isPersonaOwner) {
+			settingsPayload.selected_persona = selectedPersona;
+		}
+		console.log('[handlePasteComplete] Saving to DB:', settingsPayload);
 		try {
-			await fetch('/api/settings', {
+			const resp = await fetch('/api/settings', {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					selected_persona: selectedPersona,
-					last_content_owner: newOwner,
-					last_content_lifecycle: newLifecycle
-				})
+				body: JSON.stringify(settingsPayload)
 			});
+			console.log('[handlePasteComplete] Settings save response:', resp.status);
 		} catch (error) {
 			console.error('Failed to save paste settings:', error);
 		}

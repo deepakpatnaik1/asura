@@ -18,6 +18,7 @@
 	}
 
 	let { onClose, onSuccess, onPasteComplete, lastOwner = 'system', lastLifecycle = 'ephemeral' }: Props = $props();
+	console.log('[PasteArea] Mounted with props:', { lastOwner, lastLifecycle });
 
 	// Lifecycle: ephemeral (default) or persistent - initialized from last selection
 	type Lifecycle = 'ephemeral' | 'persistent';
@@ -26,6 +27,7 @@
 	// Owner: which persona owns this content - initialized from last selection
 	type Owner = 'system' | 'felix' | 'gunnar' | 'kirby' | 'samara' | 'alicja' | 'eva' | 'ananya' | 'canon';
 	let owner = $state<Owner>((lastOwner as Owner) || 'system');
+	console.log('[PasteArea] State initialized:', { owner, lifecycle });
 
 	// Owner display names and colors
 	const ownerConfig: Record<Owner, { label: string; color: string }> = {
@@ -157,6 +159,7 @@
 			onSuccess(id, title, responseContent, superjournalId);
 			// Save last selections and trigger auto-prompt for persona owners
 			if (onPasteComplete) {
+				console.log('[PasteArea:linkFile] onPasteComplete:', { owner, lifecycle, id });
 				onPasteComplete(owner, lifecycle, id);
 			}
 			onClose();
@@ -206,6 +209,7 @@
 			onSuccess(id, title, responseContent, superjournalId);
 			// Save last selections and trigger auto-prompt for persona owners
 			if (onPasteComplete) {
+				console.log('[PasteArea:processContent] onPasteComplete:', { owner, lifecycle, id });
 				onPasteComplete(owner, lifecycle, id);
 			}
 			onClose();
@@ -324,6 +328,7 @@
 			// Save last selections and trigger auto-prompt for persona owners
 			// Pass chartId so images can be sent to vision API
 			if (onPasteComplete) {
+				console.log('[PasteArea:uploadImage] onPasteComplete:', { owner, lifecycle, id, chartId });
 				onPasteComplete(owner, lifecycle, id, chartId);
 			}
 			onClose();
@@ -376,6 +381,7 @@
 			onSuccess(id, title, content, superjournalId);
 			// Save last selections and trigger auto-prompt for persona owners
 			if (onPasteComplete) {
+				console.log('[PasteArea:processPdf] onPasteComplete:', { owner, lifecycle, id });
 				onPasteComplete(owner, lifecycle, id);
 			}
 			onClose();

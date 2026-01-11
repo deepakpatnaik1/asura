@@ -251,8 +251,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		let title: string;
 		let artisanCut: string | null = null;
 
-		if (tier === 'strategic') {
-			// Strategic tier: Call AI to generate title + artisan cut
+		if (tier === 'strategic' || tier === 'canon') {
+			// Strategic/canon tier: Call AI to generate title + artisan cut
 			// Look up provider from database
 			const provider = await getModelProvider(supabase, model);
 			assertProviderSupported(provider);
