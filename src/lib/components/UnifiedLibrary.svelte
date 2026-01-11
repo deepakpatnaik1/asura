@@ -12,7 +12,7 @@
 	 */
 	import { tick } from 'svelte';
 	import { Icon } from 'svelte-icons-pack';
-	import { LuTrash2, LuCheck, LuStar, LuEye } from 'svelte-icons-pack/lu';
+	import { LuTrash2, LuCheck, LuStar, LuEye, LuRefreshCw } from 'svelte-icons-pack/lu';
 
 	// Types
 	interface Article {
@@ -53,6 +53,7 @@
 		onArticleRename?: (id: string, newTitle: string) => void;
 		onArticleDelete: (id: string, event: MouseEvent) => void;
 		onArticleStar?: (id: string, currentState: boolean) => void;
+		onArticleRefresh?: (id: string) => Promise<void>; // Refresh artisan cut for linked files
 		onArticleClear?: () => void;
 
 		// Whiteboards
@@ -88,6 +89,7 @@
 		onArticleRename,
 		onArticleDelete,
 		onArticleStar,
+		onArticleRefresh,
 		onArticleClear,
 
 		whiteboards,
@@ -150,6 +152,9 @@
 	let editingDesignerCanvasId = $state<string | null>(null);
 	let editingDesignerCanvasTitle = $state('');
 	let designerCanvasInputRef = $state<HTMLInputElement | null>(null);
+
+	// Refresh artisan cut state
+	let refreshingArticleId = $state<string | null>(null);
 
 	function formatDate(dateString: string) {
 		const date = new Date(dateString);
@@ -221,6 +226,18 @@
 			// Toggle: if already watched, stop; otherwise watch this one
 			const newWatchId = watchedArticleId === item.id ? null : item.id;
 			onArticleWatch(newWatchId);
+		}
+	}
+
+	async function handleArticleRefresh(item: Article, event: MouseEvent) {
+		event.stopPropagation();
+		if (onArticleRefresh && !refreshingArticleId) {
+			refreshingArticleId = item.id;
+			try {
+				await onArticleRefresh(item.id);
+			} finally {
+				refreshingArticleId = null;
+			}
 		}
 	}
 
@@ -397,8 +414,18 @@
 							>
 								<Icon src={LuEye} size="11" />
 							</button>
+							<button
+								class="refresh-btn"
+								class:refreshing={refreshingArticleId === item.id}
+								onclick={(e) => handleArticleRefresh(item, e)}
+								title="Refresh artisan cut"
+								disabled={refreshingArticleId === item.id}
+							>
+								<Icon src={LuRefreshCw} size="11" />
+							</button>
 						{:else}
 							<span class="watch-spacer"></span>
+							<span class="refresh-spacer"></span>
 						{/if}
 						<button
 							class="delete-btn"
@@ -471,6 +498,8 @@
 						{:else}
 							<span class="watch-spacer"></span>
 						{/if}
+						<!-- Raw articles don't have artisan cuts, so no refresh button - just spacer -->
+						<span class="refresh-spacer"></span>
 						<button
 							class="delete-btn"
 							onclick={(e) => onArticleDelete(item.id, e)}
@@ -842,11 +871,7 @@
 		color: hsl(var(--muted-foreground));
 		cursor: pointer;
 		transition: all 0.15s ease;
-		opacity: 0;
-	}
-
-	.item:hover .star-btn {
-		opacity: 0.5;
+		opacity: 0.4;
 	}
 
 	.star-btn:hover {
@@ -874,11 +899,7 @@
 		color: hsl(var(--muted-foreground));
 		cursor: pointer;
 		transition: all 0.15s ease;
-		opacity: 0;
-	}
-
-	.item:hover .watch-btn {
-		opacity: 0.5;
+		opacity: 0.4;
 	}
 
 	.watch-btn:hover {
@@ -900,6 +921,45 @@
 		width: 20px;
 	}
 
+	.refresh-btn {
+		flex-shrink: 0;
+		width: 20px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: transparent;
+		border: none;
+		color: hsl(var(--muted-foreground));
+		cursor: pointer;
+		transition: all 0.15s ease;
+		opacity: 0.4;
+	}
+
+	.refresh-btn:hover {
+		opacity: 1;
+		color: var(--boss-accent);
+	}
+
+	.refresh-btn.refreshing {
+		opacity: 1;
+		color: var(--boss-accent);
+		animation: spin 1s linear infinite;
+	}
+
+	.refresh-btn:disabled {
+		cursor: wait;
+	}
+
+	@keyframes spin {
+		from { transform: rotate(0deg); }
+		to { transform: rotate(360deg); }
+	}
+
+	.refresh-spacer {
+		flex-shrink: 0;
+		width: 20px;
+	}
+
 	.delete-btn {
 		flex-shrink: 0;
 		width: 24px;
@@ -911,11 +971,7 @@
 		color: hsl(var(--muted-foreground));
 		cursor: pointer;
 		transition: all 0.15s ease;
-		opacity: 0;
-	}
-
-	.item:hover .delete-btn {
-		opacity: 1;
+		opacity: 0.4;
 	}
 
 	.delete-btn:hover {

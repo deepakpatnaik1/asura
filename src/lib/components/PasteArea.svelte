@@ -129,15 +129,20 @@
 
 	async function processFilePath(sourcePath: string) {
 		isProcessing = true;
-		processingStatus = 'Linking to Obsidian file...';
+		processingStatus = lifecycle === 'persistent' ? 'Linking and generating artisan cut...' : 'Linking to Obsidian file...';
 		processingError = null;
 
 		try {
+			// Map lifecycle/owner to API tier value (same logic as processContent)
+			const tier = owner === 'canon' ? 'canon' : (lifecycle === 'persistent' ? 'strategic' : 'ephemeral');
+
 			const response = await fetch('/api/chat/files', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
-					source_path: sourcePath
+					source_path: sourcePath,
+					tier,
+					owner: owner !== 'canon' ? owner : undefined
 				})
 			});
 
@@ -405,8 +410,8 @@
 			</div>
 		</div>
 	{:else}
-		<!-- Dropdowns - at top, hidden during processing or when file path detected -->
-		{#if !isProcessing && !isFilePath}
+		<!-- Dropdowns - at top, hidden during processing -->
+		{#if !isProcessing}
 			<div class="dropdown-row">
 				<!-- Lifecycle Dropdown -->
 				<div class="dropdown-group">

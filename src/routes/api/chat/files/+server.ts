@@ -39,7 +39,7 @@ async function callFireworksArtisanCut(model: string, systemPrompt: string, cont
 				{ role: 'system', content: systemPrompt },
 				{ role: 'user', content }
 			],
-			max_tokens: 2048,
+			max_tokens: 8192,
 			temperature: 0.3
 		})
 	});
@@ -117,7 +117,9 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 
 	// Handle Obsidian file linking (source_path provided)
 	if (source_path) {
-		log.info('Linking Obsidian file', { sourcePath: source_path });
+		// Determine tier for linked files (default to ephemeral if not specified)
+		const tier = requestTier || 'ephemeral';
+		log.info('Linking Obsidian file', { sourcePath: source_path, tier });
 
 		// Validate file exists and is readable
 		if (!existsSync(source_path)) {
@@ -129,7 +131,72 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			const fileContent = readFileSync(source_path, 'utf-8');
 
 			// Extract title from markdown or filename
-			const title = extractTitleFromMarkdown(fileContent, source_path);
+			let title = extractTitleFromMarkdown(fileContent, source_path);
+			let artisanCut: string | null = null;
+			let artisanCutAt: Date | null = null;
+
+			// Generate artisan cut if tier is strategic or canon
+			if (tier === 'strategic' || tier === 'canon') {
+				log.info('Generating artisan cut for linked file', { sourcePath: source_path });
+
+				// Fetch user settings for compression model
+				const { data: settings } = await supabase
+					.from('user_settings')
+					.select('default_model, model_compression')
+					.eq('user_id', userId)
+					.single();
+
+				const model = settings?.model_compression || settings?.default_model || DEFAULT_MODEL;
+				const provider = await getModelProvider(supabase, model);
+				assertProviderSupported(provider);
+
+				let responseText: string;
+
+				if (provider === 'fireworks') {
+					responseText = await callFireworksArtisanCut(model, FILE_ARTISAN_CUT_PROMPT, fileContent);
+				} else {
+					// Anthropic
+					const response = await createMessage({
+						model,
+						max_tokens: 8192,
+						temperature: 0.3,
+						system: FILE_ARTISAN_CUT_PROMPT,
+						messages: [{ role: 'user', content: fileContent }]
+					});
+
+					const textBlock = response.content.find((block) => block.type === 'text');
+					if (!textBlock || textBlock.type !== 'text') {
+						throw new Error('No text response from AI');
+					}
+					responseText = textBlock.text;
+				}
+
+				// Parse JSON response
+				let parsed: { title: string; description: string };
+				try {
+					let jsonText = responseText.trim();
+					const jsonMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)```/);
+					if (jsonMatch) {
+						jsonText = jsonMatch[1].trim();
+					}
+					const objectMatch = jsonText.match(/\{[\s\S]*\}/);
+					if (objectMatch) {
+						jsonText = objectMatch[0];
+					}
+					parsed = JSON.parse(jsonText);
+				} catch (e) {
+					log.error('Failed to parse AI response for linked file', { raw: responseText });
+					throw new Error('Failed to parse AI response as JSON');
+				}
+
+				if (!parsed.title || !parsed.description) {
+					throw new Error('AI response missing title or description');
+				}
+
+				title = parsed.title;
+				artisanCut = parsed.description;
+				artisanCutAt = new Date();
+			}
 
 			// Deselect all existing content before selecting new one
 			await supabase
@@ -138,7 +205,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				.eq('user_id', userId)
 				.eq('is_enabled', true);
 
-			// Save to database with source_path (always ephemeral for linked files)
+			// Save to database with source_path
 			const { data: file, error: insertError } = await supabase
 				.from('articles')
 				.insert({
@@ -146,9 +213,10 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 					title: title.slice(0, 255),
 					raw_content: fileContent, // Store current content for fallback/search
 					source_path: source_path, // Store path for live reading
-					artisan_cut: null,
+					artisan_cut: artisanCut,
+					artisan_cut_at: artisanCutAt,
 					is_enabled: true,
-					tier: 'ephemeral',
+					tier,
 					owner
 				})
 				.select('id, title')
@@ -167,7 +235,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 					persona_name: 'system',
 					user_message: `Boss linked ${file.title}`,
 					ai_response: `<!--content:${file.id}-->`,
-					model_identifier: 'file-link',
+					model_identifier: artisanCut ? 'file-link-artisan' : 'file-link',
 					content_id: file.id
 				})
 				.select('id')
@@ -180,7 +248,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			log.info('File linked successfully', {
 				fileId: file.id,
 				title: file.title,
-				sourcePath: source_path
+				sourcePath: source_path,
+				hasArtisanCut: !!artisanCut
 			});
 
 			// Extract tables (await to ensure charts are ready before response)
@@ -196,7 +265,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				title: file.title,
 				content: fileContent,
 				superjournal_id: sjEntry?.id,
-				linked: true
+				linked: true,
+				has_artisan_cut: !!artisanCut
 			});
 		} catch (error) {
 			log.error('Failed to read file', { error: error instanceof Error ? error.message : 'Unknown' });
@@ -265,7 +335,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				// Anthropic
 				const response = await createMessage({
 					model,
-					max_tokens: 2048,
+					max_tokens: 8192,
 					temperature: 0.3,
 					system: FILE_ARTISAN_CUT_PROMPT,
 					messages: [{ role: 'user', content }]

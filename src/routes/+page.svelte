@@ -2117,6 +2117,23 @@
 		}
 	}
 
+	async function refreshArticleArtisanCut(articleId: string): Promise<void> {
+		try {
+			const response = await fetch(`/api/chat/files/${articleId}/refresh`, {
+				method: 'POST'
+			});
+			if (response.ok) {
+				const data = await response.json();
+				// Update the article title in the local state if it changed
+				if (data.title) {
+					articles = articles.map((a) => a.id === articleId ? { ...a, title: data.title } : a);
+				}
+			}
+		} catch (error) {
+			console.error('Failed to refresh artisan cut:', error);
+		}
+	}
+
 	function handleArticleDeleteClick(articleId: string, event: MouseEvent) {
 		event.stopPropagation();
 		articleDeleteConfirm.start(articleId, async () => {
@@ -2367,6 +2384,7 @@
 								onArticleRename={renameArticle}
 								onArticleDelete={handleArticleDeleteClick}
 								onArticleStar={starArticle}
+								onArticleRefresh={refreshArticleArtisanCut}
 								onArticleClear={clearAllArticles}
 
 								{whiteboards}

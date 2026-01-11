@@ -1,5 +1,6 @@
 import { VOYAGE_API_KEY } from '$env/static/private';
 import { VoyageAIClient } from 'voyageai';
+import { existsSync, readFileSync } from 'fs';
 import { EMBEDDING_MODEL } from '$lib/config/models';
 import { MEMORY } from '$lib/config/memory';
 import { DEFAULT_PERSONA, personaHasContextChunk } from '$lib/config/personas';
@@ -137,7 +138,7 @@ export async function buildContext(
 	if (hasChunk('canon')) {
 		const { data: canonData } = await supabase
 			.from('articles')
-			.select('title, artisan_cut, raw_content, created_at')
+			.select('title, artisan_cut, raw_content, source_path, created_at')
 			.eq('user_id', userId)
 			.eq('tier', 'canon')
 			.order('created_at', { ascending: true });
@@ -157,13 +158,13 @@ export async function buildContext(
 			contentIds && contentIds.length > 0
 				? supabase
 						.from('articles')
-						.select('id, title, raw_content, artisan_cut')
+						.select('id, title, raw_content, artisan_cut, source_path')
 						.in('id', contentIds)
 						.eq('user_id', userId)
 				: Promise.resolve({ data: [] }),
 			supabase
 				.from('articles')
-				.select('id, title, raw_content, artisan_cut')
+				.select('id, title, raw_content, artisan_cut, source_path')
 				.eq('user_id', userId)
 				.eq('owner', personaName)
 		]);
@@ -176,7 +177,28 @@ export async function buildContext(
 		if (allArticles.length > 0) {
 			const articlesText = allArticles
 				.map((item) => {
-					const articleContent = item.artisan_cut || item.raw_content;
+					let articleContent: string | null = null;
+
+					// For linked files, read fresh content from disk
+					if (item.source_path) {
+						try {
+							if (existsSync(item.source_path)) {
+								const freshContent = readFileSync(item.source_path, 'utf-8');
+								// Use artisan cut if available (strategic/canon tier), otherwise fresh content
+								articleContent = item.artisan_cut || freshContent;
+							} else {
+								// File not found - use stored content as fallback
+								articleContent = item.artisan_cut || item.raw_content;
+							}
+						} catch {
+							// Read error - use stored content as fallback
+							articleContent = item.artisan_cut || item.raw_content;
+						}
+					} else {
+						// Static file (not linked) - use stored content
+						articleContent = item.artisan_cut || item.raw_content;
+					}
+
 					return articleContent ? `[${item.title}]\n${articleContent}` : null;
 				})
 				.filter(Boolean)
@@ -706,6 +728,7 @@ function formatCanonContent(
 		title: string;
 		artisan_cut: string | null;
 		raw_content: string | null;
+		source_path: string | null;
 		created_at: string;
 	}>
 ): string {
@@ -713,7 +736,28 @@ function formatCanonContent(
 
 	const formatted = entries
 		.map((entry) => {
-			const content = entry.artisan_cut || entry.raw_content || '';
+			let content: string;
+
+			// For linked files, read fresh content from disk
+			if (entry.source_path) {
+				try {
+					if (existsSync(entry.source_path)) {
+						const freshContent = readFileSync(entry.source_path, 'utf-8');
+						// Use artisan cut if available, otherwise fresh content
+						content = entry.artisan_cut || freshContent;
+					} else {
+						// File not found - use stored content as fallback
+						content = entry.artisan_cut || entry.raw_content || '';
+					}
+				} catch {
+					// Read error - use stored content as fallback
+					content = entry.artisan_cut || entry.raw_content || '';
+				}
+			} else {
+				// Static file (not linked) - use stored content
+				content = entry.artisan_cut || entry.raw_content || '';
+			}
+
 			return `[Canon: ${entry.title}]\n${content}`;
 		})
 		.join('\n\n');

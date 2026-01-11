@@ -45,7 +45,7 @@ async function callFireworksArtisanCut(
 				{ role: 'system', content: systemPrompt },
 				{ role: 'user', content }
 			],
-			max_tokens: 2048,
+			max_tokens: 8192,
 			temperature: 0.3
 		})
 	});
@@ -189,7 +189,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				// Anthropic
 				const response = await createMessage({
 					model,
-					max_tokens: 2048,
+					max_tokens: 8192,
 					temperature: 0.3,
 					system: FILE_ARTISAN_CUT_PROMPT,
 					messages: [{ role: 'user', content: extractedText }]
