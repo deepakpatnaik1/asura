@@ -26,6 +26,7 @@
 	interface NukeCounts {
 		personas: Record<string, number>;
 		content: Record<string, number>;
+		canvases: { designer: number; whiteboard: number };
 		productivity: { todos: number; diary: number };
 	}
 	let counts = $state<NukeCounts | null>(null);
@@ -54,16 +55,26 @@
 	$effect(() => {
 		if (isOpen && triggerRef) {
 			const rect = triggerRef.getBoundingClientRect();
-			menuStyle = `bottom: ${window.innerHeight - rect.top + 8}px; left: ${rect.left}px;`;
+			// Position menu to the left of the trigger, vertically centered in viewport
+			// Use top positioning with max-height constraint to prevent overflow
+			const menuHeight = Math.min(500, window.innerHeight - 100); // Cap at 500px or viewport - padding
+			const top = Math.max(50, (window.innerHeight - menuHeight) / 2); // Center vertically with min top
+			menuStyle = `top: ${top}px; left: ${rect.left}px; max-height: ${menuHeight}px;`;
 		}
 	});
 
 	// Bucket definitions
 	const CONTENT_BUCKETS = [
-		{ id: 'content:ephemeral', label: 'Ephemeral', description: 'Unprocessed pastes' },
-		{ id: 'content:strategic', label: 'Strategic', description: 'Processed, non-canon' },
+		{ id: 'content:raw', label: 'Raw', description: 'Text/PDFs without artisan cut' },
+		{ id: 'content:artisan', label: 'Artisan Cut', description: 'Text/PDFs with artisan cut' },
 		{ id: 'content:canon', label: 'Canon', description: 'Foundational docs' },
-		{ id: 'content:gettysburg', label: 'Gettysburg', description: 'Design review chunks' }
+		{ id: 'content:images', label: 'Images', description: 'Uploaded images' },
+		{ id: 'content:linked', label: 'Live-linked', description: 'Obsidian files' }
+	] as const;
+
+	const CANVAS_BUCKETS = [
+		{ id: 'canvas:designer', label: 'Designer', description: 'Eva\'s character canvases' },
+		{ id: 'canvas:whiteboard', label: 'Whiteboard', description: 'Gunnar\'s whiteboard canvases' }
 	] as const;
 
 	const PRODUCTIVITY_BUCKETS = [
@@ -202,8 +213,32 @@
 				<div class="section-label">CONTENT</div>
 				{#each CONTENT_BUCKETS as bucket}
 					{@const isActive = activeBucket === bucket.id}
-					{@const tier = bucket.id.split(':')[1]}
-					{@const count = counts?.content[tier] || 0}
+					{@const contentType = bucket.id.split(':')[1]}
+					{@const count = counts?.content[contentType] || 0}
+					<button
+						class="bucket-item"
+						class:active={isActive}
+						class:empty={count === 0}
+						onclick={() => isActive ? cancelCountdown() : startCountdown(bucket.id)}
+						disabled={count === 0}
+					>
+						<span class="bucket-label">{bucket.label} ({count})</span>
+						<span class="bucket-description">{bucket.description}</span>
+						{#if isActive}
+							<div class="progress-bar" style="width: {progress}%"></div>
+							<span class="cancel-hint">click to cancel</span>
+						{/if}
+					</button>
+				{/each}
+			</div>
+
+			<!-- CANVASES section -->
+			<div class="section">
+				<div class="section-label">CANVASES</div>
+				{#each CANVAS_BUCKETS as bucket}
+					{@const isActive = activeBucket === bucket.id}
+					{@const canvasType = bucket.id.split(':')[1] as 'designer' | 'whiteboard'}
+					{@const count = counts?.canvases[canvasType] || 0}
 					<button
 						class="bucket-item"
 						class:active={isActive}
@@ -260,7 +295,8 @@
 		border-radius: 8px;
 		min-width: 220px;
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-		overflow: hidden;
+		overflow-y: auto;
+		max-height: inherit;
 	}
 
 	.menu-header {

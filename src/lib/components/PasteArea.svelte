@@ -410,8 +410,8 @@
 						class="dropdown"
 						bind:value={lifecycle}
 					>
-						<option value="ephemeral">Ephemeral</option>
-						<option value="persistent">Persistent</option>
+						<option value="ephemeral">Raw</option>
+						<option value="persistent">Artisan Cut</option>
 					</select>
 				</div>
 

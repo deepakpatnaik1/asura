@@ -6,11 +6,22 @@ import { databaseError } from '$lib/api/errors';
 /**
  * GET /api/nuke/counts
  *
- * Returns counts for each nuke bucket (how many message turns will be deleted).
+ * Returns counts for each nuke bucket.
  *
- * - Persona counts: superjournal entries that are real conversations (not content)
- * - Content counts: superjournal entries that are content turns, grouped by tier
- * - Productivity counts: todos, tags, diary entries
+ * Response structure:
+ * {
+ *   personas: { gunnar: N, kirby: N, ... },
+ *   content: { raw: N, artisan: N, canon: N, images: N, linked: N },
+ *   canvases: { designer: N, whiteboard: N },
+ *   productivity: { todos: N, diary: N }
+ * }
+ *
+ * Content detection logic:
+ * - raw: tier='ephemeral', NOT image, NOT linked
+ * - artisan: tier='strategic', NOT image, NOT linked
+ * - canon: tier='canon'
+ * - images: raw_content LIKE '[Uploaded image:%'
+ * - linked: source_path IS NOT NULL
  */
 export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase } }) => {
 	// 1. AUTHENTICATION CHECK
@@ -19,7 +30,7 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 	const { userId } = auth;
 
 	try {
-		// Fetch all superjournal entries to categorize
+		// Fetch all superjournal entries to count conversations by persona
 		const { data: entries, error: entriesError } = await supabase
 			.from('superjournal')
 			.select('id, persona_name, ai_response')
@@ -31,52 +42,60 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 
 		// Separate content turns from conversation turns
 		const contentMarkerRegex = /^<!--content:([a-f0-9-]+)-->/;
-		const contentTurns: { id: string; contentId: string }[] = [];
 		const personaCounts: Record<string, number> = {};
 
 		for (const entry of entries || []) {
 			const match = entry.ai_response?.match(contentMarkerRegex);
-			if (match) {
-				// This is a content turn
-				contentTurns.push({ id: entry.id, contentId: match[1] });
-			} else {
-				// This is a real conversation turn
+			if (!match) {
+				// This is a real conversation turn (not a content marker)
 				const persona = entry.persona_name || 'unknown';
 				personaCounts[persona] = (personaCounts[persona] || 0) + 1;
 			}
 		}
 
-		// Get tiers for content turns
-		const contentIds = contentTurns.map(t => t.contentId);
-		let tierCounts: Record<string, number> = {
-			ephemeral: 0,
-			strategic: 0,
+		// Fetch all articles to count by content type
+		const { data: articles, error: articlesError } = await supabase
+			.from('articles')
+			.select('id, tier, source_path, raw_content')
+			.eq('user_id', userId);
+
+		if (articlesError) {
+			return databaseError('Failed to fetch articles');
+		}
+
+		// Categorize content using the new detection logic
+		const contentCounts = {
+			raw: 0,
+			artisan: 0,
 			canon: 0,
-			gettysburg: 0
+			images: 0,
+			linked: 0
 		};
 
-		if (contentIds.length > 0) {
-			const { data: articles } = await supabase
-				.from('articles')
-				.select('id, tier')
-				.in('id', contentIds);
+		for (const article of articles || []) {
+			const isImage = article.raw_content?.startsWith('[Uploaded image:');
+			const isLinked = article.source_path !== null;
 
-			// Build a map of content ID -> tier
-			const tierMap = new Map<string, string>();
-			for (const article of articles || []) {
-				tierMap.set(article.id, article.tier);
-			}
-
-			// Count by tier
-			for (const turn of contentTurns) {
-				const tier = tierMap.get(turn.contentId);
-				if (tier && tier in tierCounts) {
-					tierCounts[tier]++;
-				}
+			if (isImage) {
+				contentCounts.images++;
+			} else if (isLinked) {
+				contentCounts.linked++;
+			} else if (article.tier === 'canon') {
+				contentCounts.canon++;
+			} else if (article.tier === 'strategic') {
+				contentCounts.artisan++;
+			} else if (article.tier === 'ephemeral') {
+				contentCounts.raw++;
 			}
 		}
 
-		// Get productivity counts
+		// Fetch canvas counts
+		const [designerResult, whiteboardResult] = await Promise.all([
+			supabase.from('canvas_designer').select('id', { count: 'exact', head: true }).eq('user_id', userId),
+			supabase.from('canvas_whiteboard').select('id', { count: 'exact', head: true }).eq('user_id', userId)
+		]);
+
+		// Fetch productivity counts
 		const [todosResult, tagsResult, diaryResult] = await Promise.all([
 			supabase.from('canvas_planner_todos').select('id', { count: 'exact', head: true }).eq('user_id', userId),
 			supabase.from('canvas_planner_tags').select('id', { count: 'exact', head: true }).eq('user_id', userId),
@@ -85,7 +104,11 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 
 		return json({
 			personas: personaCounts,
-			content: tierCounts,
+			content: contentCounts,
+			canvases: {
+				designer: designerResult.count || 0,
+				whiteboard: whiteboardResult.count || 0
+			},
 			productivity: {
 				todos: (todosResult.count || 0) + (tagsResult.count || 0),
 				diary: diaryResult.count || 0

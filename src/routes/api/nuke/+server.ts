@@ -12,10 +12,13 @@ import { createLogger } from '$lib/api/logger';
  *
  * Buckets:
  * - persona:<name>     → Delete superjournal/journal for that persona
- * - content:ephemeral  → Delete content where tier = 'ephemeral'
- * - content:strategic  → Delete content where tier = 'strategic'
- * - content:canon      → Delete content where tier = 'canon'
- * - content:gettysburg → Delete content where tier = 'gettysburg'
+ * - content:raw        → Delete raw content (tier = 'ephemeral', no artisan cut)
+ * - content:artisan    → Delete artisan cut content (tier = 'strategic')
+ * - content:canon      → Delete foundational content (tier = 'canon')
+ * - content:images     → Delete uploaded images
+ * - content:linked     → Delete live-linked Obsidian files
+ * - canvas:designer    → Delete Eva's designer canvases
+ * - canvas:whiteboard  → Delete Gunnar's whiteboard canvases
  * - productivity:diary → Delete founder_diary entries
  * - productivity:todos → Delete todos + tags
  *
@@ -31,10 +34,14 @@ const VALID_BUCKETS = [
 	'persona:alicja',
 	'persona:eva',
 	'persona:ananya',
-	'content:ephemeral',
-	'content:strategic',
+	'persona:felix',
+	'content:raw',
+	'content:artisan',
 	'content:canon',
-	'content:gettysburg',
+	'content:images',
+	'content:linked',
+	'canvas:designer',
+	'canvas:whiteboard',
 	'productivity:diary',
 	'productivity:todos'
 ] as const;
@@ -79,6 +86,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				return await nukePersona(supabase, userId, target, log);
 			case 'content':
 				return await nukeContent(supabase, userId, target, log);
+			case 'canvas':
+				return await nukeCanvas(supabase, userId, target, log);
 			case 'productivity':
 				return await nukeProductivity(supabase, userId, target, log);
 			default:
@@ -249,32 +258,62 @@ async function nukePersona(supabase: App.Locals['supabase'], userId: string, per
 }
 
 /**
- * Nuke content by tier
+ * Nuke content by type
+ *
+ * Types:
+ * - raw: tier='ephemeral', NOT image, NOT linked (text/PDFs without artisan cut)
+ * - artisan: tier='strategic', NOT image, NOT linked (text/PDFs with artisan cut)
+ * - canon: tier='canon' (foundational content)
+ * - images: raw_content LIKE '[Uploaded image:%' (uploaded images)
+ * - linked: source_path IS NOT NULL (live-linked Obsidian files)
  */
-async function nukeContent(supabase: App.Locals['supabase'], userId: string, tier: string, log: ReturnType<typeof createLogger>) {
-	// Validate tier
-	const validTiers = ['ephemeral', 'strategic', 'canon', 'gettysburg'];
-	if (!validTiers.includes(tier)) {
-		return badRequest(`Unknown content tier: ${tier}`);
+async function nukeContent(supabase: App.Locals['supabase'], userId: string, contentType: string, log: ReturnType<typeof createLogger>) {
+	// Build query based on content type
+	let query = supabase.from('articles').select('id').eq('user_id', userId);
+
+	switch (contentType) {
+		case 'raw':
+			// Ephemeral tier, NOT images, NOT linked
+			query = query
+				.eq('tier', 'ephemeral')
+				.is('source_path', null)
+				.not('raw_content', 'like', '[Uploaded image:%');
+			break;
+		case 'artisan':
+			// Strategic tier, NOT images, NOT linked
+			query = query
+				.eq('tier', 'strategic')
+				.is('source_path', null)
+				.not('raw_content', 'like', '[Uploaded image:%');
+			break;
+		case 'canon':
+			// Canon tier (all canon content)
+			query = query.eq('tier', 'canon');
+			break;
+		case 'images':
+			// Uploaded images (identified by raw_content pattern)
+			query = query.like('raw_content', '[Uploaded image:%');
+			break;
+		case 'linked':
+			// Live-linked Obsidian files (have source_path)
+			query = query.not('source_path', 'is', null);
+			break;
+		default:
+			return badRequest(`Unknown content type: ${contentType}`);
 	}
 
-	// Simple query: filter by tier column
-	const { data: contentIds, error: fetchError } = await supabase
-		.from('articles')
-		.select('id')
-		.eq('user_id', userId)
-		.eq('tier', tier);
+	const { data: contentIds, error: fetchError } = await query;
 
 	if (fetchError) {
-		log.error('Failed to fetch content for nuke', { error: fetchError, tier });
-		return databaseError(`Failed to fetch ${tier} content`);
+		log.error('Failed to fetch content for nuke', { error: fetchError, contentType });
+		return databaseError(`Failed to fetch ${contentType} content`);
 	}
 
 	if (!contentIds || contentIds.length === 0) {
-		log.info('No content to delete', { tier });
+		log.info('No content to delete', { contentType });
 		return json({
 			success: true,
-			bucket: `content:${tier}`,
+			bucket: `content:${contentType}`,
 			deleted: { content: 0, storage_files: 0 }
 		});
 	}
@@ -299,7 +338,7 @@ async function nukeContent(supabase: App.Locals['supabase'], userId: string, tie
 	// Delete from storage
 	if (storagePaths.length > 0) {
 		const { error: storageError } = await supabase.storage
-			.from('articles')
+			.from('content')
 			.remove(storagePaths);
 		if (storageError) {
 			log.warn('Failed to delete chart files from storage', { error: storageError });
@@ -326,12 +365,12 @@ async function nukeContent(supabase: App.Locals['supabase'], userId: string, tie
 		.in('id', ids);
 
 	if (deleteError) {
-		log.error('Failed to delete content', { error: deleteError, tier });
-		return databaseError(`Failed to delete ${tier} content`);
+		log.error('Failed to delete content', { error: deleteError, contentType });
+		return databaseError(`Failed to delete ${contentType} content`);
 	}
 
 	log.info('Nuke content complete', {
-		tier,
+		contentType,
 		contentDeleted: ids.length,
 		superjournalDeleted,
 		storageFilesDeleted: storagePaths.length
@@ -339,11 +378,57 @@ async function nukeContent(supabase: App.Locals['supabase'], userId: string, tie
 
 	return json({
 		success: true,
-		bucket: `content:${tier}`,
+		bucket: `content:${contentType}`,
 		deleted: {
 			content: ids.length,
 			superjournal: superjournalDeleted,
 			storage_files: storagePaths.length
+		}
+	});
+}
+
+/**
+ * Nuke canvases by type
+ *
+ * Types:
+ * - designer: Eva's character design canvases
+ * - whiteboard: Gunnar's whiteboard canvases
+ */
+async function nukeCanvas(supabase: App.Locals['supabase'], userId: string, canvasType: string, log: ReturnType<typeof createLogger>) {
+	let tableName: string;
+
+	switch (canvasType) {
+		case 'designer':
+			tableName = 'canvas_designer';
+			break;
+		case 'whiteboard':
+			tableName = 'canvas_whiteboard';
+			break;
+		default:
+			return badRequest(`Unknown canvas type: ${canvasType}`);
+	}
+
+	const { data: deleted, error } = await supabase
+		.from(tableName)
+		.delete()
+		.eq('user_id', userId)
+		.select('id');
+
+	if (error) {
+		log.error('Failed to delete canvases', { error, canvasType });
+		return databaseError(`Failed to delete ${canvasType} canvases`);
+	}
+
+	log.info('Nuke canvas complete', {
+		canvasType,
+		canvasesDeleted: deleted?.length || 0
+	});
+
+	return json({
+		success: true,
+		bucket: `canvas:${canvasType}`,
+		deleted: {
+			canvases: deleted?.length || 0
 		}
 	});
 }
