@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { Icon } from 'svelte-icons-pack';
-	import { LuPlay, LuPause, LuArrowDown, LuArrowUp } from 'svelte-icons-pack/lu';
 	import type { ScrollConfig } from '$lib/ui/scroll';
 	import { scrollToNextTurn, scrollToPreviousTurn } from '$lib/ui/scroll';
 	import { createAutoScroll } from '$lib/ui/auto-scroll.svelte';
@@ -8,46 +6,8 @@
 	// Props
 	let { config }: { config: ScrollConfig } = $props();
 
-	// Auto-scroll controller
+	// Auto-scroll controller (created once on mount)
 	const autoScroll = createAutoScroll(config);
-
-	// Press-and-hold state for continuous navigation
-	let holdTimeout: ReturnType<typeof setTimeout> | null = null;
-	let repeatInterval: ReturnType<typeof setInterval> | null = null;
-
-	const HOLD_DELAY = 3000; // 3 seconds before continuous mode
-	const REPEAT_INTERVAL = 400; // ms between repeats
-
-	function startHold(direction: 'next' | 'prev') {
-		// Single click action happens immediately
-		if (direction === 'next') {
-			scrollToNextTurn(config);
-		} else {
-			scrollToPreviousTurn(config);
-		}
-
-		// Start timer for continuous mode
-		holdTimeout = setTimeout(() => {
-			repeatInterval = setInterval(() => {
-				if (direction === 'next') {
-					scrollToNextTurn(config);
-				} else {
-					scrollToPreviousTurn(config);
-				}
-			}, REPEAT_INTERVAL);
-		}, HOLD_DELAY);
-	}
-
-	function stopHold() {
-		if (holdTimeout) {
-			clearTimeout(holdTimeout);
-			holdTimeout = null;
-		}
-		if (repeatInterval) {
-			clearInterval(repeatInterval);
-			repeatInterval = null;
-		}
-	}
 </script>
 
 <div class="scroll-controls">
@@ -57,25 +17,37 @@
 		title={autoScroll.isActive ? 'Stop auto-scroll' : 'Start auto-scroll'}
 		onclick={autoScroll.toggle}
 	>
-		<Icon src={autoScroll.isActive ? LuPause : LuPlay} size="11" />
+		{#if autoScroll.isActive}
+			<!-- Pause icon -->
+			<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>
+			</svg>
+		{:else}
+			<!-- Play icon -->
+			<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<polygon points="5 3 19 12 5 21 5 3"/>
+			</svg>
+		{/if}
 	</button>
 	<button
 		class="control-btn"
-		title="Next turn (hold for continuous)"
-		onmousedown={() => startHold('next')}
-		onmouseup={stopHold}
-		onmouseleave={stopHold}
+		title="Next turn"
+		onclick={() => scrollToNextTurn(config)}
 	>
-		<Icon src={LuArrowDown} size="11" />
+		<!-- ArrowDown icon -->
+		<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+			<path d="M12 5v14"/><path d="m19 12-7 7-7-7"/>
+		</svg>
 	</button>
 	<button
 		class="control-btn"
-		title="Previous turn (hold for continuous)"
-		onmousedown={() => startHold('prev')}
-		onmouseup={stopHold}
-		onmouseleave={stopHold}
+		title="Previous turn"
+		onclick={() => scrollToPreviousTurn(config)}
 	>
-		<Icon src={LuArrowUp} size="11" />
+		<!-- ArrowUp icon -->
+		<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+			<path d="M12 19V5"/><path d="m5 12 7-7 7 7"/>
+		</svg>
 	</button>
 </div>
 
@@ -84,6 +56,8 @@
 		display: flex;
 		align-items: center;
 		gap: var(--action-icon-gap);
+		transform: translateZ(0); /* Force GPU layer */
+		will-change: contents;
 	}
 
 	.control-btn {
@@ -102,5 +76,11 @@
 	.control-btn.active {
 		opacity: 1;
 		color: var(--current-accent);
+	}
+
+	.icon {
+		width: 11px;
+		height: 11px;
+		display: block;
 	}
 </style>
