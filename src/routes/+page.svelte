@@ -1100,7 +1100,7 @@
 		lastContentLifecycle = newLifecycle;
 
 		// Switch to that persona if it's a real persona (not system/canon)
-		const isPersonaOwner = !!PERSONAS[newOwner];
+		const isPersonaOwner = !!PERSONAS[newOwner] && newOwner !== 'system' && newOwner !== 'canon';
 		if (isPersonaOwner) {
 			selectedPersona = newOwner;
 		}
