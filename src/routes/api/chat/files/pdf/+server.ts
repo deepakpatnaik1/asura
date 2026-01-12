@@ -248,7 +248,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				artisan_cut: artisanCut,
 				is_enabled: true,
 				tier,
-				owner
+				owner,
+				source_type: 'pdf'
 			})
 			.select('id, title')
 			.single();

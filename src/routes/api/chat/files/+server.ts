@@ -88,7 +88,7 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 
 	const { data, error } = await supabase
 		.from('articles')
-		.select('id, title, is_enabled, is_starred, tier, pending_annotation, source_path, created_at, owner')
+		.select('id, title, is_enabled, is_starred, is_protected, tier, pending_annotation, source_path, created_at, owner')
 		.eq('user_id', userId)
 		.order('tier', { ascending: false }) // strategic > gettysburg > ephemeral (alphabetically descending)
 		.order('created_at', { ascending: false }); // Newest first within each group

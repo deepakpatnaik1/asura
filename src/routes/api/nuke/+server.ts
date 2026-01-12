@@ -14,7 +14,9 @@ import { createLogger } from '$lib/api/logger';
  * - persona:<name>     → Delete superjournal/journal for that persona
  * - content:raw        → Delete raw content (tier = 'ephemeral', no artisan cut)
  * - content:artisan    → Delete artisan cut content (tier = 'strategic')
+ * - content:no-one     → Delete unassigned content (owner = 'no-one')
  * - content:everyone   → Delete shared content (owner = 'everyone')
+ * - content:pdfs       → Delete uploaded PDFs (source_type = 'pdf')
  * - content:images     → Delete uploaded images
  * - content:linked     → Delete live-linked Obsidian files
  * - canvas:designer    → Delete Eva's designer canvases
@@ -37,7 +39,9 @@ const VALID_BUCKETS = [
 	'persona:felix',
 	'content:raw',
 	'content:artisan',
+	'content:no-one',
 	'content:everyone',
+	'content:pdfs',
 	'content:images',
 	'content:linked',
 	'canvas:designer',
@@ -101,20 +105,32 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 
 /**
  * Nuke all data (backwards compatible)
+ * Note: Protected content is excluded - can only be manually deleted from content library
  */
 async function nukeAll(supabase: App.Locals['supabase'], userId: string, log: ReturnType<typeof createLogger>) {
-	// Fetch all charts for storage cleanup
-	const { data: allCharts } = await supabase
-		.from('article_charts')
-		.select('storage_path, thumbnail_path')
-		.eq('user_id', userId);
+	// First get IDs of unprotected articles (protected items are excluded)
+	const { data: unprotectedArticles } = await supabase
+		.from('articles')
+		.select('id')
+		.eq('user_id', userId)
+		.eq('is_protected', false);
 
-	// Collect storage paths
-	const storagePaths: string[] = [];
-	if (allCharts) {
-		for (const chart of allCharts) {
-			if (chart.storage_path) storagePaths.push(chart.storage_path);
-			if (chart.thumbnail_path) storagePaths.push(chart.thumbnail_path);
+	const unprotectedIds = unprotectedArticles?.map(a => a.id) || [];
+
+	// Fetch charts only for unprotected content
+	let storagePaths: string[] = [];
+	if (unprotectedIds.length > 0) {
+		const { data: allCharts } = await supabase
+			.from('article_charts')
+			.select('storage_path, thumbnail_path')
+			.eq('user_id', userId)
+			.in('content_id', unprotectedIds);
+
+		if (allCharts) {
+			for (const chart of allCharts) {
+				if (chart.storage_path) storagePaths.push(chart.storage_path);
+				if (chart.thumbnail_path) storagePaths.push(chart.thumbnail_path);
+			}
 		}
 	}
 
@@ -128,11 +144,12 @@ async function nukeAll(supabase: App.Locals['supabase'], userId: string, log: Re
 		}
 	}
 
-	// Delete content (cascades to charts)
+	// Delete unprotected content only (cascades to charts)
 	const { error: contentError } = await supabase
 		.from('articles')
 		.delete()
-		.eq('user_id', userId);
+		.eq('user_id', userId)
+		.eq('is_protected', false);
 
 	if (contentError) {
 		log.error('Failed to delete content', { error: contentError });
@@ -263,13 +280,15 @@ async function nukePersona(supabase: App.Locals['supabase'], userId: string, per
  * Types:
  * - raw: tier='ephemeral', NOT image, NOT linked (text/PDFs without artisan cut)
  * - artisan: tier='strategic', NOT image, NOT linked (text/PDFs with artisan cut)
+ * - no-one: owner='no-one' (unassigned content)
  * - everyone: owner='everyone' (shared content)
- * - images: raw_content LIKE '[Uploaded image:%' (uploaded images)
+ * - pdfs: source_type='pdf' (uploaded PDFs)
+ * - images: source_type='image' (uploaded images)
  * - linked: source_path IS NOT NULL (live-linked Obsidian files)
  */
 async function nukeContent(supabase: App.Locals['supabase'], userId: string, contentType: string, log: ReturnType<typeof createLogger>) {
-	// Build query based on content type
-	let query = supabase.from('articles').select('id').eq('user_id', userId);
+	// Build query based on content type (protected items excluded - can only be manually deleted)
+	let query = supabase.from('articles').select('id').eq('user_id', userId).eq('is_protected', false);
 
 	switch (contentType) {
 		case 'raw':
@@ -286,13 +305,21 @@ async function nukeContent(supabase: App.Locals['supabase'], userId: string, con
 				.is('source_path', null)
 				.not('raw_content', 'like', '[Uploaded image:%');
 			break;
+		case 'no-one':
+			// owner='no-one' (unassigned content)
+			query = query.eq('owner', 'no-one');
+			break;
 		case 'everyone':
 			// owner='everyone' (shared content)
 			query = query.eq('owner', 'everyone');
 			break;
+		case 'pdfs':
+			// Uploaded PDFs (source_type='pdf')
+			query = query.eq('source_type', 'pdf');
+			break;
 		case 'images':
-			// Uploaded images (identified by raw_content pattern)
-			query = query.like('raw_content', '[Uploaded image:%');
+			// Uploaded images (source_type='image' or legacy pattern)
+			query = query.or('source_type.eq.image,raw_content.like.[Uploaded image:%');
 			break;
 		case 'linked':
 			// Live-linked Obsidian files (have source_path)

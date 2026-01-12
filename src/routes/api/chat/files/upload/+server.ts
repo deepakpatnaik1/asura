@@ -97,7 +97,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				raw_content: `[Uploaded image: ${originalName}]`,
 				artisan_cut: `[Image: ${altText}]`,
 				is_enabled: true, // Enabled so image appears in carousel
-				owner
+				owner,
+				source_type: 'image'
 			})
 			.select('id')
 			.single();

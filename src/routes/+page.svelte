@@ -2120,6 +2120,23 @@
 		}
 	}
 
+	async function protectArticle(articleId: string, currentState: boolean) {
+		articles = articles.map((a) => a.id === articleId ? { ...a, is_protected: !currentState } : a);
+
+		try {
+			const response = await fetch(`/api/chat/files/${articleId}`, {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ is_protected: !currentState })
+			});
+			if (!response.ok) {
+				articles = articles.map((a) => a.id === articleId ? { ...a, is_protected: currentState } : a);
+			}
+		} catch (error) {
+			articles = articles.map((a) => a.id === articleId ? { ...a, is_protected: currentState } : a);
+		}
+	}
+
 	async function refreshArticleArtisanCut(articleId: string): Promise<void> {
 		try {
 			const response = await fetch(`/api/chat/files/${articleId}/refresh`, {
@@ -2387,6 +2404,7 @@
 								onArticleRename={renameArticle}
 								onArticleDelete={handleArticleDeleteClick}
 								onArticleStar={starArticle}
+								onArticleProtect={protectArticle}
 								onArticleRefresh={refreshArticleArtisanCut}
 								onArticleClear={clearAllArticles}
 

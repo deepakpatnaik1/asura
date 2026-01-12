@@ -57,17 +57,28 @@
 			const rect = triggerRef.getBoundingClientRect();
 			// Position menu to the left of the trigger, vertically centered in viewport
 			// Use top positioning with max-height constraint to prevent overflow
-			const menuHeight = Math.min(500, window.innerHeight - 100); // Cap at 500px or viewport - padding
+			const menuHeight = Math.min(900, window.innerHeight - 100); // Cap at 900px or viewport - padding
 			const top = Math.max(50, (window.innerHeight - menuHeight) / 2); // Center vertically with min top
 			menuStyle = `top: ${top}px; left: ${rect.left}px; max-height: ${menuHeight}px;`;
 		}
 	});
 
-	// Bucket definitions
-	const CONTENT_BUCKETS = [
-		{ id: 'content:raw', label: 'Raw', description: 'Text/PDFs without artisan cut' },
-		{ id: 'content:artisan', label: 'Artisan Cut', description: 'Text/PDFs with artisan cut' },
-		{ id: 'content:everyone', label: 'Everyone', description: 'Shared across all personas' },
+	// Bucket definitions - organized by dimension
+	// By Lifecycle (tier)
+	const CONTENT_LIFECYCLE_BUCKETS = [
+		{ id: 'content:raw', label: 'Raw', description: 'Without artisan cut' },
+		{ id: 'content:artisan', label: 'Artisan Cut', description: 'With artisan cut' }
+	] as const;
+
+	// By Owner
+	const CONTENT_OWNER_BUCKETS = [
+		{ id: 'content:no-one', label: 'No One', description: 'Unassigned content' },
+		{ id: 'content:everyone', label: 'Everyone', description: 'Shared content' }
+	] as const;
+
+	// By Type
+	const CONTENT_TYPE_BUCKETS = [
+		{ id: 'content:pdfs', label: 'PDFs', description: 'Uploaded PDFs' },
 		{ id: 'content:images', label: 'Images', description: 'Uploaded images' },
 		{ id: 'content:linked', label: 'Live-linked', description: 'Obsidian files' }
 	] as const;
@@ -211,7 +222,54 @@
 			<!-- CONTENT section -->
 			<div class="section">
 				<div class="section-label">CONTENT</div>
-				{#each CONTENT_BUCKETS as bucket}
+
+				<!-- By Lifecycle -->
+				<div class="subsection-label">By Lifecycle</div>
+				{#each CONTENT_LIFECYCLE_BUCKETS as bucket}
+					{@const isActive = activeBucket === bucket.id}
+					{@const contentType = bucket.id.split(':')[1]}
+					{@const count = counts?.content[contentType] || 0}
+					<button
+						class="bucket-item"
+						class:active={isActive}
+						class:empty={count === 0}
+						onclick={() => isActive ? cancelCountdown() : startCountdown(bucket.id)}
+						disabled={count === 0}
+					>
+						<span class="bucket-label">{bucket.label} ({count})</span>
+						<span class="bucket-description">{bucket.description}</span>
+						{#if isActive}
+							<div class="progress-bar" style="width: {progress}%"></div>
+							<span class="cancel-hint">click to cancel</span>
+						{/if}
+					</button>
+				{/each}
+
+				<!-- By Owner -->
+				<div class="subsection-label">By Owner</div>
+				{#each CONTENT_OWNER_BUCKETS as bucket}
+					{@const isActive = activeBucket === bucket.id}
+					{@const contentType = bucket.id.split(':')[1].replace('-', '')}
+					{@const count = counts?.content[contentType] || 0}
+					<button
+						class="bucket-item"
+						class:active={isActive}
+						class:empty={count === 0}
+						onclick={() => isActive ? cancelCountdown() : startCountdown(bucket.id)}
+						disabled={count === 0}
+					>
+						<span class="bucket-label">{bucket.label} ({count})</span>
+						<span class="bucket-description">{bucket.description}</span>
+						{#if isActive}
+							<div class="progress-bar" style="width: {progress}%"></div>
+							<span class="cancel-hint">click to cancel</span>
+						{/if}
+					</button>
+				{/each}
+
+				<!-- By Type -->
+				<div class="subsection-label">By Type</div>
+				{#each CONTENT_TYPE_BUCKETS as bucket}
 					{@const isActive = activeBucket === bucket.id}
 					{@const contentType = bucket.id.split(':')[1]}
 					{@const count = counts?.content[contentType] || 0}
@@ -343,6 +401,20 @@
 		color: hsl(var(--muted-foreground));
 		padding: 0 12px 6px;
 		letter-spacing: 0.5px;
+	}
+
+	.subsection-label {
+		font-size: 8px;
+		font-weight: 500;
+		color: hsl(var(--muted-foreground) / 0.7);
+		padding: 8px 12px 4px;
+		letter-spacing: 0.3px;
+		text-transform: lowercase;
+		font-style: italic;
+	}
+
+	.subsection-label:first-of-type {
+		padding-top: 0;
 	}
 
 	.bucket-item {

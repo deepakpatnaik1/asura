@@ -34,17 +34,19 @@ export const PUT: RequestHandler = async ({ params, request, locals: { safeGetSe
 		is_enabled?: boolean;
 		title?: string;
 		is_starred?: boolean;
+		is_protected?: boolean;
 		pending_annotation?: PendingAnnotation | null;
 	}>(request);
 	if (!parseResult.success) return parseResult.error;
 
-	const { is_enabled, title, is_starred, pending_annotation } = parseResult.data;
+	const { is_enabled, title, is_starred, is_protected, pending_annotation } = parseResult.data;
 
 	// Build update object with only provided fields
 	const updateData: {
 		is_enabled?: boolean;
 		title?: string;
 		is_starred?: boolean;
+		is_protected?: boolean;
 		pending_annotation?: PendingAnnotation | null;
 		updated_at: string;
 	} = {
@@ -70,6 +72,10 @@ export const PUT: RequestHandler = async ({ params, request, locals: { safeGetSe
 		updateData.is_starred = is_starred;
 	}
 
+	if (typeof is_protected === 'boolean') {
+		updateData.is_protected = is_protected;
+	}
+
 	// Handle pending_annotation (can be set to object or cleared with null)
 	if (pending_annotation !== undefined) {
 		updateData.pending_annotation = pending_annotation;
@@ -80,9 +86,10 @@ export const PUT: RequestHandler = async ({ params, request, locals: { safeGetSe
 		updateData.is_enabled === undefined &&
 		updateData.title === undefined &&
 		updateData.is_starred === undefined &&
+		updateData.is_protected === undefined &&
 		updateData.pending_annotation === undefined
 	) {
-		return validationError('Must provide is_enabled, title, is_starred, or pending_annotation to update', 'body');
+		return validationError('Must provide is_enabled, title, is_starred, is_protected, or pending_annotation to update', 'body');
 	}
 
 	// Update content (RLS ensures user can only update their own content)

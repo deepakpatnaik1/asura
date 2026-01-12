@@ -12,7 +12,7 @@
 	 */
 	import { tick } from 'svelte';
 	import { Icon } from 'svelte-icons-pack';
-	import { LuTrash2, LuCheck, LuStar, LuEye, LuRefreshCw } from 'svelte-icons-pack/lu';
+	import { LuTrash2, LuCheck, LuStar, LuEye, LuRefreshCw, LuShield } from 'svelte-icons-pack/lu';
 
 	// Types
 	interface Article {
@@ -20,6 +20,7 @@
 		title: string;
 		is_enabled?: boolean;
 		is_starred?: boolean;
+		is_protected?: boolean;
 		tier?: string;
 		source_path?: string | null; // Set when linked to Obsidian file
 		owner?: string | null; // Persona name if owner-assigned
@@ -54,6 +55,7 @@
 		onArticleRename?: (id: string, newTitle: string) => void;
 		onArticleDelete: (id: string, event: MouseEvent) => void;
 		onArticleStar?: (id: string, currentState: boolean) => void;
+		onArticleProtect?: (id: string, currentState: boolean) => void;
 		onArticleRefresh?: (id: string) => Promise<void>; // Refresh artisan cut for linked files
 		onArticleClear?: () => void;
 
@@ -90,6 +92,7 @@
 		onArticleRename,
 		onArticleDelete,
 		onArticleStar,
+		onArticleProtect,
 		onArticleRefresh,
 		onArticleClear,
 
@@ -239,6 +242,13 @@
 			} finally {
 				refreshingArticleId = null;
 			}
+		}
+	}
+
+	function handleArticleProtect(item: Article, event: MouseEvent) {
+		event.stopPropagation();
+		if (onArticleProtect) {
+			onArticleProtect(item.id, item.is_protected ?? false);
 		}
 	}
 
@@ -398,18 +408,24 @@
 							{/if}
 							<span class="item-date">{formatDate(item.created_at)}</span>
 						</div>
-						<button
-							class="star-btn"
-							class:active={item.is_starred}
-							onclick={(e) => handleArticleStar(item, e)}
-							title={item.is_starred ? 'Remove bookmark' : 'Bookmark'}
-						>
-							<Icon src={LuStar} size="11" />
-						</button>
-						{#if item.source_path}
-							{#if item.owner && item.owner !== 'no-one'}
-								<span class="watch-spacer"></span>
-							{:else}
+						<div class="icon-group">
+							<button
+								class="star-btn"
+								class:active={item.is_starred}
+								onclick={(e) => handleArticleStar(item, e)}
+								title={item.is_starred ? 'Remove bookmark' : 'Bookmark'}
+							>
+								<Icon src={LuStar} size="11" />
+							</button>
+							<button
+								class="protect-btn"
+								class:active={item.is_protected}
+								onclick={(e) => handleArticleProtect(item, e)}
+								title={item.is_protected ? 'Remove nuke protection' : 'Protect from nuke'}
+							>
+								<Icon src={LuShield} size="11" />
+							</button>
+							{#if item.source_path && (!item.owner || item.owner === 'no-one')}
 								<button
 									class="watch-btn"
 									class:active={watchedArticleId === item.id}
@@ -418,27 +434,30 @@
 								>
 									<Icon src={LuEye} size="11" />
 								</button>
+							{:else}
+								<span class="icon-spacer"></span>
+							{/if}
+							{#if item.source_path}
+								<button
+									class="refresh-btn"
+									class:refreshing={refreshingArticleId === item.id}
+									onclick={(e) => handleArticleRefresh(item, e)}
+									title="Refresh artisan cut"
+									disabled={refreshingArticleId === item.id}
+								>
+									<Icon src={LuRefreshCw} size="11" />
+								</button>
+							{:else}
+								<span class="icon-spacer"></span>
 							{/if}
 							<button
-								class="refresh-btn"
-								class:refreshing={refreshingArticleId === item.id}
-								onclick={(e) => handleArticleRefresh(item, e)}
-								title="Refresh artisan cut"
-								disabled={refreshingArticleId === item.id}
+								class="delete-btn"
+								onclick={(e) => onArticleDelete(item.id, e)}
+								title="Delete"
 							>
-								<Icon src={LuRefreshCw} size="11" />
+								<Icon src={LuTrash2} size="11" />
 							</button>
-						{:else}
-							<span class="watch-spacer"></span>
-							<span class="refresh-spacer"></span>
-						{/if}
-						<button
-							class="delete-btn"
-							onclick={(e) => onArticleDelete(item.id, e)}
-							title="Delete"
-						>
-							<Icon src={LuTrash2} size="11" />
-						</button>
+						</div>
 					</div>
 				{/each}
 			</div>
@@ -483,35 +502,44 @@
 							{/if}
 							<span class="item-date">{formatDate(item.created_at)}</span>
 						</div>
-						<button
-							class="star-btn"
-							class:active={item.is_starred}
-							onclick={(e) => handleArticleStar(item, e)}
-							title={item.is_starred ? 'Remove bookmark' : 'Bookmark'}
-						>
-							<Icon src={LuStar} size="11" />
-						</button>
-						{#if item.source_path && (!item.owner || item.owner === 'no-one')}
+						<div class="icon-group">
 							<button
-								class="watch-btn"
-								class:active={watchedArticleId === item.id}
-								onclick={(e) => handleArticleWatch(item, e)}
-								title={watchedArticleId === item.id ? 'Stop watching' : 'Watch for live updates'}
+								class="star-btn"
+								class:active={item.is_starred}
+								onclick={(e) => handleArticleStar(item, e)}
+								title={item.is_starred ? 'Remove bookmark' : 'Bookmark'}
 							>
-								<Icon src={LuEye} size="11" />
+								<Icon src={LuStar} size="11" />
 							</button>
-						{:else}
-							<span class="watch-spacer"></span>
-						{/if}
-						<!-- Raw articles don't have artisan cuts, so no refresh button - just spacer -->
-						<span class="refresh-spacer"></span>
-						<button
-							class="delete-btn"
-							onclick={(e) => onArticleDelete(item.id, e)}
-							title="Delete"
-						>
-							<Icon src={LuTrash2} size="11" />
-						</button>
+							<button
+								class="protect-btn"
+								class:active={item.is_protected}
+								onclick={(e) => handleArticleProtect(item, e)}
+								title={item.is_protected ? 'Remove nuke protection' : 'Protect from nuke'}
+							>
+								<Icon src={LuShield} size="11" />
+							</button>
+							{#if item.source_path && (!item.owner || item.owner === 'no-one')}
+								<button
+									class="watch-btn"
+									class:active={watchedArticleId === item.id}
+									onclick={(e) => handleArticleWatch(item, e)}
+									title={watchedArticleId === item.id ? 'Stop watching' : 'Watch for live updates'}
+								>
+									<Icon src={LuEye} size="11" />
+								</button>
+							{:else}
+								<span class="icon-spacer"></span>
+							{/if}
+							<span class="icon-spacer"></span>
+							<button
+								class="delete-btn"
+								onclick={(e) => onArticleDelete(item.id, e)}
+								title="Delete"
+							>
+								<Icon src={LuTrash2} size="11" />
+							</button>
+						</div>
 					</div>
 				{/each}
 			</div>
@@ -559,23 +587,25 @@
 							{/if}
 							<span class="item-date">{formatDate(wb.updated_at)}</span>
 						</div>
-						<button
-							class="star-btn"
-							class:active={wb.is_starred}
-							onclick={(e) => handleWhiteboardStar(wb, e)}
-							title={wb.is_starred ? 'Remove bookmark' : 'Bookmark'}
-						>
-							<Icon src={LuStar} size="11" />
-						</button>
-						{#if onWhiteboardDelete}
+						<div class="icon-group">
 							<button
-								class="delete-btn"
-								onclick={(e) => onWhiteboardDelete(wb.id, e)}
-								title="Delete"
+								class="star-btn"
+								class:active={wb.is_starred}
+								onclick={(e) => handleWhiteboardStar(wb, e)}
+								title={wb.is_starred ? 'Remove bookmark' : 'Bookmark'}
 							>
-								<Icon src={LuTrash2} size="11" />
+								<Icon src={LuStar} size="11" />
 							</button>
-						{/if}
+							{#if onWhiteboardDelete}
+								<button
+									class="delete-btn"
+									onclick={(e) => onWhiteboardDelete(wb.id, e)}
+									title="Delete"
+								>
+									<Icon src={LuTrash2} size="11" />
+								</button>
+							{/if}
+						</div>
 					</div>
 				{/each}
 			</div>
@@ -623,23 +653,25 @@
 							{/if}
 							<span class="item-date">{formatDate(canvas.updated_at)}</span>
 						</div>
-						<button
-							class="star-btn"
-							class:active={canvas.is_starred}
-							onclick={(e) => handleDesignerCanvasStar(canvas, e)}
-							title={canvas.is_starred ? 'Remove bookmark' : 'Bookmark'}
-						>
-							<Icon src={LuStar} size="11" />
-						</button>
-						{#if onDesignerCanvasDelete}
+						<div class="icon-group">
 							<button
-								class="delete-btn"
-								onclick={(e) => onDesignerCanvasDelete(canvas.id, e)}
-								title="Delete"
+								class="star-btn"
+								class:active={canvas.is_starred}
+								onclick={(e) => handleDesignerCanvasStar(canvas, e)}
+								title={canvas.is_starred ? 'Remove bookmark' : 'Bookmark'}
 							>
-								<Icon src={LuTrash2} size="11" />
+								<Icon src={LuStar} size="11" />
 							</button>
-						{/if}
+							{#if onDesignerCanvasDelete}
+								<button
+									class="delete-btn"
+									onclick={(e) => onDesignerCanvasDelete(canvas.id, e)}
+									title="Delete"
+								>
+									<Icon src={LuTrash2} size="11" />
+								</button>
+							{/if}
+						</div>
 					</div>
 				{/each}
 			</div>
@@ -767,6 +799,17 @@
 		cursor: pointer;
 	}
 
+	.icon-group {
+		display: flex;
+		align-items: center;
+		gap: 1px;
+	}
+
+	.icon-spacer {
+		width: 14px;
+		flex-shrink: 0;
+	}
+
 	.item:last-child {
 		border-bottom: none;
 	}
@@ -821,8 +864,8 @@
 		min-width: 0;
 		display: flex;
 		align-items: center;
-		gap: 6px;
-		padding: 5px 4px 5px 0;
+		gap: 5px;
+		padding: 5px 3px 5px 0;
 	}
 
 	.title-btn {
@@ -857,17 +900,17 @@
 	}
 
 	.item-date {
-		font-size: 0.8em;
+		font-size: 0.75em;
 		color: hsl(var(--muted-foreground));
 		flex-shrink: 0;
-		min-width: 45px;
+		min-width: 38px;
 		text-align: right;
 		opacity: 0.7;
 	}
 
 	.star-btn {
 		flex-shrink: 0;
-		width: 20px;
+		width: 14px;
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -893,9 +936,37 @@
 		fill: var(--boss-accent);
 	}
 
+	.protect-btn {
+		flex-shrink: 0;
+		width: 14px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: transparent;
+		border: none;
+		color: hsl(var(--muted-foreground));
+		cursor: pointer;
+		transition: all 0.15s ease;
+		opacity: 0.4;
+	}
+
+	.protect-btn:hover {
+		opacity: 1;
+		color: rgb(59, 130, 246);
+	}
+
+	.protect-btn.active {
+		opacity: 1;
+		color: rgb(59, 130, 246);
+	}
+
+	.protect-btn.active :global(svg) {
+		fill: rgb(59, 130, 246);
+	}
+
 	.watch-btn {
 		flex-shrink: 0;
-		width: 20px;
+		width: 14px;
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -921,14 +992,10 @@
 		fill: var(--boss-accent);
 	}
 
-	.watch-spacer {
-		flex-shrink: 0;
-		width: 20px;
-	}
 
 	.refresh-btn {
 		flex-shrink: 0;
-		width: 20px;
+		width: 14px;
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -960,14 +1027,10 @@
 		to { transform: rotate(360deg); }
 	}
 
-	.refresh-spacer {
-		flex-shrink: 0;
-		width: 20px;
-	}
 
 	.delete-btn {
 		flex-shrink: 0;
-		width: 24px;
+		width: 14px;
 		display: flex;
 		align-items: center;
 		justify-content: center;
