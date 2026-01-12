@@ -58,6 +58,7 @@ import {
 import { refreshAccessToken } from '$lib/api/google-calendar';
 import { BRAVE_SEARCH_TOOL, executeBraveSearch } from '$lib/api/brave-search';
 import { REDDIT_TOOLS, executeRedditTool, isRedditTool } from '$lib/channels/reddit';
+import { TEMPORAL_TOOLS, executeTemporalTool, isTemporalTool } from '$lib/api/temporal-tools';
 import { ENGAGEMENT_TOOLS, executeEngagementTool, isEngagementTool } from '$lib/roles/community-manager/engagement';
 import { parseToolIntents, hasToolIntents } from '$lib/api/tool-intent-parser';
 import { createClient } from '@supabase/supabase-js';
@@ -227,6 +228,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			const hasDesignTools = personaTools.some(t => isDesignTool(t));
 			const hasRedditTools = personaTools.some(t => isRedditTool(t));
 			const hasEngagementTools = personaTools.some(t => isEngagementTool(t));
+			const hasTemporalTools = personaTools.some(t => isTemporalTool(t));
 
 			log.info('Tool setup', {
 				persona,
@@ -330,6 +332,11 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				allTools.push(...ENGAGEMENT_TOOLS);
 			}
 
+			// Set up temporal tools (all personas)
+			if (hasTemporalTools) {
+				allTools.push(...TEMPORAL_TOOLS);
+			}
+
 			// Only pass tools to model if it supports native tool calling
 			if (supportsToolCalling) {
 				tools = allTools;
@@ -409,6 +416,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				return executeEngagementTool(toolName, input);
 			} else if (isTodoTool(toolName) && todoContext) {
 				return executeTodoTool(toolName, input, todoContext, todoMutations!);
+			} else if (isTemporalTool(toolName)) {
+				return executeTemporalTool(toolName, input);
 			} else if (calendarContext) {
 				return executeCalendarTool(toolName, input, calendarContext, todoMutations);
 			} else {

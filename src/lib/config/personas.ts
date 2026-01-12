@@ -79,7 +79,9 @@ export type ToolName =
 	// Reddit tools (Ananya)
 	| 'fetch_reddit_thread'
 	| 'fetch_subreddit_posts'
-	| 'log_engagement';
+	| 'log_engagement'
+	// Temporal tools (all personas)
+	| 'temporal_calc';
 
 /**
  * Persona configuration interface
@@ -138,7 +140,8 @@ const GUNNAR_TOOLS: ToolName[] = [
 	'delete_whiteboard',
 	'open_whiteboard',
 	'list_whiteboards',
-	'update_whiteboard'
+	'update_whiteboard',
+	'temporal_calc'
 ];
 
 /**
@@ -171,7 +174,7 @@ const ANANYA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic
 /**
  * Ananya tools: Reddit engagement + logging
  */
-const ANANYA_TOOLS: ToolName[] = ['fetch_reddit_thread', 'fetch_subreddit_posts', 'log_engagement'];
+const ANANYA_TOOLS: ToolName[] = ['fetch_reddit_thread', 'fetch_subreddit_posts', 'log_engagement', 'temporal_calc'];
 
 /**
  * All Alicja tools
@@ -194,7 +197,8 @@ const ALICJA_TOOLS: ToolName[] = [
 	'create_calendar_event',
 	'update_calendar_event',
 	'delete_calendar_event',
-	'check_calendar_availability'
+	'check_calendar_availability',
+	'temporal_calc'
 ];
 
 /**
@@ -224,7 +228,8 @@ const FELIX_TOOLS: ToolName[] = [
 	'create_calendar_event',
 	'update_calendar_event',
 	'delete_calendar_event',
-	'check_calendar_availability'
+	'check_calendar_availability',
+	'temporal_calc'
 ];
 
 /**
@@ -249,7 +254,7 @@ export const PERSONAS: Record<string, Persona> = {
 		systemPrompt: 'kirby',
 		contextChunks: KIRBY_CHUNKS,
 		compression: true,
-		tools: []
+		tools: ['temporal_calc']
 	},
 	samara: {
 		name: 'samara',
@@ -259,7 +264,7 @@ export const PERSONAS: Record<string, Persona> = {
 		systemPrompt: 'samara',
 		contextChunks: SAMARA_CHUNKS,
 		compression: true, // All personas use compression
-		tools: []
+		tools: ['temporal_calc']
 	},
 	alicja: {
 		name: 'alicja',
@@ -279,7 +284,7 @@ export const PERSONAS: Record<string, Persona> = {
 		systemPrompt: 'eva',
 		contextChunks: EVA_CHUNKS,
 		compression: true,
-		tools: ['create_canvas', 'rename_canvas', 'delete_canvas', 'open_canvas', 'close_canvas', 'list_canvases', 'update_canvas', 'delete_element', 'plan_character', 'draw_character', 'generate_image', 'edit_image']
+		tools: ['create_canvas', 'rename_canvas', 'delete_canvas', 'open_canvas', 'close_canvas', 'list_canvases', 'update_canvas', 'delete_element', 'plan_character', 'draw_character', 'generate_image', 'edit_image', 'temporal_calc']
 	},
 	ananya: {
 		name: 'ananya',
