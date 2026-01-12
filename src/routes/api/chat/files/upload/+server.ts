@@ -40,7 +40,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 	}
 
 	const imageFile = formData.get('image') as File | null;
-	const owner = (formData.get('owner') as string) || 'system';
+	const owner = (formData.get('owner') as string) || 'no-one';
 
 	if (!imageFile) {
 		return validationError('No image file provided');

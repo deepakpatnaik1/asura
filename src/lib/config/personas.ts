@@ -18,7 +18,7 @@ export type ContextChunk =
 	| 'recent' // Compressed summaries (journal)
 	| 'starred' // User's standing instructions (all personas should get this)
 	| 'semantic' // Vector search results
-	| 'canon' // tier = 'canon' files
+	| 'everyone' // owner = 'everyone' files (shared across all personas)
 	| 'active' // Currently selected library items (content, whiteboards, canvases)
 	| 'todos' // Open + completed todos
 	| 'diary' // Founder diary entries
@@ -103,7 +103,7 @@ const GUNNAR_CHUNKS: ContextChunk[] = [
 	'recent',
 	'starred',
 	'semantic',
-	'canon',
+	'everyone',
 	'active'
 ];
 
@@ -115,19 +115,19 @@ const KIRBY_CHUNKS: ContextChunk[] = [
 	'recent',
 	'starred',
 	'semantic',
-	'canon',
+	'everyone',
 	'active'
 ];
 
 /**
  * Samara: Article-focused reader with conversation memory
  */
-const SAMARA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic', 'canon', 'active'];
+const SAMARA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic', 'everyone', 'active'];
 
 /**
  * Alicja: Chief of Staff - needs productivity data in context for ID lookups
  */
-const ALICJA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic', 'canon', 'active', 'todos', 'diary', 'tags'];
+const ALICJA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic', 'everyone', 'active', 'todos', 'diary', 'tags'];
 
 /**
  * Gunnar whiteboard tools
@@ -144,7 +144,7 @@ const GUNNAR_TOOLS: ToolName[] = [
 /**
  * Eva: Character designer - minimal but not stateless
  */
-const EVA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic', 'canon', 'active'];
+const EVA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic', 'everyone', 'active'];
 
 /**
  * Eva canvas tools (parallel to Gunnar's whiteboard tools)
@@ -163,10 +163,10 @@ const EVA_TOOLS: ToolName[] = [
 
 /**
  * Ananya: Reddit engagement
- * Includes canon - she knows the product, trusts her not to leak
+ * Includes 'everyone' content - she knows the product, trusts her not to leak
  * subreddit_registry - top 5 lowest-score subreddits for rotation
  */
-const ANANYA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic', 'canon', 'active', 'subreddit_registry'];
+const ANANYA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic', 'everyone', 'active', 'subreddit_registry'];
 
 /**
  * Ananya tools: Reddit engagement + logging
@@ -201,7 +201,7 @@ const ALICJA_TOOLS: ToolName[] = [
  * Felix: Money to-dos persona - financial, bureaucratic, business admin
  * Same context and tools as Alicja (retiring her ~end of month)
  */
-const FELIX_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic', 'canon', 'active', 'todos', 'diary', 'tags'];
+const FELIX_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic', 'everyone', 'active', 'todos', 'diary', 'tags'];
 
 /**
  * Felix tools: Same as Alicja - full productivity suite

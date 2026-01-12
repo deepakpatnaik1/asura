@@ -134,7 +134,7 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession, supabase 
 		defaultModel: settings?.default_model || 'claude-haiku-4-5-20251001',
 		watchedArticleId: settings?.watched_article_id || null,
 		focusedMessageId: settings?.focused_message_id || null,
-		lastContentOwner: settings?.last_content_owner || 'system',
+		lastContentOwner: settings?.last_content_owner || 'no-one',
 		lastContentLifecycle: settings?.last_content_lifecycle || 'ephemeral'
 	};
 };

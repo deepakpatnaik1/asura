@@ -77,7 +77,9 @@ function extractTitleFromMarkdown(content: string, filePath?: string): string {
 
 /**
  * GET /api/chat/files
- * List user's content files: non-canon first (newest first), canon at bottom
+ * List user's content files (newest first)
+ * Tiers: strategic (artisan cut), ephemeral (raw), gettysburg (special)
+ * Owners: no-one, persona names, everyone (shared across all personas)
  */
 export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase } }) => {
 	const auth = await requireAuth(safeGetSession);
@@ -88,7 +90,7 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 		.from('articles')
 		.select('id, title, is_enabled, is_starred, tier, pending_annotation, source_path, created_at, owner')
 		.eq('user_id', userId)
-		.order('tier', { ascending: false }) // strategic > gettysburg > ephemeral > canon (alphabetically descending, so canon last)
+		.order('tier', { ascending: false }) // strategic > gettysburg > ephemeral (alphabetically descending)
 		.order('created_at', { ascending: false }); // Newest first within each group
 
 	if (error) {
@@ -113,7 +115,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 	const parseResult = await parseRequestJson<{ content?: string; source_path?: string; persistent?: boolean; tier?: string; owner?: string }>(request);
 	if (!parseResult.success) return parseResult.error;
 
-	const { content, source_path, persistent = false, tier: requestTier, owner = 'system' } = parseResult.data;
+	const { content, source_path, persistent = false, tier: requestTier, owner = 'no-one' } = parseResult.data;
 
 	// Handle Obsidian file linking (source_path provided)
 	if (source_path) {
@@ -135,8 +137,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			let artisanCut: string | null = null;
 			let artisanCutAt: Date | null = null;
 
-			// Generate artisan cut if tier is strategic or canon
-			if (tier === 'strategic' || tier === 'canon') {
+			// Generate artisan cut if tier is strategic
+			if (tier === 'strategic') {
 				log.info('Generating artisan cut for linked file', { sourcePath: source_path });
 
 				// Fetch user settings for compression model
@@ -321,8 +323,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		let title: string;
 		let artisanCut: string | null = null;
 
-		if (tier === 'strategic' || tier === 'canon') {
-			// Strategic/canon tier: Call AI to generate title + artisan cut
+		if (tier === 'strategic') {
+			// Strategic tier: Call AI to generate title + artisan cut
 			// Look up provider from database
 			const provider = await getModelProvider(supabase, model);
 			assertProviderSupported(provider);

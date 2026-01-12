@@ -11,7 +11,7 @@ import { databaseError } from '$lib/api/errors';
  * Response structure:
  * {
  *   personas: { gunnar: N, kirby: N, ... },
- *   content: { raw: N, artisan: N, canon: N, images: N, linked: N },
+ *   content: { raw: N, artisan: N, everyone: N, images: N, linked: N },
  *   canvases: { designer: N, whiteboard: N },
  *   productivity: { todos: N, diary: N }
  * }
@@ -19,7 +19,7 @@ import { databaseError } from '$lib/api/errors';
  * Content detection logic:
  * - raw: tier='ephemeral', NOT image, NOT linked
  * - artisan: tier='strategic', NOT image, NOT linked
- * - canon: tier='canon'
+ * - everyone: owner='everyone'
  * - images: raw_content LIKE '[Uploaded image:%'
  * - linked: source_path IS NOT NULL
  */
@@ -56,7 +56,7 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 		// Fetch all articles to count by content type
 		const { data: articles, error: articlesError } = await supabase
 			.from('articles')
-			.select('id, tier, source_path, raw_content')
+			.select('id, tier, owner, source_path, raw_content')
 			.eq('user_id', userId);
 
 		if (articlesError) {
@@ -67,7 +67,7 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 		const contentCounts = {
 			raw: 0,
 			artisan: 0,
-			canon: 0,
+			everyone: 0,
 			images: 0,
 			linked: 0
 		};
@@ -75,13 +75,14 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 		for (const article of articles || []) {
 			const isImage = article.raw_content?.startsWith('[Uploaded image:');
 			const isLinked = article.source_path !== null;
+			const isEveryone = article.owner === 'everyone';
 
 			if (isImage) {
 				contentCounts.images++;
 			} else if (isLinked) {
 				contentCounts.linked++;
-			} else if (article.tier === 'canon') {
-				contentCounts.canon++;
+			} else if (isEveryone) {
+				contentCounts.everyone++;
 			} else if (article.tier === 'strategic') {
 				contentCounts.artisan++;
 			} else if (article.tier === 'ephemeral') {

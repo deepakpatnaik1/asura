@@ -2,7 +2,7 @@
  * PDF Upload API
  *
  * POST: Accept PDF files, extract text using pdf-parse, and create content entry.
- * Supports tier selection (ephemeral, strategic, canon).
+ * Supports tier selection (ephemeral, strategic).
  */
 
 import { json } from '@sveltejs/kit';
@@ -115,9 +115,9 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 
 	// Get tier and owner from form data
 	const tierParam = formData.get('tier') as string | null;
-	const tier = tierParam === 'canon' ? 'canon' : tierParam === 'strategic' ? 'strategic' : 'ephemeral';
-	const persistent = tier === 'strategic' || tier === 'canon';
-	const owner = (formData.get('owner') as string) || 'system';
+	const tier = tierParam === 'strategic' ? 'strategic' : 'ephemeral';
+	const persistent = tier === 'strategic';
+	const owner = (formData.get('owner') as string) || 'no-one';
 
 	log.info('Processing PDF upload', {
 		filename: pdfFile.name,

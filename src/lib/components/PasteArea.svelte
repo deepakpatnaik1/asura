@@ -4,7 +4,7 @@
 	 *
 	 * Accepts HTML (Firefox Reader Mode), plain text (markdown, Claude docs),
 	 * or drag & dropped images/PDFs. Two dropdowns: Lifecycle and Owner.
-	 * Format is auto-detected. Default owner is "Unassigned" (system).
+	 * Format is auto-detected. Default owner is "No One".
 	 * Scan processing triggers for Felix-owned images.
 	 */
 	import { tick } from 'svelte';
@@ -17,7 +17,7 @@
 		lastLifecycle?: string;
 	}
 
-	let { onClose, onSuccess, onPasteComplete, lastOwner = 'system', lastLifecycle = 'ephemeral' }: Props = $props();
+	let { onClose, onSuccess, onPasteComplete, lastOwner = 'no-one', lastLifecycle = 'ephemeral' }: Props = $props();
 	console.log('[PasteArea] Mounted with props:', { lastOwner, lastLifecycle });
 
 	// Lifecycle: ephemeral (default) or persistent - initialized from last selection
@@ -25,13 +25,13 @@
 	let lifecycle = $state<Lifecycle>((lastLifecycle as Lifecycle) || 'ephemeral');
 
 	// Owner: which persona owns this content - initialized from last selection
-	type Owner = 'system' | 'felix' | 'gunnar' | 'kirby' | 'samara' | 'alicja' | 'eva' | 'ananya' | 'canon';
-	let owner = $state<Owner>((lastOwner as Owner) || 'system');
+	type Owner = 'no-one' | 'felix' | 'gunnar' | 'kirby' | 'samara' | 'alicja' | 'eva' | 'ananya' | 'everyone';
+	let owner = $state<Owner>((lastOwner as Owner) || 'no-one');
 	console.log('[PasteArea] State initialized:', { owner, lifecycle });
 
 	// Owner display names and colors
 	const ownerConfig: Record<Owner, { label: string; color: string }> = {
-		system: { label: 'System', color: 'hsl(var(--border))' },
+		'no-one': { label: 'No One', color: 'hsl(var(--border))' },
 		felix: { label: 'Felix', color: 'var(--felix-accent, #f59e0b)' },
 		gunnar: { label: 'Gunnar', color: 'var(--gunnar-accent, #3b82f6)' },
 		kirby: { label: 'Kirby', color: 'var(--kirby-accent, #ec4899)' },
@@ -39,7 +39,7 @@
 		alicja: { label: 'Alicja', color: 'var(--alicja-accent, #8b5cf6)' },
 		eva: { label: 'Eva', color: 'var(--eva-accent, #f43f5e)' },
 		ananya: { label: 'Ananya', color: 'var(--ananya-accent, #06b6d4)' },
-		canon: { label: 'Canon', color: 'var(--boss-accent)' }
+		everyone: { label: 'Everyone', color: 'var(--boss-accent)' }
 	};
 	let isProcessing = $state(false);
 	let processingStatus = $state('');
@@ -133,8 +133,8 @@
 		processingError = null;
 
 		try {
-			// Map lifecycle/owner to API tier value (same logic as processContent)
-			const tier = owner === 'canon' ? 'canon' : (lifecycle === 'persistent' ? 'strategic' : 'ephemeral');
+			// Lifecycle determines tier - owner is passed separately
+			const tier = lifecycle === 'persistent' ? 'strategic' : 'ephemeral';
 
 			const response = await fetch('/api/chat/files', {
 				method: 'POST',
@@ -142,7 +142,7 @@
 				body: JSON.stringify({
 					source_path: sourcePath,
 					tier,
-					owner: owner !== 'canon' ? owner : undefined
+					owner
 				})
 			});
 
@@ -182,9 +182,8 @@
 		try {
 			processingStatus = lifecycle === 'persistent' ? 'Generating artisan cut...' : 'Processing...';
 
-			// Map lifecycle/owner to API tier value
-			// Canon owner → tier='canon', otherwise lifecycle determines tier
-			const tier = owner === 'canon' ? 'canon' : (lifecycle === 'persistent' ? 'strategic' : 'ephemeral');
+			// Lifecycle determines tier - owner is passed separately
+			const tier = lifecycle === 'persistent' ? 'strategic' : 'ephemeral';
 
 			const response = await fetch('/api/chat/files', {
 				method: 'POST',
@@ -192,7 +191,7 @@
 				body: JSON.stringify({
 					content,
 					tier,
-					owner: owner !== 'canon' ? owner : undefined // Pass owner for Phase 3
+					owner
 				})
 			});
 
@@ -303,8 +302,8 @@
 			const formData = new FormData();
 			formData.append('image', file);
 
-			// Pass owner for Phase 3 (images ignore lifecycle)
-			if (owner !== 'system') {
+			// Pass owner (images ignore lifecycle)
+			if (owner !== 'no-one') {
 				formData.append('owner', owner);
 			}
 
@@ -352,14 +351,10 @@
 			const formData = new FormData();
 			formData.append('pdf', file);
 
-			// Map lifecycle/owner to API tier value
-			const tier = owner === 'canon' ? 'canon' : (lifecycle === 'persistent' ? 'strategic' : 'ephemeral');
+			// Lifecycle determines tier - owner is passed separately
+			const tier = lifecycle === 'persistent' ? 'strategic' : 'ephemeral';
 			formData.append('tier', tier);
-
-			// Pass owner for Phase 3
-			if (owner !== 'canon') {
-				formData.append('owner', owner);
-			}
+			formData.append('owner', owner);
 
 			const response = await fetch('/api/chat/files/pdf', {
 				method: 'POST',
@@ -434,7 +429,7 @@
 						class="dropdown"
 						bind:value={owner}
 					>
-						<option value="system">{ownerConfig.system.label}</option>
+						<option value="no-one">{ownerConfig['no-one'].label}</option>
 						<option disabled>─────────</option>
 						<option value="felix">{ownerConfig.felix.label}</option>
 						<option value="gunnar">{ownerConfig.gunnar.label}</option>
@@ -444,7 +439,7 @@
 						<option value="eva">{ownerConfig.eva.label}</option>
 						<option value="ananya">{ownerConfig.ananya.label}</option>
 						<option disabled>─────────</option>
-						<option value="canon">{ownerConfig.canon.label}</option>
+						<option value="everyone">{ownerConfig.everyone.label}</option>
 					</select>
 				</div>
 			</div>

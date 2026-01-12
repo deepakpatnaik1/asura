@@ -30,7 +30,7 @@ async function getModelContextWindow(supabase: SupabaseClient, modelIdentifier: 
 }
 
 interface ContextComponents {
-	canon: string; // Canon content (shared across all modes)
+	everyone: string; // owner='everyone' content (shared across all personas)
 	superjournal: string;
 	files: string; // Enabled user files (artisan cuts)
 	starred: string;
@@ -48,7 +48,7 @@ interface ContextComponents {
 interface ContextStats {
 	totalTokens: number;
 	components: {
-		canon: number;
+		everyone: number;
 		superjournal: number;
 		files: number;
 		starred: number;
@@ -93,7 +93,7 @@ interface RankedVectorResult extends VectorSearchResult {
  * - working: Last N superjournal turns (unified across all personas)
  * - recent: Compressed journal summaries
  * - semantic: Vector search results
- * - canon: tier='canon' content (always included)
+ * - everyone: owner='everyone' content (shared across all personas)
  * - active: Currently selected content(s) (via contentIds)
  * - todos, diary, tags, time: Productivity data
  */
@@ -113,7 +113,7 @@ export async function buildContext(
 
 	// Initialize context components
 	const components: ContextComponents = {
-		canon: '',
+		everyone: '',
 		superjournal: '',
 		files: '',
 		starred: '',
@@ -134,19 +134,19 @@ export async function buildContext(
 	const hasChunk = (chunk: Parameters<typeof personaHasContextChunk>[1]) =>
 		personaHasContextChunk(personaName, chunk);
 
-	// Priority 0: Canon content (always injected if persona has 'canon' chunk)
-	if (hasChunk('canon')) {
-		const { data: canonData } = await supabase
+	// Priority 0: 'Everyone' content (always injected if persona has 'everyone' chunk)
+	if (hasChunk('everyone')) {
+		const { data: everyoneData } = await supabase
 			.from('articles')
 			.select('title, artisan_cut, raw_content, source_path, created_at')
 			.eq('user_id', userId)
-			.eq('tier', 'canon')
+			.eq('owner', 'everyone')
 			.order('created_at', { ascending: true });
 
-		if (canonData && canonData.length > 0) {
-			const canonText = formatCanonContent(canonData);
-			components.canon = canonText;
-			totalTokens += estimateTokens(canonText);
+		if (everyoneData && everyoneData.length > 0) {
+			const everyoneText = formatEveryoneContent(everyoneData);
+			components.everyone = everyoneText;
+			totalTokens += estimateTokens(everyoneText);
 		}
 	}
 
@@ -184,7 +184,7 @@ export async function buildContext(
 						try {
 							if (existsSync(item.source_path)) {
 								const freshContent = readFileSync(item.source_path, 'utf-8');
-								// Use artisan cut if available (strategic/canon tier), otherwise fresh content
+								// Use artisan cut if available (strategic tier), otherwise fresh content
 								articleContent = item.artisan_cut || freshContent;
 							} else {
 								// File not found - use stored content as fallback
@@ -597,7 +597,7 @@ export async function buildContext(
 	const stats: ContextStats = {
 		totalTokens,
 		components: {
-			canon: estimateTokens(components.canon),
+			everyone: estimateTokens(components.everyone),
 			superjournal: estimateTokens(components.superjournal),
 			files: estimateTokens(components.files),
 			starred: estimateTokens(components.starred),
@@ -722,8 +722,8 @@ ${entry.persona_name}: ${entry.persona_essence}`
 	return `--- RECENT MEMORY (Last ${MEMORY.lastNJournalEntries} Compressed Turns) ---\n${formatted}\n\n`;
 }
 
-// Format canon content (shared across all modes)
-function formatCanonContent(
+// Format 'everyone' content (shared across all personas)
+function formatEveryoneContent(
 	entries: Array<{
 		title: string;
 		artisan_cut: string | null;
@@ -758,11 +758,11 @@ function formatCanonContent(
 				content = entry.artisan_cut || entry.raw_content || '';
 			}
 
-			return `[Canon: ${entry.title}]\n${content}`;
+			return `[Shared: ${entry.title}]\n${content}`;
 		})
 		.join('\n\n');
 
-	return `--- CANON (Shared Knowledge) ---\n${formatted}\n\n`;
+	return `--- SHARED KNOWLEDGE (Everyone) ---\n${formatted}\n\n`;
 }
 
 // Format starred messages (chat mode: from journal - boss message only)
@@ -1254,7 +1254,7 @@ ${formatted}
 // Assemble all context components into final string
 function assembleContext(components: ContextComponents): string {
 	const parts = [
-		components.canon, // Canon first (shared knowledge across all modes)
+		components.everyone, // 'Everyone' content first (shared knowledge across all personas)
 		components.subredditRegistry, // Subreddit registry (for Ananya - before superjournal so she sees it first)
 		components.workData, // Work data for todo mode (before superjournal so Alicja sees todos first)
 		components.calendar, // Calendar events (for Alicja)

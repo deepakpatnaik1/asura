@@ -37,7 +37,7 @@
 	let selectedPersona = $state<string>(data.selectedPersona || DEFAULT_PERSONA);
 
 	// Last paste settings (persisted to user_settings)
-	let lastContentOwner = $state<string>(data.lastContentOwner || 'system');
+	let lastContentOwner = $state<string>(data.lastContentOwner || 'no-one');
 	let lastContentLifecycle = $state<string>(data.lastContentLifecycle || 'ephemeral');
 
 	// Accent color for current persona (send button, input bar)
@@ -329,9 +329,9 @@
 	const whiteboardDeleteConfirm = createConfirmation();
 	const designerCanvasDeleteConfirm = createConfirmation();
 
-	// Total selections for library badge (exclude canon - always injected)
+	// Total selections for library badge (exclude owner='everyone' - always injected)
 	const totalLibrarySelections = $derived(
-		articles.filter(a => a.is_enabled && a.tier !== 'canon').length + selectedWhiteboardIds.length + selectedDesignerCanvasIds.length
+		articles.filter(a => a.is_enabled && a.owner !== 'everyone').length + selectedWhiteboardIds.length + selectedDesignerCanvasIds.length
 	);
 
 	// File watching for live-linked Obsidian files
@@ -1104,8 +1104,8 @@
 		lastContentLifecycle = newLifecycle;
 		console.log('[handlePasteComplete] Local state updated:', { lastContentOwner, lastContentLifecycle });
 
-		// Switch to that persona if it's a real persona (not system/canon)
-		const isPersonaOwner = !!PERSONAS[newOwner] && newOwner !== 'system' && newOwner !== 'canon';
+		// Switch to that persona if it's a real persona (not no-one/everyone)
+		const isPersonaOwner = !!PERSONAS[newOwner] && newOwner !== 'no-one' && newOwner !== 'everyone';
 		if (isPersonaOwner) {
 			selectedPersona = newOwner;
 		}
@@ -1834,7 +1834,7 @@
 				break;
 			}
 			case 'content':
-				// All content tiers (ephemeral, strategic, canon, gettysburg) are articles
+				// All content tiers (ephemeral, strategic, gettysburg) are articles
 				// Also reload messages since superjournal entries with content markers are deleted
 				reloadMessages();
 				loadArticles();

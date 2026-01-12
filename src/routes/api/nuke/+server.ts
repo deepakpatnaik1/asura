@@ -14,7 +14,7 @@ import { createLogger } from '$lib/api/logger';
  * - persona:<name>     → Delete superjournal/journal for that persona
  * - content:raw        → Delete raw content (tier = 'ephemeral', no artisan cut)
  * - content:artisan    → Delete artisan cut content (tier = 'strategic')
- * - content:canon      → Delete foundational content (tier = 'canon')
+ * - content:everyone   → Delete shared content (owner = 'everyone')
  * - content:images     → Delete uploaded images
  * - content:linked     → Delete live-linked Obsidian files
  * - canvas:designer    → Delete Eva's designer canvases
@@ -37,7 +37,7 @@ const VALID_BUCKETS = [
 	'persona:felix',
 	'content:raw',
 	'content:artisan',
-	'content:canon',
+	'content:everyone',
 	'content:images',
 	'content:linked',
 	'canvas:designer',
@@ -263,7 +263,7 @@ async function nukePersona(supabase: App.Locals['supabase'], userId: string, per
  * Types:
  * - raw: tier='ephemeral', NOT image, NOT linked (text/PDFs without artisan cut)
  * - artisan: tier='strategic', NOT image, NOT linked (text/PDFs with artisan cut)
- * - canon: tier='canon' (foundational content)
+ * - everyone: owner='everyone' (shared content)
  * - images: raw_content LIKE '[Uploaded image:%' (uploaded images)
  * - linked: source_path IS NOT NULL (live-linked Obsidian files)
  */
@@ -286,9 +286,9 @@ async function nukeContent(supabase: App.Locals['supabase'], userId: string, con
 				.is('source_path', null)
 				.not('raw_content', 'like', '[Uploaded image:%');
 			break;
-		case 'canon':
-			// Canon tier (all canon content)
-			query = query.eq('tier', 'canon');
+		case 'everyone':
+			// owner='everyone' (shared content)
+			query = query.eq('owner', 'everyone');
 			break;
 		case 'images':
 			// Uploaded images (identified by raw_content pattern)

@@ -67,7 +67,7 @@
 	const CONTENT_BUCKETS = [
 		{ id: 'content:raw', label: 'Raw', description: 'Text/PDFs without artisan cut' },
 		{ id: 'content:artisan', label: 'Artisan Cut', description: 'Text/PDFs with artisan cut' },
-		{ id: 'content:canon', label: 'Canon', description: 'Foundational docs' },
+		{ id: 'content:everyone', label: 'Everyone', description: 'Shared across all personas' },
 		{ id: 'content:images', label: 'Images', description: 'Uploaded images' },
 		{ id: 'content:linked', label: 'Live-linked', description: 'Obsidian files' }
 	] as const;

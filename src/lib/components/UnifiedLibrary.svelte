@@ -3,7 +3,7 @@
 	 * UnifiedLibrary - Four-column dropdown for all selectable content
 	 *
 	 * Columns:
-	 * 1. Artisan Cut - canon + strategic articles
+	 * 1. Artisan Cut - strategic articles + owner='everyone' articles
 	 * 2. Raw - ephemeral articles (no artisan cut)
 	 * 3. Whiteboards - Gunnar's scratch pads
 	 * 4. Designer Canvases - Eva's character canvases
@@ -113,14 +113,14 @@
 		onClose
 	}: Props = $props();
 
-	// Split articles into curated (canon + strategic) and raw (ephemeral)
-	// Canon always at bottom of curated pane
+	// Split articles into curated (strategic + owner='everyone') and raw (ephemeral)
+	// owner='everyone' always at bottom of curated pane
 	const curatedArticles = $derived(
 		articles
-			.filter((a) => a.tier === 'canon' || a.tier === 'strategic')
+			.filter((a) => a.tier === 'strategic' || a.owner === 'everyone')
 			.sort((a, b) => {
-				if (a.tier === 'canon' && b.tier !== 'canon') return 1;
-				if (a.tier !== 'canon' && b.tier === 'canon') return -1;
+				if (a.owner === 'everyone' && b.owner !== 'everyone') return 1;
+				if (a.owner !== 'everyone' && b.owner === 'everyone') return -1;
 				return 0; // Keep original order within same tier
 			})
 	);
@@ -353,7 +353,7 @@
 		</div>
 	{/if}
 	<div class="columns-container">
-		<!-- Artisan Cut Articles Column (canon + strategic) -->
+		<!-- Artisan Cut Articles Column (strategic + owner='everyone') -->
 		<div class="column">
 		<div class="column-header">Artisan Cut</div>
 		{#if curatedArticles.length === 0}
@@ -366,7 +366,7 @@
 				{#each curatedArticles as item (item.id)}
 					<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
 					<div class="item" class:active={item.is_enabled} onclick={(e) => handleArticleRowClick(item, e)}>
-						{#if item.tier === 'canon'}
+						{#if item.owner === 'everyone'}
 							<span class="toggle-spacer"></span>
 						{:else}
 							<button
@@ -407,7 +407,7 @@
 							<Icon src={LuStar} size="11" />
 						</button>
 						{#if item.source_path}
-							{#if item.owner && item.owner !== 'system'}
+							{#if item.owner && item.owner !== 'no-one'}
 								<span class="watch-spacer"></span>
 							{:else}
 								<button
@@ -491,7 +491,7 @@
 						>
 							<Icon src={LuStar} size="11" />
 						</button>
-						{#if item.source_path && (!item.owner || item.owner === 'system')}
+						{#if item.source_path && (!item.owner || item.owner === 'no-one')}
 							<button
 								class="watch-btn"
 								class:active={watchedArticleId === item.id}

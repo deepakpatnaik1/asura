@@ -36,7 +36,7 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supab
 			alt_text,
 			is_pinned,
 			created_at,
-			articles!inner(id, title, is_enabled, tier)
+			articles!inner(id, title, is_enabled, owner)
 		`)
 		.eq('user_id', userId)
 		.not('content_id', 'is', null)
@@ -65,11 +65,11 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supab
 	}
 
 	// Transform to public URLs (use relative URLs to go through Vite proxy in dev)
-	// Filter out charts from canon files (they can't be toggled off, so no point showing thumbnails)
+	// Filter out charts from 'everyone' files (they can't be toggled off, so no point showing thumbnails)
 	const charts = (data || [])
 		.filter((chart) => {
-			const content = chart.articles as unknown as { tier?: string } | null;
-			return content?.tier !== 'canon';
+			const content = chart.articles as unknown as { owner?: string } | null;
+			return content?.owner !== 'everyone';
 		})
 		.map((chart) => {
 			// articles is a single object when using !inner join
