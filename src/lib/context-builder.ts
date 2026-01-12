@@ -6,6 +6,7 @@ import { MEMORY } from '$lib/config/memory';
 import { DEFAULT_PERSONA, personaHasContextChunk } from '$lib/config/personas';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { fetchCalendarEvents, refreshAccessToken } from '$lib/api/google-calendar';
+import { getBerlinHour, getBerlinDayName, nowBerlinISO, toBerlinLocale } from '$lib/utils/timezone';
 
 const voyage = new VoyageAIClient({ apiKey: VOYAGE_API_KEY });
 
@@ -617,14 +618,15 @@ export async function buildContext(
 }
 
 // Format timestamp for context (human-readable, natural phrasing)
+// IMPORTANT: All time comparisons use Berlin timezone
 function formatTimestamp(dateString: string): string {
 	const date = new Date(dateString);
 	const now = new Date();
 	const diffMs = now.getTime() - date.getTime();
 	const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-	// Get time of day bucket
-	const hour = date.getHours();
+	// Get time of day bucket in Berlin timezone
+	const hour = getBerlinHour(date);
 	let timeOfDay: string;
 	if (hour >= 5 && hour < 12) {
 		timeOfDay = 'morning';
@@ -636,8 +638,12 @@ function formatTimestamp(dateString: string): string {
 		timeOfDay = 'night';
 	}
 
+	// Get date strings in Berlin timezone for comparison
+	const dateBerlin = toBerlinLocale(date, { year: 'numeric', month: '2-digit', day: '2-digit' });
+	const nowBerlin = toBerlinLocale(now, { year: 'numeric', month: '2-digit', day: '2-digit' });
+
 	// Today
-	if (date.toDateString() === now.toDateString()) {
+	if (dateBerlin === nowBerlin) {
 		if (diffMs < 60 * 60 * 1000) {
 			// Less than an hour ago
 			const mins = Math.floor(diffMs / (1000 * 60));
@@ -649,13 +655,14 @@ function formatTimestamp(dateString: string): string {
 	// Yesterday
 	const yesterday = new Date(now);
 	yesterday.setDate(yesterday.getDate() - 1);
-	if (date.toDateString() === yesterday.toDateString()) {
+	const yesterdayBerlin = toBerlinLocale(yesterday, { year: 'numeric', month: '2-digit', day: '2-digit' });
+	if (dateBerlin === yesterdayBerlin) {
 		return `yesterday ${timeOfDay}`;
 	}
 
 	// Within the last week (use day name)
 	if (diffDays < 7) {
-		const dayName = date.toLocaleDateString('en-US', { weekday: 'long' });
+		const dayName = getBerlinDayName(date);
 		return `${dayName} ${timeOfDay}`;
 	}
 
@@ -939,7 +946,7 @@ function formatWorkData(
 		event_period?: string | null;
 	}>
 ): string {
-	const currentTime = new Date().toISOString();
+	const currentTime = nowBerlinISO();
 
 	// Build hierarchical todo structure
 	const parentTodos = todos.filter((t) => !t.parent_id);

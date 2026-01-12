@@ -17,6 +17,7 @@ import {
 	type UpdateEventInput
 } from './google-calendar';
 import type { TodoMutations } from './todo-tools';
+import { toBerlinISO, toBerlinLocale, toBerlinDateLocale } from '$lib/utils/timezone';
 
 /**
  * Tool Definitions
@@ -503,15 +504,15 @@ async function executeCheckAvailability(
 		const endTime = input.end_time as string;
 
 		// Ensure RFC3339 format with timezone for FreeBusy API
-		// If no timezone offset provided, append Z for UTC
+		// If no timezone offset provided, assume Berlin time (not UTC!)
 		const formatRFC3339 = (time: string): string => {
 			// Already has timezone offset (+HH:MM, -HH:MM) or Z
 			if (/[+-]\d{2}:\d{2}$/.test(time) || time.endsWith('Z')) {
 				return time;
 			}
-			// Parse as local and convert to ISO with Z (treating as UTC)
+			// Parse and convert to Berlin ISO (not UTC!)
 			const date = new Date(time);
-			return date.toISOString();
+			return toBerlinISO(date);
 		};
 
 		const timeMin = formatRFC3339(startTime);
@@ -567,12 +568,12 @@ async function executeCheckAvailability(
 }
 
 /**
- * Format event time for display
+ * Format event time for display (Berlin timezone)
  */
 function formatEventTime(event: { start: { dateTime?: string; date?: string } }): string {
 	if (event.start.dateTime) {
 		const date = new Date(event.start.dateTime);
-		return date.toLocaleString('en-US', {
+		return toBerlinLocale(date, {
 			weekday: 'short',
 			month: 'short',
 			day: 'numeric',
@@ -581,7 +582,7 @@ function formatEventTime(event: { start: { dateTime?: string; date?: string } })
 		});
 	} else if (event.start.date) {
 		const date = new Date(event.start.date + 'T00:00:00');
-		return date.toLocaleDateString('en-US', {
+		return toBerlinDateLocale(date, {
 			weekday: 'short',
 			month: 'short',
 			day: 'numeric'

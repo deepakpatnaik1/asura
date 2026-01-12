@@ -4,6 +4,8 @@
  * Central export file for all system prompts used in Aether.
  */
 
+import { nowBerlinISO, toBerlinLocale } from '$lib/utils/timezone';
+
 // Personas
 export { PERSONA_GUNNAR } from './personas/gunnar';
 export { PERSONA_KIRBY } from './personas/kirby';
@@ -33,21 +35,21 @@ const PERSONA_PROMPTS: Record<string, string> = {
 };
 
 /**
- * Format current time for Alicja's prompt
+ * Format current time for Alicja/Felix's prompt
  * Human-readable with ISO for precision: "Sunday, December 7, 2025 at 3:45 PM (2025-12-07T15:45:00+01:00)"
+ * IMPORTANT: Both parts must be Berlin time, not UTC!
  */
 function formatCurrentTime(): string {
 	const now = new Date();
-	const human = now.toLocaleString('en-US', {
+	const human = toBerlinLocale(now, {
 		weekday: 'long',
 		year: 'numeric',
 		month: 'long',
 		day: 'numeric',
 		hour: 'numeric',
-		minute: '2-digit',
-		timeZone: 'Europe/Berlin'
+		minute: '2-digit'
 	});
-	const iso = now.toISOString();
+	const iso = nowBerlinISO();
 	return `${human} (${iso})`;
 }
 

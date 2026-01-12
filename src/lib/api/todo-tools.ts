@@ -7,6 +7,7 @@
 
 import type Anthropic from '@anthropic-ai/sdk';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { nowBerlinISO, todayBerlin, toBerlinISO } from '$lib/utils/timezone';
 
 /**
  * Tool Definitions
@@ -500,7 +501,7 @@ async function executeCreateTodo(
 		const parentId = input.parent_id as string | undefined;
 		const markComplete = input.mark_complete as boolean | undefined;
 
-		const now = new Date().toISOString();
+		const now = nowBerlinISO();
 		const expectedStatus = markComplete ? 'completed' : 'open';
 		const { data, error } = await supabase
 			.from('canvas_planner_todos')
@@ -585,7 +586,7 @@ async function executeCompleteTodo(
 			.from('canvas_planner_todos')
 			.update({
 				status: 'completed',
-				completed_at: new Date().toISOString()
+				completed_at: nowBerlinISO()
 			})
 			.eq('id', todoId)
 			.select()
@@ -1202,10 +1203,10 @@ async function executeLogDiary(
 		const eventPeriod = input.event_period as string | undefined;
 		const sortDate = input.sort_date as string | undefined;
 
-		// Compute sort_date: use provided value, or derive from loggedAt, or default to today
-		const computedSortDate = sortDate || (loggedAt ? loggedAt.split('T')[0] : new Date().toISOString().split('T')[0]);
+		// Compute sort_date: use provided value, or derive from loggedAt, or default to today (Berlin time)
+		const computedSortDate = sortDate || (loggedAt ? loggedAt.split('T')[0] : todayBerlin());
 
-		const expectedLoggedAt = loggedAt || new Date().toISOString();
+		const expectedLoggedAt = loggedAt || nowBerlinISO();
 		const { data, error } = await supabase
 			.from('canvas_planner_diary')
 			.insert({
@@ -1336,9 +1337,9 @@ async function executeUpdateDiary(
 			}
 		}
 		if (newSortDate !== undefined) {
-			// Compare dates by value, not string format
-			const inputDate = new Date(newSortDate).toISOString().split('T')[0];
-			const dbDate = new Date(data.sort_date).toISOString().split('T')[0];
+			// Compare dates by value, not string format (Berlin timezone)
+			const inputDate = toBerlinISO(new Date(newSortDate)).split('T')[0];
+			const dbDate = toBerlinISO(new Date(data.sort_date)).split('T')[0];
 			if (inputDate !== dbDate) {
 				discrepancies.push('sort_date');
 			}
