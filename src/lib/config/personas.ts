@@ -201,7 +201,7 @@ const ALICJA_TOOLS: ToolName[] = [
  * Felix: Money to-dos persona - financial, bureaucratic, business admin
  * Same context and tools as Alicja (retiring her ~end of month)
  */
-const FELIX_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic', 'everyone', 'active', 'todos', 'diary', 'tags'];
+const FELIX_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic', 'everyone', 'active', 'todos', 'diary', 'tags', 'calendar'];
 
 /**
  * Felix tools: Same as Alicja - full productivity suite
