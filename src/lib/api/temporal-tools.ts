@@ -36,11 +36,11 @@ export const TEMPORAL_CALC_TOOL: Anthropic.Tool = {
 			from_time: {
 				type: 'string',
 				description:
-					'Start time - use "now" for current time, or ISO timestamp like "2026-01-12T11:00:00". Required for difference/add/subtract.'
+					'Start time - use "now" for current time, "YYYY-MM-DD" for a date, or full ISO timestamp like "2026-01-12T11:00:00". Required for difference/add/subtract.'
 			},
 			to_time: {
 				type: 'string',
-				description: 'End time for difference calculation - ISO timestamp like "2026-01-12T14:30:00"'
+				description: 'End time for difference calculation - "YYYY-MM-DD" or full ISO timestamp like "2026-01-12T14:30:00"'
 			},
 			amount: {
 				type: 'number',
@@ -62,6 +62,30 @@ export const TEMPORAL_CALC_TOOL: Anthropic.Tool = {
 };
 
 export const TEMPORAL_TOOLS: Anthropic.Tool[] = [TEMPORAL_CALC_TOOL];
+
+/**
+ * Parse a time string, handling partial formats
+ * - "now" → current time
+ * - "2024-12-08" (date only) → 2024-12-08T09:00:00 (9 AM default)
+ * - "2024-12-08T14:30:00" → as-is
+ */
+function parseTimeInput(timeStr: string): Date | null {
+	if (timeStr === 'now') {
+		return new Date();
+	}
+
+	// Check for date-only format (YYYY-MM-DD)
+	const dateOnlyMatch = timeStr.match(/^(\d{4}-\d{2}-\d{2})$/);
+	if (dateOnlyMatch) {
+		// Append 9 AM to avoid UTC midnight timezone issues
+		const date = new Date(`${dateOnlyMatch[1]}T09:00:00`);
+		return isNaN(date.getTime()) ? null : date;
+	}
+
+	// Try parsing as-is (full ISO or other valid format)
+	const date = new Date(timeStr);
+	return isNaN(date.getTime()) ? null : date;
+}
 
 /**
  * Check if a tool name is a temporal tool
@@ -135,11 +159,11 @@ function computeDifference(input: Record<string, unknown>): TemporalToolResult {
 		return { success: false, message: 'Both from_time and to_time are required for difference' };
 	}
 
-	const from = fromTime === 'now' ? new Date() : new Date(fromTime);
-	const to = new Date(toTime);
+	const from = parseTimeInput(fromTime);
+	const to = parseTimeInput(toTime);
 
-	if (isNaN(from.getTime()) || isNaN(to.getTime())) {
-		return { success: false, message: 'Invalid date format. Use ISO format or "now".' };
+	if (!from || !to) {
+		return { success: false, message: 'Invalid date format. Use "now", "YYYY-MM-DD", or full ISO timestamp.' };
 	}
 
 	const diffMs = to.getTime() - from.getTime();
@@ -202,9 +226,9 @@ function computeAdd(input: Record<string, unknown>): TemporalToolResult {
 		return { success: false, message: 'unit is required for add operation' };
 	}
 
-	const from = fromTime === 'now' ? new Date() : new Date(fromTime);
-	if (isNaN(from.getTime())) {
-		return { success: false, message: 'Invalid from_time format. Use ISO format or "now".' };
+	const from = parseTimeInput(fromTime);
+	if (!from) {
+		return { success: false, message: 'Invalid from_time format. Use "now", "YYYY-MM-DD", or full ISO timestamp.' };
 	}
 
 	const result = new Date(from);
@@ -409,9 +433,9 @@ function formatTime(input: Record<string, unknown>): TemporalToolResult {
 		return { success: false, message: 'from_time is required for format operation' };
 	}
 
-	const date = fromTime === 'now' ? new Date() : new Date(fromTime);
-	if (isNaN(date.getTime())) {
-		return { success: false, message: 'Invalid date format.' };
+	const date = parseTimeInput(fromTime);
+	if (!date) {
+		return { success: false, message: 'Invalid date format. Use "now", "YYYY-MM-DD", or full ISO timestamp.' };
 	}
 
 	const resultFormatted = toBerlinLocale(date, {
