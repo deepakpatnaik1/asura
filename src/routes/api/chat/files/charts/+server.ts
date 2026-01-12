@@ -36,7 +36,7 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supab
 			alt_text,
 			is_pinned,
 			created_at,
-			articles!inner(id, title, is_enabled, owner)
+			articles!inner(id, title, is_enabled, owner, source_path)
 		`)
 		.eq('user_id', userId)
 		.not('content_id', 'is', null)
@@ -65,11 +65,15 @@ export const GET: RequestHandler = async ({ url, locals: { safeGetSession, supab
 	}
 
 	// Transform to public URLs (use relative URLs to go through Vite proxy in dev)
-	// Filter out charts from 'everyone' files (they can't be toggled off, so no point showing thumbnails)
+	// Filter out:
+	// - Charts from 'everyone' files (they can't be toggled off, so no point showing thumbnails)
+	// - Charts from live-linked files (source_path set) - table click mapping is unreliable
 	const charts = (data || [])
 		.filter((chart) => {
-			const content = chart.articles as unknown as { owner?: string } | null;
-			return content?.owner !== 'everyone';
+			const content = chart.articles as unknown as { owner?: string; source_path?: string | null } | null;
+			if (content?.owner === 'everyone') return false;
+			if (content?.source_path) return false; // Exclude live-linked files
+			return true;
 		})
 		.map((chart) => {
 			// articles is a single object when using !inner join

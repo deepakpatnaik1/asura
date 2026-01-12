@@ -35,26 +35,15 @@ export const POST: RequestHandler = async ({ params, locals: { safeGetSession, s
 		return notFoundError('Article not found');
 	}
 
-	// For live-linked files, read fresh content from disk
-	let contentText: string | null = null;
+	// Skip extraction for live-linked files - table click mapping is unreliable
+	// because extraction order doesn't match render order for dynamic content
 	if (article.source_path) {
-		try {
-			const fs = await import('fs/promises');
-			contentText = await fs.readFile(article.source_path, 'utf-8');
-			log.info('Read fresh content from disk', {
-				articleId: articleId.slice(0, 8),
-				contentLength: contentText.length
-			});
-		} catch (err) {
-			log.warn('Failed to read source file, using stored content', {
-				sourcePath: article.source_path,
-				error: err instanceof Error ? err.message : 'Unknown'
-			});
-			contentText = article.raw_content;
-		}
-	} else {
-		contentText = article.raw_content;
+		log.info('Skipping extraction for live-linked file', { articleId: articleId.slice(0, 8) });
+		return json({ success: true, articleId, chartCount: 0, skipped: true });
 	}
+
+	// For non-linked files (pasted content), use stored content
+	const contentText = article.raw_content;
 
 	if (!contentText) {
 		log.warn('No content to extract from', { articleId: articleId.slice(0, 8) });

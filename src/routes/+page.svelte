@@ -344,42 +344,6 @@
 	let heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
 	const HEARTBEAT_TIMEOUT_MS = 20000; // Server sends keep-alive every 10s, expect within 20s
 
-	// Debounced table extraction for live-linked files
-	// Re-extracts tables when content changes so new tables appear in lightbox
-	let extractionDebounceTimer: ReturnType<typeof setTimeout> | null = null;
-	const EXTRACTION_DEBOUNCE_MS = 2000; // Wait 2s after last edit before re-extracting
-
-	/**
-	 * Trigger table re-extraction for a content file (debounced)
-	 * Called when SSE detects content changes in live-linked files
-	 */
-	function triggerTableExtraction(articleId: string) {
-		// Clear any pending extraction
-		if (extractionDebounceTimer) {
-			clearTimeout(extractionDebounceTimer);
-		}
-
-		// Schedule extraction after debounce period
-		extractionDebounceTimer = setTimeout(async () => {
-			console.log('[Extract] Re-extracting tables for:', articleId.slice(0, 8));
-			try {
-				const response = await fetch(`/api/chat/files/${articleId}/extract`, {
-					method: 'POST'
-				});
-				if (response.ok) {
-					const result = await response.json();
-					console.log('[Extract] Extraction complete:', result.chartCount, 'charts');
-					// Reload charts to pick up new/updated tables
-					await loadFileCharts();
-				} else {
-					console.error('[Extract] Extraction failed:', response.status);
-				}
-			} catch (err) {
-				console.error('[Extract] Extraction error:', err);
-			}
-		}, EXTRACTION_DEBOUNCE_MS);
-	}
-
 	/**
 	 * Set which article to watch. Only one at a time.
 	 * Automatically restarts the file watcher.
@@ -521,9 +485,8 @@
 									return msg;
 								});
 
-								// Re-extract tables so new/changed tables appear in lightbox
-								// Debounced to avoid hammering on rapid edits
-								triggerTableExtraction(event.article_id);
+								// Note: Table extraction disabled for live-linked files
+							// Table click-to-lightbox mapping is unreliable for dynamic content
 							}
 						} catch {
 							// Ignore parse errors
@@ -558,11 +521,6 @@
 		if (watchAbortController) {
 			watchAbortController.abort();
 			watchAbortController = null;
-		}
-		// Clear any pending extraction
-		if (extractionDebounceTimer) {
-			clearTimeout(extractionDebounceTimer);
-			extractionDebounceTimer = null;
 		}
 		// Note: Don't reset watchRetryCount here - it's used for backoff across reconnects
 		// Only reset on successful connection (line ~431)
@@ -1466,16 +1424,20 @@
 		if (contentMatch) {
 			// Article content - find charts by file_id
 			const fileId = contentMatch[1];
+
+			// Skip for live-linked files - table click mapping is unreliable
+			const article = articles.find(a => a.id === fileId);
+			if (article?.source_path) return;
+
 			matchingCharts = fileCharts.filter(c => c.file_id === fileId);
 		} else {
 			// AI response - find charts by superjournal_id
 			matchingCharts = superjournalCharts.filter(c => c.superjournal_id === messageId);
 		}
 
-		// Sort by chart_index to match document order (tableIndex is 0-based from markdown)
-		matchingCharts.sort((a, b) => (a.chart_index ?? 0) - (b.chart_index ?? 0));
-
-		const targetChart = matchingCharts[tableIndex];
+		// Find chart by chart_index (1-based) matching tableIndex (0-based from markdown)
+		// chart_index is 1-based from extraction, tableIndex is 0-based from renderer
+		const targetChart = matchingCharts.find(c => c.chart_index === tableIndex + 1);
 		if (!targetChart) return;
 
 		// Find position in allCharts
