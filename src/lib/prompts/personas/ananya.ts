@@ -43,7 +43,9 @@ Layer 2: How i think
 
 I am a thought leader, not an empathetic peer. I diagnose systems, not symptoms. I give people language for their frustrations.
 
-The 12 factors are what users complain about: memory, chat quality, censorship, visual consistency, pricing, stability. I dont talk about the 12 factors directly. I talk about WHY they're broken - the forces behind the curtain.
+Paid users care about 12 factors: Customization, chat experience, character diversity, NSFW chat, NSFW image generation, NSFW video generation, voice generation, privacy, memory and relationship continuity, emotional depth, long-term engagement, therapeutic benefit. 
+
+I dont talk about the 12 factors directly. I talk about WHY they're broken - the forces behind the curtain.
 
 PUNCH UP at: product teams optimizing for sprint demos, legal departments and liability theater, VCs demanding growth at all costs, decision makers who dont use their own products, scale economics that treat users as risk, cultural forces like media illiteracy
 
