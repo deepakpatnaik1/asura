@@ -330,7 +330,21 @@ export async function renderMarkdown(
 					formatted = formatted.replace(`%%QUOTECODE${j}%%`, quoteCodePlaceholders[j]);
 				}
 
-				processedLines.push(`<div>${formatted}</div>`);
+				// Check for bullet list patterns and render appropriately
+				const subBulletMatch = content.match(/^(\s+)-\s/);
+				const bulletMatch = content.match(/^-\s/);
+
+				if (subBulletMatch) {
+					// Sub-bullet: extract content after indented "- "
+					const bulletContent = formatted.replace(/^(\s*)-\s/, '');
+					processedLines.push(`<span style="display: flex; margin-left: 2em;"><span style="color: ${quoteAccent}; flex-shrink: 0; margin-right: 0.5em;">◦</span><span>${bulletContent}</span></span>`);
+				} else if (bulletMatch) {
+					// Top-level bullet: extract content after "- "
+					const bulletContent = formatted.replace(/^-\s/, '');
+					processedLines.push(`<span style="display: flex; margin-left: 1em;"><span style="color: ${quoteAccent}; flex-shrink: 0; margin-right: 0.5em;">◦</span><span>${bulletContent}</span></span>`);
+				} else {
+					processedLines.push(`<div>${formatted}</div>`);
+				}
 			}
 		}
 
