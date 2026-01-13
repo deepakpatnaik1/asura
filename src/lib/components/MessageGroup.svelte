@@ -279,6 +279,8 @@
 		margin-right: var(--boss-card-margin-x);
 		border-radius: var(--boss-card-border-radius);
 		position: relative;
+		user-select: text;
+		-webkit-user-select: text;
 	}
 
 	/* URL pill badge in boss message - neutral color to contrast accent background */
@@ -299,6 +301,8 @@
 	.ai-message {
 		position: relative;
 		padding: var(--message-padding-y) var(--boss-card-padding-x);
+		user-select: text;
+		-webkit-user-select: text;
 	}
 
 	/* Message Header */
@@ -386,6 +390,9 @@
 		line-height: 1.6;
 		color: hsl(var(--foreground));
 		white-space: normal;
+		user-select: text;
+		-webkit-user-select: text;
+		cursor: text;
 	}
 
 	/* Loading animation */

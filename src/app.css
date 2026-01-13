@@ -143,10 +143,10 @@
     font-size: 8pt;
   }
 
-  /* Text selection styling - clean highlighting */
+  /* Text selection styling - black on white */
   ::selection {
-    background: rgba(255, 255, 255, 0.2);
-    color: inherit;
+    background: #ffffff;
+    color: #000000;
   }
 
   /* Make structural elements non-selectable, only text selectable */

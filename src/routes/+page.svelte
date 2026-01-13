@@ -2259,7 +2259,9 @@
 
 	function handleGlobalClick(event: MouseEvent) {
 		const target = event.target as HTMLElement;
+		// Don't steal focus from text-selectable areas or interactive elements
 		if (target.closest('.paste-area') || target.closest('textarea') || target.closest('input')) return;
+		if (target.closest('.messages-area')) return; // Allow text selection in messages
 		const selection = window.getSelection();
 		if (selection && selection.toString().length > 0) return;
 		setTimeout(refocusInput, 0);
