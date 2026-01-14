@@ -552,6 +552,12 @@ async function executeCreateTodo(
 			mutations.completed_todos.push(todo.id);
 		}
 
+		// Create a todo_ref block for top-level todos (not sub-tasks)
+		// Sub-tasks render inline with their parent, so they don't need blocks
+		if (!parentId) {
+			await createTodoRefBlock(supabase, userId, data.id, markComplete ? 'completed' : 'open');
+		}
+
 		const deadlineInfo = deadlinePeriod ? ` (deadline: ${deadlinePeriod})` : '';
 		const tagInfo = tags.length > 0 ? ` [${tags.join(', ')}]` : '';
 		const parentInfo = parentId ? ' (sub-task)' : '';
@@ -567,6 +573,95 @@ async function executeCreateTodo(
 			success: false,
 			message: `Failed to create todo: ${error instanceof Error ? error.message : 'Unknown error'}`
 		};
+	}
+}
+
+/**
+ * Create a todo_ref block for a newly created todo
+ * Places it in the appropriate section (Tasks for open, Completed for completed)
+ * Creates section if it doesn't exist
+ */
+async function createTodoRefBlock(
+	supabase: SupabaseClient,
+	userId: string,
+	todoId: string,
+	status: 'open' | 'completed'
+): Promise<void> {
+	try {
+		// Determine which section to use based on status
+		const targetSectionName = status === 'completed' ? 'Completed' : 'Tasks';
+
+		// Find the target section
+		let { data: section } = await supabase
+			.from('canvas_todo_blocks')
+			.select('id')
+			.eq('user_id', userId)
+			.eq('block_type', 'section')
+			.eq('content->>name', targetSectionName)
+			.single();
+
+		// If target section doesn't exist, try to find any section
+		if (!section) {
+			const { data: anySection } = await supabase
+				.from('canvas_todo_blocks')
+				.select('id')
+				.eq('user_id', userId)
+				.eq('block_type', 'section')
+				.order('sort_order', { ascending: true })
+				.limit(1)
+				.single();
+
+			if (anySection) {
+				section = anySection;
+			} else {
+				// No sections exist - create a default Tasks section
+				const { data: newSection } = await supabase
+					.from('canvas_todo_blocks')
+					.insert({
+						user_id: userId,
+						block_type: 'section',
+						content: { name: 'Tasks', collapsed: false },
+						sort_order: 0
+					})
+					.select()
+					.single();
+
+				section = newSection;
+			}
+		}
+
+		if (!section) {
+			// Failed to create or find a section - silently fail
+			// The todo was created, block is just for presentation
+			return;
+		}
+
+		// Get the max sort_order in this section
+		const { data: maxSortData } = await supabase
+			.from('canvas_todo_blocks')
+			.select('sort_order')
+			.eq('user_id', userId)
+			.eq('parent_id', section.id)
+			.order('sort_order', { ascending: false })
+			.limit(1)
+			.single();
+
+		const newSortOrder = (maxSortData?.sort_order ?? -1) + 1;
+
+		// Create the todo_ref block
+		await supabase
+			.from('canvas_todo_blocks')
+			.insert({
+				user_id: userId,
+				block_type: 'todo_ref',
+				todo_id: todoId,
+				parent_id: section.id,
+				sort_order: newSortOrder
+			});
+
+	} catch {
+		// Silently fail - the todo was created successfully,
+		// block creation is best-effort for presentation
 	}
 }
 

@@ -48,11 +48,20 @@ interface CanvasMutations {
 	closed_canvas?: string | null; // ID of canvas to close/deselect
 }
 
+// Block mutations from Felix's block tools (sections, notes, dividers)
+interface BlockMutations {
+	created_blocks?: { id: string; block_type: string; parent_id: string | null }[];
+	updated_blocks?: { id: string }[];
+	deleted_blocks?: string[];
+	moved_blocks?: { id: string; new_parent_id: string | null; new_position: number }[];
+}
+
 export const currentMessage = writable<Message | null>(null);
 export const isLoading = writable(false);
 export const lastMutations = writable<Mutations | null>(null);
 export const lastWhiteboardMutations = writable<WhiteboardMutations | null>(null);
 export const lastCanvasMutations = writable<CanvasMutations | null>(null);
+export const lastBlockMutations = writable<BlockMutations | null>(null);
 
 // AbortController for canceling streaming requests
 let currentAbortController: AbortController | null = null;
@@ -184,6 +193,10 @@ export async function sendMessage(
 									// Capture canvas mutations
 									if (data.canvas_mutations) {
 										lastCanvasMutations.set(data.canvas_mutations);
+									}
+									// Capture block mutations (Felix's sections, notes, etc.)
+									if (data.block_mutations) {
+										lastBlockMutations.set(data.block_mutations);
 									}
 								} else if (data.type === 'error') {
 									throw new Error(data.message);

@@ -39,6 +39,14 @@ import {
 	type TodoMutations
 } from '$lib/api/todo-tools';
 import {
+	BLOCK_TOOLS,
+	executeBlockTool,
+	isBlockTool,
+	createEmptyBlockMutations,
+	type BlockToolContext,
+	type BlockMutations
+} from '$lib/api/block-tools';
+import {
 	WHITEBOARD_TOOLS,
 	executeWhiteboardTool,
 	isWhiteboardTool,
@@ -207,6 +215,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		let tools: Anthropic.Tool[] | undefined;
 		let toolExecutor: ToolExecutor | undefined;
 		let todoMutations: TodoMutations | undefined;
+		let blockMutations: BlockMutations | undefined;
 		let whiteboardMutations: WhiteboardMutations | undefined;
 		let canvasMutations: CanvasMutations | undefined;
 
@@ -214,6 +223,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 
 		// Tool contexts - needed for both native tool calling and parsed intents
 		let todoContext: TodoToolContext | null = null;
+		let blockContext: BlockToolContext | null = null;
 		let calendarContext: CalendarToolContext | null = null;
 		let whiteboardContext: WhiteboardToolContext | null = null;
 		let designContext: DesignToolContext | null = null;
@@ -237,11 +247,14 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				supportsToolCalling
 			});
 
-			// Set up todo tools context (Alicja)
+			// Set up todo tools context (Alicja, Felix)
 			if (hasTodoTools) {
 				todoMutations = createEmptyMutations();
-				todoContext = { supabase, userId };
+				blockMutations = createEmptyBlockMutations();
+				todoContext = { supabase: supabaseStorage, userId };
+				blockContext = { supabase: supabaseStorage, userId };
 				allTools.push(...TODO_TOOLS);
+				allTools.push(...BLOCK_TOOLS);
 
 				// Add calendar tools if user has Google Calendar tokens
 				const { data: tokens } = await supabase
@@ -416,6 +429,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				return executeEngagementTool(toolName, input);
 			} else if (isTodoTool(toolName) && todoContext) {
 				return executeTodoTool(toolName, input, todoContext, todoMutations!);
+			} else if (isBlockTool(toolName) && blockContext) {
+				return executeBlockTool(toolName, input, blockContext, blockMutations!);
 			} else if (isTemporalTool(toolName)) {
 				return executeTemporalTool(toolName, input);
 			} else if (calendarContext) {
@@ -549,6 +564,9 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 						superjournal_id: superjournalId,
 						...(todoMutations && {
 							mutations: todoMutations
+						}),
+						...(blockMutations && {
+							block_mutations: blockMutations
 						}),
 						...(whiteboardMutations && {
 							whiteboard_mutations: whiteboardMutations

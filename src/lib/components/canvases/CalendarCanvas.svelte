@@ -1,18 +1,20 @@
 <script lang="ts">
 	/**
-	 * CalendarCanvas - Planner canvas: Three-pane productivity workspace
+	 * CalendarCanvas - Planner canvas: Two-pane productivity workspace
 	 *
-	 * Calendar | Todos | Done
+	 * Calendar | Todos (block-based)
 	 *
 	 * Things 3 inspired calendar pane with big dates.
-	 * Flat chronological accomplishments list.
+	 * Block-based todo pane with Felix-controlled sections.
 	 */
 
 	import { onMount } from 'svelte';
 	import CanvasFrame from '$lib/components/CanvasFrame.svelte';
 	import { Icon } from 'svelte-icons-pack';
-	import { LuRefreshCw } from 'svelte-icons-pack/lu';
+	import { LuRefreshCw, LuChevronDown, LuChevronRight } from 'svelte-icons-pack/lu';
 	import { getPersonaAccentColor } from '$lib/config/colors';
+	import { renderMarkdown } from '$lib/markdown-renderer';
+	import { lastBlockMutations, lastMutations } from '$lib/stores/chat';
 
 	interface Props {
 		persona: string;
@@ -27,8 +29,7 @@
 		if (refreshTrigger !== lastTrigger && refreshTrigger > 0) {
 			lastTrigger = refreshTrigger;
 			fetchCalendarEvents();
-			fetchTodos();
-			fetchDiaryEntries();
+			fetchBlocksAndTodos();
 		}
 	});
 
@@ -36,21 +37,58 @@
 	onMount(() => {
 		const handleNuke = (e: CustomEvent<{ bucket: string }>) => {
 			const bucket = e.detail.bucket;
-			if (bucket === 'productivity:diary') {
-				diaryEntries = [];
-				diaryDays = [];
-			} else if (bucket === 'productivity:todos') {
-				todos = [];
+			if (bucket === 'productivity:todos') {
+				blocks = [];
+				todosById.clear();
 			}
 		};
 		window.addEventListener('nuke-complete', handleNuke as EventListener);
 		return () => window.removeEventListener('nuke-complete', handleNuke as EventListener);
 	});
 
+	// Re-fetch when block mutations come in from Felix's tools
+	$effect(() => {
+		const blockMuts = $lastBlockMutations;
+		if (blockMuts) {
+			// Any block mutation should trigger a re-fetch
+			const hasChanges =
+				(blockMuts.created_blocks?.length ?? 0) > 0 ||
+				(blockMuts.updated_blocks?.length ?? 0) > 0 ||
+				(blockMuts.deleted_blocks?.length ?? 0) > 0 ||
+				(blockMuts.moved_blocks?.length ?? 0) > 0;
+			if (hasChanges) {
+				fetchBlocksAndTodos();
+				// Clear mutations after processing
+				lastBlockMutations.set(null);
+			}
+		}
+	});
+
+	// Re-fetch when todo mutations come in (create, complete, update, delete)
+	$effect(() => {
+		const todoMuts = $lastMutations;
+		if (todoMuts) {
+			const hasChanges =
+				(todoMuts.created_todos?.length ?? 0) > 0 ||
+				(todoMuts.completed_todos?.length ?? 0) > 0 ||
+				(todoMuts.reopened_todos?.length ?? 0) > 0 ||
+				(todoMuts.updated_todos?.length ?? 0) > 0 ||
+				(todoMuts.deleted_todos?.length ?? 0) > 0;
+			if (hasChanges) {
+				fetchBlocksAndTodos();
+				// Clear mutations after processing
+				lastMutations.set(null);
+			}
+		}
+	});
+
 	// Get accent color for static UI elements
 	const accentColor = $derived(getPersonaAccentColor(persona));
 
-	// Calendar state
+	// ============================================================================
+	// Calendar State (unchanged)
+	// ============================================================================
+
 	interface CalendarEvent {
 		id: string;
 		summary: string;
@@ -86,6 +124,7 @@
 	let calendarLoading = $state(false);
 	let nearTermDays = $state<DayCard[]>([]);
 	let futureMonths = $state<FutureMonth[]>([]);
+
 	// Fetch calendar events on mount
 	$effect(() => {
 		fetchCalendarEvents();
@@ -94,7 +133,6 @@
 	async function fetchCalendarEvents() {
 		calendarLoading = true;
 		try {
-			// Fetch 180 days to cover ~6 months of future events
 			const response = await fetch('/api/google/calendar/events?days=180');
 			const data = await response.json();
 
@@ -105,7 +143,6 @@
 				nearTermDays = result.nearTerm;
 				futureMonths = result.future;
 			} else {
-				// Show next 7 days with no events
 				nearTermDays = generateEmptyDays(7);
 				futureMonths = [];
 			}
@@ -117,7 +154,6 @@
 			calendarLoading = false;
 		}
 	}
-
 
 	function generateEmptyDays(count: number): DayCard[] {
 		const days: DayCard[] = [];
@@ -151,12 +187,10 @@
 		const todayKey = today.toISOString().split('T')[0];
 		const nearTermDayCount = 7;
 
-		// Calculate cutoff for near-term (end of day 7)
 		const nearTermCutoff = new Date(today);
 		nearTermCutoff.setDate(nearTermCutoff.getDate() + nearTermDayCount);
 		const nearTermCutoffKey = nearTermCutoff.toISOString().split('T')[0];
 
-		// Group events by date
 		const eventsByDate = new Map<string, CalendarEvent[]>();
 		for (const event of events) {
 			const dateStr = event.start.dateTime
@@ -170,7 +204,6 @@
 			}
 		}
 
-		// Generate near-term days (next 7 days, show all including empty)
 		const nearTerm: DayCard[] = [];
 		for (let i = 0; i < nearTermDayCount; i++) {
 			const date = new Date(today);
@@ -193,16 +226,13 @@
 			});
 		}
 
-		// Group future events by month
 		const futureByMonth = new Map<string, { month: string; year: number; events: FutureEvent[] }>();
 
-		// Always include the rest of the current month (even if no events)
 		const currentMonthKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
 		const currentMonthName = today.toLocaleDateString('en-US', { month: 'long' });
 		const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
 		const nearTermEndDay = nearTermCutoff.getDate();
 
-		// Only add current month section if there are days after near-term
 		if (nearTermCutoff.getMonth() === today.getMonth() && nearTermEndDay <= lastDayOfMonth) {
 			futureByMonth.set(currentMonthKey, {
 				month: currentMonthName,
@@ -212,7 +242,6 @@
 		}
 
 		for (const [dateStr, dayEvents] of eventsByDate) {
-			// Skip near-term dates
 			if (dateStr < nearTermCutoffKey) continue;
 
 			const date = new Date(dateStr + 'T12:00:00');
@@ -237,12 +266,10 @@
 			}
 		}
 
-		// Convert to FutureMonth array with date ranges
 		const future: FutureMonth[] = [];
 		const sortedMonths = Array.from(futureByMonth.entries()).sort(([a], [b]) => a.localeCompare(b));
 
 		for (const [, monthData] of sortedMonths) {
-			// Sort events by date
 			monthData.events.sort((a, b) => a.date - b.date);
 
 			future.push({
@@ -257,7 +284,7 @@
 
 	function formatEventTime(event: CalendarEvent): string | null {
 		if (event.start.date) {
-			return null; // All-day event
+			return null;
 		}
 		if (event.start.dateTime) {
 			const date = new Date(event.start.dateTime);
@@ -265,7 +292,6 @@
 			const minutes = date.getMinutes();
 			const ampm = hours >= 12 ? 'pm' : 'am';
 			const hour12 = hours % 12 || 12;
-			// Compact format: "11am" or "2:30pm" (no space, omit :00)
 			return minutes === 0 ? `${hour12}${ampm}` : `${hour12}:${minutes.toString().padStart(2, '0')}${ampm}`;
 		}
 		return null;
@@ -288,7 +314,10 @@
 		}
 	}
 
-	// Todo state
+	// ============================================================================
+	// Block-Based Todo State
+	// ============================================================================
+
 	interface Todo {
 		id: string;
 		description: string;
@@ -300,45 +329,113 @@
 		parent_id: string | null;
 	}
 
-	interface TodoWithChildren extends Todo {
-		children: Todo[];
-		completedCount: number;
+	interface Block {
+		id: string;
+		parent_id: string | null;
+		block_type: 'section' | 'todo_ref' | 'note' | 'divider';
+		content: { name?: string; collapsed?: boolean; text?: string };
+		todo_id: string | null;
+		sort_order: number;
+		children?: Block[];
+		renderedHtml?: string; // Pre-rendered markdown for note blocks
 	}
 
-	let todos = $state<Todo[]>([]);
-	let todosLoading = $state(false);
+	let blocks = $state<Block[]>([]);
+	let todosById = $state(new Map<string, Todo>());
+	let childrenByParent = $state(new Map<string, Todo[]>());
+	let blocksLoading = $state(false);
 
-	// Group todos into parent-child hierarchy
-	const groupedTodos = $derived.by(() => {
-		const parentTodos: TodoWithChildren[] = [];
-		const childrenByParent = new Map<string, Todo[]>();
+	// Local collapse state (overrides server state for immediate feedback)
+	let localCollapseState = $state(new Map<string, boolean>());
 
-		// First pass: separate parents and children
-		for (const todo of todos) {
-			if (todo.parent_id) {
-				if (!childrenByParent.has(todo.parent_id)) {
-					childrenByParent.set(todo.parent_id, []);
-				}
-				childrenByParent.get(todo.parent_id)!.push(todo);
-			}
+	function isCollapsed(block: Block): boolean {
+		if (localCollapseState.has(block.id)) {
+			return localCollapseState.get(block.id)!;
 		}
+		return block.content.collapsed ?? false;
+	}
 
-		// Second pass: build parent todos with children attached
-		for (const todo of todos) {
-			if (!todo.parent_id) {
-				const children = childrenByParent.get(todo.id) || [];
-				// Sort children by created_at ascending (oldest first = original creation order)
-				children.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-				const completedCount = children.filter(c => c.status === 'completed').length;
-				parentTodos.push({ ...todo, children, completedCount });
-			}
-		}
+	function toggleCollapse(block: Block) {
+		const current = isCollapsed(block);
+		localCollapseState.set(block.id, !current);
+		// Trigger reactivity
+		localCollapseState = new Map(localCollapseState);
+	}
 
-		// Sort parent todos by created_at descending (newest first)
-		parentTodos.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-
-		return parentTodos;
+	// Fetch blocks and todos on mount
+	$effect(() => {
+		fetchBlocksAndTodos();
 	});
+
+	// Recursively pre-render markdown for note blocks
+	async function renderNoteBlocks(blockList: Block[]): Promise<void> {
+		for (const block of blockList) {
+			if (block.block_type === 'note' && block.content.text) {
+				block.renderedHtml = await renderMarkdown(block.content.text, persona);
+			}
+			if (block.children && block.children.length > 0) {
+				await renderNoteBlocks(block.children);
+			}
+		}
+	}
+
+	async function fetchBlocksAndTodos() {
+		blocksLoading = true;
+		try {
+			// Fetch blocks and todos in parallel
+			const [blocksRes, todosRes] = await Promise.all([
+				fetch('/api/todo-blocks'),
+				fetch('/api/todos')
+			]);
+
+			const blocksData = await blocksRes.json();
+			const todosData = await todosRes.json();
+
+			// If no blocks exist, bootstrap
+			let fetchedBlocks: Block[];
+			if (!blocksData.blocks || blocksData.blocks.length === 0) {
+				await fetch('/api/todo-blocks/bootstrap', { method: 'POST' });
+				// Refetch after bootstrap
+				const newBlocksRes = await fetch('/api/todo-blocks');
+				const newBlocksData = await newBlocksRes.json();
+				fetchedBlocks = newBlocksData.blocks || [];
+			} else {
+				fetchedBlocks = blocksData.blocks;
+			}
+
+			// Pre-render markdown for note blocks
+			await renderNoteBlocks(fetchedBlocks);
+			blocks = fetchedBlocks;
+
+			// Build todos lookup map
+			if (todosData.todos) {
+				const newTodosById = new Map<string, Todo>();
+				const newChildrenByParent = new Map<string, Todo[]>();
+
+				for (const todo of todosData.todos) {
+					newTodosById.set(todo.id, todo);
+					if (todo.parent_id) {
+						if (!newChildrenByParent.has(todo.parent_id)) {
+							newChildrenByParent.set(todo.parent_id, []);
+						}
+						newChildrenByParent.get(todo.parent_id)!.push(todo);
+					}
+				}
+
+				// Sort children by created_at
+				for (const children of newChildrenByParent.values()) {
+					children.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+				}
+
+				todosById = newTodosById;
+				childrenByParent = newChildrenByParent;
+			}
+		} catch (err) {
+			console.error('Failed to fetch blocks/todos:', err);
+		} finally {
+			blocksLoading = false;
+		}
+	}
 
 	function formatRelativeTime(isoString: string): string {
 		const date = new Date(isoString);
@@ -360,134 +457,71 @@
 	function normalizeText(text: string): string {
 		return text.replace(/\s*—\s*/g, ' – ');
 	}
-
-	// Fetch todos on mount
-	$effect(() => {
-		fetchTodos();
-	});
-
-	async function fetchTodos() {
-		todosLoading = true;
-		try {
-			const response = await fetch('/api/todos');
-			const data = await response.json();
-			if (data.todos) {
-				todos = data.todos;
-			}
-		} catch (err) {
-			console.error('Failed to fetch todos:', err);
-		} finally {
-			todosLoading = false;
-		}
-	}
-
-	// Founder Diary state
-	interface DiaryEntry {
-		id: string;
-		description: string;
-		tags: string[];
-		logged_at: string;
-		event_period?: string | null; // Fuzzy date like "Early 2022", "Summer 2023"
-		sort_date?: string | null; // YYYY-MM-DD for chronological sorting
-	}
-
-	interface DiaryDay {
-		date: number;
-		day: string;
-		month: string;
-		year: number;
-		dateKey: string;
-		isToday: boolean;
-		isFuzzy: boolean; // True if this group is for entries with event_period
-		fuzzyPeriod?: string; // The event_period string for fuzzy entries
-		entries: DiaryEntry[];
-	}
-
-	let diaryEntries = $state<DiaryEntry[]>([]);
-	let diaryDays = $state<DiaryDay[]>([]);
-	let diaryLoading = $state(false);
-	let diaryPaneContent = $state<HTMLDivElement | null>(null);
-
-	// Fetch diary entries on mount
-	$effect(() => {
-		fetchDiaryEntries();
-	});
-
-	// Scroll diary to bottom when entries load (show latest entry)
-	$effect(() => {
-		if (diaryDays.length > 0 && !diaryLoading && diaryPaneContent) {
-			diaryPaneContent.scrollTop = diaryPaneContent.scrollHeight;
-		}
-	});
-
-	async function fetchDiaryEntries() {
-		diaryLoading = true;
-		try {
-			const response = await fetch('/api/diary');
-			const data = await response.json();
-			if (data.entries) {
-				diaryEntries = data.entries;
-				diaryDays = groupDiaryByDate(data.entries);
-			}
-		} catch (err) {
-			console.error('Failed to fetch diary entries:', err);
-		} finally {
-			diaryLoading = false;
-		}
-	}
-
-	function groupDiaryByDate(entries: DiaryEntry[]): DiaryDay[] {
-		// Entries arrive pre-sorted by sort_date from the API
-		// Group by display key (event_period for fuzzy, logged_at date for precise)
-		// while preserving the chronological order
-		const today = new Date();
-		const todayKey = today.toISOString().split('T')[0];
-
-		const days: DiaryDay[] = [];
-		const groupMap = new Map<string, DiaryDay>();
-
-		for (const entry of entries) {
-			const isFuzzy = !!entry.event_period;
-			const groupKey = isFuzzy ? `fuzzy:${entry.event_period}` : entry.logged_at.split('T')[0];
-
-			if (!groupMap.has(groupKey)) {
-				let day: DiaryDay;
-				if (isFuzzy) {
-					day = {
-						date: 0,
-						day: '',
-						month: '',
-						year: 0,
-						dateKey: groupKey,
-						isToday: false,
-						isFuzzy: true,
-						fuzzyPeriod: entry.event_period!,
-						entries: []
-					};
-				} else {
-					const dateKey = entry.logged_at.split('T')[0];
-					const date = new Date(dateKey + 'T12:00:00');
-					day = {
-						date: date.getDate(),
-						day: date.toLocaleDateString('en-US', { weekday: 'long' }),
-						month: date.toLocaleDateString('en-US', { month: 'long' }),
-						year: date.getFullYear(),
-						dateKey,
-						isToday: dateKey === todayKey,
-						isFuzzy: false,
-						entries: []
-					};
-				}
-				groupMap.set(groupKey, day);
-				days.push(day);
-			}
-
-			groupMap.get(groupKey)!.entries.push(entry);
-		}
-
-		return days;
-	}
 </script>
+
+<!-- Recursive Block Renderer -->
+{#snippet renderBlock(block: Block, depth: number = 0)}
+	{#if block.block_type === 'section'}
+		<div class="block-section" class:collapsed={isCollapsed(block)}>
+			<button class="section-header" onclick={() => toggleCollapse(block)}>
+				<span class="section-chevron">
+					{#if isCollapsed(block)}
+						<Icon src={LuChevronRight} size="12" />
+					{:else}
+						<Icon src={LuChevronDown} size="12" />
+					{/if}
+				</span>
+				<span class="section-name">{block.content.name || 'Untitled'}</span>
+			</button>
+			{#if !isCollapsed(block) && block.children && block.children.length > 0}
+				<div class="section-content">
+					{#each block.children as child (child.id)}
+						{@render renderBlock(child, depth + 1)}
+					{/each}
+				</div>
+			{/if}
+		</div>
+	{:else if block.block_type === 'todo_ref'}
+		{@const todo = todosById.get(block.todo_id!)}
+		{#if todo}
+			{@const children = childrenByParent.get(todo.id) || []}
+			<div class="todo-group">
+				<div class="todo-item" class:completed={todo.status === 'completed'}>
+					<div class="todo-content">
+						<span class="todo-text">{normalizeText(todo.description)}</span>
+						<div class="todo-meta">
+							{#if todo.deadline_period}
+								<span class="todo-deadline">{todo.deadline_period}</span>
+							{/if}
+							{#if todo.tags.length > 0}
+								<span class="todo-tag">#{todo.tags.join(' #')}</span>
+							{/if}
+							<span class="todo-time">{formatRelativeTime(todo.created_at)}</span>
+						</div>
+					</div>
+				</div>
+				<!-- Child todos (from parent_id relationship, not blocks) -->
+				{#each children as child (child.id)}
+					<div class="todo-item todo-child" class:completed={child.status === 'completed'} class:parent-completed={todo.status === 'completed'}>
+						<div class="todo-content">
+							<span class="todo-text">{normalizeText(child.description)}</span>
+						</div>
+					</div>
+				{/each}
+			</div>
+		{/if}
+	{:else if block.block_type === 'note'}
+		<div class="block-note">
+			{#if block.renderedHtml}
+				{@html block.renderedHtml}
+			{:else}
+				<span class="note-text">{block.content.text || ''}</span>
+			{/if}
+		</div>
+	{:else if block.block_type === 'divider'}
+		<div class="block-divider"></div>
+	{/if}
+{/snippet}
 
 <CanvasFrame>
 	{#snippet content()}
@@ -573,104 +607,23 @@
 				</div>
 			</div>
 
-			<!-- Todos Pane -->
+			<!-- Todos Pane (Block-Based) -->
 			<div class="pane todos-pane">
 				<div class="pane-header">
 					To-Dos
-					{#if todosLoading}
+					{#if blocksLoading}
 						<span class="loading-indicator">...</span>
 					{/if}
 				</div>
 				<div class="pane-content">
-					<div class="todo-list">
-						{#each groupedTodos as todo (todo.id)}
-							<div class="todo-group">
-								<div class="todo-item" class:completed={todo.status === 'completed'}>
-									<div class="todo-content">
-										<span class="todo-text">{normalizeText(todo.description)}</span>
-										<div class="todo-meta">
-												{#if todo.deadline_period}
-												<span class="todo-deadline">{todo.deadline_period}</span>
-											{/if}
-											{#if todo.tags.length > 0}
-												<span class="todo-tag">#{todo.tags.join(' #')}</span>
-											{/if}
-											<span class="todo-time">{formatRelativeTime(todo.created_at)}</span>
-										</div>
-									</div>
-								</div>
-								<!-- Child todos (indented) -->
-								{#each todo.children as child (child.id)}
-									<div class="todo-item todo-child" class:completed={child.status === 'completed'} class:parent-completed={todo.status === 'completed'}>
-										<div class="todo-content">
-											<span class="todo-text">{normalizeText(child.description)}</span>
-										</div>
-									</div>
-								{/each}
-							</div>
+					<div class="block-tree">
+						{#each blocks as block (block.id)}
+							{@render renderBlock(block)}
 						{/each}
 					</div>
 				</div>
 			</div>
 
-			<!-- Founder Diary Pane -->
-			<div class="pane done-pane">
-				<div class="pane-header">
-					Founder Diary
-					{#if diaryLoading}
-						<span class="loading-indicator">...</span>
-					{/if}
-				</div>
-				<div class="pane-content" bind:this={diaryPaneContent}>
-					{#if diaryDays.length > 0}
-						{@const seenMonths = new Set<string>()}
-						{#each diaryDays as day (day.dateKey)}
-							{#if day.isFuzzy}
-								<!-- Fuzzy period entry (e.g., "Early 2022") -->
-								<div class="diary-day fuzzy-day">
-									<div class="day-header">
-										<span class="fuzzy-period">{day.fuzzyPeriod}</span>
-									</div>
-									<div class="diary-entries">
-										{#each day.entries as entry (entry.id)}
-											<div class="diary-entry">
-												<span class="diary-text">{normalizeText(entry.description)}</span>
-												{#if entry.tags.length > 0}
-													<span class="diary-tag">#{entry.tags.join(' #')}</span>
-												{/if}
-											</div>
-										{/each}
-									</div>
-								</div>
-							{:else}
-								<!-- Precise date entry -->
-								{@const monthYearKey = `${day.month}-${day.year}`}
-								{@const isFirstInMonth = !seenMonths.has(monthYearKey)}
-								{@const _ = seenMonths.add(monthYearKey)}
-								<div class="diary-day">
-									<div class="day-header">
-										<span class="day-date">{day.date}</span>
-										<span class="day-name">{day.day}</span>
-										{#if isFirstInMonth}
-											<span class="day-month-year">{day.month} {day.year}</span>
-										{/if}
-									</div>
-									<div class="diary-entries">
-										{#each day.entries as entry (entry.id)}
-											<div class="diary-entry">
-												<span class="diary-text">{normalizeText(entry.description)}</span>
-												{#if entry.tags.length > 0}
-													<span class="diary-tag">#{entry.tags.join(' #')}</span>
-												{/if}
-											</div>
-										{/each}
-									</div>
-								</div>
-							{/if}
-						{/each}
-					{/if}
-				</div>
-			</div>
 		</div>
 	{/snippet}
 	{#snippet footer()}
@@ -682,7 +635,7 @@
 	.productivity-canvas {
 		height: 100%;
 		display: grid;
-		grid-template-columns: 1fr 1fr 1fr;
+		grid-template-columns: 1fr 2fr;
 	}
 
 	.pane {
@@ -709,8 +662,7 @@
 	}
 
 	.calendar-pane .pane-header,
-	.todos-pane .pane-header,
-	.done-pane .pane-header {
+	.todos-pane .pane-header {
 		color: var(--accent-color);
 	}
 
@@ -801,16 +753,6 @@
 	}
 
 	.calendar-pane .day-name {
-		font-size: var(--font-body);
-		color: var(--accent-color);
-	}
-
-	.done-pane .day-name {
-		font-size: var(--font-body);
-		color: var(--accent-color);
-	}
-
-	.done-pane .day-month-year {
 		font-size: var(--font-body);
 		color: var(--accent-color);
 	}
@@ -913,16 +855,78 @@
 		opacity: 0.8;
 	}
 
-	/* Todos Pane */
-	.todos-pane {
+	/* Block Tree */
+	.block-tree {
+		display: flex;
+		flex-direction: column;
+		gap: var(--spacing-lg);
+	}
+
+	/* Section Block */
+	.block-section {
 		display: flex;
 		flex-direction: column;
 	}
 
-	.todo-list {
+	.section-header {
+		display: flex;
+		align-items: center;
+		gap: var(--spacing-xs);
+		background: none;
+		border: none;
+		padding: var(--spacing-xs) 0;
+		cursor: pointer;
+		color: var(--accent-color);
+		font-size: var(--font-body);
+		text-align: left;
+	}
+
+	.section-header:hover {
+		opacity: 0.8;
+	}
+
+	.section-chevron {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 16px;
+		height: 16px;
+		color: hsl(var(--muted-foreground) / 0.6);
+	}
+
+	.section-name {
+		font-weight: var(--font-weight-medium);
+	}
+
+	.section-content {
 		display: flex;
 		flex-direction: column;
-		gap: var(--spacing-lg);
+		gap: var(--spacing-md);
+		padding-left: var(--spacing-lg);
+		margin-top: var(--spacing-sm);
+	}
+
+	/* Note Block */
+	.block-note {
+		padding: var(--spacing-sm) var(--spacing-md);
+		background: hsl(var(--muted) / 0.3);
+		border-radius: 4px;
+		font-size: var(--font-caption);
+		color: hsl(var(--muted-foreground));
+		font-style: italic;
+	}
+
+	/* Divider Block */
+	.block-divider {
+		height: 1px;
+		background: hsl(var(--muted) / var(--border-opacity));
+		margin: var(--spacing-md) 0;
+	}
+
+	/* Todo Styles (same as before) */
+	.todos-pane {
+		display: flex;
+		flex-direction: column;
 	}
 
 	.todo-group {
@@ -988,7 +992,7 @@
 		color: hsl(var(--foreground) / 0.2);
 	}
 
-	/* Gray out children when parent is completed (regardless of child's own status) */
+	/* Gray out children when parent is completed */
 	.todo-item.parent-completed .todo-text {
 		color: hsl(var(--foreground) / 0.2);
 	}
@@ -1002,44 +1006,5 @@
 	.loading-indicator {
 		font-size: var(--font-caption);
 		color: hsl(var(--muted-foreground) / 0.5);
-	}
-
-	/* Founder Diary Pane */
-	.diary-day {
-		margin-bottom: var(--spacing-2xl);
-	}
-
-	.fuzzy-period {
-		font-size: var(--font-body);
-		color: var(--accent-color);
-		font-style: italic;
-	}
-
-	.diary-entries {
-		display: flex;
-		flex-direction: column;
-		gap: var(--spacing-sm);
-	}
-
-	.diary-entry {
-		display: flex;
-		flex-direction: column;
-		gap: 1px;
-		padding: 0 var(--spacing-md);
-		border: 1px solid transparent;
-		border-left: 2px solid color-mix(in srgb, var(--accent-color) 80%, transparent);
-		border-radius: 6px;
-		background: hsl(var(--background));
-	}
-
-	.diary-text {
-		font-size: var(--font-body);
-		color: hsl(var(--foreground));
-	}
-
-	.diary-tag {
-		font-size: var(--font-caption);
-		color: hsl(var(--foreground));
-		opacity: 0.8;
 	}
 </style>

@@ -81,7 +81,17 @@ export type ToolName =
 	| 'fetch_subreddit_posts'
 	| 'log_engagement'
 	// Temporal tools (all personas)
-	| 'temporal_calc';
+	| 'temporal_calc'
+	// Block tools (Felix) - presentation layer for todos
+	| 'create_section'
+	| 'create_note'
+	| 'create_divider'
+	| 'move_todo_to_section'
+	| 'reorder_block'
+	| 'update_section'
+	| 'delete_block'
+	| 'collapse_section'
+	| 'expand_section';
 
 /**
  * Persona configuration interface
@@ -211,18 +221,32 @@ const FELIX_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic'
  * Felix tools: Same as Alicja - full productivity suite
  */
 const FELIX_TOOLS: ToolName[] = [
+	// Todo data tools
 	'create_todo',
 	'complete_todo',
 	'reopen_todo',
 	'update_todo',
 	'delete_todo',
+	// Block presentation tools
+	'create_section',
+	'create_note',
+	'create_divider',
+	'move_todo_to_section',
+	'reorder_block',
+	'update_section',
+	'delete_block',
+	'collapse_section',
+	'expand_section',
+	// Tag tools
 	'create_tag',
 	'delete_tag',
 	'rename_tag',
 	'merge_tags',
+	// Diary tools
 	'log_diary',
 	'update_diary',
 	'delete_diary',
+	// Other tools
 	'log_fitness',
 	'list_calendar_events',
 	'create_calendar_event',
