@@ -91,7 +91,22 @@ export type ToolName =
 	| 'update_section'
 	| 'delete_block'
 	| 'collapse_section'
-	| 'expand_section';
+	| 'expand_section'
+	| 'list_todo_blocks'
+	// Gmail tools (Felix) - email monitoring
+	| 'scan_gmail_inbox'
+	| 'add_gmail_watch_rule'
+	| 'remove_gmail_watch_rule'
+	| 'list_gmail_watch_rules'
+	| 'list_gmail_accounts'
+	| 'read_gmail_message'
+	// Browser tools (Felix) - portal automation
+	| 'browse_url'
+	| 'browser_click'
+	| 'browser_type'
+	| 'browser_snapshot'
+	| 'browser_close'
+	| 'browser_login';
 
 /**
  * Persona configuration interface
@@ -237,6 +252,7 @@ const FELIX_TOOLS: ToolName[] = [
 	'delete_block',
 	'collapse_section',
 	'expand_section',
+	'list_todo_blocks',
 	// Tag tools
 	'create_tag',
 	'delete_tag',
@@ -246,6 +262,20 @@ const FELIX_TOOLS: ToolName[] = [
 	'log_diary',
 	'update_diary',
 	'delete_diary',
+	// Gmail tools
+	'scan_gmail_inbox',
+	'add_gmail_watch_rule',
+	'remove_gmail_watch_rule',
+	'list_gmail_watch_rules',
+	'list_gmail_accounts',
+	'read_gmail_message',
+	// Browser tools
+	'browse_url',
+	'browser_click',
+	'browser_type',
+	'browser_snapshot',
+	'browser_close',
+	'browser_login',
 	// Other tools
 	'log_fitness',
 	'list_calendar_events',

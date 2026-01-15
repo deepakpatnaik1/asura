@@ -85,7 +85,7 @@ export const MOVE_TODO_TO_SECTION_TOOL: Anthropic.Tool = {
 			section_id: {
 				type: 'string',
 				description:
-					'UUID of the target section. Use null or omit for top-level (outside any section).'
+					'UUID or NAME of the target section (e.g., "MONEY" or "abc-123-uuid"). Use null or omit for top-level (outside any section).'
 			},
 			position: {
 				type: 'integer',
@@ -191,6 +191,17 @@ export const EXPAND_SECTION_TOOL: Anthropic.Tool = {
 	}
 };
 
+export const LIST_TODO_BLOCKS_TOOL: Anthropic.Tool = {
+	name: 'list_todo_blocks',
+	description:
+		'Get the current state of the todo blocks panel. Returns all sections, their hierarchy, and which todos are in each section. Use this to see what sections exist and where todos are currently placed.',
+	input_schema: {
+		type: 'object',
+		properties: {},
+		required: []
+	}
+};
+
 /**
  * All block tools
  */
@@ -203,7 +214,8 @@ export const BLOCK_TOOLS: Anthropic.Tool[] = [
 	UPDATE_SECTION_TOOL,
 	DELETE_BLOCK_TOOL,
 	COLLAPSE_SECTION_TOOL,
-	EXPAND_SECTION_TOOL
+	EXPAND_SECTION_TOOL,
+	LIST_TODO_BLOCKS_TOOL
 ];
 
 /**
@@ -298,6 +310,8 @@ export async function executeBlockTool(
 			return executeCollapseSection(input, context, mutations);
 		case 'expand_section':
 			return executeExpandSection(input, context, mutations);
+		case 'list_todo_blocks':
+			return executeListTodoBlocks(context);
 		default:
 			return { success: false, message: `Unknown block tool: ${toolName}` };
 	}
@@ -448,6 +462,65 @@ async function executeCreateDivider(
 }
 
 /**
+ * Check if a string is a valid UUID
+ */
+function isUUID(str: string): boolean {
+	const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+	return uuidRegex.test(str);
+}
+
+/**
+ * Resolve section identifier (UUID or name) to UUID
+ * Supports partial matching (e.g., "MONEY" matches "💰 MONEY")
+ */
+async function resolveSectionId(
+	supabase: SupabaseClient,
+	userId: string,
+	sectionIdOrName: string | null
+): Promise<{ id: string | null; error?: string }> {
+	if (!sectionIdOrName) {
+		return { id: null };
+	}
+
+	// If it's already a UUID, return it
+	if (isUUID(sectionIdOrName)) {
+		return { id: sectionIdOrName };
+	}
+
+	// Look up by name - use ILIKE with wildcards for partial matching
+	// This handles cases like "MONEY" matching "💰 MONEY"
+	const { data, error } = await supabase
+		.from('canvas_todo_blocks')
+		.select('id, content')
+		.eq('user_id', userId)
+		.eq('block_type', 'section')
+		.ilike('content->>name', `%${sectionIdOrName}%`);
+
+	if (error) {
+		return { id: null, error: error.message };
+	}
+
+	if (!data || data.length === 0) {
+		return { id: null, error: `Section "${sectionIdOrName}" not found` };
+	}
+
+	if (data.length > 1) {
+		// Multiple matches - try to find one where the search term is at the end (after emoji)
+		const bestMatch = data.find((s) => {
+			const name = (s.content as { name?: string }).name || '';
+			return name.toUpperCase().endsWith(sectionIdOrName.toUpperCase());
+		});
+		if (bestMatch) {
+			return { id: bestMatch.id };
+		}
+		// Otherwise return first match
+		return { id: data[0].id };
+	}
+
+	return { id: data[0].id };
+}
+
+/**
  * Move Todo to Section
  */
 async function executeMoveToSection(
@@ -458,8 +531,14 @@ async function executeMoveToSection(
 	try {
 		const { supabase, userId } = context;
 		const todoId = input.todo_id as string;
-		const sectionId = (input.section_id as string) || null;
+		const sectionInput = (input.section_id as string) || null;
 		const position = input.position as number | undefined;
+
+		// Resolve section name to UUID if needed
+		const { id: sectionId, error: resolveError } = await resolveSectionId(supabase, userId, sectionInput);
+		if (resolveError) {
+			return { success: false, message: resolveError };
+		}
 
 		// Check if todo_ref already exists for this todo
 		const { data: existing } = await supabase
@@ -713,6 +792,140 @@ async function executeExpandSection(
 }
 
 /**
+ * List Todo Blocks - Returns the full hierarchy of sections and todos
+ */
+async function executeListTodoBlocks(context: BlockToolContext): Promise<BlockToolResult> {
+	try {
+		const { supabase, userId } = context;
+
+		// Fetch all blocks
+		const { data: blocks, error: blocksError } = await supabase
+			.from('canvas_todo_blocks')
+			.select('id, parent_id, block_type, content, todo_id, sort_order')
+			.eq('user_id', userId)
+			.order('sort_order', { ascending: true });
+
+		if (blocksError) throw blocksError;
+
+		// Fetch all todos to get their descriptions
+		const { data: todos, error: todosError } = await supabase
+			.from('canvas_planner_todos')
+			.select('id, description, status, tags')
+			.eq('user_id', userId);
+
+		if (todosError) throw todosError;
+
+		// Build todo lookup
+		const todoMap = new Map<string, { description: string; status: string; tags: string[] }>();
+		for (const todo of todos || []) {
+			todoMap.set(todo.id, {
+				description: todo.description,
+				status: todo.status,
+				tags: todo.tags || []
+			});
+		}
+
+		// Build hierarchy
+		interface BlockNode {
+			id: string;
+			type: string;
+			name?: string;
+			todo?: { id: string; description: string; status: string; tags: string[] };
+			children: BlockNode[];
+		}
+
+		const blockMap = new Map<string, BlockNode>();
+		const rootBlocks: BlockNode[] = [];
+
+		// First pass: create all nodes
+		for (const block of blocks || []) {
+			const node: BlockNode = {
+				id: block.id,
+				type: block.block_type,
+				children: []
+			};
+
+			if (block.block_type === 'section') {
+				node.name = (block.content as { name?: string }).name || 'Untitled';
+			} else if (block.block_type === 'todo_ref' && block.todo_id) {
+				const todo = todoMap.get(block.todo_id);
+				if (todo) {
+					node.todo = { id: block.todo_id, ...todo };
+				}
+			}
+
+			blockMap.set(block.id, node);
+		}
+
+		// Second pass: build tree
+		for (const block of blocks || []) {
+			const node = blockMap.get(block.id)!;
+			if (block.parent_id && blockMap.has(block.parent_id)) {
+				blockMap.get(block.parent_id)!.children.push(node);
+			} else {
+				rootBlocks.push(node);
+			}
+		}
+
+		// Find todos that have no block reference (orphans)
+		const referencedTodoIds = new Set(
+			(blocks || []).filter((b) => b.block_type === 'todo_ref' && b.todo_id).map((b) => b.todo_id)
+		);
+		const orphanTodos = (todos || [])
+			.filter((t) => !referencedTodoIds.has(t.id) && t.status === 'open')
+			.map((t) => ({
+				id: t.id,
+				description: t.description,
+				status: t.status,
+				tags: t.tags || []
+			}));
+
+		// Format output for Felix
+		function formatNode(node: BlockNode, indent: string = ''): string {
+			let result = '';
+			if (node.type === 'section') {
+				result = `${indent}📁 ${node.name} (id: ${node.id})\n`;
+				for (const child of node.children) {
+					result += formatNode(child, indent + '  ');
+				}
+			} else if (node.type === 'todo_ref' && node.todo) {
+				const status = node.todo.status === 'completed' ? '✓' : '○';
+				result = `${indent}${status} ${node.todo.description}\n`;
+			}
+			return result;
+		}
+
+		let output = '=== TODO BLOCKS PANEL ===\n\n';
+
+		if (rootBlocks.length === 0 && orphanTodos.length === 0) {
+			output += '(empty)\n';
+		} else {
+			for (const block of rootBlocks) {
+				output += formatNode(block);
+			}
+
+			if (orphanTodos.length > 0) {
+				output += '\n--- UNASSIGNED TODOS (not in any section) ---\n';
+				for (const todo of orphanTodos) {
+					output += `○ ${todo.description} (id: ${todo.id})\n`;
+				}
+			}
+		}
+
+		return {
+			success: true,
+			message: output,
+			data: { blocks: rootBlocks, orphan_todos: orphanTodos }
+		};
+	} catch (error) {
+		return {
+			success: false,
+			message: `Failed to list blocks: ${error instanceof Error ? error.message : 'Unknown error'}`
+		};
+	}
+}
+
+/**
  * Check if a tool name is a block tool
  */
 export function isBlockTool(toolName: string): boolean {
@@ -725,6 +938,7 @@ export function isBlockTool(toolName: string): boolean {
 		'update_section',
 		'delete_block',
 		'collapse_section',
-		'expand_section'
+		'expand_section',
+		'list_todo_blocks'
 	].includes(toolName);
 }

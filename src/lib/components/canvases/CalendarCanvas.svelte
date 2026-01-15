@@ -362,6 +362,29 @@
 		localCollapseState = new Map(localCollapseState);
 	}
 
+	function collapseAllSections() {
+		// Recursively find all section blocks and collapse them
+		function collectSections(blockList: Block[]): string[] {
+			const ids: string[] = [];
+			for (const block of blockList) {
+				if (block.block_type === 'section') {
+					ids.push(block.id);
+					if (block.children) {
+						ids.push(...collectSections(block.children));
+					}
+				}
+			}
+			return ids;
+		}
+
+		const sectionIds = collectSections(blocks);
+		for (const id of sectionIds) {
+			localCollapseState.set(id, true);
+		}
+		// Trigger reactivity
+		localCollapseState = new Map(localCollapseState);
+	}
+
 	// Fetch blocks and todos on mount
 	$effect(() => {
 		fetchBlocksAndTodos();
@@ -614,6 +637,9 @@
 					{#if blocksLoading}
 						<span class="loading-indicator">...</span>
 					{/if}
+					<button class="collapse-all-button" onclick={collapseAllSections} title="Collapse all sections">
+						Collapse all
+					</button>
 				</div>
 				<div class="pane-content">
 					<div class="block-tree">
@@ -623,6 +649,9 @@
 					</div>
 				</div>
 			</div>
+
+			<!-- Empty Third Column -->
+			<div class="pane empty-pane"></div>
 
 		</div>
 	{/snippet}
@@ -635,7 +664,7 @@
 	.productivity-canvas {
 		height: 100%;
 		display: grid;
-		grid-template-columns: 1fr 2fr;
+		grid-template-columns: 1fr 1fr 1fr;
 	}
 
 	.pane {
@@ -705,6 +734,22 @@
 	.disconnect-button {
 		color: hsl(var(--muted-foreground) / 0.6);
 		border: 1px solid hsl(var(--muted-foreground) / 0.3);
+	}
+
+	.collapse-all-button {
+		background: none;
+		border: 1px solid hsl(var(--muted-foreground) / 0.3);
+		padding: 2px var(--spacing-sm);
+		cursor: pointer;
+		color: hsl(var(--muted-foreground) / 0.6);
+		border-radius: 4px;
+		font-size: var(--font-caption);
+		margin-left: auto;
+	}
+
+	.collapse-all-button:hover {
+		background: hsl(var(--muted) / var(--border-opacity));
+		color: hsl(var(--foreground));
 	}
 
 	.loading {
