@@ -3,8 +3,8 @@
 	 * UnifiedLibrary - Four-column dropdown for all selectable content
 	 *
 	 * Columns:
-	 * 1. Artisan Cut - artisan_cut tier articles + owner='everyone' articles
-	 * 2. Raw - raw tier articles (no artisan cut)
+	 * 1. Artisan Cut - artisan_cut tier articles
+	 * 2. Raw - raw tier articles (canon files have no checkbox, always injected)
 	 * 3. Whiteboards - Gunnar's scratch pads
 	 * 4. Designer Canvases - Eva's character canvases
 	 *
@@ -116,17 +116,9 @@
 		onClose
 	}: Props = $props();
 
-	// Split articles into curated (artisan_cut + owner='everyone') and raw
-	// owner='everyone' always at bottom of curated pane
-	const curatedArticles = $derived(
-		articles
-			.filter((a) => a.tier === 'artisan_cut' || a.owner === 'everyone')
-			.sort((a, b) => {
-				if (a.owner === 'everyone' && b.owner !== 'everyone') return 1;
-				if (a.owner !== 'everyone' && b.owner === 'everyone') return -1;
-				return 0; // Keep original order within same tier
-			})
-	);
+	// Split articles by tier
+	// Canon files (owner='everyone') are raw but shown without checkbox (always-on)
+	const curatedArticles = $derived(articles.filter((a) => a.tier === 'artisan_cut'));
 	const rawArticles = $derived(articles.filter((a) => a.tier === 'raw' || !a.tier));
 
 	// Derived state
@@ -369,9 +361,6 @@
 		{#if curatedArticles.length === 0}
 			<div class="column-empty">No artisan cut articles</div>
 		{:else}
-			{#if onArticleClear && hasArticleSelection}
-				<button class="clear-btn" onclick={onArticleClear}>Clear</button>
-			{/if}
 			<div class="column-items">
 				{#each curatedArticles as item (item.id)}
 					<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
@@ -474,16 +463,20 @@
 				{#each rawArticles as item (item.id)}
 					<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
 					<div class="item" class:active={item.is_enabled} onclick={(e) => handleArticleRowClick(item, e)}>
-						<button
-							class="toggle-btn"
-							class:active={item.is_enabled}
-							onclick={(e) => handleArticleToggle(item, e)}
-							title={item.is_enabled ? 'Remove from context' : 'Add to context'}
-						>
-							{#if item.is_enabled}
-								<Icon src={LuCheck} size="9" />
-							{/if}
-						</button>
+						{#if item.owner === 'everyone'}
+							<span class="toggle-spacer"></span>
+						{:else}
+							<button
+								class="toggle-btn"
+								class:active={item.is_enabled}
+								onclick={(e) => handleArticleToggle(item, e)}
+								title={item.is_enabled ? 'Remove from context' : 'Add to context'}
+							>
+								{#if item.is_enabled}
+									<Icon src={LuCheck} size="9" />
+								{/if}
+							</button>
+						{/if}
 						<div class="item-info">
 							{#if editingArticleId === item.id}
 								<input
@@ -552,9 +545,6 @@
 		{#if whiteboards.length === 0}
 			<div class="column-empty">No whiteboards</div>
 		{:else}
-			{#if onWhiteboardClear && hasWhiteboardSelection}
-				<button class="clear-btn" onclick={onWhiteboardClear}>Clear</button>
-			{/if}
 			<div class="column-items">
 				{#each whiteboards as wb (wb.id)}
 					{@const isSelected = selectedWhiteboardIds.includes(wb.id)}
@@ -618,9 +608,6 @@
 		{#if designerCanvases.length === 0}
 			<div class="column-empty">No canvases</div>
 		{:else}
-			{#if onDesignerCanvasClear && hasDesignerCanvasSelection}
-				<button class="clear-btn" onclick={onDesignerCanvasClear}>Clear</button>
-			{/if}
 			<div class="column-items">
 				{#each designerCanvases as canvas (canvas.id)}
 					{@const isSelected = selectedDesignerCanvasIds.includes(canvas.id)}
@@ -767,25 +754,9 @@
 	.column-items {
 		overflow-y: auto;
 		flex: 1;
-	}
-
-	.clear-btn {
-		width: 100%;
-		padding: 4px 12px;
-		background: transparent;
-		border: none;
-		border-bottom: 1px solid hsl(var(--border) / 0.3);
-		color: hsl(var(--muted-foreground));
-		font-size: 0.8em;
-		cursor: pointer;
-		text-align: left;
-		transition: all 0.15s;
-		flex-shrink: 0;
-	}
-
-	.clear-btn:hover {
-		background: hsl(var(--accent) / 0.3);
-		color: hsl(var(--foreground));
+		display: flex;
+		flex-direction: column;
+		justify-content: flex-end;
 	}
 
 	.item {
@@ -795,6 +766,7 @@
 		padding-right: 6px;
 		border-left: 2px solid transparent;
 		transition: all 0.15s ease;
+		border-top: 1px solid hsl(var(--border) / 0.2);
 		border-bottom: 1px solid hsl(var(--border) / 0.2);
 		cursor: pointer;
 	}
