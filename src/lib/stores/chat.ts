@@ -27,6 +27,8 @@ interface Mutations {
 	created_events?: string[];
 	updated_events?: string[];
 	deleted_events?: string[];
+	// Settings mutations
+	settings_changed?: boolean;
 }
 
 // Whiteboard mutations from Gunnar's whiteboard tools

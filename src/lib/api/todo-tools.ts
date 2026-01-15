@@ -304,6 +304,22 @@ export const LOG_FITNESS_TOOL: Anthropic.Tool = {
 	}
 };
 
+export const SET_HIDE_COMPLETED_TOOL: Anthropic.Tool = {
+	name: 'set_hide_completed',
+	description:
+		'Show or hide completed todos in the UI. When hidden, completed todos are not displayed in the Calendar canvas, but you can still see them via list_todo_blocks. Use when user asks to "hide completed", "show completed", or "toggle completed visibility".',
+	input_schema: {
+		type: 'object',
+		properties: {
+			hide: {
+				type: 'boolean',
+				description: 'Set to true to hide completed todos, false to show them'
+			}
+		},
+		required: ['hide']
+	}
+};
+
 /**
  * All todo tools (includes diary and fitness)
  */
@@ -320,7 +336,8 @@ export const TODO_TOOLS: Anthropic.Tool[] = [
 	LOG_DIARY_TOOL,
 	UPDATE_DIARY_TOOL,
 	DELETE_DIARY_TOOL,
-	LOG_FITNESS_TOOL
+	LOG_FITNESS_TOOL,
+	SET_HIDE_COMPLETED_TOOL
 ];
 
 /**
@@ -402,6 +419,8 @@ export interface TodoMutations {
 	created_events: string[]; // Event IDs
 	updated_events: string[]; // Event IDs
 	deleted_events: string[]; // Event IDs
+	// Settings mutations
+	settings_changed: boolean;
 }
 
 /**
@@ -424,7 +443,8 @@ export function createEmptyMutations(): TodoMutations {
 		fitness_entries: [],
 		created_events: [],
 		updated_events: [],
-		deleted_events: []
+		deleted_events: [],
+		settings_changed: false
 	};
 }
 
@@ -476,6 +496,9 @@ export async function executeTodoTool(
 
 		case 'log_fitness':
 			return executeLogFitness(input, context, mutations);
+
+		case 'set_hide_completed':
+			return executeSetHideCompleted(input, context, mutations);
 
 		default:
 			return {
@@ -1580,6 +1603,43 @@ async function executeLogFitness(
 }
 
 /**
+ * Set Hide Completed Executor
+ */
+async function executeSetHideCompleted(
+	input: Record<string, unknown>,
+	context: TodoToolContext,
+	mutations: TodoMutations
+): Promise<ToolExecutionResult> {
+	try {
+		const { supabase, userId } = context;
+		const hide = input.hide as boolean;
+
+		const { error } = await supabase
+			.from('user_settings')
+			.update({ hide_completed_todos: hide })
+			.eq('user_id', userId);
+
+		if (error) throw error;
+
+		// Signal UI to refetch todos with new visibility setting
+		mutations.settings_changed = true;
+
+		return {
+			success: true,
+			message: hide
+				? 'Completed todos are now hidden from the UI'
+				: 'Completed todos are now visible in the UI',
+			data: { hide_completed_todos: hide }
+		};
+	} catch (error) {
+		return {
+			success: false,
+			message: `Failed to update visibility setting: ${error instanceof Error ? error.message : 'Unknown error'}`
+		};
+	}
+}
+
+/**
  * Check if a tool name is a todo tool (includes diary and fitness)
  */
 export function isTodoTool(toolName: string): boolean {
@@ -1596,6 +1656,7 @@ export function isTodoTool(toolName: string): boolean {
 		'log_diary',
 		'update_diary',
 		'delete_diary',
-		'log_fitness'
+		'log_fitness',
+		'set_hide_completed'
 	].includes(toolName);
 }

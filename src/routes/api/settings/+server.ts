@@ -50,7 +50,8 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 			 model_embeddings, model_compression, model_chat_compression,
 			 model_character_planning, model_image_gen, model_image_edit,
 			 compression_uncensored_gunnar, compression_uncensored_kirby, compression_uncensored_samara,
-			 compression_uncensored_alicja, compression_uncensored_eva, compression_uncensored_ananya, compression_uncensored_felix`
+			 compression_uncensored_alicja, compression_uncensored_eva, compression_uncensored_ananya, compression_uncensored_felix,
+			 hide_completed_todos`
 		)
 		.eq('user_id', userId)
 		.single();
@@ -103,6 +104,7 @@ export const PUT: RequestHandler = async ({ request, locals: { safeGetSession, s
 	if (validatedData.focused_message_id !== undefined) updateData.focused_message_id = validatedData.focused_message_id;
 	if (validatedData.last_content_owner !== undefined) updateData.last_content_owner = validatedData.last_content_owner;
 	if (validatedData.last_content_lifecycle !== undefined) updateData.last_content_lifecycle = validatedData.last_content_lifecycle;
+	if (validatedData.hide_completed_todos !== undefined) updateData.hide_completed_todos = validatedData.hide_completed_todos;
 
 	// Model overrides - check each column
 	for (const col of MODEL_COLUMNS) {

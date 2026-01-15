@@ -810,7 +810,7 @@ async function executeListTodoBlocks(context: BlockToolContext): Promise<BlockTo
 		// Fetch all todos to get their descriptions
 		const { data: todos, error: todosError } = await supabase
 			.from('canvas_planner_todos')
-			.select('id, description, status, tags')
+			.select('id, description, status, tags, parent_id')
 			.eq('user_id', userId);
 
 		if (todosError) throw todosError;
@@ -872,7 +872,7 @@ async function executeListTodoBlocks(context: BlockToolContext): Promise<BlockTo
 			(blocks || []).filter((b) => b.block_type === 'todo_ref' && b.todo_id).map((b) => b.todo_id)
 		);
 		const orphanTodos = (todos || [])
-			.filter((t) => !referencedTodoIds.has(t.id) && t.status === 'open')
+			.filter((t) => !referencedTodoIds.has(t.id) && t.status === 'open' && !t.parent_id)
 			.map((t) => ({
 				id: t.id,
 				description: t.description,

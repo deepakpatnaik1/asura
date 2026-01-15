@@ -64,7 +64,7 @@
 		}
 	});
 
-	// Re-fetch when todo mutations come in (create, complete, update, delete)
+	// Re-fetch when todo mutations come in (create, complete, update, delete, settings change)
 	$effect(() => {
 		const todoMuts = $lastMutations;
 		if (todoMuts) {
@@ -73,7 +73,8 @@
 				(todoMuts.completed_todos?.length ?? 0) > 0 ||
 				(todoMuts.reopened_todos?.length ?? 0) > 0 ||
 				(todoMuts.updated_todos?.length ?? 0) > 0 ||
-				(todoMuts.deleted_todos?.length ?? 0) > 0;
+				(todoMuts.deleted_todos?.length ?? 0) > 0 ||
+				todoMuts.settings_changed === true;
 			if (hasChanges) {
 				fetchBlocksAndTodos();
 				// Clear mutations after processing
@@ -344,6 +345,7 @@
 	let todosById = $state(new Map<string, Todo>());
 	let childrenByParent = $state(new Map<string, Todo[]>());
 	let blocksLoading = $state(false);
+	let hideCompletedTodos = $state(false);
 
 	// Local collapse state (overrides server state for immediate feedback)
 	let localCollapseState = $state(new Map<string, boolean>());
@@ -405,14 +407,19 @@
 	async function fetchBlocksAndTodos() {
 		blocksLoading = true;
 		try {
-			// Fetch blocks and todos in parallel
-			const [blocksRes, todosRes] = await Promise.all([
+			// Fetch blocks, todos, and settings in parallel
+			const [blocksRes, todosRes, settingsRes] = await Promise.all([
 				fetch('/api/todo-blocks'),
-				fetch('/api/todos')
+				fetch('/api/todos'),
+				fetch('/api/settings')
 			]);
 
 			const blocksData = await blocksRes.json();
 			const todosData = await todosRes.json();
+			const settingsData = await settingsRes.json();
+
+			// Update hide_completed_todos setting
+			hideCompletedTodos = settingsData.hide_completed_todos ?? false;
 
 			// If no blocks exist, bootstrap
 			let fetchedBlocks: Block[];
@@ -506,8 +513,9 @@
 		</div>
 	{:else if block.block_type === 'todo_ref'}
 		{@const todo = todosById.get(block.todo_id!)}
-		{#if todo}
+		{#if todo && !(hideCompletedTodos && todo.status === 'completed')}
 			{@const children = childrenByParent.get(todo.id) || []}
+			{@const visibleChildren = hideCompletedTodos ? children.filter(c => c.status !== 'completed') : children}
 			<div class="todo-group">
 				<div class="todo-item" class:completed={todo.status === 'completed'}>
 					<div class="todo-content">
@@ -524,7 +532,7 @@
 					</div>
 				</div>
 				<!-- Child todos (from parent_id relationship, not blocks) -->
-				{#each children as child (child.id)}
+				{#each visibleChildren as child (child.id)}
 					<div class="todo-item todo-child" class:completed={child.status === 'completed'} class:parent-completed={todo.status === 'completed'}>
 						<div class="todo-content">
 							<span class="todo-text">{normalizeText(child.description)}</span>

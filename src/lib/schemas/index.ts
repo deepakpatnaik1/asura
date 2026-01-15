@@ -104,7 +104,10 @@ export const settingsUpdateSchema = z.object({
 
 	// Last-used paste settings (remembered across sessions)
 	last_content_owner: z.string().optional(),
-	last_content_lifecycle: z.string().optional()
+	last_content_lifecycle: z.string().optional(),
+
+	// Todo visibility (Felix-controlled, UI-only)
+	hide_completed_todos: z.boolean().optional()
 }).refine(
 	(data) => Object.keys(data).length > 0,
 	{ message: 'At least one field must be provided' }
