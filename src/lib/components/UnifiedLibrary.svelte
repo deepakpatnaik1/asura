@@ -3,8 +3,8 @@
 	 * UnifiedLibrary - Four-column dropdown for all selectable content
 	 *
 	 * Columns:
-	 * 1. Artisan Cut - strategic articles + owner='everyone' articles
-	 * 2. Raw - ephemeral articles (no artisan cut)
+	 * 1. Artisan Cut - artisan_cut tier articles + owner='everyone' articles
+	 * 2. Raw - raw tier articles (no artisan cut)
 	 * 3. Whiteboards - Gunnar's scratch pads
 	 * 4. Designer Canvases - Eva's character canvases
 	 *
@@ -116,18 +116,18 @@
 		onClose
 	}: Props = $props();
 
-	// Split articles into curated (strategic + owner='everyone') and raw (ephemeral)
+	// Split articles into curated (artisan_cut + owner='everyone') and raw
 	// owner='everyone' always at bottom of curated pane
 	const curatedArticles = $derived(
 		articles
-			.filter((a) => a.tier === 'strategic' || a.owner === 'everyone')
+			.filter((a) => a.tier === 'artisan_cut' || a.owner === 'everyone')
 			.sort((a, b) => {
 				if (a.owner === 'everyone' && b.owner !== 'everyone') return 1;
 				if (a.owner !== 'everyone' && b.owner === 'everyone') return -1;
 				return 0; // Keep original order within same tier
 			})
 	);
-	const rawArticles = $derived(articles.filter((a) => a.tier === 'ephemeral' || !a.tier));
+	const rawArticles = $derived(articles.filter((a) => a.tier === 'raw' || !a.tier));
 
 	// Derived state
 	const hasArticleSelection = $derived(articles.some((a) => a.is_enabled));
@@ -363,7 +363,7 @@
 		</div>
 	{/if}
 	<div class="columns-container">
-		<!-- Artisan Cut Articles Column (strategic + owner='everyone') -->
+		<!-- Artisan Cut Articles Column (artisan_cut tier + owner='everyone') -->
 		<div class="column">
 		<div class="column-header">Artisan Cut</div>
 		{#if curatedArticles.length === 0}
@@ -464,7 +464,7 @@
 		{/if}
 	</div>
 
-	<!-- Raw Articles Column (ephemeral) -->
+	<!-- Raw Articles Column (raw tier) -->
 	<div class="column">
 		<div class="column-header">Raw</div>
 		{#if rawArticles.length === 0}

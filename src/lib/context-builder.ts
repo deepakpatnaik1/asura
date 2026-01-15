@@ -74,9 +74,8 @@ export interface StructuredContext {
 // Type for vector search RPC results
 interface VectorSearchResult {
 	id: string;
-	boss_essence: string;
-	persona_essence: string;
-	decision_arc_summary: string;
+	turn_essence: string;
+	conversation_arc: string;
 	salience_score: number;
 	created_at: string;
 	similarity: number;
@@ -185,7 +184,7 @@ export async function buildContext(
 						try {
 							if (existsSync(item.source_path)) {
 								const freshContent = readFileSync(item.source_path, 'utf-8');
-								// Use artisan cut if available (strategic tier), otherwise fresh content
+								// Use artisan cut if available (artisan_cut tier), otherwise fresh content
 								articleContent = item.artisan_cut || freshContent;
 							} else {
 								// File not found - use stored content as fallback
@@ -408,10 +407,10 @@ export async function buildContext(
 		queries.push(
 			supabase
 				.from('journal')
-				.select('boss_essence, persona_essence, persona_name, created_at')
+				.select('turn_essence, participants, created_at')
 				.eq('is_starred', true)
 				.eq('user_id', userId)
-				.eq('persona_name', personaName)
+				.contains('participants', [personaName])
 				.order('created_at', { ascending: false })
 		);
 		queryKeys.push('starred');
@@ -422,9 +421,9 @@ export async function buildContext(
 		queries.push(
 			supabase
 				.from('journal')
-				.select('boss_essence, persona_essence, decision_arc_summary, persona_name, created_at')
+				.select('turn_essence, conversation_arc, participants, created_at')
 				.eq('user_id', userId)
-				.eq('persona_name', personaName)
+				.contains('participants', [personaName])
 				.order('created_at', { ascending: false })
 				.limit(MEMORY.lastNJournalEntries)
 		);
@@ -462,9 +461,8 @@ export async function buildContext(
 	// Priority 2: Starred messages from journal
 	if (starredJournalResult?.data && starredJournalResult.data.length > 0) {
 		const starredData = starredJournalResult.data as Array<{
-			boss_essence: string;
-			persona_essence: string;
-			persona_name: string;
+			turn_essence: string;
+			participants: string[];
 			created_at: string;
 		}>;
 		const starredText = formatStarredMessages(starredData);
@@ -479,10 +477,9 @@ export async function buildContext(
 	if (journalResult?.data && journalResult.data.length > 0) {
 		const journalData = (
 			journalResult.data as Array<{
-				boss_essence: string;
-				persona_essence: string;
-				decision_arc_summary: string;
-				persona_name: string;
+				turn_essence: string;
+				conversation_arc: string;
+				participants: string[];
 				created_at: string;
 			}>
 		).reverse();
@@ -708,10 +705,9 @@ ${entry.persona_name}: ${entry.ai_response}`
 // Format Journal history (recent compressed turns)
 function formatJournalHistory(
 	entries: Array<{
-		boss_essence: string;
-		persona_essence: string;
-		decision_arc_summary: string;
-		persona_name: string;
+		turn_essence: string;
+		conversation_arc: string;
+		participants: string[];
 		created_at: string;
 	}>
 ): string {
@@ -721,8 +717,7 @@ function formatJournalHistory(
 		.map(
 			(entry) =>
 				`[${formatTimestamp(entry.created_at)}]
-User: ${entry.boss_essence}
-${entry.persona_name}: ${entry.persona_essence}`
+${entry.turn_essence}`
 		)
 		.join('\n\n');
 
@@ -772,12 +767,11 @@ function formatEveryoneContent(
 	return `--- SHARED KNOWLEDGE (Everyone) ---\n${formatted}\n\n`;
 }
 
-// Format starred messages (chat mode: from journal - boss message only)
+// Format starred messages (chat mode: from journal)
 function formatStarredMessages(
 	entries: Array<{
-		boss_essence: string;
-		persona_essence: string;
-		persona_name: string;
+		turn_essence: string;
+		participants: string[];
 		created_at: string;
 	}>
 ): string {
@@ -787,8 +781,7 @@ function formatStarredMessages(
 		.map(
 			(entry) =>
 				`[Starred - ${formatTimestamp(entry.created_at)}]
-User: ${entry.boss_essence}
-${entry.persona_name}: ${entry.persona_essence}`
+${entry.turn_essence}`
 		)
 		.join('\n\n');
 
@@ -798,9 +791,8 @@ ${entry.persona_name}: ${entry.persona_essence}`
 // Format vector search results
 function formatVectorSearchResults(
 	entries: Array<{
-		boss_essence: string;
-		persona_essence: string;
-		decision_arc_summary: string;
+		turn_essence: string;
+		conversation_arc: string;
 		salience_score: number;
 		created_at: string;
 		weighted_score: number;
@@ -812,8 +804,7 @@ function formatVectorSearchResults(
 		.map(
 			(entry) =>
 				`[${formatTimestamp(entry.created_at)}]
-User: ${entry.boss_essence}
-AI: ${entry.persona_essence}`
+${entry.turn_essence}`
 		)
 		.join('\n\n');
 

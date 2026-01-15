@@ -135,6 +135,6 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession, supabase 
 		watchedArticleId: settings?.watched_article_id || null,
 		focusedMessageId: settings?.focused_message_id || null,
 		lastContentOwner: settings?.last_content_owner || 'no-one',
-		lastContentLifecycle: settings?.last_content_lifecycle || 'ephemeral'
+		lastContentLifecycle: settings?.last_content_lifecycle || 'raw'
 	};
 };

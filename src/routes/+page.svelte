@@ -38,7 +38,7 @@
 
 	// Last paste settings (persisted to user_settings)
 	let lastContentOwner = $state<string>(data.lastContentOwner || 'no-one');
-	let lastContentLifecycle = $state<string>(data.lastContentLifecycle || 'ephemeral');
+	let lastContentLifecycle = $state<string>(data.lastContentLifecycle || 'raw');
 
 	// Accent color for current persona (send button, input bar)
 	const currentAccentColor = $derived(getPersonaAccentColor(selectedPersona));
@@ -1796,7 +1796,7 @@
 				break;
 			}
 			case 'content':
-				// All content tiers (ephemeral, strategic, gettysburg) are articles
+				// All content tiers (raw, artisan_cut) are articles
 				// Also reload messages since superjournal entries with content markers are deleted
 				reloadMessages();
 				loadArticles();

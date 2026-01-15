@@ -118,8 +118,7 @@ export const settingsUpdateSchema = z.object({
 export const readerUploadSchema = z.object({
 	content: z.string()
 		.min(1, 'Content is required')
-		.max(5_000_000, 'Content too large (max 5MB)'),
-	persistent: z.boolean().optional().default(false)
+		.max(5_000_000, 'Content too large (max 5MB)')
 });
 
 /** POST /api/reader/process-article - Process article with AI */

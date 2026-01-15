@@ -79,9 +79,9 @@ export const POST: RequestHandler = async ({ params, locals: { safeGetSession, s
 		return validationError('Only linked files can be refreshed', 'source_path');
 	}
 
-	// Validate: must have artisan cut tier (strategic)
-	if (article.tier !== 'strategic') {
-		return validationError('Only strategic tier files have artisan cuts to refresh', 'tier');
+	// Validate: must have artisan cut tier
+	if (article.tier !== 'artisan_cut') {
+		return validationError('Only artisan_cut tier files have artisan cuts to refresh', 'tier');
 	}
 
 	// Validate: file must exist

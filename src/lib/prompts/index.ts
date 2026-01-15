@@ -67,4 +67,4 @@ export function getPersonaPrompt(personaName: string): string {
 
 // Chat prompts
 export { CONVERSE_PROMPT } from './converse';
-export { COMPRESS_PROMPT } from './compress';
+export { CHAT_ARTISAN_CUT_PROMPT } from './chat-artisan-cut';

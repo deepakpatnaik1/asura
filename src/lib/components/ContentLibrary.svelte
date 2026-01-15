@@ -16,6 +16,7 @@
 		title: string;
 		is_enabled?: boolean;
 		tier?: string;
+		owner?: string;
 		created_at: string;
 	}
 
@@ -98,9 +99,9 @@
 				class="content-item"
 				class:active={item.is_enabled}
 			>
-				{#if item.tier === 'canon'}
-					<!-- Canon: no toggle, always injected -->
-					<span class="canon-spacer"></span>
+				{#if item.owner === 'everyone'}
+					<!-- Everyone: no toggle, always injected -->
+					<span class="everyone-spacer"></span>
 				{:else}
 					<!-- Checkbox for context injection toggle -->
 					<button
@@ -236,8 +237,8 @@
 		opacity: 1;
 	}
 
-	/* Spacer for canon items (no toggle) */
-	.canon-spacer {
+	/* Spacer for everyone items (no toggle) */
+	.everyone-spacer {
 		width: 13px;
 		height: 13px;
 		margin-left: 8px;

@@ -17,12 +17,12 @@
 		lastLifecycle?: string;
 	}
 
-	let { onClose, onSuccess, onPasteComplete, lastOwner = 'no-one', lastLifecycle = 'ephemeral' }: Props = $props();
+	let { onClose, onSuccess, onPasteComplete, lastOwner = 'no-one', lastLifecycle = 'raw' }: Props = $props();
 	console.log('[PasteArea] Mounted with props:', { lastOwner, lastLifecycle });
 
-	// Lifecycle: ephemeral (default) or persistent - initialized from last selection
-	type Lifecycle = 'ephemeral' | 'persistent';
-	let lifecycle = $state<Lifecycle>((lastLifecycle as Lifecycle) || 'ephemeral');
+	// Lifecycle: raw (default) or artisan_cut - initialized from last selection
+	type Lifecycle = 'raw' | 'artisan_cut';
+	let lifecycle = $state<Lifecycle>((lastLifecycle as Lifecycle) || 'raw');
 
 	// Owner: which persona owns this content - initialized from last selection
 	type Owner = 'no-one' | 'felix' | 'gunnar' | 'kirby' | 'samara' | 'alicja' | 'eva' | 'ananya' | 'everyone';
@@ -129,12 +129,12 @@
 
 	async function processFilePath(sourcePath: string) {
 		isProcessing = true;
-		processingStatus = lifecycle === 'persistent' ? 'Linking and generating artisan cut...' : 'Linking to Obsidian file...';
+		processingStatus = lifecycle === 'artisan_cut' ? 'Linking and generating artisan cut...' : 'Linking to Obsidian file...';
 		processingError = null;
 
 		try {
-			// Lifecycle determines tier - owner is passed separately
-			const tier = lifecycle === 'persistent' ? 'strategic' : 'ephemeral';
+			// Lifecycle IS tier now - no translation needed
+			const tier = lifecycle;
 
 			const response = await fetch('/api/chat/files', {
 				method: 'POST',
@@ -180,10 +180,10 @@
 		processingError = null;
 
 		try {
-			processingStatus = lifecycle === 'persistent' ? 'Generating artisan cut...' : 'Processing...';
+			processingStatus = lifecycle === 'artisan_cut' ? 'Generating artisan cut...' : 'Processing...';
 
-			// Lifecycle determines tier - owner is passed separately
-			const tier = lifecycle === 'persistent' ? 'strategic' : 'ephemeral';
+			// Lifecycle IS tier now - no translation needed
+			const tier = lifecycle;
 
 			const response = await fetch('/api/chat/files', {
 				method: 'POST',
@@ -351,9 +351,8 @@
 			const formData = new FormData();
 			formData.append('pdf', file);
 
-			// Lifecycle determines tier - owner is passed separately
-			const tier = lifecycle === 'persistent' ? 'strategic' : 'ephemeral';
-			formData.append('tier', tier);
+			// Lifecycle IS tier now - no translation needed
+			formData.append('tier', lifecycle);
 			formData.append('owner', owner);
 
 			const response = await fetch('/api/chat/files/pdf', {
@@ -416,8 +415,8 @@
 						class="dropdown"
 						bind:value={lifecycle}
 					>
-						<option value="ephemeral">Raw</option>
-						<option value="persistent">Artisan Cut</option>
+						<option value="raw">Raw</option>
+						<option value="artisan_cut">Artisan Cut</option>
 					</select>
 				</div>
 

@@ -77,7 +77,7 @@ function extractTitleFromMarkdown(content: string, filePath?: string): string {
 /**
  * GET /api/chat/files
  * List user's content files (newest first)
- * Tiers: strategic (artisan cut), ephemeral (raw), gettysburg (special)
+ * Tiers: artisan_cut (AI compressed), raw (no processing)
  * Owners: no-one, persona names, everyone (shared across all personas)
  */
 export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase } }) => {
@@ -89,7 +89,7 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 		.from('articles')
 		.select('id, title, is_enabled, is_starred, is_protected, tier, pending_annotation, source_path, created_at, owner')
 		.eq('user_id', userId)
-		.order('tier', { ascending: false }) // strategic > gettysburg > ephemeral (alphabetically descending)
+		.order('tier', { ascending: true }) // artisan_cut < raw (alphabetically ascending)
 		.order('created_at', { ascending: false }); // Newest first within each group
 
 	if (error) {
@@ -111,15 +111,15 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 	const log = createLogger('FilesAPI', userId);
 
 	// Parse request body
-	const parseResult = await parseRequestJson<{ content?: string; source_path?: string; persistent?: boolean; tier?: string; owner?: string }>(request);
+	const parseResult = await parseRequestJson<{ content?: string; source_path?: string; tier?: string; owner?: string }>(request);
 	if (!parseResult.success) return parseResult.error;
 
-	const { content, source_path, persistent = false, tier: requestTier, owner = 'no-one' } = parseResult.data;
+	const { content, source_path, tier: requestTier, owner = 'no-one' } = parseResult.data;
 
 	// Handle Obsidian file linking (source_path provided)
 	if (source_path) {
-		// Determine tier for linked files (default to ephemeral if not specified)
-		const tier = requestTier || 'ephemeral';
+		// Determine tier for linked files (default to raw if not specified)
+		const tier = requestTier || 'raw';
 		log.info('Linking Obsidian file', { sourcePath: source_path, tier });
 
 		// Validate file exists and is readable
@@ -136,8 +136,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			let artisanCut: string | null = null;
 			let artisanCutAt: Date | null = null;
 
-			// Generate artisan cut if tier is strategic
-			if (tier === 'strategic') {
+			// Generate artisan cut if tier is artisan_cut
+			if (tier === 'artisan_cut') {
 				log.info('Generating artisan cut for linked file', { sourcePath: source_path });
 
 				// Fetch user settings for compression model
@@ -272,8 +272,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 	}
 
 	// Regular content upload (existing behavior)
-	// Determine tier: explicit tier > persistent flag > ephemeral default
-	const tier = requestTier || (persistent ? 'strategic' : 'ephemeral');
+	// Determine tier from request, default to raw
+	const tier = requestTier || 'raw';
 
 	// Validate content
 	if (!content || typeof content !== 'string') {
@@ -307,7 +307,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 
 		log.info('Processing file upload', {
 			contentLength: content.length,
-			persistent,
+			tier,
 			isHtml,
 			contentStart: content.slice(0, 100)
 		});
@@ -318,8 +318,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		let title: string;
 		let artisanCut: string | null = null;
 
-		if (tier === 'strategic') {
-			// Strategic tier: Call AI to generate title + artisan cut
+		if (tier === 'artisan_cut') {
+			// Artisan cut tier: Call AI to generate title + artisan cut
 			// Look up provider from database
 			const provider = await getModelProvider(supabase, model);
 			assertProviderSupported(provider);

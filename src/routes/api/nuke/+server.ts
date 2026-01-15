@@ -12,8 +12,8 @@ import { createLogger } from '$lib/api/logger';
  *
  * Buckets:
  * - persona:<name>     → Delete superjournal/journal for that persona
- * - content:raw        → Delete raw content (tier = 'ephemeral', no artisan cut)
- * - content:artisan    → Delete artisan cut content (tier = 'strategic')
+ * - content:raw        → Delete raw content (tier = 'raw', no artisan cut)
+ * - content:artisan    → Delete artisan cut content (tier = 'artisan_cut')
  * - content:no-one     → Delete unassigned content (owner = 'no-one')
  * - content:everyone   → Delete shared content (owner = 'everyone')
  * - content:pdfs       → Delete uploaded PDFs (source_type = 'pdf')
@@ -278,8 +278,8 @@ async function nukePersona(supabase: App.Locals['supabase'], userId: string, per
  * Nuke content by type
  *
  * Types:
- * - raw: tier='ephemeral', NOT image, NOT linked (text/PDFs without artisan cut)
- * - artisan: tier='strategic', NOT image, NOT linked (text/PDFs with artisan cut)
+ * - raw: tier='raw', NOT image, NOT linked (text/PDFs without artisan cut)
+ * - artisan: tier='artisan_cut', NOT image, NOT linked (text/PDFs with artisan cut)
  * - no-one: owner='no-one' (unassigned content)
  * - everyone: owner='everyone' (shared content)
  * - pdfs: source_type='pdf' (uploaded PDFs)
@@ -292,16 +292,16 @@ async function nukeContent(supabase: App.Locals['supabase'], userId: string, con
 
 	switch (contentType) {
 		case 'raw':
-			// Ephemeral tier, NOT images, NOT linked
+			// Raw tier, NOT images, NOT linked
 			query = query
-				.eq('tier', 'ephemeral')
+				.eq('tier', 'raw')
 				.is('source_path', null)
 				.not('raw_content', 'like', '[Uploaded image:%');
 			break;
 		case 'artisan':
-			// Strategic tier, NOT images, NOT linked
+			// Artisan cut tier, NOT images, NOT linked
 			query = query
-				.eq('tier', 'strategic')
+				.eq('tier', 'artisan_cut')
 				.is('source_path', null)
 				.not('raw_content', 'like', '[Uploaded image:%');
 			break;

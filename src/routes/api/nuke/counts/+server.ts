@@ -17,8 +17,8 @@ import { databaseError } from '$lib/api/errors';
  * }
  *
  * Content detection logic:
- * - raw: tier='ephemeral', NOT image, NOT linked
- * - artisan: tier='strategic', NOT image, NOT linked
+ * - raw: tier='raw', NOT image, NOT linked
+ * - artisan: tier='artisan_cut', NOT image, NOT linked
  * - noone: owner='no-one'
  * - everyone: owner='everyone'
  * - pdfs: source_type='pdf'
@@ -94,9 +94,9 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 
 			// Count by lifecycle (tier) - for non-type content
 			if (!isPdf && !isImage && !isLinked) {
-				if (article.tier === 'strategic') {
+				if (article.tier === 'artisan_cut') {
 					contentCounts.artisan++;
-				} else if (article.tier === 'ephemeral') {
+				} else if (article.tier === 'raw') {
 					contentCounts.raw++;
 				}
 			}

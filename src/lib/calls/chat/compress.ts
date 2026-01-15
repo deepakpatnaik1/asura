@@ -8,7 +8,7 @@
 
 import { OPENROUTER_API_KEY } from '$env/static/private';
 import { createMessage } from '$lib/api/anthropic-client';
-import { COMPRESS_PROMPT } from '$lib/prompts';
+import { CHAT_ARTISAN_CUT_PROMPT as COMPRESS_PROMPT } from '$lib/prompts';
 import { compressUserFormat } from '$lib/prompts/templates';
 import { getModelProvider, type ProviderType } from './provider';
 import { createClient } from '@supabase/supabase-js';
@@ -25,10 +25,9 @@ export interface CompressParams {
 }
 
 export interface CompressResult {
-	boss_essence: string;
-	persona_name: string;
-	persona_essence: string;
-	decision_arc_summary: string;
+	turn_essence: string;
+	participants: string[];
+	conversation_arc: string;
 	salience_score: number;
 }
 
@@ -147,10 +146,9 @@ export async function compress(params: CompressParams): Promise<CompressResult> 
 	const parsed = JSON.parse(cleanedOutput);
 
 	return {
-		boss_essence: parsed.boss_essence || userMessage,
-		persona_name: parsed.persona_name || personaName,
-		persona_essence: parsed.persona_essence || aiResponse,
-		decision_arc_summary: parsed.decision_arc_summary || 'No arc generated',
+		turn_essence: parsed.turn_essence || `Boss: ${userMessage}\n${personaName}: ${aiResponse}`,
+		participants: parsed.participants || ['boss', personaName.toLowerCase()],
+		conversation_arc: parsed.conversation_arc || 'No arc generated',
 		salience_score: parsed.salience_score || 5
 	};
 }

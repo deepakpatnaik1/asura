@@ -2,7 +2,7 @@
  * PDF Upload API
  *
  * POST: Accept PDF files, extract text using pdf-parse, and create content entry.
- * Supports tier selection (ephemeral, strategic).
+ * Supports tier selection (raw, artisan_cut).
  */
 
 import { json } from '@sveltejs/kit';
@@ -115,8 +115,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 
 	// Get tier and owner from form data
 	const tierParam = formData.get('tier') as string | null;
-	const tier = tierParam === 'strategic' ? 'strategic' : 'ephemeral';
-	const persistent = tier === 'strategic';
+	const tier = tierParam === 'artisan_cut' ? 'artisan_cut' : 'raw';
 	const owner = (formData.get('owner') as string) || 'no-one';
 
 	log.info('Processing PDF upload', {
@@ -169,8 +168,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		let title: string;
 		let artisanCut: string | null = null;
 
-		if (persistent) {
-			// Persistent: Call AI to generate title + artisan cut
+		if (tier === 'artisan_cut') {
+			// Artisan cut: Call AI to generate title + artisan cut
 			const { data: settings } = await supabase
 				.from('user_settings')
 				.select('default_model, model_compression')
