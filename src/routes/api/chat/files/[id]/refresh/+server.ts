@@ -98,11 +98,11 @@ export const POST: RequestHandler = async ({ params, locals: { safeGetSession, s
 		// Fetch user settings for compression model
 		const { data: settings } = await supabase
 			.from('user_settings')
-			.select('default_model, model_compression')
+			.select('default_model, model_file_artisan_cut')
 			.eq('user_id', userId)
 			.single();
 
-		const model = settings?.model_compression || settings?.default_model || DEFAULT_MODEL;
+		const model = settings?.model_file_artisan_cut || settings?.default_model || DEFAULT_MODEL;
 		const provider = await getModelProvider(supabase, model);
 		assertProviderSupported(provider);
 

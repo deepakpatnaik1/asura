@@ -1,21 +1,21 @@
 /**
- * Chat Compress Call (Artisan Cut)
+ * Chat Artisan Cut Call
  *
  * Compresses a conversation turn into journal entry format.
- * Takes a full turn, returns structured compression.
+ * Takes a full turn, returns structured artisan cut.
  * Supports multiple providers: Anthropic and OpenRouter.
  */
 
 import { OPENROUTER_API_KEY } from '$env/static/private';
 import { createMessage } from '$lib/api/anthropic-client';
-import { CHAT_ARTISAN_CUT_PROMPT as COMPRESS_PROMPT } from '$lib/prompts';
+import { CHAT_ARTISAN_CUT_PROMPT } from '$lib/prompts';
 import { compressUserFormat } from '$lib/prompts/templates';
 import { getModelProvider, type ProviderType } from './provider';
 import { createClient } from '@supabase/supabase-js';
 import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
 
-export interface CompressParams {
+export interface ArtisanCutParams {
 	userMessage: string;
 	aiResponse: string;
 	personaName: string;
@@ -24,7 +24,7 @@ export interface CompressParams {
 	temperature: number;
 }
 
-export interface CompressResult {
+export interface ArtisanCutResult {
 	turn_essence: string;
 	participants: string[];
 	conversation_arc: string;
@@ -50,9 +50,9 @@ function extractJSON(text: string): string {
 }
 
 /**
- * Compress using Anthropic API
+ * Artisan cut using Anthropic API
  */
-async function compressWithAnthropic(params: CompressParams): Promise<string> {
+async function artisanCutWithAnthropic(params: ArtisanCutParams): Promise<string> {
 	const { userMessage, aiResponse, personaName, model, maxTokens, temperature } = params;
 
 	const response = await createMessage({
@@ -62,7 +62,7 @@ async function compressWithAnthropic(params: CompressParams): Promise<string> {
 		system: [
 			{
 				type: 'text' as const,
-				text: COMPRESS_PROMPT,
+				text: CHAT_ARTISAN_CUT_PROMPT,
 				cache_control: { type: 'ephemeral' as const, ttl: '1h' as const }
 			}
 		],
@@ -78,9 +78,9 @@ async function compressWithAnthropic(params: CompressParams): Promise<string> {
 }
 
 /**
- * Compress using OpenRouter API (non-streaming)
+ * Artisan cut using OpenRouter API (non-streaming)
  */
-async function compressWithOpenRouter(params: CompressParams): Promise<string> {
+async function artisanCutWithOpenRouter(params: ArtisanCutParams): Promise<string> {
 	const { userMessage, aiResponse, personaName, model, maxTokens, temperature } = params;
 
 	const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -89,12 +89,12 @@ async function compressWithOpenRouter(params: CompressParams): Promise<string> {
 			'Content-Type': 'application/json',
 			Authorization: `Bearer ${OPENROUTER_API_KEY}`,
 			'HTTP-Referer': 'https://aether.vercel.app',
-			'X-Title': 'Aether - Compression'
+			'X-Title': 'Aether - Artisan Cut'
 		},
 		body: JSON.stringify({
 			model,
 			messages: [
-				{ role: 'system', content: COMPRESS_PROMPT },
+				{ role: 'system', content: CHAT_ARTISAN_CUT_PROMPT },
 				{ role: 'user', content: compressUserFormat(userMessage, personaName, aiResponse) }
 			],
 			max_tokens: maxTokens,
@@ -105,7 +105,7 @@ async function compressWithOpenRouter(params: CompressParams): Promise<string> {
 
 	if (!response.ok) {
 		const errorText = await response.text();
-		throw new Error(`OpenRouter compression failed: ${response.status} - ${errorText}`);
+		throw new Error(`OpenRouter artisan cut failed: ${response.status} - ${errorText}`);
 	}
 
 	const data = await response.json();
@@ -113,14 +113,14 @@ async function compressWithOpenRouter(params: CompressParams): Promise<string> {
 }
 
 /**
- * Compress a conversation turn using Artisan Cut.
+ * Run artisan cut on a conversation turn.
  * Automatically routes to the correct provider based on the model.
  *
- * @param params - Compression parameters
- * @returns Compressed journal entry data
- * @throws Error if compression or JSON parsing fails
+ * @param params - Artisan cut parameters
+ * @returns Artisan cut journal entry data
+ * @throws Error if artisan cut or JSON parsing fails
  */
-export async function compress(params: CompressParams): Promise<CompressResult> {
+export async function artisanCut(params: ArtisanCutParams): Promise<ArtisanCutResult> {
 	const { userMessage, aiResponse, personaName, model } = params;
 
 	// Look up provider from database
@@ -136,10 +136,10 @@ export async function compress(params: CompressParams): Promise<CompressResult> 
 	// Route to appropriate provider
 	let rawOutput: string;
 	if (provider === 'openrouter') {
-		rawOutput = await compressWithOpenRouter(params);
+		rawOutput = await artisanCutWithOpenRouter(params);
 	} else {
 		// Default to Anthropic for all other providers
-		rawOutput = await compressWithAnthropic(params);
+		rawOutput = await artisanCutWithAnthropic(params);
 	}
 
 	const cleanedOutput = extractJSON(rawOutput);

@@ -2,7 +2,7 @@
  * Model Parameters Configuration
  *
  * Provides helper functions to fetch model-specific parameters from the database.
- * Parameters vary by use case (conversation vs compression).
+ * Parameters vary by use case (conversation vs artisan_cut).
  */
 
 import { supabaseAdmin } from '$lib/supabase-admin';
@@ -20,13 +20,13 @@ export interface ModelParams {
 /**
  * Use case for model parameters
  */
-export type ModelUseCase = 'conversation' | 'compression';
+export type ModelUseCase = 'conversation' | 'artisan_cut';
 
 /**
  * Fetch model parameters from database for specific use case
  *
  * @param modelIdentifier - Model identifier (e.g., 'claude-sonnet-4-5-20250929')
- * @param useCase - Use case ('conversation' for Call 1A/1B, 'compression' for Call 2A/2B/3A/3B)
+ * @param useCase - Use case ('conversation' for Call 1A/1B, 'artisan_cut' for Call 2A/2B/3A/3B)
  * @returns Model parameters (temperature, max_tokens, thinking_enabled, max_tokens_thinking)
  * @throws Error if parameters not found
  */

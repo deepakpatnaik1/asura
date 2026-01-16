@@ -4,7 +4,7 @@
 import { describe, it, expect } from 'vitest';
 import {
 	chatMessageSchema,
-	compressSchema,
+	artisanCutSchema,
 	settingsUpdateSchema,
 	readerUploadSchema,
 	processArticleSchema,
@@ -62,11 +62,11 @@ describe('chatMessageSchema', () => {
 	});
 });
 
-describe('compressSchema', () => {
+describe('artisanCutSchema', () => {
 	const validUuid = '550e8400-e29b-41d4-a716-446655440000';
 
-	it('accepts valid compression request', () => {
-		const result = compressSchema.safeParse({
+	it('accepts valid artisan cut request', () => {
+		const result = artisanCutSchema.safeParse({
 			superjournal_id: validUuid,
 			user_message: 'Test message',
 			ai_response: 'Test response',
@@ -76,7 +76,7 @@ describe('compressSchema', () => {
 	});
 
 	it('rejects invalid UUID', () => {
-		const result = compressSchema.safeParse({
+		const result = artisanCutSchema.safeParse({
 			superjournal_id: 'invalid-uuid',
 			user_message: 'Test message',
 			ai_response: 'Test response',
@@ -86,7 +86,7 @@ describe('compressSchema', () => {
 	});
 
 	it('rejects missing fields', () => {
-		const result = compressSchema.safeParse({
+		const result = artisanCutSchema.safeParse({
 			superjournal_id: validUuid
 		});
 		expect(result.success).toBe(false);

@@ -54,14 +54,14 @@ export const PATCH: RequestHandler = async ({ params, locals: { supabase, safeGe
 		}
 
 		// Create placeholder journal row with star enabled
-		// Compression job will upsert and fill in the rest
+		// Artisan cut job will upsert and fill in the rest
 		const personaName = superjournal.persona_name || 'unknown';
 		const { error: insertError } = await supabase.from('journal').insert({
 			superjournal_id: id,
 			user_id: userId,
 			turn_essence: `Boss: ${superjournal.user_message || ''}\n${personaName}: ${superjournal.ai_response || ''}`,
 			participants: ['boss', personaName.toLowerCase()],
-			conversation_arc: 'Pending compression',
+			conversation_arc: 'Pending artisan cut',
 			salience_score: 5,
 			is_starred: true,
 			embedding: null

@@ -4,19 +4,19 @@ import { VoyageAIClient } from 'voyageai';
 import { VOYAGE_API_KEY } from '$env/static/private';
 import { DEFAULT_MODEL, EMBEDDING_MODEL } from '$lib/config/models';
 import { getModelParams } from '$lib/config/model-params';
-import { compress } from '$lib/calls';
+import { artisanCut } from '$lib/calls';
 import { requireAuth } from '$lib/api/require-auth';
 import { parseRequestJson } from '$lib/api/parse-json';
-import { compressSchema, validateSchema } from '$lib/schemas';
+import { artisanCutSchema, validateSchema } from '$lib/schemas';
 
 const voyage = new VoyageAIClient({ apiKey: VOYAGE_API_KEY });
 
 /**
  * Orphan Recovery Endpoint
  *
- * POST /api/chat/compress
- * Triggers compression for a superjournal entry that's missing its journal entry.
- * Called automatically on page load to recover failed compressions.
+ * POST /api/chat/artisan-cut
+ * Triggers artisan cut for a superjournal entry that's missing its journal entry.
+ * Called automatically on page load to recover failed artisan cuts.
  */
 export const POST: RequestHandler = async ({ request, locals: { safeGetSession, supabase } }) => {
 	// 1. AUTHENTICATION CHECK
@@ -27,7 +27,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 	const parseResult = await parseRequestJson<unknown>(request);
 	if (!parseResult.success) return parseResult.error;
 
-	const validation = validateSchema(compressSchema, parseResult.data);
+	const validation = validateSchema(artisanCutSchema, parseResult.data);
 	if (!validation.success) return validation.error;
 
 	const { superjournal_id, user_message, ai_response, persona_name } = validation.data;
@@ -52,10 +52,10 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		.single();
 
 	if (existingJournal) {
-		return json({ message: 'Already compressed', skipped: true });
+		return json({ message: 'Already processed', skipped: true });
 	}
 
-	// Run compression
+	// Run artisan cut
 	try {
 		const { data: settings } = await supabase
 			.from('user_settings')
@@ -63,16 +63,16 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			.eq('user_id', auth.userId)
 			.single();
 
-		const compressionModel = settings?.default_model || DEFAULT_MODEL;
-		const compressionParams = await getModelParams(compressionModel, 'compression');
+		const artisanCutModel = settings?.default_model || DEFAULT_MODEL;
+		const artisanCutParams = await getModelParams(artisanCutModel, 'artisan_cut');
 
-		const compressionJson = await compress({
+		const artisanCutJson = await artisanCut({
 			userMessage: user_message,
 			aiResponse: ai_response,
 			personaName: persona_name,
-			model: compressionModel,
-			maxTokens: compressionParams.max_tokens,
-			temperature: compressionParams.temperature
+			model: artisanCutModel,
+			maxTokens: artisanCutParams.max_tokens,
+			temperature: artisanCutParams.temperature
 		});
 
 		// Save to Journal
@@ -81,10 +81,10 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			.insert({
 				superjournal_id: superjournal_id,
 				user_id: auth.userId,
-				turn_essence: compressionJson.turn_essence || `Boss: ${user_message}\n${persona_name}: ${ai_response}`,
-				participants: compressionJson.participants || ['boss', persona_name.toLowerCase()],
-				conversation_arc: compressionJson.conversation_arc || 'No arc generated',
-				salience_score: compressionJson.salience_score || 5,
+				turn_essence: artisanCutJson.turn_essence || `Boss: ${user_message}\n${persona_name}: ${ai_response}`,
+				participants: artisanCutJson.participants || ['boss', persona_name.toLowerCase()],
+				conversation_arc: artisanCutJson.conversation_arc || 'No arc generated',
+				salience_score: artisanCutJson.salience_score || 5,
 				is_starred: false,
 				file_name: null,
 				file_type: null,
@@ -98,7 +98,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		}
 
 		// Generate and save embedding
-		const conversationArc = compressionJson.conversation_arc || 'No arc generated';
+		const conversationArc = artisanCutJson.conversation_arc || 'No arc generated';
 		const embeddingResponse = await voyage.embed({
 			input: conversationArc,
 			model: EMBEDDING_MODEL
@@ -115,6 +115,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		return json({ success: true, journal_id: journalData.id });
 
 	} catch (error) {
-		return json({ error: { message: 'Compression failed', code: 'COMPRESSION_ERROR' } }, { status: 500 });
+		return json({ error: { message: 'Artisan cut failed', code: 'ARTISAN_CUT_ERROR' } }, { status: 500 });
 	}
 };

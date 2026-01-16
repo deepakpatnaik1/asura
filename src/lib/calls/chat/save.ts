@@ -9,7 +9,7 @@ import { SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
 import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { createLogger } from '$lib/api/logger';
-import { runCompressJob } from './compress-job';
+import { runArtisanCutJob } from './chat-artisan-cut-job';
 import { runExtractTablesJob } from './extract-tables';
 import { scheduleRetries } from './retry';
 import { triggerDailyBackupIfNeeded } from '$lib/api/backup';
@@ -87,7 +87,7 @@ export function triggerBackgroundJobs(params: {
 	const { superjournalId, userId, message, aiResponse, persona, conversationModel } = params;
 
 	setTimeout(() => {
-		runCompressJob({
+		runArtisanCutJob({
 			superjournalId,
 			userId,
 			userMessage: message,

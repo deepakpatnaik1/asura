@@ -25,12 +25,8 @@
 	}
 
 	// All override keys (personas + processors)
-	const OVERRIDE_KEYS = ['gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya', 'felix', 'embeddings', 'compression', 'chat_compression', 'character_planning', 'image_gen', 'image_edit'] as const;
+	const OVERRIDE_KEYS = ['gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya', 'felix', 'embeddings', 'file_artisan_cut', 'chat_artisan_cut', 'character_planning', 'image_gen', 'image_edit'] as const;
 	type OverrideKey = typeof OVERRIDE_KEYS[number];
-
-	// Persona names for uncensored compression flags
-	const PERSONA_NAMES = ['gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya', 'felix'] as const;
-	type PersonaName = typeof PERSONA_NAMES[number];
 
 	let models = $state<Model[]>([]);
 	let modelOverrides = $state<Record<OverrideKey, string>>({
@@ -42,23 +38,13 @@
 		ananya: '',
 		felix: '',
 		embeddings: '',
-		compression: '',
-		chat_compression: '',
+		file_artisan_cut: '',
+		chat_artisan_cut: '',
 		character_planning: '',
 		image_gen: '',
 		image_edit: ''
 	});
 
-	// Per-persona uncensored compression flags
-	let uncensoredFlags = $state<Record<PersonaName, boolean>>({
-		gunnar: false,
-		kirby: false,
-		samara: false,
-		alicja: false,
-		eva: true,
-		ananya: false,
-		felix: false
-	});
 	let isLoading = $state(true);
 	let isExporting = $state(false);
 	let errorMessage = $state<string | null>(null);
@@ -170,8 +156,8 @@
 				ananya: '',
 				felix: '',
 				embeddings: '',
-				compression: '',
-				chat_compression: '',
+				file_artisan_cut: '',
+				chat_artisan_cut: '',
 				character_planning: '',
 				image_gen: '',
 				image_edit: ''
@@ -182,24 +168,6 @@
 				const columnName = `model_${key}` as keyof typeof settings;
 				newOverrides[key] = settings[columnName] || '';
 			}
-
-			// Load uncensored compression flags
-			const newFlags: Record<PersonaName, boolean> = {
-				gunnar: false,
-				kirby: false,
-				samara: false,
-				alicja: false,
-				eva: true,
-				ananya: false,
-				felix: false
-			};
-			for (const persona of PERSONA_NAMES) {
-				const columnName = `compression_uncensored_${persona}` as keyof typeof settings;
-				if (settings[columnName] !== undefined) {
-					newFlags[persona] = settings[columnName] as boolean;
-				}
-			}
-			uncensoredFlags = newFlags;
 
 			// Replace entire object to ensure reactivity
 			modelOverrides = newOverrides;
@@ -237,13 +205,6 @@
 		const newModel = (event.target as HTMLSelectElement).value;
 		modelOverrides[key] = newModel;
 		saveSetting({ [`model_${key}`]: newModel });
-	}
-
-	// Handle uncensored compression checkbox change
-	function handleUncensoredChange(persona: PersonaName, event: Event) {
-		const checked = (event.target as HTMLInputElement).checked;
-		uncensoredFlags[persona] = checked;
-		saveSetting({ [`compression_uncensored_${persona}`]: checked });
 	}
 
 	// Handle overlay click (close modal)
@@ -533,7 +494,6 @@
 							<h3 class="section-heading">Personas</h3>
 							<div class="dropdown-row">
 								<label for="gunnar-select">Gunnar</label>
-								<input type="checkbox" id="gunnar-uncensored" checked={uncensoredFlags.gunnar} onchange={(e) => handleUncensoredChange('gunnar', e)} title="Use persona model for compression" />
 								<select id="gunnar-select" value={modelOverrides.gunnar} onchange={(e) => handleOverrideChange('gunnar', e)}>
 									{#each modelsByProvider as group}
 										<optgroup label={group.label}>
@@ -546,7 +506,6 @@
 							</div>
 							<div class="dropdown-row">
 								<label for="kirby-select">Kirby</label>
-								<input type="checkbox" id="kirby-uncensored" checked={uncensoredFlags.kirby} onchange={(e) => handleUncensoredChange('kirby', e)} title="Use persona model for compression" />
 								<select id="kirby-select" value={modelOverrides.kirby} onchange={(e) => handleOverrideChange('kirby', e)}>
 									{#each modelsByProvider as group}
 										<optgroup label={group.label}>
@@ -559,7 +518,6 @@
 							</div>
 							<div class="dropdown-row">
 								<label for="samara-select">Samara</label>
-								<input type="checkbox" id="samara-uncensored" checked={uncensoredFlags.samara} onchange={(e) => handleUncensoredChange('samara', e)} title="Use persona model for compression" />
 								<select id="samara-select" value={modelOverrides.samara} onchange={(e) => handleOverrideChange('samara', e)}>
 									{#each modelsByProvider as group}
 										<optgroup label={group.label}>
@@ -572,7 +530,6 @@
 							</div>
 							<div class="dropdown-row">
 								<label for="alicja-select">Alicja</label>
-								<input type="checkbox" id="alicja-uncensored" checked={uncensoredFlags.alicja} onchange={(e) => handleUncensoredChange('alicja', e)} title="Use persona model for compression" />
 								<select id="alicja-select" value={modelOverrides.alicja} onchange={(e) => handleOverrideChange('alicja', e)}>
 									{#each modelsByProvider as group}
 										<optgroup label={group.label}>
@@ -585,7 +542,6 @@
 							</div>
 							<div class="dropdown-row">
 								<label for="eva-select">Eva</label>
-								<input type="checkbox" id="eva-uncensored" checked={uncensoredFlags.eva} onchange={(e) => handleUncensoredChange('eva', e)} title="Use persona model for compression" />
 								<select id="eva-select" value={modelOverrides.eva} onchange={(e) => handleOverrideChange('eva', e)}>
 									{#each modelsByProvider as group}
 										<optgroup label={group.label}>
@@ -598,7 +554,6 @@
 							</div>
 							<div class="dropdown-row">
 								<label for="ananya-select">Ananya</label>
-								<input type="checkbox" id="ananya-uncensored" checked={uncensoredFlags.ananya} onchange={(e) => handleUncensoredChange('ananya', e)} title="Use persona model for compression" />
 								<select id="ananya-select" value={modelOverrides.ananya} onchange={(e) => handleOverrideChange('ananya', e)}>
 									{#each modelsByProvider as group}
 										<optgroup label={group.label}>
@@ -611,7 +566,6 @@
 							</div>
 							<div class="dropdown-row">
 								<label for="felix-select">Felix</label>
-								<input type="checkbox" id="felix-uncensored" checked={uncensoredFlags.felix} onchange={(e) => handleUncensoredChange('felix', e)} title="Use persona model for compression" />
 								<select id="felix-select" value={modelOverrides.felix} onchange={(e) => handleOverrideChange('felix', e)}>
 									{#each modelsByProvider as group}
 										<optgroup label={group.label}>
@@ -640,8 +594,8 @@
 								</select>
 							</div>
 							<div class="dropdown-row">
-								<label for="compression-select">File artisan cut</label>
-								<select id="compression-select" value={modelOverrides.compression} onchange={(e) => handleOverrideChange('compression', e)}>
+								<label for="file-artisan-cut-select">File artisan cut</label>
+								<select id="file-artisan-cut-select" value={modelOverrides.file_artisan_cut} onchange={(e) => handleOverrideChange('file_artisan_cut', e)}>
 									{#each modelsByProvider as group}
 										<optgroup label={group.label}>
 											{#each group.models as model}
@@ -652,8 +606,8 @@
 								</select>
 							</div>
 							<div class="dropdown-row">
-								<label for="chat-compression-select">Chat artisan cut</label>
-								<select id="chat-compression-select" value={modelOverrides.chat_compression} onchange={(e) => handleOverrideChange('chat_compression', e)}>
+								<label for="chat-artisan-cut-select">Chat artisan cut</label>
+								<select id="chat-artisan-cut-select" value={modelOverrides.chat_artisan_cut} onchange={(e) => handleOverrideChange('chat_artisan_cut', e)}>
 									{#each modelsByProvider as group}
 										<optgroup label={group.label}>
 											{#each group.models as model}
@@ -919,38 +873,6 @@
 	.dropdown-row select option {
 		font-weight: 400;
 		padding-left: 8px;
-	}
-
-	.dropdown-row input[type="checkbox"] {
-		width: 12px;
-		height: 12px;
-		margin-left: auto;
-		margin-right: 8px;
-		cursor: pointer;
-		appearance: none;
-		-webkit-appearance: none;
-		background: #000;
-		border: 1px solid hsl(var(--border));
-		border-radius: 2px;
-		position: relative;
-		flex-shrink: 0;
-	}
-
-	.dropdown-row input[type="checkbox"]:checked {
-		background: hsl(var(--primary));
-		border-color: hsl(var(--primary));
-	}
-
-	.dropdown-row input[type="checkbox"]:checked::after {
-		content: '';
-		position: absolute;
-		left: 3px;
-		top: 1px;
-		width: 4px;
-		height: 7px;
-		border: solid #000;
-		border-width: 0 1.5px 1.5px 0;
-		transform: rotate(45deg);
 	}
 
 	/* Footer icons */

@@ -23,7 +23,7 @@ export const personaSchema = z.enum(['gunnar', 'kirby', 'samara', 'alicja', 'eva
 /** Override key enum (personas + processor types for model overrides) */
 export const overrideKeySchema = z.enum([
 	'gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya', 'felix', // Personas
-	'embeddings', 'compression', 'chat_compression', // Text processes
+	'embeddings', 'file_artisan_cut', 'chat_artisan_cut', // Text processes
 	'tool_calling', 'image_gen', 'image_edit', // Eva pipeline
 	'comment_generator' // Ananya pipeline
 ]);
@@ -48,8 +48,8 @@ export const chatMessageSchema = z.object({
 	canvas_ids: z.array(z.string().uuid()).optional() // selected designer canvases for Eva context
 });
 
-/** POST /api/chat/compress - Orphan recovery compression */
-export const compressSchema = z.object({
+/** POST /api/chat/artisan-cut - Orphan recovery artisan cut */
+export const artisanCutSchema = z.object({
 	superjournal_id: uuidSchema,
 	user_message: nonEmptyString,
 	ai_response: nonEmptyString,
@@ -78,20 +78,11 @@ export const settingsUpdateSchema = z.object({
 
 	// Process model overrides
 	model_embeddings: z.string().nullable().optional(),
-	model_compression: z.string().nullable().optional(),
-	model_chat_compression: z.string().nullable().optional(),
+	model_file_artisan_cut: z.string().nullable().optional(),
+	model_chat_artisan_cut: z.string().nullable().optional(),
 	model_character_planning: z.string().nullable().optional(),
 	model_image_gen: z.string().nullable().optional(),
 	model_image_edit: z.string().nullable().optional(),
-
-	// Per-persona uncensored compression flags
-	compression_uncensored_gunnar: z.boolean().optional(),
-	compression_uncensored_kirby: z.boolean().optional(),
-	compression_uncensored_samara: z.boolean().optional(),
-	compression_uncensored_alicja: z.boolean().optional(),
-	compression_uncensored_eva: z.boolean().optional(),
-	compression_uncensored_ananya: z.boolean().optional(),
-	compression_uncensored_felix: z.boolean().optional(),
 
 	// Live-linked article watch state
 	watched_article_id: z.string().uuid().nullable().optional(),

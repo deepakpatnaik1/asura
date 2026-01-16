@@ -143,11 +143,11 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				// Fetch user settings for compression model
 				const { data: settings } = await supabase
 					.from('user_settings')
-					.select('default_model, model_compression')
+					.select('default_model, model_file_artisan_cut')
 					.eq('user_id', userId)
 					.single();
 
-				const model = settings?.model_compression || settings?.default_model || DEFAULT_MODEL;
+				const model = settings?.model_file_artisan_cut || settings?.default_model || DEFAULT_MODEL;
 				const provider = await getModelProvider(supabase, model);
 				assertProviderSupported(provider);
 
@@ -292,12 +292,12 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		// Fetch user settings (default model + file compression model)
 		const { data: settings } = await supabase
 			.from('user_settings')
-			.select('default_model, model_compression')
+			.select('default_model, model_file_artisan_cut')
 			.eq('user_id', userId)
 			.single();
 
-		// Use model_compression if set, otherwise fall back to default_model
-		const model = settings?.model_compression || settings?.default_model || DEFAULT_MODEL;
+		// Use model_file_artisan_cut if set, otherwise fall back to default_model
+		const model = settings?.model_file_artisan_cut || settings?.default_model || DEFAULT_MODEL;
 
 		// Detect if content is HTML or already markdown
 		// Check markdown patterns first - if it looks like markdown, don't run through Turndown

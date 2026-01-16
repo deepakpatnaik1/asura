@@ -1,9 +1,9 @@
 /**
- * Background Compression Job
+ * Background Artisan Cut Job
  *
  * Compresses a conversation turn into the journal format with embeddings.
  * Runs asynchronously after the conversation is saved to superjournal.
- * Uses dedicated compression model from user settings (default: Opus 4.5).
+ * Uses dedicated artisan cut model from user settings (default: Opus 4.5).
  */
 
 import { VoyageAIClient } from 'voyageai';
@@ -14,11 +14,11 @@ import { EMBEDDING_MODEL } from '$lib/config/models';
 import { getModelParams } from '$lib/config/model-params';
 import { personaUsesCompression } from '$lib/config/personas';
 import { createLogger } from '$lib/api/logger';
-import { compress } from './compress';
+import { artisanCut } from './chat-artisan-cut';
 import { scheduleRetries } from './retry';
 
-// Default compression model (Opus 4.5)
-const DEFAULT_COMPRESSION_MODEL = 'claude-opus-4-5-20251101';
+// Default artisan cut model (Opus 4.5)
+const DEFAULT_ARTISAN_CUT_MODEL = 'claude-opus-4-5-20251101';
 
 // Lazy-initialized clients
 let voyage: VoyageAIClient | null = null;
@@ -38,7 +38,7 @@ function getSupabaseServiceRole(): SupabaseClient {
 	return supabaseServiceRole;
 }
 
-export interface CompressJobParams {
+export interface ArtisanCutJobParams {
 	superjournalId: string;
 	userId: string;
 	userMessage: string;
@@ -48,50 +48,34 @@ export interface CompressJobParams {
 }
 
 /**
- * Run the compression job for a conversation turn.
+ * Run the artisan cut job for a conversation turn.
  * This creates a journal entry with compressed content and embeddings.
  *
- * @param params - The compression job parameters
+ * @param params - The artisan cut job parameters
  */
-export async function runCompressJob(params: CompressJobParams): Promise<void> {
+export async function runArtisanCutJob(params: ArtisanCutJobParams): Promise<void> {
 	const { superjournalId, userId, userMessage, aiResponse, personaName, conversationModel } = params;
-	const log = createLogger('Compression', userId);
+	const log = createLogger('ArtisanCut', userId);
 	const supabase = getSupabaseServiceRole();
 
-	const doCompression = async () => {
-		log.info('Compression job started', { superjournalId, personaName });
+	const doArtisanCut = async () => {
+		log.info('Artisan cut job started', { superjournalId, personaName });
 
-		// Check if persona uses compression
+		// Check if persona uses artisan cut
 		if (!personaUsesCompression(personaName)) {
-			log.debug('Skipping compression for persona', { superjournalId, personaName });
+			log.debug('Skipping artisan cut for persona', { superjournalId, personaName });
 			return;
 		}
 
-		// Get compression model from user settings
-		// If persona's checkbox is checked, use persona's own chat model for compression
-		// Otherwise use the global chat_compression model
+		// Get artisan cut model from user settings
 		const { data: settings } = await supabase
 			.from('user_settings')
-			.select(`model_chat_compression,
-				model_gunnar, model_kirby, model_samara, model_alicja, model_eva, model_ananya,
-				compression_uncensored_gunnar, compression_uncensored_kirby,
-				compression_uncensored_samara, compression_uncensored_alicja,
-				compression_uncensored_eva, compression_uncensored_ananya`)
+			.select('model_chat_artisan_cut')
 			.eq('user_id', userId)
 			.single();
 
-		// Check if this persona uses its own model for compression
-		const usePersonaModelKey = `compression_uncensored_${personaName}` as keyof typeof settings;
-		const usePersonaModel = settings?.[usePersonaModelKey] === true;
-
-		// Get persona's own model if flag is set
-		const personaModelKey = `model_${personaName}` as keyof typeof settings;
-		const personaModel = settings?.[personaModelKey] as string | undefined;
-
-		const compressionModel = usePersonaModel && personaModel
-			? personaModel
-			: (settings?.model_chat_compression || DEFAULT_COMPRESSION_MODEL);
-		log.info('Using compression model', { compressionModel, usePersonaModel });
+		const artisanCutModel = settings?.model_chat_artisan_cut || DEFAULT_ARTISAN_CUT_MODEL;
+		log.info('Using artisan cut model', { artisanCutModel });
 
 		// Check if placeholder journal row exists (created by star button)
 		const { data: existingJournal } = await supabase
@@ -101,27 +85,27 @@ export async function runCompressJob(params: CompressJobParams): Promise<void> {
 			.eq('user_id', userId)
 			.single();
 
-		// Run Artisan Cut compression with dedicated model
-		log.info('Starting compression', { superjournalId, model: compressionModel });
+		// Run Artisan Cut with dedicated model
+		log.info('Starting artisan cut', { superjournalId, model: artisanCutModel });
 
-		const compressionParams = await getModelParams(compressionModel, 'compression');
+		const artisanCutParams = await getModelParams(artisanCutModel, 'artisan_cut');
 
-		const compressionJson = await compress({
+		const artisanCutJson = await artisanCut({
 			userMessage,
 			aiResponse,
 			personaName,
-			model: compressionModel,
-			maxTokens: compressionParams.max_tokens,
-			temperature: compressionParams.temperature
+			model: artisanCutModel,
+			maxTokens: artisanCutParams.max_tokens,
+			temperature: artisanCutParams.temperature
 		});
 
-		log.debug('Compression output', { salienceScore: compressionJson.salience_score });
+		log.debug('Artisan cut output', { salienceScore: artisanCutJson.salience_score });
 
 		const journalData = {
-			turn_essence: compressionJson.turn_essence || `Boss: ${userMessage}\n${personaName}: ${aiResponse}`,
-			participants: compressionJson.participants || ['boss', personaName.toLowerCase()],
-			conversation_arc: compressionJson.conversation_arc || 'No arc generated',
-			salience_score: compressionJson.salience_score || 5
+			turn_essence: artisanCutJson.turn_essence || `Boss: ${userMessage}\n${personaName}: ${aiResponse}`,
+			participants: artisanCutJson.participants || ['boss', personaName.toLowerCase()],
+			conversation_arc: artisanCutJson.conversation_arc || 'No arc generated',
+			salience_score: artisanCutJson.salience_score || 5
 		};
 
 		let journalId: string;
@@ -155,7 +139,7 @@ export async function runCompressJob(params: CompressJobParams): Promise<void> {
 			log.info('Saved to journal', { journalId });
 		}
 
-		const embeddingText = compressionJson.conversation_arc || 'No arc generated';
+		const embeddingText = artisanCutJson.conversation_arc || 'No arc generated';
 
 		// Generate embedding (works for both paths)
 		log.debug('Generating embedding', { textLength: embeddingText.length });
@@ -183,12 +167,12 @@ export async function runCompressJob(params: CompressJobParams): Promise<void> {
 	};
 
 	try {
-		await doCompression();
+		await doArtisanCut();
 	} catch (error) {
-		log.error('Compression failed, scheduling retries', {
+		log.error('Artisan cut failed, scheduling retries', {
 			superjournalId,
 			error: error instanceof Error ? error.message : 'Unknown'
 		});
-		scheduleRetries(doCompression, `Compression-${superjournalId}`, userId);
+		scheduleRetries(doArtisanCut, `ArtisanCut-${superjournalId}`, userId);
 	}
 }

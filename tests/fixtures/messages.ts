@@ -50,7 +50,7 @@ export const testSuperjournal2: SuperjournalEntry = {
 	created_at: '2024-11-20T11:00:00.000Z'
 };
 
-// Sample journal entries (compressed)
+// Sample journal entries (artisan cut)
 export const testJournal1: JournalEntry = {
 	id: 'j-1-test',
 	superjournal_id: 'sj-1-test',
@@ -64,13 +64,13 @@ export const testJournal1: JournalEntry = {
 	created_at: '2024-11-20T10:01:00.000Z'
 };
 
-// Sample orphan entry (superjournal without journal compression)
+// Sample orphan entry (superjournal without journal artisan cut)
 export const testOrphanEntry: SuperjournalEntry = {
 	id: 'sj-orphan-test',
 	user_id: 'user-1-test-uuid-12345',
 	persona_name: 'gunnar',
-	user_message: 'This message failed to compress',
-	ai_response: 'Response that was never compressed to journal',
+	user_message: 'This message failed artisan cut',
+	ai_response: 'Response that never got artisan cut to journal',
 	model_identifier: 'claude-sonnet-4-5-20250929',
 	created_at: '2024-11-19T10:00:00.000Z'
 };

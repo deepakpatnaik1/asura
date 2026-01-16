@@ -17,22 +17,11 @@ const MODEL_COLUMNS = [
 	'model_ananya',
 	'model_felix',
 	'model_embeddings',
-	'model_compression',
-	'model_chat_compression',
+	'model_file_artisan_cut',
+	'model_chat_artisan_cut',
 	'model_character_planning',
 	'model_image_gen',
 	'model_image_edit'
-] as const;
-
-// Per-persona uncensored compression flags
-const UNCENSORED_FLAGS = [
-	'compression_uncensored_gunnar',
-	'compression_uncensored_kirby',
-	'compression_uncensored_samara',
-	'compression_uncensored_alicja',
-	'compression_uncensored_eva',
-	'compression_uncensored_ananya',
-	'compression_uncensored_felix'
 ] as const;
 
 export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase } }) => {
@@ -41,16 +30,14 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 	if (!auth.success) return auth.error;
 	const { userId } = auth;
 
-	// 2. QUERY USER SETTINGS (including all model columns and uncensored flags)
+	// 2. QUERY USER SETTINGS (including all model columns)
 	const { data, error } = await supabase
 		.from('user_settings')
 		.select(
 			`default_model, selected_persona, watched_article_id, focused_message_id,
 			 model_gunnar, model_kirby, model_samara, model_alicja, model_eva, model_ananya, model_felix,
-			 model_embeddings, model_compression, model_chat_compression,
+			 model_embeddings, model_file_artisan_cut, model_chat_artisan_cut,
 			 model_character_planning, model_image_gen, model_image_edit,
-			 compression_uncensored_gunnar, compression_uncensored_kirby, compression_uncensored_samara,
-			 compression_uncensored_alicja, compression_uncensored_eva, compression_uncensored_ananya, compression_uncensored_felix,
 			 hide_completed_todos, scroll_bookmark`
 		)
 		.eq('user_id', userId)
@@ -109,13 +96,6 @@ export const PUT: RequestHandler = async ({ request, locals: { safeGetSession, s
 
 	// Model overrides - check each column
 	for (const col of MODEL_COLUMNS) {
-		if ((validatedData as Record<string, unknown>)[col] !== undefined) {
-			updateData[col] = (validatedData as Record<string, unknown>)[col];
-		}
-	}
-
-	// Uncensored compression flags - check each column
-	for (const col of UNCENSORED_FLAGS) {
 		if ((validatedData as Record<string, unknown>)[col] !== undefined) {
 			updateData[col] = (validatedData as Record<string, unknown>)[col];
 		}

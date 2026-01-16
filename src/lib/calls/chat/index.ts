@@ -12,11 +12,11 @@ export { converseStreamTogether } from './converse-together';
 export { converseStreamGroq } from './converse-groq';
 export { converseStreamReplicate } from './converse-replicate';
 export { converseStreamVenice } from './converse-venice';
-export { compress, type CompressParams, type CompressResult } from './compress';
+export { artisanCut, type ArtisanCutParams, type ArtisanCutResult } from './chat-artisan-cut';
 
 // Background jobs
 export { saveConversation, saveToSuperjournal, triggerBackgroundJobs, type SaveConversationParams } from './save';
-export { runCompressJob, type CompressJobParams } from './compress-job';
+export { runArtisanCutJob, type ArtisanCutJobParams } from './chat-artisan-cut-job';
 
 // Utilities
 export { scheduleRetries, RETRY_DELAYS } from './retry';
