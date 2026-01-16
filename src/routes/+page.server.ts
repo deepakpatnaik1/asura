@@ -104,11 +104,11 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession, supabase 
 		};
 	});
 
-	// Fetch user settings (for selected_persona, watched_article_id, focused_message_id, last paste settings)
+	// Fetch user settings (for selected_persona, watched_article_id, focused_message_id, last paste settings, scroll_bookmark)
 	const { data: settings } = await monitor.track('fetchSettings', async () =>
 		await supabase
 			.from('user_settings')
-			.select('selected_persona, default_model, watched_article_id, focused_message_id, last_content_owner, last_content_lifecycle')
+			.select('selected_persona, default_model, watched_article_id, focused_message_id, last_content_owner, last_content_lifecycle, scroll_bookmark')
 			.eq('user_id', user!.id)
 			.single()
 	);
@@ -135,6 +135,7 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession, supabase 
 		watchedArticleId: settings?.watched_article_id || null,
 		focusedMessageId: settings?.focused_message_id || null,
 		lastContentOwner: settings?.last_content_owner || 'no-one',
-		lastContentLifecycle: settings?.last_content_lifecycle || 'raw'
+		lastContentLifecycle: settings?.last_content_lifecycle || 'raw',
+		scrollBookmark: settings?.scroll_bookmark || null
 	};
 };

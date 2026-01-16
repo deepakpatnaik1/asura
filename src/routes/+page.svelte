@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Icon } from 'svelte-icons-pack';
-	import { LuPaperclip, LuFolder, LuFilePenLine, LuLock, LuLockOpen } from 'svelte-icons-pack/lu';
+	import { LuPaperclip, LuFolder, LuFilePenLine, LuLock, LuLockOpen, LuMapPin } from 'svelte-icons-pack/lu';
 	import { currentMessage, isLoading, sendMessage, abortCurrentMessage, lastMutations, lastWhiteboardMutations, lastCanvasMutations } from '$lib/stores/chat';
 	import { tick, onMount, onDestroy } from 'svelte';
 	import { DEFAULT_PERSONA, PERSONAS } from '$lib/config/personas';
@@ -292,6 +292,10 @@
 
 	// Annotation mode state (for write-back feature)
 	let annotationMode = $state(false);
+
+	// Bookmark mode state (for navigation within long turns)
+	let bookmarkMode = $state(false);
+	let bookmarkMarker = $state<HTMLElement | null>(null);
 
 	// RTF lock mode - prevents accidental sends during RTF workflow
 	let rtfLockMode = $state(false);
@@ -1155,12 +1159,14 @@
 		}
 	});
 
-	// Scroll to last turn on initial load
+	// Scroll to last turn on initial load and restore bookmark if saved
 	onMount(() => {
 		if (allMessages.length > 0) {
 			requestAnimationFrame(() => {
 				requestAnimationFrame(() => {
 					scrollToLastTurn(CHAT_CONFIG);
+					// Restore saved bookmark marker after DOM is ready
+					restoreBookmarkMarker();
 				});
 			});
 		}
@@ -1454,6 +1460,14 @@
 	 * If click is inside a fenced container (:::red/blue/boss), escapes to place marker after it.
 	 */
 	function handleAnnotationClick(event: MouseEvent) {
+		// Handle bookmark mode first (simpler, just places a marker)
+		if (bookmarkMode) {
+			const target = event.target as HTMLElement;
+			if (target.closest('button') || target.closest('a') || target.closest('.bookmark-dismiss')) return;
+			placeBookmarkMarker(event);
+			return;
+		}
+
 		if (!annotationMode) return;
 
 		let target = event.target as HTMLElement;
@@ -1670,6 +1684,232 @@
 				a.id === articleId ? { ...a, pending_annotation: null } : a
 			);
 		}
+	}
+
+	/**
+	 * Clear bookmark marker from DOM and database
+	 */
+	function clearBookmarkMarker() {
+		if (bookmarkMarker) {
+			bookmarkMarker.remove();
+			bookmarkMarker = null;
+		}
+
+		// Clear from database
+		fetch('/api/settings', {
+			method: 'PUT',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ scroll_bookmark: null })
+		}).catch(err => console.error('Failed to clear bookmark:', err));
+	}
+
+	/**
+	 * Place bookmark marker at click location within message content
+	 * Persists to database for restoration on page reload
+	 */
+	function placeBookmarkMarker(event: MouseEvent) {
+		const target = event.target as HTMLElement;
+
+		// Must be within a message-text element
+		const messageText = target.closest('.message-text');
+		if (!messageText) return;
+
+		// Find the message ID
+		const messageGroup = target.closest('[data-message-id]') as HTMLElement | null;
+		if (!messageGroup) return;
+		const messageId = messageGroup.dataset.messageId;
+		if (!messageId) return;
+
+		// Clear existing bookmark
+		clearBookmarkMarker();
+
+		// Find all section boundaries (headers, dividers, fenced containers)
+		const allBoundaries = messageText.querySelectorAll('h1, h2, h3, h4, h5, h6, hr, .flourish-divider, .fenced-container');
+
+		// Find the nearest preceding boundary for position tracking
+		let boundary: Element | null = null;
+		for (const b of allBoundaries) {
+			const position = target.compareDocumentPosition(b);
+			if (position & Node.DOCUMENT_POSITION_FOLLOWING) {
+				break; // b comes after target
+			}
+			boundary = b; // b is before or contains target
+		}
+
+		// Determine header info for persistence
+		let headerText = '__START__';
+		let headerLevel = 0;
+		let headerIndex = 0;
+
+		if (boundary) {
+			if (boundary.tagName === 'HR' || boundary.classList.contains('flourish-divider')) {
+				headerText = '__DIVIDER__';
+				headerLevel = 0;
+				headerIndex = 0;
+				for (const b of allBoundaries) {
+					if (b === boundary) break;
+					if (b.tagName === 'HR' || b.classList.contains('flourish-divider')) {
+						headerIndex++;
+					}
+				}
+			} else if (boundary.classList.contains('fenced-container')) {
+				headerText = '__FENCED__';
+				headerLevel = 0;
+				headerIndex = 0;
+				for (const b of allBoundaries) {
+					if (b === boundary) break;
+					if (b.classList.contains('fenced-container')) {
+						headerIndex++;
+					}
+				}
+			} else {
+				// Header boundary
+				const levelMatch = boundary.tagName.match(/H(\d)/);
+				const contentSpan = boundary.querySelector('span:last-child');
+				headerText = contentSpan?.textContent?.trim() || boundary.textContent?.trim() || '';
+				headerLevel = levelMatch ? parseInt(levelMatch[1]) : 2;
+
+				headerIndex = 0;
+				for (const b of allBoundaries) {
+					if (b === boundary) break;
+					if (b.tagName === 'HR' || b.classList.contains('flourish-divider') || b.classList.contains('fenced-container')) continue;
+					const bContentSpan = b.querySelector('span:last-child');
+					const bText = bContentSpan?.textContent?.trim() || b.textContent?.trim();
+					if (bText === headerText && b.tagName === boundary.tagName) {
+						headerIndex++;
+					}
+				}
+			}
+		}
+
+		// Create bookmark marker element
+		const marker = document.createElement('div');
+		marker.className = 'scroll-bookmark';
+		marker.innerHTML = `
+			<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg>
+			<span class="bookmark-label">Bookmark</span>
+			<button class="bookmark-dismiss" title="Remove bookmark">×</button>
+		`;
+
+		// Add click handler for dismiss button
+		const dismissBtn = marker.querySelector('.bookmark-dismiss');
+		dismissBtn?.addEventListener('click', (e) => {
+			e.stopPropagation();
+			clearBookmarkMarker();
+		});
+
+		// Insert after the boundary element, or at the start if no boundary
+		if (boundary) {
+			boundary.parentElement?.insertBefore(marker, boundary.nextSibling);
+		} else {
+			// Insert at the beginning of message text
+			messageText.insertBefore(marker, messageText.firstChild);
+		}
+
+		bookmarkMarker = marker;
+		bookmarkMode = false; // Exit bookmark mode after placing
+
+		// Save to database for persistence
+		fetch('/api/settings', {
+			method: 'PUT',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				scroll_bookmark: { message_id: messageId, header_text: headerText, header_level: headerLevel, header_index: headerIndex }
+			})
+		}).catch(err => console.error('Failed to save bookmark:', err));
+	}
+
+	/**
+	 * Restore bookmark marker from settings data on page load
+	 */
+	function restoreBookmarkMarker() {
+		if (!data.scrollBookmark) return;
+
+		const { message_id, header_text, header_level, header_index } = data.scrollBookmark;
+
+		// Find the message element
+		const messageElement = document.querySelector(`[data-message-id="${message_id}"]`);
+		if (!messageElement) return;
+
+		const messageText = messageElement.querySelector('.message-text');
+		if (!messageText) return;
+
+		// Create bookmark marker
+		const marker = document.createElement('div');
+		marker.className = 'scroll-bookmark';
+		marker.innerHTML = `
+			<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg>
+			<span class="bookmark-label">Bookmark</span>
+			<button class="bookmark-dismiss" title="Remove bookmark">×</button>
+		`;
+
+		const dismissBtn = marker.querySelector('.bookmark-dismiss');
+		dismissBtn?.addEventListener('click', (e) => {
+			e.stopPropagation();
+			clearBookmarkMarker();
+		});
+
+		// Find the target position
+		let targetElement: Element | null = null;
+
+		if (header_text === '__START__') {
+			// Insert at start
+			messageText.insertBefore(marker, messageText.firstChild);
+			bookmarkMarker = marker;
+			return;
+		}
+
+		const allBoundaries = messageText.querySelectorAll('h1, h2, h3, h4, h5, h6, hr, .flourish-divider, .fenced-container');
+
+		if (header_text === '__DIVIDER__') {
+			let count = 0;
+			for (const b of allBoundaries) {
+				if (b.tagName === 'HR' || b.classList.contains('flourish-divider')) {
+					if (count === header_index) {
+						targetElement = b;
+						break;
+					}
+					count++;
+				}
+			}
+		} else if (header_text === '__FENCED__') {
+			let count = 0;
+			for (const b of allBoundaries) {
+				if (b.classList.contains('fenced-container')) {
+					if (count === header_index) {
+						targetElement = b;
+						break;
+					}
+					count++;
+				}
+			}
+		} else {
+			// Header
+			let count = 0;
+			for (const b of allBoundaries) {
+				if (b.tagName === 'HR' || b.classList.contains('flourish-divider') || b.classList.contains('fenced-container')) continue;
+				const contentSpan = b.querySelector('span:last-child');
+				const text = contentSpan?.textContent?.trim() || b.textContent?.trim();
+				const levelMatch = b.tagName.match(/H(\d)/);
+				const level = levelMatch ? parseInt(levelMatch[1]) : 0;
+
+				if (text === header_text && level === header_level) {
+					if (count === header_index) {
+						targetElement = b;
+						break;
+					}
+					count++;
+				}
+			}
+		}
+
+		if (targetElement) {
+			targetElement.parentElement?.insertBefore(marker, targetElement.nextSibling);
+		} else {
+			messageText.appendChild(marker);
+		}
+
+		bookmarkMarker = marker;
 	}
 
 	/**
@@ -2268,6 +2508,7 @@
 		<div
 			class="messages-content"
 			class:annotation-mode={annotationMode}
+			class:bookmark-mode={bookmarkMode}
 			onclick={handleAnnotationClick}
 		>
 			{#if hasMore && !focusedMessageId}
@@ -2403,6 +2644,24 @@
 						}}
 					>
 						<Icon src={LuFilePenLine} size="11" />
+					</button>
+
+					<button
+						class="control-btn hit-target"
+						class:active={bookmarkMode}
+						class:bookmark-active={bookmarkMarker !== null}
+						title={bookmarkMode ? 'Exit bookmark mode' : (bookmarkMarker ? 'Click to clear bookmark, or enable mode to move it' : 'Drop a bookmark for navigation')}
+						onclick={() => {
+							if (bookmarkMarker && !bookmarkMode) {
+								// If bookmark exists and not in mode, clear it
+								clearBookmarkMarker();
+							} else {
+								// Toggle bookmark mode
+								bookmarkMode = !bookmarkMode;
+							}
+						}}
+					>
+						<Icon src={LuMapPin} size="11" />
 					</button>
 
 					<button
@@ -2803,5 +3062,69 @@
 			opacity: 1;
 			transform: translateX(0);
 		}
+	}
+
+	/* Bookmark mode styles */
+	.messages-content.bookmark-mode {
+		cursor: crosshair;
+	}
+
+	.messages-content.bookmark-mode :global(.ai-message) {
+		cursor: crosshair;
+	}
+
+	:global(.scroll-bookmark) {
+		display: flex;
+		align-items: baseline;
+		gap: 8px;
+		padding: 8px 12px;
+		margin: 12px 0;
+		background: var(--boss-accent-bg);
+		border-left: 3px solid var(--boss-accent);
+		border-radius: 0 6px 6px 0;
+		color: var(--boss-accent);
+		font-size: 0.85rem;
+		animation: markerPulse 0.3s ease-out;
+		position: relative;
+	}
+
+	:global(.scroll-bookmark svg) {
+		flex-shrink: 0;
+		align-self: baseline;
+		transform: translateY(2px);
+	}
+
+	:global(.scroll-bookmark .bookmark-label) {
+		font-weight: 500;
+	}
+
+	:global(.bookmark-dismiss) {
+		position: absolute;
+		right: 8px;
+		top: 50%;
+		transform: translateY(-50%);
+		background: transparent;
+		border: none;
+		color: var(--boss-accent);
+		font-size: 1.2rem;
+		font-weight: bold;
+		cursor: pointer;
+		opacity: 0;
+		transition: opacity 0.2s;
+		padding: 4px 8px;
+		line-height: 1;
+	}
+
+	:global(.scroll-bookmark:hover .bookmark-dismiss) {
+		opacity: 0.7;
+	}
+
+	:global(.bookmark-dismiss:hover) {
+		opacity: 1 !important;
+	}
+
+	/* Bookmark button active state (when bookmark exists) */
+	.control-btn.bookmark-active {
+		color: var(--boss-accent);
 	}
 </style>

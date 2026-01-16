@@ -62,11 +62,26 @@ const EMPTY_NODE_LIST = {
 } as unknown as NodeListOf<Element>;
 
 /**
- * Get all turn elements in the container
+ * Get all turn elements in the container (including bookmarks)
+ * Returns both turn markers (.boss-message) and bookmark markers (.scroll-bookmark)
+ * sorted by their position in the document.
  */
-export function getTurns(config: ScrollConfig): NodeListOf<Element> {
-	if (!isBrowser()) return EMPTY_NODE_LIST;
-	return document.querySelectorAll(config.turnSelector);
+export function getTurns(config: ScrollConfig): Element[] {
+	if (!isBrowser()) return [];
+
+	// Get both turns and bookmarks
+	const turns = Array.from(document.querySelectorAll(config.turnSelector));
+	const bookmarks = Array.from(document.querySelectorAll('.scroll-bookmark'));
+
+	// Combine and sort by document position
+	const allStops = [...turns, ...bookmarks].sort((a, b) => {
+		const position = a.compareDocumentPosition(b);
+		if (position & Node.DOCUMENT_POSITION_FOLLOWING) return -1;
+		if (position & Node.DOCUMENT_POSITION_PRECEDING) return 1;
+		return 0;
+	});
+
+	return allStops;
 }
 
 /**
