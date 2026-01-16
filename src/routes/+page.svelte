@@ -1455,25 +1455,18 @@
 	}
 
 	/**
-	 * Handle click in messages area when annotation mode is active.
-	 * Finds the nearest following section boundary (header or divider) and places a marker there.
-	 * If click is inside a fenced container (:::red/blue/boss), escapes to place marker after it.
+	 * Handle click in messages area for annotation mode.
+	 * Independent from bookmark mode - both can have active markers simultaneously.
 	 */
 	function handleAnnotationClick(event: MouseEvent) {
-		// Handle bookmark mode first (simpler, just places a marker)
-		if (bookmarkMode) {
-			const target = event.target as HTMLElement;
-			if (target.closest('button') || target.closest('a') || target.closest('.bookmark-dismiss')) return;
-			placeBookmarkMarker(event);
-			return;
-		}
-
 		if (!annotationMode) return;
 
-		let target = event.target as HTMLElement;
+		const target = event.target as HTMLElement;
 
-		// Don't annotate if clicking on buttons, interactive elements, or dismiss button
+		// Skip interactive elements
 		if (target.closest('button') || target.closest('a') || target.closest('.annotation-dismiss')) return;
+
+		let currentTarget = target;
 
 		// Find the content container (.message-text inside .ai-message)
 		const messageText = target.closest('.message-text');
@@ -1500,7 +1493,7 @@
 		if (fencedContainer && messageText.contains(fencedContainer)) {
 			clickedFencedContainer = fencedContainer;
 			// Use the fenced container as the reference point for finding boundaries
-			target = fencedContainer;
+			currentTarget = fencedContainer;
 		}
 
 		// Get all section boundaries: headers, dividers, AND fenced containers
@@ -1513,7 +1506,7 @@
 		for (const b of allBoundaries) {
 			// Skip the clicked fenced container itself when looking for next boundary
 			if (b === clickedFencedContainer) continue;
-			const position = target.compareDocumentPosition(b);
+			const position = currentTarget.compareDocumentPosition(b);
 			if (position & Node.DOCUMENT_POSITION_FOLLOWING) {
 				boundary = b as HTMLElement;
 				break;
@@ -1705,6 +1698,21 @@
 				body: JSON.stringify({ scroll_bookmark: null })
 			}).catch(err => console.error('Failed to clear bookmark:', err));
 		}
+	}
+
+	/**
+	 * Handle click in messages area for bookmark mode.
+	 * Independent from annotation mode - both can have active markers simultaneously.
+	 */
+	function handleBookmarkClick(event: MouseEvent) {
+		if (!bookmarkMode) return;
+
+		const target = event.target as HTMLElement;
+
+		// Skip interactive elements
+		if (target.closest('button') || target.closest('a') || target.closest('.bookmark-dismiss')) return;
+
+		placeBookmarkMarker(event);
 	}
 
 	/**
@@ -2513,7 +2521,7 @@
 			class="messages-content"
 			class:annotation-mode={annotationMode}
 			class:bookmark-mode={bookmarkMode}
-			onclick={handleAnnotationClick}
+			onclick={(e) => { handleAnnotationClick(e); handleBookmarkClick(e); }}
 		>
 			{#if hasMore && !focusedMessageId}
 				<button class="load-more-btn" onclick={loadMoreMessages} disabled={isLoadingMore}>
@@ -2654,6 +2662,7 @@
 						class="control-btn hit-target"
 						class:active={bookmarkMode}
 						class:bookmark-active={bookmarkMarker !== null}
+						style={(bookmarkMode || bookmarkMarker) ? `color: ${currentAccentColor}` : ''}
 						title={bookmarkMode ? 'Exit bookmark mode' : (bookmarkMarker ? 'Click to clear bookmark, or enable mode to move it' : 'Drop a bookmark for navigation')}
 						onclick={() => {
 							if (bookmarkMarker && !bookmarkMode) {
@@ -3125,10 +3134,5 @@
 
 	:global(.bookmark-dismiss:hover) {
 		opacity: 1 !important;
-	}
-
-	/* Bookmark button active state (when bookmark exists) */
-	.control-btn.bookmark-active {
-		color: var(--boss-accent);
 	}
 </style>

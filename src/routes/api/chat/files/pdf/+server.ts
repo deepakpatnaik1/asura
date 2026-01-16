@@ -230,13 +230,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			title = pdfInfo?.Title || extractTitleFromPdfText(extractedText);
 		}
 
-		// Deselect all existing content before selecting new one
-		await supabase
-			.from('articles')
-			.update({ is_enabled: false })
-			.eq('user_id', userId)
-			.eq('is_enabled', true);
-
 		// Save to database
 		const { data: file, error: insertError } = await supabase
 			.from('articles')

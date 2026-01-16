@@ -151,10 +151,15 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				const provider = await getModelProvider(supabase, model);
 				assertProviderSupported(provider);
 
+				log.info('Using file artisan cut model', { model, provider, sourcePath: source_path });
+
+				// Wrap content in XML tags to clearly separate it from conversation
+				const wrappedFileContent = `<document>\n${fileContent}\n</document>\n\nProcess this document and return the JSON output.`;
+
 				let responseText: string;
 
 				if (provider === 'fireworks') {
-					responseText = await callFireworksArtisanCut(model, FILE_ARTISAN_CUT_PROMPT, fileContent);
+					responseText = await callFireworksArtisanCut(model, FILE_ARTISAN_CUT_PROMPT, wrappedFileContent);
 				} else {
 					// Anthropic
 					const response = await createMessage({
@@ -162,7 +167,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 						max_tokens: 8192,
 						temperature: 0.3,
 						system: FILE_ARTISAN_CUT_PROMPT,
-						messages: [{ role: 'user', content: fileContent }]
+						messages: [{ role: 'user', content: wrappedFileContent }]
 					});
 
 					const textBlock = response.content.find((block) => block.type === 'text');
@@ -199,13 +204,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				artisanCutAt = new Date();
 			}
 
-			// Deselect all existing content before selecting new one
-			await supabase
-				.from('articles')
-				.update({ is_enabled: false })
-				.eq('user_id', userId)
-				.eq('is_enabled', true);
-
 			// Save to database with source_path
 			const { data: file, error: insertError } = await supabase
 				.from('articles')
@@ -216,7 +214,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 					source_path: source_path, // Store path for live reading
 					artisan_cut: artisanCut,
 					artisan_cut_at: artisanCutAt,
-					is_enabled: !owner, // Don't auto-select if owner is set (owner bypass handles injection)
+					is_enabled: true, // Auto-select newly uploaded content
 					tier,
 					owner
 				})
@@ -324,10 +322,16 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			const provider = await getModelProvider(supabase, model);
 			assertProviderSupported(provider);
 
+			log.info('Using file artisan cut model', { model, provider });
+
+			// Wrap content in XML tags to clearly separate it from conversation
+			// This prevents the model from interpreting document text as instructions
+			const wrappedContent = `<document>\n${content}\n</document>\n\nProcess this document and return the JSON output.`;
+
 			let responseText: string;
 
 			if (provider === 'fireworks') {
-				responseText = await callFireworksArtisanCut(model, FILE_ARTISAN_CUT_PROMPT, content);
+				responseText = await callFireworksArtisanCut(model, FILE_ARTISAN_CUT_PROMPT, wrappedContent);
 			} else {
 				// Anthropic
 				const response = await createMessage({
@@ -335,7 +339,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 					max_tokens: 8192,
 					temperature: 0.3,
 					system: FILE_ARTISAN_CUT_PROMPT,
-					messages: [{ role: 'user', content }]
+					messages: [{ role: 'user', content: wrappedContent }]
 				});
 
 				const textBlock = response.content.find((block) => block.type === 'text');
@@ -374,13 +378,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			title = await extractTitleFromHtml(content);
 		}
 
-		// Deselect all existing content before selecting new one
-		await supabase
-			.from('articles')
-			.update({ is_enabled: false })
-			.eq('user_id', userId)
-			.eq('is_enabled', true);
-
 		// Save to database (store readable text, not raw HTML)
 		const { data: file, error: insertError } = await supabase
 			.from('articles')
@@ -389,7 +386,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				title: title.slice(0, 255),
 				raw_content: readableContent,
 				artisan_cut: artisanCut,
-				is_enabled: !owner, // Don't auto-select if owner is set (owner bypass handles injection)
+				is_enabled: true, // Auto-select newly uploaded content
 				tier,
 				owner
 			})

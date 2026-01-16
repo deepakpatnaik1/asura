@@ -81,13 +81,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		const originalName = imageFile.name || 'Uploaded image';
 		const altText = originalName.replace(/\.[^/.]+$/, '');
 
-		// Deselect all existing content before selecting new one
-		await supabase
-			.from('articles')
-			.update({ is_enabled: false })
-			.eq('user_id', userId)
-			.eq('is_enabled', true);
-
 		// 1. Create a minimal content entry (required for the charts FK)
 		const { data: contentData, error: contentError } = await supabase
 			.from('articles')
