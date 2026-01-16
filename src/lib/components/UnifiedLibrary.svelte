@@ -437,7 +437,7 @@
 							>
 								<Icon src={LuShield} size="11" />
 							</button>
-							{#if item.source_path && (!item.owner || item.owner === 'no-one')}
+							{#if item.source_path}
 								<button
 									class="watch-btn"
 									class:active={watchedArticleId === item.id}
@@ -446,10 +446,6 @@
 								>
 									<Icon src={LuEye} size="11" />
 								</button>
-							{:else}
-								<span class="icon-spacer"></span>
-							{/if}
-							{#if item.source_path}
 								<button
 									class="refresh-btn"
 									class:refreshing={refreshingArticleId === item.id}
@@ -460,6 +456,7 @@
 									<Icon src={LuRefreshCw} size="11" />
 								</button>
 							{:else}
+								<span class="icon-spacer"></span>
 								<span class="icon-spacer"></span>
 							{/if}
 							<button
@@ -533,7 +530,7 @@
 							>
 								<Icon src={LuShield} size="11" />
 							</button>
-							{#if item.source_path && (!item.owner || item.owner === 'no-one')}
+							{#if item.source_path}
 								<button
 									class="watch-btn"
 									class:active={watchedArticleId === item.id}
@@ -542,10 +539,19 @@
 								>
 									<Icon src={LuEye} size="11" />
 								</button>
+								<button
+									class="refresh-btn"
+									class:refreshing={refreshingArticleId === item.id}
+									onclick={(e) => handleArticleRefresh(item, e)}
+									title="Refresh from Obsidian"
+									disabled={refreshingArticleId === item.id}
+								>
+									<Icon src={LuRefreshCw} size="11" />
+								</button>
 							{:else}
 								<span class="icon-spacer"></span>
+								<span class="icon-spacer"></span>
 							{/if}
-							<span class="icon-spacer"></span>
 							<button
 								class="delete-btn"
 								onclick={(e) => onArticleDelete(item.id, e)}
