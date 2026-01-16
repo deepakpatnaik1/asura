@@ -55,13 +55,13 @@ export const PATCH: RequestHandler = async ({ params, locals: { supabase, safeGe
 
 		// Create placeholder journal row with star enabled
 		// Compression job will upsert and fill in the rest
+		const personaName = superjournal.persona_name || 'unknown';
 		const { error: insertError } = await supabase.from('journal').insert({
 			superjournal_id: id,
 			user_id: userId,
-			persona_name: superjournal.persona_name || 'unknown',
-			boss_essence: superjournal.user_message || '',
-			persona_essence: superjournal.ai_response || '',
-			decision_arc_summary: 'Pending compression',
+			turn_essence: `Boss: ${superjournal.user_message || ''}\n${personaName}: ${superjournal.ai_response || ''}`,
+			participants: ['boss', personaName.toLowerCase()],
+			conversation_arc: 'Pending compression',
 			salience_score: 5,
 			is_starred: true,
 			embedding: null

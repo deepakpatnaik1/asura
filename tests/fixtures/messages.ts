@@ -18,10 +18,9 @@ export interface JournalEntry {
 	id: string;
 	superjournal_id: string;
 	user_id: string;
-	persona_name: string;
-	boss_essence: string;
-	persona_essence: string;
-	decision_arc_summary: string;
+	turn_essence: string;
+	participants: string[];
+	conversation_arc: string;
 	salience_score: number;
 	is_starred: boolean;
 	embedding: string | null;
@@ -56,11 +55,9 @@ export const testJournal1: JournalEntry = {
 	id: 'j-1-test',
 	superjournal_id: 'sj-1-test',
 	user_id: 'user-1-test-uuid-12345',
-	persona_name: 'gunnar',
-	boss_essence: 'Seeking understanding of software architecture fundamentals',
-	persona_essence: 'Explained core architectural principles',
-	decision_arc_summary:
-		'Boss sought architectural guidance; Gunnar provided structured explanation of separation of concerns, modularity, abstraction, and encapsulation',
+	turn_essence: 'Boss asked about software architecture fundamentals; Gunnar explained core principles: separation of concerns, modularity, abstraction, encapsulation.',
+	participants: ['boss', 'gunnar'],
+	conversation_arc: 'Architecture fundamentals inquiry; structured explanation of core principles',
 	salience_score: 7,
 	is_starred: false,
 	embedding: null,

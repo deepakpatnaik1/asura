@@ -118,10 +118,9 @@ export async function runCompressJob(params: CompressJobParams): Promise<void> {
 		log.debug('Compression output', { salienceScore: compressionJson.salience_score });
 
 		const journalData = {
-			persona_name: compressionJson.persona_name || personaName,
-			boss_essence: compressionJson.boss_essence || userMessage,
-			persona_essence: compressionJson.persona_essence || aiResponse,
-			decision_arc_summary: compressionJson.decision_arc_summary || 'No arc generated',
+			turn_essence: compressionJson.turn_essence || `Boss: ${userMessage}\n${personaName}: ${aiResponse}`,
+			participants: compressionJson.participants || ['boss', personaName.toLowerCase()],
+			conversation_arc: compressionJson.conversation_arc || 'No arc generated',
 			salience_score: compressionJson.salience_score || 5
 		};
 
@@ -156,7 +155,7 @@ export async function runCompressJob(params: CompressJobParams): Promise<void> {
 			log.info('Saved to journal', { journalId });
 		}
 
-		const embeddingText = compressionJson.decision_arc_summary || 'No arc generated';
+		const embeddingText = compressionJson.conversation_arc || 'No arc generated';
 
 		// Generate embedding (works for both paths)
 		log.debug('Generating embedding', { textLength: embeddingText.length });

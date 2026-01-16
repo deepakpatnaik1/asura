@@ -81,10 +81,9 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			.insert({
 				superjournal_id: superjournal_id,
 				user_id: auth.userId,
-				persona_name: compressionJson.persona_name || persona_name,
-				boss_essence: compressionJson.boss_essence || user_message,
-				persona_essence: compressionJson.persona_essence || ai_response,
-				decision_arc_summary: compressionJson.decision_arc_summary || 'No arc generated',
+				turn_essence: compressionJson.turn_essence || `Boss: ${user_message}\n${persona_name}: ${ai_response}`,
+				participants: compressionJson.participants || ['boss', persona_name.toLowerCase()],
+				conversation_arc: compressionJson.conversation_arc || 'No arc generated',
 				salience_score: compressionJson.salience_score || 5,
 				is_starred: false,
 				file_name: null,
@@ -99,9 +98,9 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		}
 
 		// Generate and save embedding
-		const decisionArc = compressionJson.decision_arc_summary || 'No arc generated';
+		const conversationArc = compressionJson.conversation_arc || 'No arc generated';
 		const embeddingResponse = await voyage.embed({
-			input: decisionArc,
+			input: conversationArc,
 			model: EMBEDDING_MODEL
 		});
 
