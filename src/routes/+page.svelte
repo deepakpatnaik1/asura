@@ -296,6 +296,13 @@
 	// Bookmark mode state (for navigation within long turns)
 	let bookmarkMode = $state(false);
 	let bookmarkMarker = $state<HTMLElement | null>(null);
+	// Bookmark data for persistence - separate from DOM reference
+	let bookmarkData = $state<{
+		message_id: string;
+		header_text: string;
+		header_level: number;
+		header_index: number;
+	} | null>(data.scrollBookmark);
 
 	// RTF lock mode - prevents accidental sends during RTF workflow
 	let rtfLockMode = $state(false);
@@ -1159,17 +1166,34 @@
 		}
 	});
 
-	// Scroll to last turn on initial load and restore bookmark if saved
+	// Scroll to last turn on initial load
 	onMount(() => {
 		if (allMessages.length > 0) {
 			requestAnimationFrame(() => {
 				requestAnimationFrame(() => {
 					scrollToLastTurn(CHAT_CONFIG);
-					// Restore saved bookmark marker after DOM is ready
-					restoreBookmarkMarker();
 				});
 			});
 		}
+	});
+
+	// Strongly persistent bookmark - re-places marker whenever DOM changes or marker is lost
+	$effect(() => {
+		// Track allMessages length to re-run when messages load/change
+		const _msgCount = allMessages.length;
+
+		if (!bookmarkData) return;
+
+		// Use setTimeout to let DOM settle after message renders
+		const timer = setTimeout(() => {
+			// Check if marker still exists in DOM
+			if (bookmarkMarker && document.contains(bookmarkMarker)) return;
+
+			// Marker is gone or never existed - try to place it
+			placeBookmarkMarkerFromData(bookmarkData);
+		}, 150);
+
+		return () => clearTimeout(timer);
 	});
 
 	async function handleSend() {
@@ -1692,6 +1716,8 @@
 		// Only clear from database when explicitly requested (user dismissal)
 		// Skip DB clear when placing a new bookmark (the save will overwrite anyway)
 		if (clearFromDatabase) {
+			// Clear reactive state so $effect doesn't re-place it
+			bookmarkData = null;
 			fetch('/api/settings', {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
@@ -1821,23 +1847,25 @@
 		bookmarkMarker = marker;
 		bookmarkMode = false; // Exit bookmark mode after placing
 
+		// Update reactive state for persistence
+		const newBookmarkData = { message_id: messageId, header_text: headerText, header_level: headerLevel, header_index: headerIndex };
+		bookmarkData = newBookmarkData;
+
 		// Save to database for persistence
 		fetch('/api/settings', {
 			method: 'PUT',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				scroll_bookmark: { message_id: messageId, header_text: headerText, header_level: headerLevel, header_index: headerIndex }
-			})
+			body: JSON.stringify({ scroll_bookmark: newBookmarkData })
 		}).catch(err => console.error('Failed to save bookmark:', err));
 	}
 
 	/**
-	 * Restore bookmark marker from settings data on page load
+	 * Place bookmark marker from data (used by $effect for persistence)
 	 */
-	function restoreBookmarkMarker() {
-		if (!data.scrollBookmark) return;
+	function placeBookmarkMarkerFromData(bmData: typeof bookmarkData) {
+		if (!bmData) return;
 
-		const { message_id, header_text, header_level, header_index } = data.scrollBookmark;
+		const { message_id, header_text, header_level, header_index } = bmData;
 
 		// Find the message element
 		const messageElement = document.querySelector(`[data-message-id="${message_id}"]`);
