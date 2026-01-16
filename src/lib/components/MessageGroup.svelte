@@ -169,8 +169,11 @@
 	});
 </script>
 
+<!-- Full Message Turn -->
+<div class="message-turn" data-message-id={messageId} id={messageId ? `message-${messageId}` : undefined}>
+
 <!-- Boss Message -->
-<div class="message-group" id={messageId ? `message-${messageId}` : undefined}>
+<div class="message-group">
 	<div class="boss-message" style="background: {accentBg};">
 		{#if turnNumber !== undefined}
 			<div class="turn-indicator">turn {turnNumber}</div>
@@ -239,7 +242,7 @@
 </div>
 
 <!-- AI Response -->
-<div class="message-group" data-message-id={messageId}>
+<div class="message-group">
 	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
 	<div class="ai-message" bind:this={aiMessageContainer} onclick={handleContainerClick}>
 		<div class="message-header">
@@ -254,6 +257,8 @@
 		</div>
 	</div>
 </div>
+
+</div><!-- End message-turn wrapper -->
 
 <style>
 	/* Message Groups */

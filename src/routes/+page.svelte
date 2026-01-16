@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Icon } from 'svelte-icons-pack';
-	import { LuPaperclip, LuFolder, LuFilePenLine, LuLock, LuLockOpen, LuMapPin } from 'svelte-icons-pack/lu';
+	import { LuPaperclip, LuFolder, LuFilePenLine, LuLock, LuLockOpen, LuMapPin, LuMaximize2 } from 'svelte-icons-pack/lu';
 	import { currentMessage, isLoading, sendMessage, abortCurrentMessage, lastMutations, lastWhiteboardMutations, lastCanvasMutations } from '$lib/stores/chat';
 	import { tick, onMount, onDestroy } from 'svelte';
 	import { DEFAULT_PERSONA, PERSONAS } from '$lib/config/personas';
@@ -303,6 +303,9 @@
 		header_level: number;
 		header_index: number;
 	} | null>(data.scrollBookmark);
+
+	// Focus selection mode (for choosing which message to focus)
+	let focusSelectionMode = $state(false);
 
 	// RTF lock mode - prevents accidental sends during RTF workflow
 	let rtfLockMode = $state(false);
@@ -1742,6 +1745,30 @@
 	}
 
 	/**
+	 * Handle click in messages area for focus selection mode.
+	 * Clicking anywhere in a message turn focuses that turn.
+	 */
+	function handleFocusSelectionClick(event: MouseEvent) {
+		if (!focusSelectionMode) return;
+
+		const target = event.target as HTMLElement;
+
+		// Skip interactive elements
+		if (target.closest('button') || target.closest('a')) return;
+
+		// Find the message group (entire turn)
+		const messageGroup = target.closest('[data-message-id]') as HTMLElement | null;
+		if (!messageGroup) return;
+
+		const messageId = messageGroup.dataset.messageId;
+		if (!messageId) return;
+
+		// Exit selection mode and focus the message
+		focusSelectionMode = false;
+		handleFocusToggle(messageId);
+	}
+
+	/**
 	 * Place bookmark marker at click location within message content
 	 * Persists to database for restoration on page reload
 	 */
@@ -1836,9 +1863,9 @@
 			clearBookmarkMarker();
 		});
 
-		// Insert after the boundary element, or at the start if no boundary
+		// Insert before the boundary element (above the header), or at the start if no boundary
 		if (boundary) {
-			boundary.parentElement?.insertBefore(marker, boundary.nextSibling);
+			boundary.parentElement?.insertBefore(marker, boundary);
 		} else {
 			// Insert at the beginning of message text
 			messageText.insertBefore(marker, messageText.firstChild);
@@ -1944,7 +1971,7 @@
 		}
 
 		if (targetElement) {
-			targetElement.parentElement?.insertBefore(marker, targetElement.nextSibling);
+			targetElement.parentElement?.insertBefore(marker, targetElement);
 		} else {
 			messageText.appendChild(marker);
 		}
@@ -2477,6 +2504,11 @@
 	}
 
 	function handleKeydown(event: KeyboardEvent) {
+		// Exit focus selection mode first
+		if (event.key === 'Escape' && focusSelectionMode) {
+			focusSelectionMode = false;
+			return;
+		}
 		// Focus mode has highest priority for Escape
 		if (event.key === 'Escape' && focusedMessageId) {
 			focusedMessageId = null;
@@ -2549,7 +2581,8 @@
 			class="messages-content"
 			class:annotation-mode={annotationMode}
 			class:bookmark-mode={bookmarkMode}
-			onclick={(e) => { handleAnnotationClick(e); handleBookmarkClick(e); }}
+			class:focus-selection-mode={focusSelectionMode}
+			onclick={(e) => { handleAnnotationClick(e); handleBookmarkClick(e); handleFocusSelectionClick(e); }}
 		>
 			{#if hasMore && !focusedMessageId}
 				<button class="load-more-btn" onclick={loadMoreMessages} disabled={isLoadingMore}>
@@ -2577,7 +2610,6 @@
 						onStar={() => handleStarToggle(msg.id)}
 						onCopy={() => handleCopyTurn(msg.id, msg.user_message, msg.ai_response, msg.persona_name)}
 						onDelete={() => handleMessageDeleteClick(msg.id)}
-						onFocus={() => handleFocusToggle(msg.id)}
 						onTableClick={handleTableClick}
 					/>
 				{/if}
@@ -2707,6 +2739,33 @@
 
 					<button
 						class="control-btn hit-target"
+						class:active={focusSelectionMode}
+						class:focus-active={focusedMessageId !== null}
+						style={(focusSelectionMode || focusedMessageId) ? `color: ${currentAccentColor}` : ''}
+						title={focusSelectionMode ? 'Exit focus selection mode' : (focusedMessageId ? 'Exit focus mode' : 'Focus a message turn')}
+						onclick={() => {
+							if (focusedMessageId && !focusSelectionMode) {
+								// If focused and not in selection mode, exit focus
+								focusedMessageId = null;
+								tick().then(() => {
+									setTimeout(() => scrollToLastTurn(CHAT_CONFIG), 50);
+								});
+								fetch('/api/settings', {
+									method: 'PUT',
+									headers: { 'Content-Type': 'application/json' },
+									body: JSON.stringify({ focused_message_id: null })
+								}).catch(err => console.error('Failed to persist focus mode exit:', err));
+							} else {
+								// Toggle focus selection mode
+								focusSelectionMode = !focusSelectionMode;
+							}
+						}}
+					>
+						<Icon src={LuMaximize2} size="11" />
+					</button>
+
+					<button
+						class="control-btn hit-target"
 						class:active={rtfLockMode}
 						class:rtf-lock={rtfLockMode}
 						title={rtfLockMode ? 'Unlock input (RTF mode off)' : 'Lock input (RTF mode)'}
@@ -2729,9 +2788,6 @@
 					disabled={$isLoading}
 				></textarea>
 			</div>
-			<button class="send-button" onclick={handleSend} disabled={$isLoading}>
-				{$isLoading ? 'Sending...' : 'Send'}
-			</button>
 		</div>
 	</div>
 
@@ -2982,22 +3038,6 @@
 		opacity: 0.6;
 	}
 
-	.send-button {
-		background: transparent;
-		color: var(--current-accent);
-		border: 1px solid var(--current-accent);
-		border-radius: 6px;
-		padding: 12px 24px;
-		font-weight: 500;
-		cursor: pointer;
-		transition: all 0.2s;
-	}
-
-	.send-button:hover {
-		background: var(--current-accent);
-		color: hsl(var(--background));
-	}
-
 	.messages-area::-webkit-scrollbar {
 		display: none;
 	}
@@ -3007,15 +3047,9 @@
 		scrollbar-width: none;
 	}
 
-	.message-input:disabled,
-	.send-button:disabled {
+	.message-input:disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
-	}
-
-	.send-button:hover:not(:disabled) {
-		background: var(--current-accent);
-		color: hsl(var(--background));
 	}
 
 	.load-more-btn {
@@ -3112,6 +3146,21 @@
 
 	.messages-content.bookmark-mode :global(.ai-message) {
 		cursor: crosshair;
+	}
+
+	.messages-content.focus-selection-mode {
+		cursor: pointer;
+	}
+
+	.messages-content.focus-selection-mode :global(.message-turn) {
+		cursor: pointer;
+		transition: outline 0.15s ease;
+	}
+
+	.messages-content.focus-selection-mode :global(.message-turn:hover) {
+		outline: 2px solid var(--current-accent);
+		outline-offset: 4px;
+		border-radius: 8px;
 	}
 
 	:global(.scroll-bookmark) {
