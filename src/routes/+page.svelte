@@ -1687,20 +1687,24 @@
 	}
 
 	/**
-	 * Clear bookmark marker from DOM and database
+	 * Clear bookmark marker from DOM and optionally from database
+	 * @param clearFromDatabase - If true, also clears from database (default: true)
 	 */
-	function clearBookmarkMarker() {
+	function clearBookmarkMarker(clearFromDatabase = true) {
 		if (bookmarkMarker) {
 			bookmarkMarker.remove();
 			bookmarkMarker = null;
 		}
 
-		// Clear from database
-		fetch('/api/settings', {
-			method: 'PUT',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ scroll_bookmark: null })
-		}).catch(err => console.error('Failed to clear bookmark:', err));
+		// Only clear from database when explicitly requested (user dismissal)
+		// Skip DB clear when placing a new bookmark (the save will overwrite anyway)
+		if (clearFromDatabase) {
+			fetch('/api/settings', {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ scroll_bookmark: null })
+			}).catch(err => console.error('Failed to clear bookmark:', err));
+		}
 	}
 
 	/**
@@ -1720,8 +1724,8 @@
 		const messageId = messageGroup.dataset.messageId;
 		if (!messageId) return;
 
-		// Clear existing bookmark
-		clearBookmarkMarker();
+		// Clear existing bookmark marker from DOM only (don't hit DB - the new save will overwrite)
+		clearBookmarkMarker(false);
 
 		// Find all section boundaries (headers, dividers, fenced containers)
 		const allBoundaries = messageText.querySelectorAll('h1, h2, h3, h4, h5, h6, hr, .flourish-divider, .fenced-container');
