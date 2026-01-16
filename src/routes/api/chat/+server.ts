@@ -68,6 +68,18 @@ import { BRAVE_SEARCH_TOOL, executeBraveSearch } from '$lib/api/brave-search';
 import { REDDIT_TOOLS, executeRedditTool, isRedditTool } from '$lib/channels/reddit';
 import { TEMPORAL_TOOLS, executeTemporalTool, isTemporalTool } from '$lib/api/temporal-tools';
 import { ENGAGEMENT_TOOLS, executeEngagementTool, isEngagementTool } from '$lib/roles/community-manager/engagement';
+import {
+	GMAIL_TOOLS,
+	executeGmailTool,
+	isGmailTool,
+	checkAndRenewGmailWatches,
+	type GmailToolContext
+} from '$lib/api/gmail-tools';
+import {
+	BROWSER_TOOLS,
+	executeBrowserTool,
+	isBrowserTool
+} from '$lib/api/browser-tools';
 import { parseToolIntents, hasToolIntents } from '$lib/api/tool-intent-parser';
 import { createClient } from '@supabase/supabase-js';
 import { PUBLIC_SUPABASE_URL } from '$env/static/public';
@@ -100,6 +112,9 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		const { userId } = auth;
 
 		const log = createLogger('ChatAPI', userId);
+
+		// 1.5. GMAIL WATCH AUTO-RENEWAL (fire and forget)
+		checkAndRenewGmailWatches().catch(() => {}); // Silent background check
 
 		// 2. RATE LIMIT (waits silently if needed)
 		await waitForRateLimit(userId, RATE_LIMITS.ai);
@@ -193,13 +208,13 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		// 7. Build context and get model params
 		const conversationParams = await getModelParams(conversationModel, 'conversation');
 
+		// Note: article_ids no longer passed - context builder uses owner-based injection
 		const { context, stats } = await buildContext(
 			supabase,
 			userId,
 			persona,
 			conversationModel,
 			message,
-			article_ids,
 			whiteboard_ids,
 			canvas_ids
 		);
@@ -227,6 +242,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		let calendarContext: CalendarToolContext | null = null;
 		let whiteboardContext: WhiteboardToolContext | null = null;
 		let designContext: DesignToolContext | null = null;
+		let gmailContext: GmailToolContext | null = null;
 
 		if (personaTools.length > 0) {
 			// Persona has tools configured
@@ -239,6 +255,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			const hasRedditTools = personaTools.some(t => isRedditTool(t));
 			const hasEngagementTools = personaTools.some(t => isEngagementTool(t));
 			const hasTemporalTools = personaTools.some(t => isTemporalTool(t));
+			const hasGmailTools = personaTools.some(t => isGmailTool(t));
+			const hasBrowserTools = personaTools.some(t => isBrowserTool(t));
 
 			log.info('Tool setup', {
 				persona,
@@ -289,6 +307,17 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 
 					calendarContext = { accessToken };
 					allTools.push(...CALENDAR_TOOLS);
+				}
+
+				// Add Gmail tools if persona has them (Felix)
+				if (hasGmailTools) {
+					gmailContext = { userId };
+					allTools.push(...GMAIL_TOOLS);
+				}
+
+				// Add browser tools if persona has them (Felix)
+				if (hasBrowserTools) {
+					allTools.push(...BROWSER_TOOLS);
 				}
 			}
 
@@ -433,6 +462,10 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				return executeBlockTool(toolName, input, blockContext, blockMutations!);
 			} else if (isTemporalTool(toolName)) {
 				return executeTemporalTool(toolName, input);
+			} else if (isGmailTool(toolName) && gmailContext) {
+				return executeGmailTool(toolName, input, gmailContext);
+			} else if (isBrowserTool(toolName)) {
+				return executeBrowserTool(toolName, input);
 			} else if (calendarContext) {
 				return executeCalendarTool(toolName, input, calendarContext, todoMutations);
 			} else {

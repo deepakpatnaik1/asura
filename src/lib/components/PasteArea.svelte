@@ -8,6 +8,7 @@
 	 * Scan processing triggers for Felix-owned images.
 	 */
 	import { tick } from 'svelte';
+	import { getPaletteColor } from '$lib/config/palettes';
 
 	interface Props {
 		onClose: () => void;
@@ -29,16 +30,16 @@
 	let owner = $state<Owner>((lastOwner as Owner) || 'no-one');
 	console.log('[PasteArea] State initialized:', { owner, lifecycle });
 
-	// Owner display names and colors
+	// Owner display names and colors (fallbacks from active palette)
 	const ownerConfig: Record<Owner, { label: string; color: string }> = {
 		'no-one': { label: 'No One', color: 'hsl(var(--border))' },
-		felix: { label: 'Felix', color: 'var(--felix-accent, #f59e0b)' },
-		gunnar: { label: 'Gunnar', color: 'var(--gunnar-accent, #3b82f6)' },
-		kirby: { label: 'Kirby', color: 'var(--kirby-accent, #ec4899)' },
-		samara: { label: 'Samara', color: 'var(--samara-accent, #10b981)' },
-		alicja: { label: 'Alicja', color: 'var(--alicja-accent, #8b5cf6)' },
-		eva: { label: 'Eva', color: 'var(--eva-accent, #f43f5e)' },
-		ananya: { label: 'Ananya', color: 'var(--ananya-accent, #06b6d4)' },
+		felix: { label: 'Felix', color: `var(--felix-accent, ${getPaletteColor('felix')})` },
+		gunnar: { label: 'Gunnar', color: `var(--gunnar-accent, ${getPaletteColor('gunnar')})` },
+		kirby: { label: 'Kirby', color: `var(--kirby-accent, ${getPaletteColor('kirby')})` },
+		samara: { label: 'Samara', color: `var(--samara-accent, ${getPaletteColor('samara')})` },
+		alicja: { label: 'Alicja', color: `var(--alicja-accent, ${getPaletteColor('alicja')})` },
+		eva: { label: 'Eva', color: `var(--eva-accent, ${getPaletteColor('eva')})` },
+		ananya: { label: 'Ananya', color: `var(--ananya-accent, ${getPaletteColor('ananya')})` },
 		everyone: { label: 'Everyone', color: 'var(--boss-accent)' }
 	};
 	let isProcessing = $state(false);

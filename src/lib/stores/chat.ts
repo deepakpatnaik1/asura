@@ -76,7 +76,7 @@ export async function sendMessage(
 	persona?: string,
 	chartId?: string,
 	chartSource?: 'file' | 'superjournal',
-	articleIds?: string[], // active articles for context injection
+	_articleIds?: string[], // DEPRECATED: context builder now uses owner-based injection
 	whiteboardIds?: string[], // selected whiteboards for Gunnar context
 	canvasIds?: string[] // selected designer canvases for Eva context
 ): Promise<void> {
@@ -108,9 +108,7 @@ export async function sendMessage(
 			body.chart_id = chartId;
 			body.chart_source = chartSource;
 		}
-		if (articleIds && articleIds.length > 0) {
-			body.article_ids = articleIds;
-		}
+		// Note: articleIds no longer passed - context builder uses owner-based injection
 		if (whiteboardIds && whiteboardIds.length > 0) {
 			body.whiteboard_ids = whiteboardIds;
 		}

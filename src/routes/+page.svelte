@@ -329,9 +329,9 @@
 	const whiteboardDeleteConfirm = createConfirmation();
 	const designerCanvasDeleteConfirm = createConfirmation();
 
-	// Total selections for library badge (exclude owner='everyone' - always injected)
+	// Total selections for library badge (articles + whiteboards + canvases)
 	const totalLibrarySelections = $derived(
-		articles.filter(a => a.is_enabled && a.owner !== 'everyone').length + selectedWhiteboardIds.length + selectedDesignerCanvasIds.length
+		articles.filter(a => a.is_enabled).length + selectedWhiteboardIds.length + selectedDesignerCanvasIds.length
 	);
 
 	// File watching for live-linked Obsidian files
@@ -1099,14 +1099,14 @@
 			inputMessage = '';
 			resetTextareaHeight();
 
-			// Send the auto-prompt with the uploaded content as context
-			// Images need chart_id (for vision API), text files need article_ids
+			// Send the auto-prompt - file content is auto-injected via owner-based context
+			// Images need chart_id for vision API
 			await sendMessage(
 				autoPrompt,
 				newOwner,
 				chartId,           // chart_id for images (vision API)
 				chartId ? 'file' as const : undefined,  // chart_source
-				chartId ? undefined : [fileId],  // article_ids for text content only
+				undefined, // articleIds - no longer used, owner-based injection handles it
 				undefined, // no whiteboards
 				undefined  // no designer canvases
 			);
@@ -1249,14 +1249,12 @@
 			chartSource = selectedChart.source;
 		}
 
-		const enabledArticleIds = articles.filter(a => a.is_enabled).map(a => a.id);
-
 		await sendMessage(
 			message,
 			selectedPersona,
 			chartId,
 			chartSource,
-			enabledArticleIds.length > 0 ? enabledArticleIds : undefined,
+			undefined, // articleIds - no longer used, context builder uses owner-based injection
 			selectedWhiteboardIds.length > 0 ? selectedWhiteboardIds : undefined,
 			selectedDesignerCanvasIds.length > 0 ? selectedDesignerCanvasIds : undefined
 		);
@@ -1952,59 +1950,6 @@
 		}
 	}
 
-	async function toggleArticle(articleId: string, currentState: boolean) {
-		articles = articles.map((a) => a.id === articleId ? { ...a, is_enabled: !currentState } : a);
-
-		try {
-			if (!currentState) {
-				// Enabling this article (does NOT auto-watch - user must click eye icon)
-				const response = await fetch(`/api/chat/files/${articleId}/open`, { method: 'POST' });
-				if (!response.ok) {
-					articles = articles.map((a) => a.id === articleId ? { ...a, is_enabled: currentState } : a);
-				} else {
-					const data = await response.json();
-					await loadFileCharts();
-					forceCanvas = 'carousel';
-
-					if (data.message) {
-						// New entry created - append to messages and scroll
-						allMessages = [...allMessages, data.message];
-						totalMessageCount++;
-						selectedPersona = 'system';
-						await tick();
-						scrollToLastTurn(CHAT_CONFIG);
-					} else if (data.originalSuperjournalId) {
-						// Entry already exists - scroll to it (top-aligned like turn navigation)
-						selectedPersona = 'system';
-						await tick();
-						const element = document.getElementById(`message-${data.originalSuperjournalId}`);
-						if (element) {
-							scrollToTurn(CHAT_CONFIG, element, { behavior: 'smooth' });
-						}
-					}
-				}
-			} else {
-				// Disabling this article - if it was being watched, stop watching
-				if (watchedArticleId === articleId) {
-					setWatchedArticle(null);
-				}
-
-				const response = await fetch(`/api/chat/files/${articleId}`, {
-					method: 'PUT',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ is_enabled: false })
-				});
-				if (!response.ok) {
-					articles = articles.map((a) => a.id === articleId ? { ...a, is_enabled: currentState } : a);
-				} else {
-					await loadFileCharts();
-				}
-			}
-		} catch (error) {
-			articles = articles.map((a) => a.id === articleId ? { ...a, is_enabled: currentState } : a);
-		}
-	}
-
 	async function scrollToArticle(articleId: string) {
 		// Find the message linked to this article (both old content marker and new content_id patterns)
 		const message = allMessages.find(m =>
@@ -2020,12 +1965,28 @@
 		}
 	}
 
+	// Toggle article enabled state (within owner's domain)
+	async function toggleArticle(articleId: string, currentState: boolean) {
+		articles = articles.map((a) => a.id === articleId ? { ...a, is_enabled: !currentState } : a);
+
+		try {
+			const response = await fetch(`/api/chat/files/${articleId}`, {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ is_enabled: !currentState })
+			});
+			if (!response.ok) {
+				articles = articles.map((a) => a.id === articleId ? { ...a, is_enabled: currentState } : a);
+			}
+		} catch (error) {
+			articles = articles.map((a) => a.id === articleId ? { ...a, is_enabled: currentState } : a);
+		}
+	}
+
+	// Clear all enabled articles
 	async function clearAllArticles() {
 		const enabledArticles = articles.filter(a => a.is_enabled);
 		if (enabledArticles.length === 0) return;
-
-		// Stop watching
-		setWatchedArticle(null);
 
 		articles = articles.map(a => ({ ...a, is_enabled: false }));
 
@@ -2039,7 +2000,6 @@
 					})
 				)
 			);
-			await loadFileCharts();
 		} catch (error) {
 			console.error('Failed to clear articles:', error);
 			await loadArticles();

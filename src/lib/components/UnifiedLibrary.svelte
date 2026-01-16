@@ -1,18 +1,44 @@
 <script lang="ts">
 	/**
-	 * UnifiedLibrary - Four-column dropdown for all selectable content
+	 * UnifiedLibrary - Four-column dropdown for all content
 	 *
 	 * Columns:
 	 * 1. Artisan Cut - artisan_cut tier articles
-	 * 2. Raw - raw tier articles (canon files have no checkbox, always injected)
+	 * 2. Raw - raw tier articles
 	 * 3. Whiteboards - Gunnar's scratch pads
 	 * 4. Designer Canvases - Eva's character canvases
 	 *
-	 * All selections go into AI context for next message turn.
+	 * Articles inject based on owner assignment (no manual selection).
+	 * Whiteboards and canvases still use checkbox selection.
 	 */
 	import { tick } from 'svelte';
 	import { Icon } from 'svelte-icons-pack';
 	import { LuTrash2, LuCheck, LuStar, LuEye, LuRefreshCw, LuShield } from 'svelte-icons-pack/lu';
+	import { getPaletteColor } from '$lib/config/palettes';
+
+	// Owner colors for checkbox borders/fills (from active palette)
+	// CSS variables with palette colors as fallbacks ensure consistency
+	const ownerColors: Record<string, string> = {
+		'no-one': 'hsl(var(--muted-foreground) / 0.3)',
+		'felix': `var(--felix-accent, ${getPaletteColor('felix')})`,
+		'gunnar': `var(--gunnar-accent, ${getPaletteColor('gunnar')})`,
+		'kirby': `var(--kirby-accent, ${getPaletteColor('kirby')})`,
+		'samara': `var(--samara-accent, ${getPaletteColor('samara')})`,
+		'alicja': `var(--alicja-accent, ${getPaletteColor('alicja')})`,
+		'eva': `var(--eva-accent, ${getPaletteColor('eva')})`,
+		'ananya': `var(--ananya-accent, ${getPaletteColor('ananya')})`,
+		'everyone': 'var(--boss-accent)'
+	};
+
+	function getOwnerColor(owner: string | null | undefined): string {
+		return ownerColors[owner || 'no-one'] || ownerColors['no-one'];
+	}
+
+	function getOwnerLabel(owner: string | null | undefined): string {
+		if (!owner || owner === 'no-one') return 'No owner';
+		if (owner === 'everyone') return 'Everyone';
+		return owner.charAt(0).toUpperCase() + owner.slice(1);
+	}
 
 	// Types
 	interface Article {
@@ -46,7 +72,7 @@
 	}
 
 	interface Props {
-		// Articles
+		// Articles (owner routes, checkbox filters within owner's domain)
 		articles: Article[];
 		watchedArticleId?: string | null; // Single article being watched for live updates
 		onArticleToggle?: (id: string, currentState: boolean) => void;
@@ -117,7 +143,6 @@
 	}: Props = $props();
 
 	// Split articles by tier
-	// Canon files (owner='everyone') are raw but shown without checkbox (always-on)
 	const curatedArticles = $derived(articles.filter((a) => a.tier === 'artisan_cut'));
 	const rawArticles = $derived(articles.filter((a) => a.tier === 'raw' || !a.tier));
 
@@ -365,20 +390,18 @@
 				{#each curatedArticles as item (item.id)}
 					<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
 					<div class="item" class:active={item.is_enabled} onclick={(e) => handleArticleRowClick(item, e)}>
-						{#if item.owner === 'everyone'}
-							<span class="toggle-spacer"></span>
-						{:else}
-							<button
-								class="toggle-btn"
-								class:active={item.is_enabled}
-								onclick={(e) => handleArticleToggle(item, e)}
-								title={item.is_enabled ? 'Remove from context' : 'Add to context'}
-							>
-								{#if item.is_enabled}
-									<Icon src={LuCheck} size="9" />
-								{/if}
-							</button>
-						{/if}
+						<!-- Colored checkbox: color = owner, checked = active in context -->
+						<button
+							class="toggle-btn"
+							class:active={item.is_enabled}
+							style="border-color: {getOwnerColor(item.owner)}; {item.is_enabled ? `background: ${getOwnerColor(item.owner)};` : ''}"
+							onclick={(e) => handleArticleToggle(item, e)}
+							title="{getOwnerLabel(item.owner)} - {item.is_enabled ? 'Remove from context' : 'Add to context'}"
+						>
+							{#if item.is_enabled}
+								<Icon src={LuCheck} size="9" />
+							{/if}
+						</button>
 						<div class="item-info">
 							{#if editingArticleId === item.id}
 								<input
@@ -463,20 +486,18 @@
 				{#each rawArticles as item (item.id)}
 					<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
 					<div class="item" class:active={item.is_enabled} onclick={(e) => handleArticleRowClick(item, e)}>
-						{#if item.owner === 'everyone'}
-							<span class="toggle-spacer"></span>
-						{:else}
-							<button
-								class="toggle-btn"
-								class:active={item.is_enabled}
-								onclick={(e) => handleArticleToggle(item, e)}
-								title={item.is_enabled ? 'Remove from context' : 'Add to context'}
-							>
-								{#if item.is_enabled}
-									<Icon src={LuCheck} size="9" />
-								{/if}
-							</button>
-						{/if}
+						<!-- Colored checkbox: color = owner, checked = active in context -->
+						<button
+							class="toggle-btn"
+							class:active={item.is_enabled}
+							style="border-color: {getOwnerColor(item.owner)}; {item.is_enabled ? `background: ${getOwnerColor(item.owner)};` : ''}"
+							onclick={(e) => handleArticleToggle(item, e)}
+							title="{getOwnerLabel(item.owner)} - {item.is_enabled ? 'Remove from context' : 'Add to context'}"
+						>
+							{#if item.is_enabled}
+								<Icon src={LuCheck} size="9" />
+							{/if}
+						</button>
 						<div class="item-info">
 							{#if editingArticleId === item.id}
 								<input
@@ -548,12 +569,14 @@
 			<div class="column-items">
 				{#each whiteboards as wb (wb.id)}
 					{@const isSelected = selectedWhiteboardIds.includes(wb.id)}
+					{@const gunnarColor = ownerColors['gunnar']}
 					<div class="item" class:active={isSelected}>
 						<button
 							class="toggle-btn"
 							class:active={isSelected}
+							style="border-color: {gunnarColor}; {isSelected ? `background: ${gunnarColor};` : ''}"
 							onclick={(e) => handleWhiteboardToggle(wb.id, e)}
-							title={isSelected ? 'Remove from context' : 'Add to context'}
+							title="Gunnar - {isSelected ? 'Remove from context' : 'Add to context'}"
 						>
 							{#if isSelected}
 								<Icon src={LuCheck} size="9" />
@@ -611,12 +634,14 @@
 			<div class="column-items">
 				{#each designerCanvases as canvas (canvas.id)}
 					{@const isSelected = selectedDesignerCanvasIds.includes(canvas.id)}
+					{@const evaColor = ownerColors['eva']}
 					<div class="item" class:active={isSelected}>
 						<button
 							class="toggle-btn"
 							class:active={isSelected}
+							style="border-color: {evaColor}; {isSelected ? `background: ${evaColor};` : ''}"
 							onclick={(e) => handleDesignerCanvasToggle(canvas.id, e)}
-							title={isSelected ? 'Remove from context' : 'Add to context'}
+							title="Eva - {isSelected ? 'Remove from context' : 'Add to context'}"
 						>
 							{#if isSelected}
 								<Icon src={LuCheck} size="9" />
@@ -796,6 +821,7 @@
 		border-left-color: var(--boss-accent);
 	}
 
+	/* Toggle button - colors set via inline style for owner theming */
 	.toggle-btn {
 		width: 12px;
 		height: 12px;
@@ -818,17 +844,8 @@
 	}
 
 	.toggle-btn.active {
-		background: var(--boss-accent);
-		border-color: var(--boss-accent);
 		color: black;
 		opacity: 1;
-	}
-
-	.toggle-spacer {
-		width: 12px;
-		height: 12px;
-		margin-left: 6px;
-		flex-shrink: 0;
 	}
 
 	.item-info {

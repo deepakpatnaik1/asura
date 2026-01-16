@@ -94,7 +94,7 @@ interface RankedVectorResult extends VectorSearchResult {
  * - recent: Compressed journal summaries
  * - semantic: Vector search results
  * - everyone: owner='everyone' content (shared across all personas)
- * - active: Currently selected content(s) (via contentIds)
+ * - active: Owner-assigned content (files go to their assigned persona only)
  * - todos, diary, tags, time: Productivity data
  */
 export async function buildContext(
@@ -103,7 +103,6 @@ export async function buildContext(
 	personaName: string = DEFAULT_PERSONA,
 	modelIdentifier: string,
 	userQuery?: string, // Optional: enables vector search
-	contentIds?: string[], // Currently selected content(s) from library
 	whiteboardIds?: string[], // Selected whiteboard IDs (for Gunnar)
 	canvasIds?: string[] // Selected designer canvas IDs (for Eva)
 ): Promise<StructuredContext> {
@@ -151,28 +150,17 @@ export async function buildContext(
 	}
 
 	// Priority 0.5: Active library items (content, whiteboards, canvases)
+	// Content injection: owner routes to persona, is_enabled filters what's active
 	if (hasChunk('active')) {
-		// Load selected content (articles) AND owner-assigned content for this persona
-		// Owner-assigned content is always injected (until manually deleted)
-		const [selectedResult, ownedResult] = await Promise.all([
-			contentIds && contentIds.length > 0
-				? supabase
-						.from('articles')
-						.select('id, title, raw_content, artisan_cut, source_path')
-						.in('id', contentIds)
-						.eq('user_id', userId)
-				: Promise.resolve({ data: [] }),
-			supabase
-				.from('articles')
-				.select('id, title, raw_content, artisan_cut, source_path')
-				.eq('user_id', userId)
-				.eq('owner', personaName)
-		]);
+		// Load owner-assigned AND enabled content for this persona
+		const { data: ownedArticles } = await supabase
+			.from('articles')
+			.select('id, title, raw_content, artisan_cut, source_path')
+			.eq('user_id', userId)
+			.eq('owner', personaName)
+			.eq('is_enabled', true);
 
-		// Merge and dedupe by ID (selected takes precedence)
-		const selectedIds = new Set((selectedResult.data || []).map((a) => a.id));
-		const ownedArticles = (ownedResult.data || []).filter((a) => !selectedIds.has(a.id));
-		const allArticles = [...(selectedResult.data || []), ...ownedArticles];
+		const allArticles = ownedArticles || [];
 
 		if (allArticles.length > 0) {
 			const articlesText = allArticles

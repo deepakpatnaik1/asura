@@ -1,9 +1,11 @@
 /**
  * Open Content API
  *
- * POST: Open a file from library - enables content and ensures it appears as a message turn
+ * POST: Open a file from library - ensures it appears as a message turn
  * - If original superjournal entry exists → return its ID for scroll navigation
  * - If no entry exists → create one and return the new message for UI display
+ *
+ * Note: No longer sets is_enabled - context injection is now owner-based.
  */
 
 import { json } from '@sveltejs/kit';
@@ -47,13 +49,6 @@ export const POST: RequestHandler = async ({ params, locals: { safeGetSession, s
 	if (contentError || !content) {
 		return notFoundError('Content not found');
 	}
-
-	// Enable the content for context injection
-	await supabase
-		.from('articles')
-		.update({ is_enabled: true, updated_at: new Date().toISOString() })
-		.eq('id', id)
-		.eq('user_id', userId);
 
 	// Find the original superjournal entry for this content
 	// Note: Don't use .single() - it errors on 0 rows AND on 2+ rows,

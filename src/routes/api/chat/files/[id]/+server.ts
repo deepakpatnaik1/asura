@@ -1,8 +1,11 @@
 /**
- * Chat Files API - Toggle and Delete
+ * Chat Files API - Update and Delete
  *
- * PUT: Toggle file enabled state
+ * PUT: Update file metadata (enabled, title, starred, protected, annotation)
  * DELETE: Delete a file
+ *
+ * Note: is_enabled controls context injection within owner's domain.
+ * Owner routes files to personas; is_enabled filters what's currently active.
  */
 
 import { json } from '@sveltejs/kit';
@@ -13,7 +16,7 @@ import { databaseError, notFoundError, validationError } from '$lib/api/errors';
 
 /**
  * PUT /api/chat/files/[id]
- * Update content: toggle enabled state or rename title
+ * Update content metadata (enabled, title, starred, protected, annotation)
  */
 export const PUT: RequestHandler = async ({ params, request, locals: { safeGetSession, supabase } }) => {
 	const auth = await requireAuth(safeGetSession);
