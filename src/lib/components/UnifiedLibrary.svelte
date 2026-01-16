@@ -13,7 +13,7 @@
 	 */
 	import { tick } from 'svelte';
 	import { Icon } from 'svelte-icons-pack';
-	import { LuTrash2, LuCheck, LuStar, LuEye, LuRefreshCw, LuShield } from 'svelte-icons-pack/lu';
+	import { LuTrash2, LuStar, LuEye, LuRefreshCw, LuShield } from 'svelte-icons-pack/lu';
 	import { getPaletteColor } from '$lib/config/palettes';
 
 	// Owner colors for checkbox borders/fills (from active palette)
@@ -425,11 +425,7 @@
 							style="border-color: {getOwnerColor(item.owner)}; {item.is_enabled ? `background: ${getOwnerColor(item.owner)};` : ''}"
 							onclick={(e) => handleArticleToggle(item, e)}
 							title="{getOwnerLabel(item.owner)} - {item.is_enabled ? 'Remove from context' : 'Add to context'}"
-						>
-							{#if item.is_enabled}
-								<Icon src={LuCheck} size="9" />
-							{/if}
-						</button>
+						></button>
 						<div class="item-info">
 							{#if editingArticleId === item.id}
 								<input
@@ -523,11 +519,7 @@
 							style="border-color: {getOwnerColor(item.owner)}; {item.is_enabled ? `background: ${getOwnerColor(item.owner)};` : ''}"
 							onclick={(e) => handleArticleToggle(item, e)}
 							title="{getOwnerLabel(item.owner)} - {item.is_enabled ? 'Remove from context' : 'Add to context'}"
-						>
-							{#if item.is_enabled}
-								<Icon src={LuCheck} size="9" />
-							{/if}
-						</button>
+						></button>
 						<div class="item-info">
 							{#if editingArticleId === item.id}
 								<input
@@ -621,11 +613,7 @@
 							style="border-color: {gunnarColor}; {isSelected ? `background: ${gunnarColor};` : ''}"
 							onclick={(e) => handleWhiteboardToggle(wb.id, e)}
 							title="Gunnar - {isSelected ? 'Remove from context' : 'Add to context'}"
-						>
-							{#if isSelected}
-								<Icon src={LuCheck} size="9" />
-							{/if}
-						</button>
+						></button>
 						<div class="item-info">
 							{#if editingWhiteboardId === wb.id}
 								<input
@@ -686,11 +674,7 @@
 							style="border-color: {evaColor}; {isSelected ? `background: ${evaColor};` : ''}"
 							onclick={(e) => handleDesignerCanvasToggle(canvas.id, e)}
 							title="Eva - {isSelected ? 'Remove from context' : 'Add to context'}"
-						>
-							{#if isSelected}
-								<Icon src={LuCheck} size="9" />
-							{/if}
-						</button>
+						></button>
 						<div class="item-info">
 							{#if editingDesignerCanvasId === canvas.id}
 								<input
