@@ -177,6 +177,34 @@
 	// Refresh artisan cut state
 	let refreshingArticleId = $state<string | null>(null);
 
+	// Click delay for distinguishing single vs double click on title
+	let titleClickTimeout: ReturnType<typeof setTimeout> | null = null;
+
+	function handleTitleClick(item: Article, event: MouseEvent) {
+		event.stopPropagation();
+		// Clear any pending timeout
+		if (titleClickTimeout) {
+			clearTimeout(titleClickTimeout);
+			titleClickTimeout = null;
+		}
+		// Delay edit mode to allow double-click detection
+		titleClickTimeout = setTimeout(() => {
+			titleClickTimeout = null;
+			startArticleEdit(item, event);
+		}, 250);
+	}
+
+	function handleTitleDoubleClick(item: Article, event: MouseEvent) {
+		event.stopPropagation();
+		// Cancel pending edit
+		if (titleClickTimeout) {
+			clearTimeout(titleClickTimeout);
+			titleClickTimeout = null;
+		}
+		// Scroll to message turn
+		onArticleSelect?.(item.id);
+	}
+
 	function formatDate(dateString: string) {
 		const date = new Date(dateString);
 		return date.toLocaleDateString('en-US', {
@@ -414,7 +442,12 @@
 									onclick={(e) => e.stopPropagation()}
 								/>
 							{:else}
-								<button class="title-btn" onclick={(e) => startArticleEdit(item, e)}>
+								<button
+									class="title-btn"
+									onclick={(e) => handleTitleClick(item, e)}
+									ondblclick={(e) => handleTitleDoubleClick(item, e)}
+									title="Click to edit, double-click to scroll to turn"
+								>
 									<span class="item-title">{item.title}</span>
 								</button>
 							{/if}
@@ -507,7 +540,12 @@
 									onclick={(e) => e.stopPropagation()}
 								/>
 							{:else}
-								<button class="title-btn" onclick={(e) => startArticleEdit(item, e)}>
+								<button
+									class="title-btn"
+									onclick={(e) => handleTitleClick(item, e)}
+									ondblclick={(e) => handleTitleDoubleClick(item, e)}
+									title="Click to edit, double-click to scroll to turn"
+								>
 									<span class="item-title">{item.title}</span>
 								</button>
 							{/if}

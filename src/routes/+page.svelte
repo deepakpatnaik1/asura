@@ -1951,12 +1951,41 @@
 	}
 
 	async function scrollToArticle(articleId: string) {
-		// Find the message linked to this article (both old content marker and new content_id patterns)
-		const message = allMessages.find(m =>
+		// Helper to find message in current allMessages
+		const findMessage = () => allMessages.find(m =>
 			m.ai_response?.includes(`<!--content:${articleId}-->`) ||
 			m.content_id === articleId
 		);
+
+		// Check if already loaded
+		let message = findMessage();
+
+		// If not found, load more messages until we find it or run out
+		while (!message && hasMore && !isLoadingMore) {
+			isLoadingMore = true;
+			try {
+				const response = await fetch(`/api/superjournal?offset=${currentOffset}&limit=50`);
+				if (response.ok) {
+					const result = await response.json();
+					const olderMessages = [...result.messages].reverse();
+					allMessages = [...olderMessages, ...allMessages];
+					currentOffset += result.messages.length;
+					hasMore = result.hasMore;
+				}
+			} catch (error) {
+				console.error('Failed to load more messages:', error);
+				break;
+			} finally {
+				isLoadingMore = false;
+			}
+			// Check again after loading
+			message = findMessage();
+		}
+
 		if (!message) return;
+
+		// Wait for DOM to update with new messages
+		await tick();
 
 		// Scroll to the message element
 		const element = document.getElementById(`message-${message.id}`);
