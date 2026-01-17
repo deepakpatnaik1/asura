@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Icon } from 'svelte-icons-pack';
-	import { LuPaperclip, LuFolder, LuFilePenLine, LuLock, LuLockOpen, LuMapPin, LuMaximize2 } from 'svelte-icons-pack/lu';
+	import { LuPaperclip, LuFolder, LuFilePenLine, LuLock, LuLockOpen, LuMaximize2 } from 'svelte-icons-pack/lu';
 	import { currentMessage, isLoading, sendMessage, abortCurrentMessage, lastMutations, lastWhiteboardMutations, lastCanvasMutations } from '$lib/stores/chat';
 	import { tick, onMount, onDestroy } from 'svelte';
 	import { DEFAULT_PERSONA, PERSONAS } from '$lib/config/personas';
@@ -293,17 +293,6 @@
 
 	// Annotation mode state (for write-back feature)
 	let annotationMode = $state(false);
-
-	// Bookmark mode state (for navigation within long turns)
-	let bookmarkMode = $state(false);
-	let bookmarkMarker = $state<HTMLElement | null>(null);
-	// Bookmark data for persistence - separate from DOM reference
-	let bookmarkData = $state<{
-		message_id: string;
-		header_text: string;
-		header_level: number;
-		header_index: number;
-	} | null>(data.scrollBookmark);
 
 	// Focus selection mode (for choosing which message to focus)
 	let focusSelectionMode = $state(false);
@@ -1181,25 +1170,6 @@
 		}
 	});
 
-	// Strongly persistent bookmark - re-places marker whenever DOM changes or marker is lost
-	$effect(() => {
-		// Track allMessages length to re-run when messages load/change
-		const _msgCount = allMessages.length;
-
-		if (!bookmarkData) return;
-
-		// Use setTimeout to let DOM settle after message renders
-		const timer = setTimeout(() => {
-			// Check if marker still exists in DOM
-			if (bookmarkMarker && document.contains(bookmarkMarker)) return;
-
-			// Marker is gone or never existed - try to place it
-			placeBookmarkMarkerFromData(bookmarkData);
-		}, 150);
-
-		return () => clearTimeout(timer);
-	});
-
 	async function handleSend() {
 		// RTF lock blocks regular sends, but allows annotation/feedback workflow
 		const isAnnotationSend = annotationMode && annotationTarget;
@@ -1489,7 +1459,6 @@
 
 	/**
 	 * Handle click in messages area for annotation mode.
-	 * Independent from bookmark mode - both can have active markers simultaneously.
 	 */
 	function handleAnnotationClick(event: MouseEvent) {
 		if (!annotationMode) return;
@@ -1713,44 +1682,6 @@
 	}
 
 	/**
-	 * Clear bookmark marker from DOM and optionally from database
-	 * @param clearFromDatabase - If true, also clears from database (default: true)
-	 */
-	function clearBookmarkMarker(clearFromDatabase = true) {
-		if (bookmarkMarker) {
-			bookmarkMarker.remove();
-			bookmarkMarker = null;
-		}
-
-		// Only clear from database when explicitly requested (user dismissal)
-		// Skip DB clear when placing a new bookmark (the save will overwrite anyway)
-		if (clearFromDatabase) {
-			// Clear reactive state so $effect doesn't re-place it
-			bookmarkData = null;
-			fetch('/api/settings', {
-				method: 'PUT',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ scroll_bookmark: null })
-			}).catch(err => console.error('Failed to clear bookmark:', err));
-		}
-	}
-
-	/**
-	 * Handle click in messages area for bookmark mode.
-	 * Independent from annotation mode - both can have active markers simultaneously.
-	 */
-	function handleBookmarkClick(event: MouseEvent) {
-		if (!bookmarkMode) return;
-
-		const target = event.target as HTMLElement;
-
-		// Skip interactive elements
-		if (target.closest('button') || target.closest('a') || target.closest('.bookmark-dismiss')) return;
-
-		placeBookmarkMarker(event);
-	}
-
-	/**
 	 * Handle click in messages area for focus selection mode.
 	 * Clicking anywhere in a message turn focuses that turn.
 	 */
@@ -1772,233 +1703,6 @@
 		// Exit selection mode and focus the message
 		focusSelectionMode = false;
 		handleFocusToggle(messageId);
-	}
-
-	/**
-	 * Place bookmark marker at click location within message content
-	 * Persists to database for restoration on page reload
-	 */
-	function placeBookmarkMarker(event: MouseEvent) {
-		const target = event.target as HTMLElement;
-
-		// Must be within a message-text element
-		const messageText = target.closest('.message-text');
-		if (!messageText) return;
-
-		// Find the message ID
-		const messageGroup = target.closest('[data-message-id]') as HTMLElement | null;
-		if (!messageGroup) return;
-		const messageId = messageGroup.dataset.messageId;
-		if (!messageId) return;
-
-		// Clear existing bookmark marker from DOM only (don't hit DB - the new save will overwrite)
-		clearBookmarkMarker(false);
-
-		// Find all section boundaries (headers, dividers, fenced containers)
-		const allBoundaries = messageText.querySelectorAll('h1, h2, h3, h4, h5, h6, hr, .flourish-divider, .fenced-container');
-
-		// Find the nearest preceding boundary for position tracking
-		let boundary: Element | null = null;
-		for (const b of allBoundaries) {
-			const position = target.compareDocumentPosition(b);
-			if (position & Node.DOCUMENT_POSITION_FOLLOWING) {
-				break; // b comes after target
-			}
-			boundary = b; // b is before or contains target
-		}
-
-		// Determine header info for persistence
-		let headerText = '__START__';
-		let headerLevel = 0;
-		let headerIndex = 0;
-
-		if (boundary) {
-			if (boundary.tagName === 'HR' || boundary.classList.contains('flourish-divider')) {
-				headerText = '__DIVIDER__';
-				headerLevel = 0;
-				headerIndex = 0;
-				for (const b of allBoundaries) {
-					if (b === boundary) break;
-					if (b.tagName === 'HR' || b.classList.contains('flourish-divider')) {
-						headerIndex++;
-					}
-				}
-			} else if (boundary.classList.contains('fenced-container')) {
-				headerText = '__FENCED__';
-				headerLevel = 0;
-				headerIndex = 0;
-				for (const b of allBoundaries) {
-					if (b === boundary) break;
-					if (b.classList.contains('fenced-container')) {
-						headerIndex++;
-					}
-				}
-			} else {
-				// Header boundary
-				const levelMatch = boundary.tagName.match(/H(\d)/);
-				const contentSpan = boundary.querySelector('span:last-child');
-				headerText = contentSpan?.textContent?.trim() || boundary.textContent?.trim() || '';
-				headerLevel = levelMatch ? parseInt(levelMatch[1]) : 2;
-
-				headerIndex = 0;
-				for (const b of allBoundaries) {
-					if (b === boundary) break;
-					if (b.tagName === 'HR' || b.classList.contains('flourish-divider') || b.classList.contains('fenced-container')) continue;
-					const bContentSpan = b.querySelector('span:last-child');
-					const bText = bContentSpan?.textContent?.trim() || b.textContent?.trim();
-					if (bText === headerText && b.tagName === boundary.tagName) {
-						headerIndex++;
-					}
-				}
-			}
-		}
-
-		// Create bookmark marker element
-		const marker = document.createElement('div');
-		marker.className = 'scroll-bookmark';
-		marker.innerHTML = `
-			<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg>
-			<span class="bookmark-label">Bookmark</span>
-			<button class="bookmark-dismiss" title="Remove bookmark">×</button>
-		`;
-
-		// Add click handler for dismiss button
-		const dismissBtn = marker.querySelector('.bookmark-dismiss');
-		dismissBtn?.addEventListener('click', (e) => {
-			e.stopPropagation();
-			clearBookmarkMarker();
-		});
-
-		// Insert before the boundary element (above the header), or at the start if no boundary
-		if (boundary) {
-			boundary.parentElement?.insertBefore(marker, boundary);
-		} else {
-			// Insert at the beginning of message text
-			messageText.insertBefore(marker, messageText.firstChild);
-		}
-
-		bookmarkMarker = marker;
-		bookmarkMode = false; // Exit bookmark mode after placing
-
-		// Update reactive state for persistence
-		const newBookmarkData = { message_id: messageId, header_text: headerText, header_level: headerLevel, header_index: headerIndex };
-		bookmarkData = newBookmarkData;
-
-		// Save to database for persistence
-		fetch('/api/settings', {
-			method: 'PUT',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ scroll_bookmark: newBookmarkData })
-		}).catch(err => console.error('Failed to save bookmark:', err));
-	}
-
-	/**
-	 * Place bookmark marker from data (used by $effect for persistence)
-	 */
-	function placeBookmarkMarkerFromData(bmData: typeof bookmarkData) {
-		if (!bmData) return;
-
-		const { message_id, header_text, header_level, header_index } = bmData;
-
-		// Find the message element
-		const messageElement = document.querySelector(`[data-message-id="${message_id}"]`);
-		if (!messageElement) return;
-
-		const messageText = messageElement.querySelector('.message-text');
-		if (!messageText) return;
-
-		// DEBUG: Log what we're looking for vs what we find
-		const allBoundariesDebug = messageText.querySelectorAll('h1, h2, h3, h4, h5, h6, hr, .flourish-divider, .fenced-container');
-		console.log('BOOKMARK DEBUG:', {
-			looking_for: { header_text, header_level, header_index },
-			found_boundaries: allBoundariesDebug.length,
-			boundary_texts: Array.from(allBoundariesDebug).slice(0, 5).map(b => {
-				const span = b.querySelector('span:last-child');
-				return { tag: b.tagName, text: span?.textContent?.trim() || b.textContent?.trim() };
-			})
-		});
-
-		// Create bookmark marker
-		const marker = document.createElement('div');
-		marker.className = 'scroll-bookmark';
-		marker.innerHTML = `
-			<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg>
-			<span class="bookmark-label">Bookmark</span>
-			<button class="bookmark-dismiss" title="Remove bookmark">×</button>
-		`;
-
-		const dismissBtn = marker.querySelector('.bookmark-dismiss');
-		dismissBtn?.addEventListener('click', (e) => {
-			e.stopPropagation();
-			clearBookmarkMarker();
-		});
-
-		// Find the target position
-		let targetElement: Element | null = null;
-
-		if (header_text === '__START__') {
-			// Insert at start
-			messageText.insertBefore(marker, messageText.firstChild);
-			bookmarkMarker = marker;
-			return;
-		}
-
-		const allBoundaries = messageText.querySelectorAll('h1, h2, h3, h4, h5, h6, hr, .flourish-divider, .fenced-container');
-
-		if (header_text === '__DIVIDER__') {
-			let count = 0;
-			for (const b of allBoundaries) {
-				if (b.tagName === 'HR' || b.classList.contains('flourish-divider')) {
-					if (count === header_index) {
-						targetElement = b;
-						break;
-					}
-					count++;
-				}
-			}
-		} else if (header_text === '__FENCED__') {
-			let count = 0;
-			for (const b of allBoundaries) {
-				if (b.classList.contains('fenced-container')) {
-					if (count === header_index) {
-						targetElement = b;
-						break;
-					}
-					count++;
-				}
-			}
-		} else {
-			// Header
-			let count = 0;
-			for (const b of allBoundaries) {
-				if (b.tagName === 'HR' || b.classList.contains('flourish-divider') || b.classList.contains('fenced-container')) continue;
-				const contentSpan = b.querySelector('span:last-child');
-				const text = contentSpan?.textContent?.trim() || b.textContent?.trim();
-				const levelMatch = b.tagName.match(/H(\d)/);
-				const level = levelMatch ? parseInt(levelMatch[1]) : 0;
-
-				if (text === header_text && level === header_level) {
-					if (count === header_index) {
-						targetElement = b;
-						break;
-					}
-					count++;
-				}
-			}
-		}
-
-		if (targetElement) {
-			targetElement.parentElement?.insertBefore(marker, targetElement);
-			bookmarkMarker = marker;
-		} else {
-			// Content drifted - anchor no longer exists, clear bookmark silently
-			bookmarkData = null;
-			fetch('/api/settings', {
-				method: 'PUT',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ scroll_bookmark: null })
-			}).catch(() => {});
-		}
 	}
 
 	/**
@@ -2602,9 +2306,8 @@
 		<div
 			class="messages-content"
 			class:annotation-mode={annotationMode}
-			class:bookmark-mode={bookmarkMode}
 			class:focus-selection-mode={focusSelectionMode}
-			onclick={(e) => { handleAnnotationClick(e); handleBookmarkClick(e); handleFocusSelectionClick(e); }}
+			onclick={(e) => { handleAnnotationClick(e); handleFocusSelectionClick(e); }}
 		>
 			{#if hasMore && !focusedMessageId}
 				<button class="load-more-btn" onclick={loadMoreMessages} disabled={isLoadingMore}>
@@ -2738,25 +2441,6 @@
 						}}
 					>
 						<Icon src={LuFilePenLine} size="11" />
-					</button>
-
-					<button
-						class="control-btn hit-target"
-						class:active={bookmarkMode}
-						class:bookmark-active={bookmarkMarker !== null}
-						style={(bookmarkMode || bookmarkMarker) ? `color: ${currentAccentColor}` : ''}
-						title={bookmarkMode ? 'Exit bookmark mode' : (bookmarkMarker ? 'Click to clear bookmark, or enable mode to move it' : 'Drop a bookmark for navigation')}
-						onclick={() => {
-							if (bookmarkMarker && !bookmarkMode) {
-								// If bookmark exists and not in mode, clear it
-								clearBookmarkMarker();
-							} else {
-								// Toggle bookmark mode
-								bookmarkMode = !bookmarkMode;
-							}
-						}}
-					>
-						<Icon src={LuMapPin} size="11" />
 					</button>
 
 					<button
@@ -3164,15 +2848,6 @@
 		}
 	}
 
-	/* Bookmark mode styles */
-	.messages-content.bookmark-mode {
-		cursor: crosshair;
-	}
-
-	.messages-content.bookmark-mode :global(.ai-message) {
-		cursor: crosshair;
-	}
-
 	.messages-content.focus-selection-mode {
 		cursor: pointer;
 	}
@@ -3186,55 +2861,5 @@
 		outline: 2px solid var(--current-accent);
 		outline-offset: 4px;
 		border-radius: 8px;
-	}
-
-	:global(.scroll-bookmark) {
-		display: flex;
-		align-items: baseline;
-		gap: 8px;
-		padding: 8px 12px;
-		margin: 12px 0;
-		background: var(--boss-accent-bg);
-		border-left: 3px solid var(--boss-accent);
-		border-radius: 0 6px 6px 0;
-		color: var(--boss-accent);
-		font-size: 0.85rem;
-		animation: markerPulse 0.3s ease-out;
-		position: relative;
-	}
-
-	:global(.scroll-bookmark svg) {
-		flex-shrink: 0;
-		align-self: baseline;
-		transform: translateY(2px);
-	}
-
-	:global(.scroll-bookmark .bookmark-label) {
-		font-weight: 500;
-	}
-
-	:global(.bookmark-dismiss) {
-		position: absolute;
-		right: 8px;
-		top: 50%;
-		transform: translateY(-50%);
-		background: transparent;
-		border: none;
-		color: var(--boss-accent);
-		font-size: 1.2rem;
-		font-weight: bold;
-		cursor: pointer;
-		opacity: 0;
-		transition: opacity 0.2s;
-		padding: 4px 8px;
-		line-height: 1;
-	}
-
-	:global(.scroll-bookmark:hover .bookmark-dismiss) {
-		opacity: 0.7;
-	}
-
-	:global(.bookmark-dismiss:hover) {
-		opacity: 1 !important;
 	}
 </style>

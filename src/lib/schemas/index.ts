@@ -98,15 +98,7 @@ export const settingsUpdateSchema = z.object({
 	last_content_lifecycle: z.string().optional(),
 
 	// Todo visibility (Felix-controlled, UI-only)
-	hide_completed_todos: z.boolean().optional(),
-
-	// Scroll bookmark for navigation within long message turns
-	scroll_bookmark: z.object({
-		message_id: z.string().uuid(),
-		header_text: z.string(),
-		header_level: z.number().int().min(0).max(6),
-		header_index: z.number().int().min(0)
-	}).nullable().optional()
+	hide_completed_todos: z.boolean().optional()
 }).refine(
 	(data) => Object.keys(data).length > 0,
 	{ message: 'At least one field must be provided' }

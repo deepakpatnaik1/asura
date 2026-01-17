@@ -38,7 +38,7 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 			 model_gunnar, model_kirby, model_samara, model_alicja, model_eva, model_ananya, model_felix,
 			 model_embeddings, model_file_artisan_cut, model_chat_artisan_cut,
 			 model_character_planning, model_image_gen, model_image_edit,
-			 hide_completed_todos, scroll_bookmark`
+			 hide_completed_todos`
 		)
 		.eq('user_id', userId)
 		.single();
@@ -92,7 +92,6 @@ export const PUT: RequestHandler = async ({ request, locals: { safeGetSession, s
 	if (validatedData.last_content_owner !== undefined) updateData.last_content_owner = validatedData.last_content_owner;
 	if (validatedData.last_content_lifecycle !== undefined) updateData.last_content_lifecycle = validatedData.last_content_lifecycle;
 	if (validatedData.hide_completed_todos !== undefined) updateData.hide_completed_todos = validatedData.hide_completed_todos;
-	if (validatedData.scroll_bookmark !== undefined) updateData.scroll_bookmark = validatedData.scroll_bookmark;
 
 	// Model overrides - check each column
 	for (const col of MODEL_COLUMNS) {
