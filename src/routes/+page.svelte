@@ -1972,11 +1972,16 @@
 
 		if (targetElement) {
 			targetElement.parentElement?.insertBefore(marker, targetElement);
+			bookmarkMarker = marker;
 		} else {
-			messageText.appendChild(marker);
+			// Content drifted - anchor no longer exists, clear bookmark silently
+			bookmarkData = null;
+			fetch('/api/settings', {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ scroll_bookmark: null })
+			}).catch(() => {});
 		}
-
-		bookmarkMarker = marker;
 	}
 
 	/**
