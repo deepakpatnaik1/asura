@@ -16,6 +16,7 @@
 	import PasteArea from '$lib/components/PasteArea.svelte';
 	import UnifiedLibrary from '$lib/components/UnifiedLibrary.svelte';
 	import ServerStatusLED from '$lib/components/ServerStatusLED.svelte';
+	import StageManagerFlash from '$lib/components/StageManagerFlash.svelte';
 	
 	// Receive loaded data from server
 	let { data } = $props();
@@ -1292,6 +1293,11 @@
 			selectedDesignerCanvasIds.length > 0 ? selectedDesignerCanvasIds : undefined
 		);
 
+		// Track when Boss talks to Felix (for Stage Manager re-appearance logic)
+		if (selectedPersona.toLowerCase() === 'felix' && typeof window !== 'undefined' && (window as any).felixTalked) {
+			(window as any).felixTalked();
+		}
+
 		if ($currentMessage) {
 			const now = new Date().toISOString();
 			const formattedTimestamp = formatTimestamp(now);
@@ -1900,6 +1906,17 @@
 
 		const messageText = messageElement.querySelector('.message-text');
 		if (!messageText) return;
+
+		// DEBUG: Log what we're looking for vs what we find
+		const allBoundariesDebug = messageText.querySelectorAll('h1, h2, h3, h4, h5, h6, hr, .flourish-divider, .fenced-container');
+		console.log('BOOKMARK DEBUG:', {
+			looking_for: { header_text, header_level, header_index },
+			found_boundaries: allBoundariesDebug.length,
+			boundary_texts: Array.from(allBoundariesDebug).slice(0, 5).map(b => {
+				const span = b.querySelector('span:last-child');
+				return { tag: b.tagName, text: span?.textContent?.trim() || b.textContent?.trim() };
+			})
+		});
 
 		// Create bookmark marker
 		const marker = document.createElement('div');
@@ -2860,6 +2877,9 @@
 		onDesignerCanvasStateChange={handleDesignerCanvasStateChange}
 	/>
 </div>
+
+<!-- Stage Manager Flash - "Boss, talk to Felix" notification -->
+<StageManagerFlash />
 
 <svelte:window onkeydown={handleKeydown} onfocus={handleWindowFocus} onclick={handleGlobalClick} />
 

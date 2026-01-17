@@ -3,6 +3,28 @@ import { PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
 import { createServerClient } from '@supabase/ssr';
 import type { Handle } from '@sveltejs/kit';
 import { validateCsrf, requiresCsrfProtection } from '$lib/api/csrf';
+import { startScanWatcher } from '$lib/api/scan-tools';
+
+// ============================================================================
+// Initialize background services (run once on server start)
+// ============================================================================
+let scanWatcherInitialized = false;
+
+function initializeBackgroundServices() {
+	if (scanWatcherInitialized) return;
+	scanWatcherInitialized = true;
+
+	// Start watching /Users/d.patnaik/paper-scans for new PDFs
+	try {
+		startScanWatcher();
+		console.log('[Hooks] Scan watcher started');
+	} catch (error) {
+		console.error('[Hooks] Failed to start scan watcher:', error);
+	}
+}
+
+// Initialize on module load
+initializeBackgroundServices();
 
 /**
  * Hardcoded user for localhost-only single-user mode.

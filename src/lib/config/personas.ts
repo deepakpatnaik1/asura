@@ -100,6 +100,11 @@ export type ToolName =
 	| 'list_gmail_watch_rules'
 	| 'list_gmail_accounts'
 	| 'read_gmail_message'
+	| 'list_pending_emails'
+	| 'mark_email_addressed'
+	// Scan tools (Felix) - paper mail scanning
+	| 'list_pending_scans'
+	| 'mark_scan_addressed'
 	// Browser tools (Felix) - portal automation
 	| 'browse_url'
 	| 'browser_click'
@@ -269,6 +274,11 @@ const FELIX_TOOLS: ToolName[] = [
 	'list_gmail_watch_rules',
 	'list_gmail_accounts',
 	'read_gmail_message',
+	'list_pending_emails',
+	'mark_email_addressed',
+	// Scan tools (paper mail)
+	'list_pending_scans',
+	'mark_scan_addressed',
 	// Browser tools
 	'browse_url',
 	'browser_click',
