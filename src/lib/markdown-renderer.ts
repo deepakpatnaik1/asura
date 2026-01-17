@@ -89,12 +89,12 @@ function renderTable(tableMatch: string, accent: string, tableIndex: number): st
 	// Build HTML table with horizontal scroll wrapper
 	// Process inline formatting in cells
 	const headerCells = headers.map(h =>
-		`<th style="padding: 6px 10px; text-align: left; white-space: nowrap; color: ${accent}; border-bottom: 1px solid ${accent};">${processInlineFormatting(h, accent, '')}</th>`
+		`<th style="padding: 6px 10px; text-align: left; vertical-align: top; color: ${accent}; border-bottom: 1px solid ${accent};">${processInlineFormatting(h, accent, '')}</th>`
 	).join('');
 
 	const bodyRows = dataRows.map(row =>
 		`<tr>${row.map(cell =>
-			`<td style="padding: 6px 10px; white-space: nowrap; border-bottom: 1px solid ${TABLE_BORDER};">${processInlineFormatting(cell, accent, '')}</td>`
+			`<td style="padding: 6px 10px; vertical-align: top; border-bottom: 1px solid ${TABLE_BORDER};">${processInlineFormatting(cell, accent, '')}</td>`
 		).join('')}</tr>`
 	).join('');
 
