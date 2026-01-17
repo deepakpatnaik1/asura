@@ -4,7 +4,11 @@
 	import { createAutoScroll } from '$lib/ui/auto-scroll.svelte';
 
 	// Props
-	let { config }: { config: ScrollConfig } = $props();
+	interface Props {
+		config: ScrollConfig;
+		bookmarkPosition?: number;
+	}
+	let { config, bookmarkPosition }: Props = $props();
 
 	// Auto-scroll controller (created once on mount)
 	const autoScroll = createAutoScroll(config);
@@ -32,7 +36,7 @@
 	<button
 		class="control-btn"
 		title="Next turn"
-		onclick={() => scrollToNextTurn(config)}
+		onclick={() => scrollToNextTurn(config, bookmarkPosition)}
 	>
 		<!-- ArrowDown icon -->
 		<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -42,7 +46,7 @@
 	<button
 		class="control-btn"
 		title="Previous turn"
-		onclick={() => scrollToPreviousTurn(config)}
+		onclick={() => scrollToPreviousTurn(config, bookmarkPosition)}
 	>
 		<!-- ArrowUp icon -->
 		<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Icon } from 'svelte-icons-pack';
-	import { LuPaperclip, LuFolder, LuFilePenLine, LuLock, LuLockOpen, LuMaximize2 } from 'svelte-icons-pack/lu';
+	import { LuPaperclip, LuFolder, LuFilePenLine, LuLock, LuLockOpen, LuMaximize2, LuBookmark } from 'svelte-icons-pack/lu';
 	import { currentMessage, isLoading, sendMessage, abortCurrentMessage, lastMutations, lastWhiteboardMutations, lastCanvasMutations } from '$lib/stores/chat';
 	import { tick, onMount, onDestroy } from 'svelte';
 	import { DEFAULT_PERSONA, PERSONAS } from '$lib/config/personas';
@@ -112,7 +112,7 @@
 	const selectedDesignerCanvasIds = $derived(designerCanvases.filter(c => c.is_selected).map(c => c.id));
 	let designerCanvasRefreshTrigger = $state(0);
 
-	// Refresh calendar when any Alicja mutations occur (todos, tags, diary, calendar)
+	// Refresh calendar when any Felix mutations occur (todos, calendar)
 	$effect(() => {
 		const mutations = $lastMutations;
 		if (mutations) {
@@ -299,6 +299,31 @@
 
 	// RTF lock mode - prevents accidental sends during RTF workflow
 	let rtfLockMode = $state(false);
+
+	// Bookmark mode state (for placing navigation markers within message turns)
+	let bookmarkMode = $state(false);
+	interface BookmarkAnchor {
+		message_id: string;
+		anchor_type: 'header' | 'divider' | 'fenced' | 'codeblock' | 'paragraph';
+		anchor_text: string;
+		anchor_index: number;
+	}
+	let bookmarkAnchor = $state<BookmarkAnchor | null>(data.scrollBookmark || null);
+	let bookmarkMarkerElement = $state<HTMLElement | null>(null);
+
+	/**
+	 * Get bookmark position relative to the scroll container.
+	 * Returns undefined if no bookmark is placed.
+	 */
+	function getBookmarkPosition(): number | undefined {
+		if (!bookmarkMarkerElement) return undefined;
+		const container = document.querySelector('.messages-area');
+		if (!container) return undefined;
+		const containerRect = container.getBoundingClientRect();
+		const markerRect = bookmarkMarkerElement.getBoundingClientRect();
+		return markerRect.top - containerRect.top + container.scrollTop;
+	}
+
 	interface AnnotationTarget {
 		headerText: string;
 		headerLevel: number;
@@ -960,9 +985,10 @@
 			if (watchedArticleId) {
 				startFileWatching();
 			}
-			// Restore annotation marker if one was saved (must run after DOM is rendered)
+			// Restore markers if saved (must run after DOM is rendered)
 			await tick();
 			restoreAnnotationMarker();
+			restoreBookmarkMarker();
 		})();
 
 		// Listen for nuke events from SettingsModal
@@ -1706,6 +1732,267 @@
 	}
 
 	/**
+	 * Handle click in messages area for bookmark placement mode.
+	 * Places a navigation marker at the clicked content boundary.
+	 */
+	function handleBookmarkClick(event: MouseEvent) {
+		if (!bookmarkMode) return;
+
+		const target = event.target as HTMLElement;
+
+		// Skip interactive elements
+		if (target.closest('button') || target.closest('a') || target.closest('.bookmark-dismiss')) return;
+
+		// Find the message turn
+		const messageTurn = target.closest('[data-message-id]') as HTMLElement | null;
+		if (!messageTurn) return;
+
+		const messageId = messageTurn.dataset.messageId;
+		if (!messageId) return;
+
+		// Find nearest content boundary (priority: headers > fenced > dividers > codeblocks > paragraphs)
+		const boundary = findNearestBookmarkBoundary(target, messageTurn);
+		if (!boundary) return;
+
+		// Clear existing bookmark if any
+		clearBookmarkMarker();
+
+		// Create marker element
+		const marker = createBookmarkMarker();
+
+		// Insert marker before the boundary element
+		boundary.element.before(marker);
+		bookmarkMarkerElement = marker;
+
+		// Store anchor data
+		bookmarkAnchor = {
+			message_id: messageId,
+			anchor_type: boundary.type as BookmarkAnchor['anchor_type'],
+			anchor_text: boundary.text,
+			anchor_index: boundary.index
+		};
+
+		// Persist to database
+		fetch('/api/settings', {
+			method: 'PUT',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ scroll_bookmark: bookmarkAnchor })
+		}).catch(err => console.error('Failed to save bookmark:', err));
+
+		// Exit bookmark mode
+		bookmarkMode = false;
+	}
+
+	/**
+	 * Find nearest content boundary element for bookmark placement.
+	 * Priority: headers > fenced containers > dividers > code blocks > paragraphs
+	 */
+	function findNearestBookmarkBoundary(clicked: HTMLElement, container: Element): { element: Element; type: string; text: string; index: number } | null {
+		const selectors: Record<string, string> = {
+			header: 'h1, h2, h3, h4, h5, h6',
+			fenced: '.admonition, .boss-container, .red-container, .blue-container',
+			divider: 'hr',
+			codeblock: 'pre',
+			paragraph: 'p'
+		};
+
+		// Walk up from clicked element to find nearest boundary
+		let current: HTMLElement | null = clicked;
+		while (current && current !== container) {
+			for (const [type, selector] of Object.entries(selectors)) {
+				if (current.matches(selector)) {
+					const allOfType = container.querySelectorAll(selector);
+					const index = Array.from(allOfType).indexOf(current);
+					const text = getBookmarkAnchorText(current, type);
+					return { element: current, type, text, index };
+				}
+			}
+			current = current.parentElement;
+		}
+
+		// Fallback: find closest boundary by click position
+		for (const [type, selector] of Object.entries(selectors)) {
+			const elements = container.querySelectorAll(selector);
+			for (const el of elements) {
+				const rect = el.getBoundingClientRect();
+				const clickY = clicked.getBoundingClientRect().top;
+				// If clicked within or just below this element
+				if (clickY >= rect.top - 50 && clickY <= rect.bottom + 50) {
+					const allOfType = container.querySelectorAll(selector);
+					const index = Array.from(allOfType).indexOf(el);
+					const text = getBookmarkAnchorText(el as HTMLElement, type);
+					return { element: el, type, text, index };
+				}
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * Extract identifying text from bookmark anchor element.
+	 */
+	function getBookmarkAnchorText(element: HTMLElement, type: string): string {
+		switch (type) {
+			case 'header':
+				return element.textContent?.slice(0, 100) || '';
+			case 'fenced':
+				// Get first line or container type
+				return element.className || element.textContent?.slice(0, 50) || '';
+			case 'codeblock':
+				// Get first line of code
+				return element.textContent?.split('\n')[0]?.slice(0, 100) || '';
+			case 'paragraph':
+				return element.textContent?.slice(0, 100) || '';
+			default:
+				return '';
+		}
+	}
+
+	/**
+	 * Create bookmark marker DOM element.
+	 */
+	function createBookmarkMarker(): HTMLElement {
+		const marker = document.createElement('div');
+		marker.className = 'bookmark-marker';
+		marker.innerHTML = `
+			<span class="bookmark-icon">📍</span>
+			<span class="bookmark-label">Bookmark</span>
+			<button class="bookmark-dismiss" title="Remove bookmark">×</button>
+		`;
+
+		// Add dismiss handler
+		const dismissBtn = marker.querySelector('.bookmark-dismiss');
+		dismissBtn?.addEventListener('click', (e) => {
+			e.stopPropagation();
+			clearBookmarkMarker();
+			// Also clear from database
+			fetch('/api/settings', {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ scroll_bookmark: null })
+			}).catch(err => console.error('Failed to clear bookmark:', err));
+		});
+
+		return marker;
+	}
+
+	/**
+	 * Clear bookmark marker from DOM and state.
+	 */
+	function clearBookmarkMarker() {
+		if (bookmarkMarkerElement) {
+			bookmarkMarkerElement.remove();
+			bookmarkMarkerElement = null;
+		}
+		bookmarkAnchor = null;
+	}
+
+	/**
+	 * Restore bookmark marker on page load.
+	 */
+	function restoreBookmarkMarker() {
+		if (!bookmarkAnchor) return;
+
+		const { message_id, anchor_type, anchor_text, anchor_index } = bookmarkAnchor;
+
+		// Find the message turn
+		const messageTurn = document.querySelector(`[data-message-id="${message_id}"]`);
+		if (!messageTurn) {
+			// Message not loaded or deleted - clear bookmark
+			console.log('Bookmark message not found, clearing bookmark');
+			bookmarkAnchor = null;
+			fetch('/api/settings', {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ scroll_bookmark: null })
+			}).catch(err => console.error('Failed to clear stale bookmark:', err));
+			return;
+		}
+
+		// Find anchor element with fallback chain
+		const anchor = findAnchorWithFallback(messageTurn, anchor_type, anchor_text, anchor_index);
+		if (!anchor) {
+			// Snap to top of turn as ultimate fallback
+			const marker = createBookmarkMarker();
+			messageTurn.prepend(marker);
+			bookmarkMarkerElement = marker;
+			return;
+		}
+
+		// Create and place marker
+		const marker = createBookmarkMarker();
+		anchor.before(marker);
+		bookmarkMarkerElement = marker;
+	}
+
+	/**
+	 * Find anchor element with fuzzy matching fallback.
+	 */
+	function findAnchorWithFallback(container: Element, type: string, text: string, index: number): Element | null {
+		const selectors: Record<string, string> = {
+			header: 'h1, h2, h3, h4, h5, h6',
+			fenced: '.admonition, .boss-container, .red-container, .blue-container',
+			divider: 'hr',
+			codeblock: 'pre',
+			paragraph: 'p'
+		};
+
+		const selector = selectors[type];
+		if (!selector) return null;
+
+		const elements = container.querySelectorAll(selector);
+
+		// Try exact index first
+		if (elements[index]) {
+			const elementText = getBookmarkAnchorText(elements[index] as HTMLElement, type);
+			// Check if text roughly matches (80% threshold)
+			if (fuzzyMatch(elementText, text, 0.8)) {
+				return elements[index];
+			}
+		}
+
+		// Try fuzzy text match on all elements of same type
+		for (const el of elements) {
+			const elementText = getBookmarkAnchorText(el as HTMLElement, type);
+			if (fuzzyMatch(elementText, text, 0.8)) {
+				return el;
+			}
+		}
+
+		// Fallback to first element of same type
+		if (elements.length > 0) {
+			return elements[0];
+		}
+
+		return null;
+	}
+
+	/**
+	 * Simple fuzzy match - checks if strings are similar enough.
+	 */
+	function fuzzyMatch(a: string, b: string, threshold: number): boolean {
+		if (!a || !b) return false;
+		if (a === b) return true;
+
+		const shorter = a.length < b.length ? a : b;
+		const longer = a.length < b.length ? b : a;
+
+		// Simple containment check
+		if (longer.includes(shorter)) return true;
+
+		// Levenshtein-ish: count matching characters
+		let matches = 0;
+		const aLower = a.toLowerCase();
+		const bLower = b.toLowerCase();
+		for (let i = 0; i < Math.min(aLower.length, bLower.length); i++) {
+			if (aLower[i] === bLower[i]) matches++;
+		}
+
+		return (matches / Math.max(a.length, b.length)) >= threshold;
+	}
+
+	/**
 	 * Restore annotation marker from articles data on page load
 	 */
 	function restoreAnnotationMarker() {
@@ -2307,7 +2594,8 @@
 			class="messages-content"
 			class:annotation-mode={annotationMode}
 			class:focus-selection-mode={focusSelectionMode}
-			onclick={(e) => { handleAnnotationClick(e); handleFocusSelectionClick(e); }}
+			class:bookmark-mode={bookmarkMode}
+			onclick={(e) => { handleAnnotationClick(e); handleFocusSelectionClick(e); handleBookmarkClick(e); }}
 		>
 			{#if hasMore && !focusedMessageId}
 				<button class="load-more-btn" onclick={loadMoreMessages} disabled={isLoadingMore}>
@@ -2427,7 +2715,7 @@
 						onSelect={selectPersona}
 					/>
 
-					<ScrollControls config={CHAT_CONFIG} />
+					<ScrollControls config={CHAT_CONFIG} bookmarkPosition={getBookmarkPosition()} />
 
 					<button
 						class="control-btn hit-target"
@@ -2468,6 +2756,30 @@
 						}}
 					>
 						<Icon src={LuMaximize2} size="11" />
+					</button>
+
+					<button
+						class="control-btn hit-target"
+						class:active={bookmarkMode}
+						class:bookmark-active={bookmarkAnchor !== null}
+						style={(bookmarkMode || bookmarkAnchor) ? `color: ${currentAccentColor}` : ''}
+						title={bookmarkMode ? 'Exit bookmark placement mode' : (bookmarkAnchor ? 'Clear bookmark' : 'Place a bookmark marker')}
+						onclick={() => {
+							if (bookmarkAnchor && !bookmarkMode) {
+								// Bookmark exists - clear it
+								clearBookmarkMarker();
+								fetch('/api/settings', {
+									method: 'PUT',
+									headers: { 'Content-Type': 'application/json' },
+									body: JSON.stringify({ scroll_bookmark: null })
+								}).catch(err => console.error('Failed to clear bookmark:', err));
+							} else {
+								// No bookmark or in placement mode - toggle placement mode
+								bookmarkMode = !bookmarkMode;
+							}
+						}}
+					>
+						<Icon src={LuBookmark} size="11" />
 					</button>
 
 					<button
@@ -2672,6 +2984,8 @@
 		opacity: 0.7;
 		transition: opacity 0.2s;
 		padding: 4px;
+		transform: translateZ(0); /* GPU layer to prevent hover jitter */
+		backface-visibility: hidden; /* Additional anti-jitter measure */
 	}
 
 	.control-btn:hover {
@@ -2861,5 +3175,68 @@
 		outline: 2px solid var(--current-accent);
 		outline-offset: 4px;
 		border-radius: 8px;
+	}
+
+	/* Bookmark mode styles */
+	.messages-content.bookmark-mode {
+		cursor: crosshair;
+	}
+
+	.messages-content.bookmark-mode :global(.ai-message) {
+		cursor: crosshair;
+	}
+
+	:global(.bookmark-marker) {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		padding: 4px 8px;
+		margin: 8px 0;
+		background: hsl(var(--accent) / 0.1);
+		border-left: 3px solid var(--current-accent);
+		border-radius: 0 4px 4px 0;
+		font-size: 12px;
+		color: hsl(var(--muted-foreground));
+		animation: markerPulse 0.3s ease-out;
+		position: relative;
+	}
+
+	:global(.bookmark-marker .bookmark-icon) {
+		font-size: 14px;
+	}
+
+	:global(.bookmark-marker .bookmark-label) {
+		color: var(--current-accent);
+		font-weight: 500;
+	}
+
+	:global(.bookmark-dismiss) {
+		position: absolute;
+		right: 8px;
+		top: 50%;
+		transform: translateY(-50%);
+		background: transparent;
+		border: none;
+		color: hsl(var(--muted-foreground));
+		font-size: 1.2rem;
+		font-weight: bold;
+		cursor: pointer;
+		opacity: 0;
+		transition: opacity 0.2s;
+		padding: 4px 8px;
+		line-height: 1;
+	}
+
+	:global(.bookmark-marker:hover .bookmark-dismiss) {
+		opacity: 0.7;
+	}
+
+	:global(.bookmark-dismiss:hover) {
+		opacity: 1 !important;
+	}
+
+	/* Bookmark button active state when bookmark exists */
+	.control-btn.bookmark-active {
+		opacity: 1;
 	}
 </style>

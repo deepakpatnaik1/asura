@@ -104,11 +104,11 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession, supabase 
 		};
 	});
 
-	// Fetch user settings (for selected_persona, watched_article_id, focused_message_id, last paste settings)
+	// Fetch user settings (for selected_persona, watched_article_id, focused_message_id, scroll_bookmark, last paste settings)
 	const { data: settings } = await monitor.track('fetchSettings', async () =>
 		await supabase
 			.from('user_settings')
-			.select('selected_persona, default_model, watched_article_id, focused_message_id, last_content_owner, last_content_lifecycle')
+			.select('selected_persona, default_model, watched_article_id, focused_message_id, scroll_bookmark, last_content_owner, last_content_lifecycle')
 			.eq('user_id', user!.id)
 			.single()
 	);
@@ -134,6 +134,7 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession, supabase 
 		defaultModel: settings?.default_model || 'claude-haiku-4-5-20251001',
 		watchedArticleId: settings?.watched_article_id || null,
 		focusedMessageId: settings?.focused_message_id || null,
+		scrollBookmark: settings?.scroll_bookmark || null,
 		lastContentOwner: settings?.last_content_owner || 'no-one',
 		lastContentLifecycle: settings?.last_content_lifecycle || 'raw'
 	};
