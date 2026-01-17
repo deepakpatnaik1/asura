@@ -14,7 +14,7 @@ AI mentor toolkit. Single unified interface at `/` with 6 personas sharing one c
 - **Gunnar**: Startup mentor - finance, bootstrapping, strategy (6 whiteboard tools)
 - **Kirby**: Guerrilla marketer - bold ideas, different mindspace
 - **Samara**: Reading teacher - deep reading, pattern recognition
-- **Alicja**: Chief of staff - todos, calendar, founder diary (17 productivity tools)
+- **Felix**: Money to-dos - invoices, taxes, paperwork, Gmail, paper scans, browser automation
 - **Eva**: Character designer - image generation/editing (9 canvas/image tools)
 - **Ananya**: Community manager - Reddit engagement (pending)
 

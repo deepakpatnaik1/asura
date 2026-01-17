@@ -10,7 +10,6 @@ import { nowBerlinISO, toBerlinLocale } from '$lib/utils/timezone';
 export { PERSONA_GUNNAR } from './personas/gunnar';
 export { PERSONA_KIRBY } from './personas/kirby';
 export { PERSONA_SAMARA } from './personas/samara';
-export { PERSONA_ALICJA } from './personas/alicja';
 export { PERSONA_EVA } from './personas/eva';
 export { PERSONA_ANANYA } from './personas/ananya';
 export { PERSONA_FELIX } from './personas/felix';
@@ -18,7 +17,6 @@ export { PERSONA_FELIX } from './personas/felix';
 import { PERSONA_GUNNAR } from './personas/gunnar';
 import { PERSONA_KIRBY } from './personas/kirby';
 import { PERSONA_SAMARA } from './personas/samara';
-import { PERSONA_ALICJA } from './personas/alicja';
 import { PERSONA_EVA } from './personas/eva';
 import { PERSONA_ANANYA } from './personas/ananya';
 import { PERSONA_FELIX } from './personas/felix';
@@ -28,14 +26,13 @@ const PERSONA_PROMPTS: Record<string, string> = {
 	gunnar: PERSONA_GUNNAR,
 	kirby: PERSONA_KIRBY,
 	samara: PERSONA_SAMARA,
-	alicja: PERSONA_ALICJA,
 	eva: PERSONA_EVA,
 	ananya: PERSONA_ANANYA,
 	felix: PERSONA_FELIX
 };
 
 /**
- * Format current time for Alicja/Felix's prompt
+ * Format current time for Felix's prompt
  * Human-readable with ISO for precision: "Sunday, December 7, 2025 at 3:45 PM (2025-12-07T15:45:00+01:00)"
  * IMPORTANT: Both parts must be Berlin time, not UTC!
  */
@@ -57,8 +54,8 @@ function formatCurrentTime(): string {
 export function getPersonaPrompt(personaName: string): string {
 	let prompt = PERSONA_PROMPTS[personaName] || PERSONA_GUNNAR;
 
-	// Inject current time for productivity personas (Alicja, Felix)
-	if (personaName === 'alicja' || personaName === 'felix') {
+	// Inject current time for Felix
+	if (personaName === 'felix') {
 		prompt = prompt.replace('{{CURRENT_TIME}}', formatCurrentTime());
 	}
 

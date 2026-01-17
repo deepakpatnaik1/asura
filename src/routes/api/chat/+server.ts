@@ -75,6 +75,7 @@ import {
 	checkAndRenewGmailWatches,
 	type GmailToolContext
 } from '$lib/api/gmail-tools';
+import { scanToolDefinitions } from '$lib/api/scan-tools';
 import {
 	BROWSER_TOOLS,
 	executeBrowserTool,
@@ -132,7 +133,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 		const { data: settings } = await supabase
 			.from('user_settings')
 			.select(`selected_persona, default_model,
-				model_gunnar, model_kirby, model_samara, model_alicja, model_eva, model_ananya,
+				model_gunnar, model_kirby, model_samara, model_eva, model_ananya, model_felix,
 				model_tool_calling, model_character_planning, model_image_gen, model_image_edit`)
 			.eq('user_id', userId)
 			.single();
@@ -265,7 +266,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				supportsToolCalling
 			});
 
-			// Set up todo tools context (Alicja, Felix)
+			// Set up todo tools context (Felix)
 			if (hasTodoTools) {
 				todoMutations = createEmptyMutations();
 				blockMutations = createEmptyBlockMutations();
@@ -313,6 +314,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				if (hasGmailTools) {
 					gmailContext = { userId };
 					allTools.push(...GMAIL_TOOLS);
+					// Add scan tools (paper mail) - routed through Gmail executor
+					allTools.push(...scanToolDefinitions);
 				}
 
 				// Add browser tools if persona has them (Felix)

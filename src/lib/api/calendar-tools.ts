@@ -1,8 +1,8 @@
 /**
- * Calendar Tools for Alicja
+ * Calendar Tools for Felix
  *
  * Tool definitions and executors for Google Calendar operations.
- * These tools allow Alicja to create, update, and delete calendar events.
+ * These tools allow Felix to create, update, and delete calendar events.
  */
 
 import type Anthropic from '@anthropic-ai/sdk';
@@ -469,7 +469,7 @@ async function executeListEvents(
 			};
 		}
 
-		// Format events for Alicja
+		// Format events for Felix
 		const formattedEvents = events.map((event) => ({
 			event_id: event.id,
 			title: event.summary,
@@ -548,7 +548,7 @@ async function executeCheckAvailability(
 			};
 		}
 
-		// Format conflicts for Alicja
+		// Format conflicts for Felix
 		const conflicts = busyPeriods.map((period: { start: string; end: string }) => ({
 			start: period.start,
 			end: period.end

@@ -39,8 +39,8 @@ interface ContextComponents {
 	highSalienceArcs: string;
 	otherArcs: string;
 	workData: string; // Todo mode: current todos and tags
-	calendar: string; // Google Calendar events (for Alicja)
-	fitness: string; // Fitness/health log (for Alicja)
+	calendar: string; // Google Calendar events (for Felix)
+	fitness: string; // Fitness/health log (for Felix)
 	whiteboard: string; // Active whiteboard (for Gunnar)
 	canvas: string; // Designer canvases (for Eva)
 	subredditRegistry: string; // Subreddit list with engagement timestamps (for Ananya)
@@ -263,7 +263,7 @@ export async function buildContext(
 				: Promise.resolve({ data: [] })
 		]);
 
-		// Use Alicja-style formatting (with IDs) for personas with tools
+		// Use Felix-style formatting (with IDs) for personas with tools
 		// Use Gunnar-style formatting (pre-computed analytics) for personas without tools
 		const { PERSONAS } = await import('$lib/config/personas');
 		const personaHasTools = (PERSONAS[personaName]?.tools?.length ?? 0) > 0;
@@ -282,7 +282,7 @@ export async function buildContext(
 		totalTokens += estimateTokens(workDataText);
 	}
 
-	// Priority 0.6: Google Calendar events (for Alicja)
+	// Priority 0.6: Google Calendar events (for Felix)
 	if (hasChunk('calendar')) {
 		try {
 			// Get Google OAuth tokens
@@ -330,7 +330,7 @@ export async function buildContext(
 		}
 	}
 
-	// Priority 0.7: Fitness log (for Alicja)
+	// Priority 0.7: Fitness log (for Felix)
 	if (hasChunk('fitness')) {
 		try {
 			const { data: fitnessData } = await supabase
@@ -890,7 +890,7 @@ function formatWorkDataForGunnar(
 	const diaryJson = JSON.stringify(formattedDiary, null, 2);
 	const tagsJson = JSON.stringify(tags);
 
-	return `--- PRODUCTIVITY DATA (From Alicja) ---
+	return `--- PRODUCTIVITY DATA (From Felix) ---
 <productivity_data>
 <tags>${tagsJson}</tags>
 <todos>
@@ -904,7 +904,7 @@ ${diaryJson}
 `;
 }
 
-// Format work data (todos, tags, and diary) for Alicja (with IDs and hierarchy)
+// Format work data (todos, tags, and diary) for Felix (with IDs and hierarchy)
 function formatWorkData(
 	todos: Array<{
 		id: string;
@@ -989,7 +989,7 @@ ${diaryJson}
 `;
 }
 
-// Format Google Calendar events for Alicja's context
+// Format Google Calendar events for Felix's context
 interface CalendarEvent {
 	id: string;
 	summary: string;
@@ -1028,7 +1028,7 @@ ${eventsJson}
 `;
 }
 
-// Format fitness log for Alicja
+// Format fitness log for Felix
 function formatFitnessLog(
 	entries: Array<{
 		id: string;
@@ -1242,9 +1242,9 @@ function assembleContext(components: ContextComponents): string {
 	const parts = [
 		components.everyone, // 'Everyone' content first (shared knowledge across all personas)
 		components.subredditRegistry, // Subreddit registry (for Ananya - before superjournal so she sees it first)
-		components.workData, // Work data for todo mode (before superjournal so Alicja sees todos first)
-		components.calendar, // Calendar events (for Alicja)
-		components.fitness, // Fitness log (for Alicja)
+		components.workData, // Work data for todo mode (before superjournal so Felix sees todos first)
+		components.calendar, // Calendar events (for Felix)
+		components.fitness, // Fitness log (for Felix)
 		components.whiteboard, // Active whiteboard (for Gunnar)
 		components.canvas, // Designer canvases (for Eva)
 		components.superjournal,

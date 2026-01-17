@@ -18,11 +18,11 @@ export const uuidSchema = z.string().uuid('Invalid ID format');
 export const nonEmptyString = z.string().min(1, 'Required');
 
 /** Persona enum (allowed values) */
-export const personaSchema = z.enum(['gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya', 'felix']);
+export const personaSchema = z.enum(['gunnar', 'kirby', 'samara', 'eva', 'ananya', 'felix']);
 
 /** Override key enum (personas + processor types for model overrides) */
 export const overrideKeySchema = z.enum([
-	'gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya', 'felix', // Personas
+	'gunnar', 'kirby', 'samara', 'eva', 'ananya', 'felix', // Personas
 	'embeddings', 'file_artisan_cut', 'chat_artisan_cut', // Text processes
 	'tool_calling', 'image_gen', 'image_edit', // Eva pipeline
 	'comment_generator' // Ananya pipeline
@@ -71,7 +71,6 @@ export const settingsUpdateSchema = z.object({
 	model_gunnar: z.string().nullable().optional(),
 	model_kirby: z.string().nullable().optional(),
 	model_samara: z.string().nullable().optional(),
-	model_alicja: z.string().nullable().optional(),
 	model_eva: z.string().nullable().optional(),
 	model_ananya: z.string().nullable().optional(),
 	model_felix: z.string().nullable().optional(),
@@ -98,7 +97,15 @@ export const settingsUpdateSchema = z.object({
 	last_content_lifecycle: z.string().optional(),
 
 	// Todo visibility (Felix-controlled, UI-only)
-	hide_completed_todos: z.boolean().optional()
+	hide_completed_todos: z.boolean().optional(),
+
+	// Scroll bookmark (persisted navigation marker within a message turn)
+	scroll_bookmark: z.object({
+		message_id: z.string().uuid(),
+		anchor_type: z.enum(['header', 'divider', 'fenced', 'codeblock', 'paragraph']),
+		anchor_text: z.string(),
+		anchor_index: z.number().int().min(0)
+	}).nullable().optional()
 }).refine(
 	(data) => Object.keys(data).length > 0,
 	{ message: 'At least one field must be provided' }

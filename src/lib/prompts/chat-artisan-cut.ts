@@ -10,7 +10,7 @@
  *
  * Two content types:
  * - Type 1A: Strategic (Gunnar, Blue) - "What did we learn?"
- * - Type 1B: Operational (Ananya, Felix, Kirby, Samara, Alicja, Eva) - "Where have I been, what did I do?"
+ * - Type 1B: Operational (Ananya, Felix, Kirby, Samara, Eva) - "Where have I been, what did I do?"
  */
 
 export const CHAT_ARTISAN_CUT_PROMPT = `ARTISAN CUT
@@ -51,7 +51,7 @@ Key question: "What did we learn?"
 Goal: Preserve what was learned, decided, or shifted - the things that inform future decisions.
 
 **Type 1B: Operational Conversation Turns**
-Personas: Ananya, Felix, Kirby, Samara, Alicja, Eva
+Personas: Ananya, Felix, Kirby, Samara, Eva
 Key question: "Where have I been, what did I do?"
 Goal: Preserve what was done, where, and what happened - the things that enable workflow continuity.
 
@@ -119,7 +119,7 @@ WHAT TO REMOVE:
 
 ---
 
-TYPE 1B: OPERATIONAL (Ananya, Felix, Kirby, Samara, Alicja, Eva)
+TYPE 1B: OPERATIONAL (Ananya, Felix, Kirby, Samara, Eva)
 
 WHAT TO KEEP:
 

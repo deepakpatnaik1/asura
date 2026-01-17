@@ -26,7 +26,7 @@
 	let lifecycle = $state<Lifecycle>((lastLifecycle as Lifecycle) || 'raw');
 
 	// Owner: which persona owns this content - initialized from last selection
-	type Owner = 'no-one' | 'felix' | 'gunnar' | 'kirby' | 'samara' | 'alicja' | 'eva' | 'ananya' | 'everyone';
+	type Owner = 'no-one' | 'felix' | 'gunnar' | 'kirby' | 'samara' | 'eva' | 'ananya' | 'everyone';
 	let owner = $state<Owner>((lastOwner as Owner) || 'no-one');
 	console.log('[PasteArea] State initialized:', { owner, lifecycle });
 
@@ -37,7 +37,6 @@
 		gunnar: { label: 'Gunnar', color: `var(--gunnar-accent, ${getPaletteColor('gunnar')})` },
 		kirby: { label: 'Kirby', color: `var(--kirby-accent, ${getPaletteColor('kirby')})` },
 		samara: { label: 'Samara', color: `var(--samara-accent, ${getPaletteColor('samara')})` },
-		alicja: { label: 'Alicja', color: `var(--alicja-accent, ${getPaletteColor('alicja')})` },
 		eva: { label: 'Eva', color: `var(--eva-accent, ${getPaletteColor('eva')})` },
 		ananya: { label: 'Ananya', color: `var(--ananya-accent, ${getPaletteColor('ananya')})` },
 		everyone: { label: 'Everyone', color: 'var(--boss-accent)' }
@@ -435,7 +434,6 @@
 						<option value="gunnar">{ownerConfig.gunnar.label}</option>
 						<option value="kirby">{ownerConfig.kirby.label}</option>
 						<option value="samara">{ownerConfig.samara.label}</option>
-						<option value="alicja">{ownerConfig.alicja.label}</option>
 						<option value="eva">{ownerConfig.eva.label}</option>
 						<option value="ananya">{ownerConfig.ananya.label}</option>
 						<option disabled>─────────</option>

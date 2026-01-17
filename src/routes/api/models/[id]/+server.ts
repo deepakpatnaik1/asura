@@ -30,7 +30,7 @@ export const DELETE: RequestHandler = async ({ params, locals: { safeGetSession 
 	// Clear model from user_settings where it's referenced
 	// (Set to null so it falls back to default_model)
 	const modelColumns = [
-		'model_gunnar', 'model_kirby', 'model_samara', 'model_alicja', 'model_ananya',
+		'model_gunnar', 'model_kirby', 'model_samara', 'model_ananya', 'model_felix',
 		'model_embeddings', 'model_file_artisan_cut', 'model_chat_artisan_cut'
 	];
 

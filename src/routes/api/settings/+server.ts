@@ -12,7 +12,6 @@ const MODEL_COLUMNS = [
 	'model_gunnar',
 	'model_kirby',
 	'model_samara',
-	'model_alicja',
 	'model_eva',
 	'model_ananya',
 	'model_felix',
@@ -35,10 +34,10 @@ export const GET: RequestHandler = async ({ locals: { safeGetSession, supabase }
 		.from('user_settings')
 		.select(
 			`default_model, selected_persona, watched_article_id, focused_message_id,
-			 model_gunnar, model_kirby, model_samara, model_alicja, model_eva, model_ananya, model_felix,
+			 model_gunnar, model_kirby, model_samara, model_eva, model_ananya, model_felix,
 			 model_embeddings, model_file_artisan_cut, model_chat_artisan_cut,
 			 model_character_planning, model_image_gen, model_image_edit,
-			 hide_completed_todos`
+			 hide_completed_todos, scroll_bookmark`
 		)
 		.eq('user_id', userId)
 		.single();
@@ -92,6 +91,7 @@ export const PUT: RequestHandler = async ({ request, locals: { safeGetSession, s
 	if (validatedData.last_content_owner !== undefined) updateData.last_content_owner = validatedData.last_content_owner;
 	if (validatedData.last_content_lifecycle !== undefined) updateData.last_content_lifecycle = validatedData.last_content_lifecycle;
 	if (validatedData.hide_completed_todos !== undefined) updateData.hide_completed_todos = validatedData.hide_completed_todos;
+	if (validatedData.scroll_bookmark !== undefined) updateData.scroll_bookmark = validatedData.scroll_bookmark;
 
 	// Model overrides - check each column
 	for (const col of MODEL_COLUMNS) {

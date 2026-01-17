@@ -24,7 +24,6 @@
 		'gunnar': `var(--gunnar-accent, ${getPaletteColor('gunnar')})`,
 		'kirby': `var(--kirby-accent, ${getPaletteColor('kirby')})`,
 		'samara': `var(--samara-accent, ${getPaletteColor('samara')})`,
-		'alicja': `var(--alicja-accent, ${getPaletteColor('alicja')})`,
 		'eva': `var(--eva-accent, ${getPaletteColor('eva')})`,
 		'ananya': `var(--ananya-accent, ${getPaletteColor('ananya')})`,
 		'everyone': 'var(--boss-accent)'

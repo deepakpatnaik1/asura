@@ -232,11 +232,7 @@
 			{/if}
 		</div>
 		<div class="message-text">
-			{#if personaName === 'alicja' && /\blog (this|it|the founder diary)\b/i.test(userMessage)}
-				Alicja, log this.
-			{:else}
-				{@html autoLinkUrls(userMessage)}
-			{/if}
+			{@html autoLinkUrls(userMessage)}
 		</div>
 	</div>
 </div>

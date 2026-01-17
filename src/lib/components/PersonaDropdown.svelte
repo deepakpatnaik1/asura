@@ -113,7 +113,7 @@
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
-		width: 52px; /* Fixed width for longest name (Gunnar/Samara/Alicja) */
+		width: 52px; /* Fixed width for longest name (Gunnar/Samara/Ananya) */
 		text-align: center;
 	}
 

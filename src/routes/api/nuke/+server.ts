@@ -33,7 +33,6 @@ const VALID_BUCKETS = [
 	'persona:gunnar',
 	'persona:kirby',
 	'persona:samara',
-	'persona:alicja',
 	'persona:eva',
 	'persona:ananya',
 	'persona:felix',

@@ -184,10 +184,15 @@ export const GMAIL_TOOLS: Anthropic.Tool[] = [
 ];
 
 /**
- * Check if a tool name is a Gmail tool
+ * Scan tool names (paper mail) - routed through Gmail executor
+ */
+const SCAN_TOOL_NAMES = ['scan_paper_folder', 'list_pending_scans', 'mark_scan_addressed'];
+
+/**
+ * Check if a tool name is a Gmail tool (includes scan tools)
  */
 export function isGmailTool(toolName: string): boolean {
-	return GMAIL_TOOLS.some((t) => t.name === toolName);
+	return GMAIL_TOOLS.some((t) => t.name === toolName) || SCAN_TOOL_NAMES.includes(toolName);
 }
 
 /**
@@ -245,6 +250,7 @@ export async function executeGmailTool(
 			return executeMarkEmailAddressed(userId, input);
 
 		// Scan tools (paper mail) - delegate to scan-tools
+		case 'scan_paper_folder':
 		case 'list_pending_scans':
 		case 'mark_scan_addressed': {
 			const { executeScanTool } = await import('./scan-tools');

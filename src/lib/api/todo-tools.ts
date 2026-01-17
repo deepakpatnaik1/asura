@@ -1,8 +1,8 @@
 /**
- * Todo Tools for Alicja
+ * Todo Tools for Felix
  *
- * Tool definitions and executors for todo/tag operations.
- * These tools allow Alicja to create, complete, push, and delete todos.
+ * Tool definitions and executors for todo operations.
+ * These tools allow Felix to create, complete, push, and delete todos.
  */
 
 import type Anthropic from '@anthropic-ai/sdk';

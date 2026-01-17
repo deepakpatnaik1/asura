@@ -25,7 +25,7 @@
 	}
 
 	// All override keys (personas + processors)
-	const OVERRIDE_KEYS = ['gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya', 'felix', 'embeddings', 'file_artisan_cut', 'chat_artisan_cut', 'character_planning', 'image_gen', 'image_edit'] as const;
+	const OVERRIDE_KEYS = ['gunnar', 'kirby', 'samara', 'eva', 'ananya', 'felix', 'embeddings', 'file_artisan_cut', 'chat_artisan_cut', 'character_planning', 'image_gen', 'image_edit'] as const;
 	type OverrideKey = typeof OVERRIDE_KEYS[number];
 
 	let models = $state<Model[]>([]);
@@ -33,7 +33,6 @@
 		gunnar: '',
 		kirby: '',
 		samara: '',
-		alicja: '',
 		eva: '',
 		ananya: '',
 		felix: '',
@@ -151,7 +150,6 @@
 				gunnar: '',
 				kirby: '',
 				samara: '',
-				alicja: '',
 				eva: '',
 				ananya: '',
 				felix: '',
@@ -519,18 +517,6 @@
 							<div class="dropdown-row">
 								<label for="samara-select">Samara</label>
 								<select id="samara-select" value={modelOverrides.samara} onchange={(e) => handleOverrideChange('samara', e)}>
-									{#each modelsByProvider as group}
-										<optgroup label={group.label}>
-											{#each group.models as model}
-												<option value={model.model_identifier}>{model.model_name}</option>
-											{/each}
-										</optgroup>
-									{/each}
-								</select>
-							</div>
-							<div class="dropdown-row">
-								<label for="alicja-select">Alicja</label>
-								<select id="alicja-select" value={modelOverrides.alicja} onchange={(e) => handleOverrideChange('alicja', e)}>
 									{#each modelsByProvider as group}
 										<optgroup label={group.label}>
 											{#each group.models as model}
@@ -977,7 +963,7 @@
 	 * Update these counts when adding/removing dropdowns:
 	 */
 	.all-models-list {
-		--personas-count: 7;      /* Gunnar, Kirby, Samara, Alicja, Eva, Ananya, Felix */
+		--personas-count: 6;      /* Gunnar, Kirby, Samara, Eva, Ananya, Felix */
 		--processes-count: 6;     /* Embeddings, File artisan cut, Chat artisan cut, Character plan (NSFW), Image gen (NSFW), Image editing (NSFW) */
 		--dropdown-height: 24px;
 		--dropdown-gap: 6px;

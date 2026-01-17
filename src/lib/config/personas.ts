@@ -37,15 +37,6 @@ export type ToolName =
 	| 'reopen_todo'
 	| 'update_todo'
 	| 'delete_todo'
-	// Tag tools
-	| 'create_tag'
-	| 'delete_tag'
-	| 'rename_tag'
-	| 'merge_tags'
-	// Diary tools
-	| 'log_diary'
-	| 'update_diary'
-	| 'delete_diary'
 	// Fitness tools
 	| 'log_fitness'
 	// Calendar tools
@@ -94,15 +85,13 @@ export type ToolName =
 	| 'expand_section'
 	| 'list_todo_blocks'
 	// Gmail tools (Felix) - email monitoring
-	| 'scan_gmail_inbox'
-	| 'add_gmail_watch_rule'
-	| 'remove_gmail_watch_rule'
-	| 'list_gmail_watch_rules'
+	| 'scan_starred_emails'
 	| 'list_gmail_accounts'
 	| 'read_gmail_message'
 	| 'list_pending_emails'
 	| 'mark_email_addressed'
 	// Scan tools (Felix) - paper mail scanning
+	| 'scan_paper_folder'
 	| 'list_pending_scans'
 	| 'mark_scan_addressed'
 	// Browser tools (Felix) - portal automation
@@ -128,7 +117,7 @@ export interface Persona {
 }
 
 /**
- * Gunnar: Full memory pyramid (no productivity data - that's Alicja's domain)
+ * Gunnar: Full memory pyramid (no productivity data - that's Felix's domain)
  */
 const GUNNAR_CHUNKS: ContextChunk[] = [
 	'working',
@@ -156,10 +145,6 @@ const KIRBY_CHUNKS: ContextChunk[] = [
  */
 const SAMARA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic', 'everyone', 'active'];
 
-/**
- * Alicja: Chief of Staff - needs productivity data in context for ID lookups
- */
-const ALICJA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic', 'everyone', 'active', 'todos', 'diary', 'tags'];
 
 /**
  * Gunnar whiteboard tools
@@ -206,39 +191,14 @@ const ANANYA_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic
  */
 const ANANYA_TOOLS: ToolName[] = ['fetch_reddit_thread', 'fetch_subreddit_posts', 'log_engagement', 'temporal_calc'];
 
-/**
- * All Alicja tools
- */
-const ALICJA_TOOLS: ToolName[] = [
-	'create_todo',
-	'complete_todo',
-	'reopen_todo',
-	'update_todo',
-	'delete_todo',
-	'create_tag',
-	'delete_tag',
-	'rename_tag',
-	'merge_tags',
-	'log_diary',
-	'update_diary',
-	'delete_diary',
-	'log_fitness',
-	'list_calendar_events',
-	'create_calendar_event',
-	'update_calendar_event',
-	'delete_calendar_event',
-	'check_calendar_availability',
-	'temporal_calc'
-];
 
 /**
  * Felix: Money to-dos persona - financial, bureaucratic, business admin
- * Same context and tools as Alicja (retiring her ~end of month)
  */
-const FELIX_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic', 'everyone', 'active', 'todos', 'diary', 'tags', 'calendar'];
+const FELIX_CHUNKS: ContextChunk[] = ['working', 'recent', 'starred', 'semantic', 'everyone', 'active', 'todos', 'calendar'];
 
 /**
- * Felix tools: Same as Alicja - full productivity suite
+ * Felix tools: Full productivity suite + Gmail, scans, browser
  */
 const FELIX_TOOLS: ToolName[] = [
 	// Todo data tools
@@ -258,25 +218,14 @@ const FELIX_TOOLS: ToolName[] = [
 	'collapse_section',
 	'expand_section',
 	'list_todo_blocks',
-	// Tag tools
-	'create_tag',
-	'delete_tag',
-	'rename_tag',
-	'merge_tags',
-	// Diary tools
-	'log_diary',
-	'update_diary',
-	'delete_diary',
 	// Gmail tools
-	'scan_gmail_inbox',
-	'add_gmail_watch_rule',
-	'remove_gmail_watch_rule',
-	'list_gmail_watch_rules',
+	'scan_starred_emails',
 	'list_gmail_accounts',
 	'read_gmail_message',
 	'list_pending_emails',
 	'mark_email_addressed',
 	// Scan tools (paper mail)
+	'scan_paper_folder',
 	'list_pending_scans',
 	'mark_scan_addressed',
 	// Browser tools
@@ -330,16 +279,6 @@ export const PERSONAS: Record<string, Persona> = {
 		compression: true, // All personas use compression
 		tools: ['temporal_calc']
 	},
-	alicja: {
-		name: 'alicja',
-		displayName: 'Alicja',
-		accentColor: getPaletteColor('alicja'),
-		model: null,
-		systemPrompt: 'alicja',
-		contextChunks: ALICJA_CHUNKS,
-		compression: true, // Full memory of Alicja conversations
-		tools: ALICJA_TOOLS
-	},
 	eva: {
 		name: 'eva',
 		displayName: 'Eva',
@@ -385,7 +324,7 @@ export const PERSONAS: Record<string, Persona> = {
 /**
  * Persona names as const array for type safety
  */
-export const PERSONA_NAMES = ['gunnar', 'kirby', 'samara', 'alicja', 'eva', 'ananya', 'felix'] as const;
+export const PERSONA_NAMES = ['gunnar', 'kirby', 'samara', 'eva', 'ananya', 'felix'] as const;
 export type PersonaName = (typeof PERSONA_NAMES)[number];
 
 /**

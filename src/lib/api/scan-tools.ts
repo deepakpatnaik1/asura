@@ -324,6 +324,16 @@ export async function markScanAddressed(scanId: string): Promise<{ success: bool
 
 export const scanToolDefinitions = [
 	{
+		name: 'scan_paper_folder',
+		description:
+			'Scan the paper-scans folder for new documents. Use this to check if Boss has scanned any new paper mail. Returns a list of newly found documents.',
+		input_schema: {
+			type: 'object' as const,
+			properties: {},
+			required: []
+		}
+	},
+	{
 		name: 'list_pending_scans',
 		description:
 			'List scanned paper documents that need attention. Returns documents that Felix flagged as important but Boss has not yet addressed.',
@@ -358,6 +368,48 @@ export async function executeScanTool(
 	input: Record<string, unknown>
 ): Promise<string> {
 	switch (toolName) {
+		case 'scan_paper_folder': {
+			// Scan the folder for new/unprocessed files
+			const files = await fs.readdir(SCAN_FOLDER).catch(() => []);
+			const scanFiles = (files as string[]).filter(
+				(f) =>
+					f.toLowerCase().endsWith('.pdf') ||
+					f.toLowerCase().endsWith('.jpg') ||
+					f.toLowerCase().endsWith('.jpeg')
+			);
+
+			if (scanFiles.length === 0) {
+				return 'Paper scans folder is empty. No documents found.';
+			}
+
+			// Check which files are already processed
+			const newFiles: string[] = [];
+			const existingFiles: string[] = [];
+
+			for (const file of scanFiles) {
+				const filePath = path.join(SCAN_FOLDER, file);
+				const { data: existing } = await supabaseAdmin
+					.from('scanned_documents')
+					.select('id')
+					.eq('file_path', filePath)
+					.single();
+
+				if (existing) {
+					existingFiles.push(file);
+				} else {
+					newFiles.push(file);
+					// Process the new file
+					await processScannedFile(filePath);
+				}
+			}
+
+			if (newFiles.length === 0) {
+				return `Found ${existingFiles.length} document(s) in the folder, all already processed. Use \`list_pending_scans\` to see which ones need attention.`;
+			}
+
+			return `**Scanned ${newFiles.length} new document(s):**\n${newFiles.map((f) => `- ${f}`).join('\n')}\n\nThese will be evaluated shortly. Use \`list_pending_scans\` to see results.`;
+		}
+
 		case 'list_pending_scans': {
 			const scans = await getPendingScans();
 			if (scans.length === 0) {
