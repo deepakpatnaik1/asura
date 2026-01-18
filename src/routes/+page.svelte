@@ -309,18 +309,25 @@
 		anchor_index: number;
 	}
 	let bookmarkAnchor = $state<BookmarkAnchor | null>(data.scrollBookmark || null);
-	let bookmarkMarkerElement = $state<HTMLElement | null>(null);
 
 	/**
 	 * Get bookmark position relative to the scroll container.
-	 * Returns undefined if no bookmark is placed.
+	 * Queries DOM directly since bookmark marker is now part of rendered content.
+	 * Returns undefined if no bookmark marker exists or during SSR.
 	 */
 	function getBookmarkPosition(): number | undefined {
-		if (!bookmarkMarkerElement) return undefined;
-		const container = document.querySelector('.messages-area');
+		// Guard for SSR - document doesn't exist on server
+		if (typeof document === 'undefined') return undefined;
+
+		// Find the rendered bookmark marker in DOM (embedded in content via markdown renderer)
+		const marker = document.querySelector('.bookmark-marker');
+		if (!marker) return undefined;
+
+		const container = document.querySelector('.messages-area') as HTMLElement;
 		if (!container) return undefined;
+
+		const markerRect = marker.getBoundingClientRect();
 		const containerRect = container.getBoundingClientRect();
-		const markerRect = bookmarkMarkerElement.getBoundingClientRect();
 		return markerRect.top - containerRect.top + container.scrollTop;
 	}
 
@@ -985,10 +992,10 @@
 			if (watchedArticleId) {
 				startFileWatching();
 			}
-			// Restore markers if saved (must run after DOM is rendered)
+			// Restore annotation marker if saved (must run after DOM is rendered)
+			// Note: Bookmark marker is now embedded in content and rendered via markdown renderer
 			await tick();
 			restoreAnnotationMarker();
-			restoreBookmarkMarker();
 		})();
 
 		// Listen for nuke events from SettingsModal
@@ -1242,12 +1249,6 @@
 							}
 							return msg;
 						});
-
-						// DOM re-render destroys bookmark marker - restore it after tick
-						if (bookmarkAnchor) {
-							await tick();
-							restoreBookmarkMarker();
-						}
 					}
 
 					// Clear marker and exit annotation mode
@@ -1739,15 +1740,15 @@
 
 	/**
 	 * Handle click in messages area for bookmark placement mode.
-	 * Places a navigation marker at the clicked content boundary.
+	 * Places a navigation marker by embedding <!--bookmark--> in the content via API.
 	 */
-	function handleBookmarkClick(event: MouseEvent) {
+	async function handleBookmarkClick(event: MouseEvent) {
 		if (!bookmarkMode) return;
 
 		const target = event.target as HTMLElement;
 
 		// Skip interactive elements
-		if (target.closest('button') || target.closest('a') || target.closest('.bookmark-dismiss')) return;
+		if (target.closest('button') || target.closest('a') || target.closest('.bookmark-marker')) return;
 
 		// Find the message turn
 		const messageTurn = target.closest('[data-message-id]') as HTMLElement | null;
@@ -1760,30 +1761,43 @@
 		const boundary = findNearestBookmarkBoundary(target, messageTurn);
 		if (!boundary) return;
 
-		// Clear existing bookmark if any
-		clearBookmarkMarker();
+		// Call API to embed bookmark in content
+		try {
+			const response = await fetch(`/api/superjournal/${messageId}/bookmark`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					anchor_type: boundary.type,
+					anchor_text: boundary.text,
+					anchor_index: boundary.index
+				})
+			});
 
-		// Create marker element
-		const marker = createBookmarkMarker();
+			if (response.ok) {
+				const result = await response.json();
 
-		// Insert marker before the boundary element
-		boundary.element.before(marker);
-		bookmarkMarkerElement = marker;
+				// Update local message content to show bookmark immediately
+				allMessages = allMessages.map(msg => {
+					if (msg.id === messageId) {
+						// For linked articles: content marker + updated content
+						// For regular messages: just the updated ai_response
+						if (result.is_linked_article && result.article_id) {
+							return { ...msg, ai_response: `<!--content:${result.article_id}-->\n${result.content}` };
+						}
+						return { ...msg, ai_response: result.content };
+					}
+					// Clear bookmark from old message if it was on a different message
+					if (result.cleared_message_id && msg.id === result.cleared_message_id) {
+						return { ...msg, ai_response: msg.ai_response?.replace(/<!--bookmark-->\n?/g, '') };
+					}
+					return msg;
+				});
 
-		// Store anchor data
-		bookmarkAnchor = {
-			message_id: messageId,
-			anchor_type: boundary.type as BookmarkAnchor['anchor_type'],
-			anchor_text: boundary.text,
-			anchor_index: boundary.index
-		};
-
-		// Persist to database
-		fetch('/api/settings', {
-			method: 'PUT',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ scroll_bookmark: bookmarkAnchor })
-		}).catch(err => console.error('Failed to save bookmark:', err));
+				bookmarkAnchor = result.bookmark_anchor;
+			}
+		} catch (err) {
+			console.error('Failed to place bookmark:', err);
+		}
 
 		// Exit bookmark mode
 		bookmarkMode = false;
@@ -1796,10 +1810,10 @@
 	function findNearestBookmarkBoundary(clicked: HTMLElement, container: Element): { element: Element; type: string; text: string; index: number } | null {
 		const selectors: Record<string, string> = {
 			header: 'h1, h2, h3, h4, h5, h6',
-			fenced: '.admonition, .boss-container, .red-container, .blue-container',
-			divider: 'hr',
-			codeblock: 'pre',
-			paragraph: 'p'
+			fenced: '.fenced-container',
+			divider: '.flourish-divider',
+			codeblock: '.code-block-container',
+			paragraph: 'div[style*="min-height"]'
 		};
 
 		// Walk up from clicked element to find nearest boundary
@@ -1856,146 +1870,39 @@
 	}
 
 	/**
-	 * Create bookmark marker DOM element.
+	 * Clear bookmark via API - removes marker from content and clears state.
 	 */
-	function createBookmarkMarker(): HTMLElement {
-		const marker = document.createElement('div');
-		marker.className = 'bookmark-marker';
-		marker.innerHTML = `
-			<span class="bookmark-icon">📍</span>
-			<span class="bookmark-label">Bookmark</span>
-			<button class="bookmark-dismiss" title="Remove bookmark">×</button>
-		`;
-
-		// Add dismiss handler
-		const dismissBtn = marker.querySelector('.bookmark-dismiss');
-		dismissBtn?.addEventListener('click', (e) => {
-			e.stopPropagation();
-			clearBookmarkMarker();
-			// Also clear from database
-			fetch('/api/settings', {
-				method: 'PUT',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ scroll_bookmark: null })
-			}).catch(err => console.error('Failed to clear bookmark:', err));
-		});
-
-		return marker;
-	}
-
-	/**
-	 * Clear bookmark marker from DOM and state.
-	 */
-	function clearBookmarkMarker() {
-		if (bookmarkMarkerElement) {
-			bookmarkMarkerElement.remove();
-			bookmarkMarkerElement = null;
-		}
-		bookmarkAnchor = null;
-	}
-
-	/**
-	 * Restore bookmark marker on page load.
-	 */
-	function restoreBookmarkMarker() {
+	async function clearBookmark() {
 		if (!bookmarkAnchor) return;
 
-		const { message_id, anchor_type, anchor_text, anchor_index } = bookmarkAnchor;
+		const messageId = bookmarkAnchor.message_id;
 
-		// Find the message turn
-		const messageTurn = document.querySelector(`[data-message-id="${message_id}"]`);
-		if (!messageTurn) {
-			// Message not loaded or deleted - clear bookmark
-			console.log('Bookmark message not found, clearing bookmark');
-			bookmarkAnchor = null;
-			fetch('/api/settings', {
-				method: 'PUT',
+		try {
+			const response = await fetch(`/api/superjournal/${messageId}/bookmark`, {
+				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ scroll_bookmark: null })
-			}).catch(err => console.error('Failed to clear stale bookmark:', err));
-			return;
-		}
+				body: JSON.stringify(null)  // null = remove bookmark
+			});
 
-		// Find anchor element with fallback chain
-		const anchor = findAnchorWithFallback(messageTurn, anchor_type, anchor_text, anchor_index);
-		if (!anchor) {
-			// Snap to top of turn as ultimate fallback
-			const marker = createBookmarkMarker();
-			messageTurn.prepend(marker);
-			bookmarkMarkerElement = marker;
-			return;
-		}
+			if (response.ok) {
+				const result = await response.json();
 
-		// Create and place marker
-		const marker = createBookmarkMarker();
-		anchor.before(marker);
-		bookmarkMarkerElement = marker;
-	}
+				// Update local message content to remove bookmark marker
+				allMessages = allMessages.map(msg => {
+					if (msg.id === messageId) {
+						if (result.is_linked_article && result.article_id) {
+							return { ...msg, ai_response: `<!--content:${result.article_id}-->\n${result.content}` };
+						}
+						return { ...msg, ai_response: result.content };
+					}
+					return msg;
+				});
 
-	/**
-	 * Find anchor element with fuzzy matching fallback.
-	 */
-	function findAnchorWithFallback(container: Element, type: string, text: string, index: number): Element | null {
-		const selectors: Record<string, string> = {
-			header: 'h1, h2, h3, h4, h5, h6',
-			fenced: '.admonition, .boss-container, .red-container, .blue-container',
-			divider: 'hr',
-			codeblock: 'pre',
-			paragraph: 'p'
-		};
-
-		const selector = selectors[type];
-		if (!selector) return null;
-
-		const elements = container.querySelectorAll(selector);
-
-		// Try exact index first
-		if (elements[index]) {
-			const elementText = getBookmarkAnchorText(elements[index] as HTMLElement, type);
-			// Check if text roughly matches (80% threshold)
-			if (fuzzyMatch(elementText, text, 0.8)) {
-				return elements[index];
+				bookmarkAnchor = null;
 			}
+		} catch (err) {
+			console.error('Failed to clear bookmark:', err);
 		}
-
-		// Try fuzzy text match on all elements of same type
-		for (const el of elements) {
-			const elementText = getBookmarkAnchorText(el as HTMLElement, type);
-			if (fuzzyMatch(elementText, text, 0.8)) {
-				return el;
-			}
-		}
-
-		// Fallback to first element of same type
-		if (elements.length > 0) {
-			return elements[0];
-		}
-
-		return null;
-	}
-
-	/**
-	 * Simple fuzzy match - checks if strings are similar enough.
-	 */
-	function fuzzyMatch(a: string, b: string, threshold: number): boolean {
-		if (!a || !b) return false;
-		if (a === b) return true;
-
-		const shorter = a.length < b.length ? a : b;
-		const longer = a.length < b.length ? b : a;
-
-		// Simple containment check
-		if (longer.includes(shorter)) return true;
-
-		// Levenshtein-ish: count matching characters
-		let matches = 0;
-		const aLower = a.toLowerCase();
-		const bLower = b.toLowerCase();
-		for (let i = 0; i < Math.min(aLower.length, bLower.length); i++) {
-			if (aLower[i] === bLower[i]) matches++;
-		}
-
-		return (matches / Math.max(a.length, b.length)) >= threshold;
 	}
 
 	/**
@@ -2770,15 +2677,10 @@
 						class:bookmark-active={bookmarkAnchor !== null}
 						style={(bookmarkMode || bookmarkAnchor) ? `color: ${currentAccentColor}` : ''}
 						title={bookmarkMode ? 'Exit bookmark placement mode' : (bookmarkAnchor ? 'Clear bookmark' : 'Place a bookmark marker')}
-						onclick={() => {
+						onclick={async () => {
 							if (bookmarkAnchor && !bookmarkMode) {
-								// Bookmark exists - clear it
-								clearBookmarkMarker();
-								fetch('/api/settings', {
-									method: 'PUT',
-									headers: { 'Content-Type': 'application/json' },
-									body: JSON.stringify({ scroll_bookmark: null })
-								}).catch(err => console.error('Failed to clear bookmark:', err));
+								// Bookmark exists - clear it via API
+								await clearBookmark();
 							} else {
 								// No bookmark or in placement mode - toggle placement mode
 								bookmarkMode = !bookmarkMode;
@@ -3198,9 +3100,10 @@
 		gap: 6px;
 		padding: 4px 8px;
 		margin: 8px 0;
-		background: hsl(var(--accent) / 0.1);
-		border-left: 3px solid var(--current-accent);
-		border-radius: 0 4px 4px 0;
+		background: color-mix(in srgb, var(--current-accent) 10%, transparent);
+		border: 0.5px solid color-mix(in srgb, var(--current-accent) 50%, transparent);
+		border-left: 4px solid var(--current-accent);
+		border-radius: 4px;
 		font-size: 12px;
 		color: hsl(var(--muted-foreground));
 		animation: markerPulse 0.3s ease-out;
@@ -3208,7 +3111,8 @@
 	}
 
 	:global(.bookmark-marker .bookmark-icon) {
-		font-size: 14px;
+		color: var(--current-accent);
+		flex-shrink: 0;
 	}
 
 	:global(.bookmark-marker .bookmark-label) {
