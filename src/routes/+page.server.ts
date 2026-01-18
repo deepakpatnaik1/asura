@@ -113,6 +113,75 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession, supabase 
 			.single()
 	);
 
+	// Validate scroll_bookmark - auto-clear if stale (message deleted or bookmark marker removed)
+	let validatedScrollBookmark = settings?.scroll_bookmark || null;
+	if (validatedScrollBookmark && typeof validatedScrollBookmark === 'object' && 'message_id' in validatedScrollBookmark) {
+		const bookmarkData = validatedScrollBookmark as { message_id: string };
+		const bookmarkMessageId = bookmarkData.message_id;
+
+		// First check if message is in loaded messages
+		let bookmarkedMessage = messagesWithFormattedTimestamps.find(msg => msg.id === bookmarkMessageId);
+		let contentToCheck = bookmarkedMessage?.ai_response;
+
+		// If not in loaded messages, fetch it specifically
+		if (!bookmarkedMessage) {
+			const { data: fetchedMessage } = await supabase
+				.from('superjournal')
+				.select('id, ai_response')
+				.eq('id', bookmarkMessageId)
+				.eq('user_id', user!.id)
+				.single();
+
+			if (fetchedMessage) {
+				// Check if it's a linked article and expand content
+				const match = fetchedMessage.ai_response?.match(contentMarkerRegex);
+				if (match) {
+					const contentId = match[1];
+					// Check if we already have this content, otherwise fetch it
+					let expandedContent = contentMap.get(contentId);
+					if (!expandedContent) {
+						const { data: article } = await supabase
+							.from('articles')
+							.select('id, raw_content, source_path')
+							.eq('id', contentId)
+							.eq('user_id', user!.id)
+							.single();
+
+						if (article?.source_path && existsSync(article.source_path)) {
+							try {
+								expandedContent = readFileSync(article.source_path, 'utf-8');
+							} catch {
+								expandedContent = '';
+							}
+						} else {
+							expandedContent = article?.raw_content || '';
+						}
+					}
+					contentToCheck = expandedContent;
+				} else {
+					contentToCheck = fetchedMessage.ai_response;
+				}
+			}
+		}
+
+		// Validate: content must exist AND contain bookmark marker
+		const isValid = contentToCheck && contentToCheck.includes('<!--bookmark-->');
+
+		if (!isValid) {
+			// Clear stale bookmark from database
+			await supabase
+				.from('user_settings')
+				.update({ scroll_bookmark: null, updated_at: new Date().toISOString() })
+				.eq('user_id', user!.id);
+
+			validatedScrollBookmark = null;
+			log.info('Cleared stale scroll_bookmark', {
+				bookmarkMessageId,
+				reason: contentToCheck ? 'marker_missing' : 'message_not_found'
+			});
+		}
+	}
+
 	// Log query performance
 	const stats = monitor.getStats();
 	if (stats.slowQueries > 0) {
@@ -134,7 +203,7 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession, supabase 
 		defaultModel: settings?.default_model || 'claude-haiku-4-5-20251001',
 		watchedArticleId: settings?.watched_article_id || null,
 		focusedMessageId: settings?.focused_message_id || null,
-		scrollBookmark: settings?.scroll_bookmark || null,
+		scrollBookmark: validatedScrollBookmark,
 		lastContentOwner: settings?.last_content_owner || 'no-one',
 		lastContentLifecycle: settings?.last_content_lifecycle || 'raw'
 	};
