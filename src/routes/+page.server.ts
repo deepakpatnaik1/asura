@@ -2,6 +2,7 @@ import type { PageServerLoad } from './$types';
 import { existsSync, readFileSync } from 'fs';
 import { createLogger } from '$lib/api/logger';
 import { createQueryMonitor } from '$lib/api/query-monitor';
+import { BOOKMARK } from '$lib/config/memory';
 
 const PAGE_SIZE = 50;
 
@@ -165,7 +166,7 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession, supabase 
 		}
 
 		// Validate: content must exist AND contain bookmark marker
-		const isValid = contentToCheck && contentToCheck.includes('<!--bookmark-->');
+		const isValid = contentToCheck && contentToCheck.includes(BOOKMARK.marker);
 
 		if (!isValid) {
 			// Clear stale bookmark from database

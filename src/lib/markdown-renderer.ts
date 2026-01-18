@@ -1,5 +1,6 @@
 import { getPersonaAccentColor, getPersonaAccentBg, CODE_BLOCK_BG, TABLE_BORDER, BOSS_ACCENT, BOSS_ACCENT_BG, RED_CLAUDE_ACCENT, RED_CLAUDE_ACCENT_BG, BLUE_CLAUDE_ACCENT, BLUE_CLAUDE_ACCENT_BG } from '$lib/config/colors';
 import { DEFAULT_PERSONA } from '$lib/config/personas';
+import { BOOKMARK } from '$lib/config/memory';
 
 /**
  * Process inline markdown formatting (bold, italic, code) in a string
@@ -151,9 +152,9 @@ export async function renderMarkdown(
 	let processed = markdown.replace(/<!--content:[a-f0-9-]+-->\n?/gi, '');
 
 	// Extract bookmark markers as placeholders (protect from escaping)
-	// The bookmark is embedded in content as <!--bookmark--> and survives re-renders
+	// The bookmark uses a self-documenting message to warn Claude not to delete it
 	const bookmarkMarkers: string[] = [];
-	processed = processed.replace(/<!--bookmark-->\n?/g, () => {
+	processed = processed.replace(BOOKMARK.getPattern(), () => {
 		const placeholder = `__BOOKMARK_${bookmarkMarkers.length}__`;
 		bookmarkMarkers.push('<div class="bookmark-marker"><svg class="bookmark-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" fill-opacity="0.6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg><span class="bookmark-label">Bookmark</span></div>');
 		return placeholder + '\n';

@@ -3,8 +3,9 @@
  *
  * PATCH: Place or remove bookmark marker in superjournal entry
  *
- * The bookmark is embedded as <!--bookmark--> HTML comment in the content,
- * making it survive DOM re-renders (same pattern as annotations).
+ * The bookmark is embedded as an HTML comment with a self-documenting message
+ * warning Claude not to delete it during edits. Survives DOM re-renders.
+ * See BOOKMARK constant in $lib/config/memory.ts for the marker format.
  */
 
 import { json } from '@sveltejs/kit';
@@ -14,6 +15,7 @@ import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { requireAuth } from '$lib/api/require-auth';
 import { parseRequestJson } from '$lib/api/parse-json';
 import { databaseError, notFoundError, validationError } from '$lib/api/errors';
+import { BOOKMARK } from '$lib/config/memory';
 
 interface BookmarkRequest {
 	anchor_type: 'header' | 'divider' | 'fenced' | 'codeblock' | 'paragraph';
@@ -124,7 +126,7 @@ export const PATCH: RequestHandler = async ({ params, request, locals: { safeGet
 	}
 
 	// Strip any existing bookmark marker (safety + for removal case)
-	content = content.replace(/<!--bookmark-->\n?/g, '');
+	content = content.replace(BOOKMARK.getPattern(), '');
 
 	// If request is null, we're just removing the bookmark
 	if (bookmarkRequest === null) {
@@ -170,7 +172,7 @@ export const PATCH: RequestHandler = async ({ params, request, locals: { safeGet
 	const placementResult = placeBookmark(content, anchor_type, anchor_text, anchor_index);
 	if (!placementResult.success) {
 		// Fallback: place at start of content
-		content = `<!--bookmark-->\n${content}`;
+		content = `${BOOKMARK.marker}\n${content}`;
 	} else {
 		content = placementResult.content;
 	}
@@ -253,14 +255,14 @@ async function clearBookmarkFromMessage(
 				// File-based: read, strip, write
 				try {
 					let content = readFileSync(article.source_path, 'utf-8');
-					content = content.replace(/<!--bookmark-->\n?/g, '');
+					content = content.replace(BOOKMARK.getPattern(), '');
 					writeFileSync(article.source_path, content, 'utf-8');
 				} catch {
 					// Ignore file errors during cleanup
 				}
 			} else if (article.raw_content) {
 				// Database-stored: strip and update
-				const cleanContent = article.raw_content.replace(/<!--bookmark-->\n?/g, '');
+				const cleanContent = article.raw_content.replace(BOOKMARK.getPattern(), '');
 				await supabase
 					.from('articles')
 					.update({ raw_content: cleanContent, updated_at: new Date().toISOString() })
@@ -270,7 +272,7 @@ async function clearBookmarkFromMessage(
 		}
 	} else {
 		// Regular message: strip bookmark from ai_response
-		const cleanResponse = entry.ai_response?.replace(/<!--bookmark-->\n?/g, '') || '';
+		const cleanResponse = entry.ai_response?.replace(BOOKMARK.getPattern(), '') || '';
 		await supabase
 			.from('superjournal')
 			.update({ ai_response: cleanResponse })
@@ -290,7 +292,7 @@ function placeBookmark(
 	anchorText: string,
 	anchorIndex: number
 ): { success: boolean; content: string } {
-	const bookmarkMarker = '<!--bookmark-->\n';
+	const bookmarkMarker = `${BOOKMARK.marker}\n`;
 
 	// Build regex pattern based on anchor type
 	let pattern: RegExp;

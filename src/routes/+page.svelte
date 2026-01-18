@@ -6,6 +6,7 @@
 	import { DEFAULT_PERSONA, PERSONAS } from '$lib/config/personas';
 	import { type CanvasType, getDefaultCanvasForPersona } from '$lib/config/canvases';
 	import { getPersonaAccentColor, getPersonaAccentBg } from '$lib/config/colors';
+	import { BOOKMARK } from '$lib/config/memory';
 	import { CHAT_CONFIG, scrollToTurn, scrollToLastTurn, getTurns } from '$lib/ui/scroll';
 	import { createConfirmation } from '$lib/composables';
 	import ScrollControls from '$lib/components/ScrollControls.svelte';
@@ -1740,7 +1741,8 @@
 
 	/**
 	 * Handle click in messages area for bookmark placement mode.
-	 * Places a navigation marker by embedding <!--bookmark--> in the content via API.
+	 * Places a navigation marker by embedding a self-documenting bookmark comment in content via API.
+	 * See BOOKMARK constant in $lib/config/memory.ts for the marker format.
 	 */
 	async function handleBookmarkClick(event: MouseEvent) {
 		if (!bookmarkMode) return;
@@ -1788,7 +1790,7 @@
 					}
 					// Clear bookmark from old message if it was on a different message
 					if (result.cleared_message_id && msg.id === result.cleared_message_id) {
-						return { ...msg, ai_response: msg.ai_response?.replace(/<!--bookmark-->\n?/g, '') };
+						return { ...msg, ai_response: msg.ai_response?.replace(BOOKMARK.getPattern(), '') };
 					}
 					return msg;
 				});
@@ -3100,9 +3102,9 @@
 		gap: 6px;
 		padding: 4px 8px;
 		margin: 8px 0;
-		background: color-mix(in srgb, var(--current-accent) 10%, transparent);
-		border: 0.5px solid color-mix(in srgb, var(--current-accent) 50%, transparent);
-		border-left: 4px solid var(--current-accent);
+		background: color-mix(in srgb, var(--boss-accent) 10%, transparent);
+		border: 0.5px solid color-mix(in srgb, var(--boss-accent) 50%, transparent);
+		border-left: 4px solid var(--boss-accent);
 		border-radius: 4px;
 		font-size: 12px;
 		color: hsl(var(--muted-foreground));
@@ -3111,12 +3113,12 @@
 	}
 
 	:global(.bookmark-marker .bookmark-icon) {
-		color: var(--current-accent);
+		color: var(--boss-accent);
 		flex-shrink: 0;
 	}
 
 	:global(.bookmark-marker .bookmark-label) {
-		color: var(--current-accent);
+		color: var(--boss-accent);
 		font-weight: 500;
 	}
 
