@@ -1242,6 +1242,12 @@
 							}
 							return msg;
 						});
+
+						// DOM re-render destroys bookmark marker - restore it after tick
+						if (bookmarkAnchor) {
+							await tick();
+							restoreBookmarkMarker();
+						}
 					}
 
 					// Clear marker and exit annotation mode
