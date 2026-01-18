@@ -251,12 +251,35 @@ export function parseMessage(message: GmailMessage): ParsedEmail {
 	const headers = message.payload.headers;
 	const getHeader = (name: string) => headers.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value || '';
 
-	// Parse From header
+	// Parse From header with validation
 	const fromRaw = getHeader('From');
 	const fromMatch = fromRaw.match(/^(?:"?([^"<]*)"?\s*)?<?([^>]+)>?$/);
+	let fromEmail = fromMatch?.[2]?.trim() || fromRaw;
+	let fromName = fromMatch?.[1]?.trim();
+
+	// Validate extracted email - must contain @ and be reasonable length
+	const isValidEmail = (email: string) => email.includes('@') && email.length >= 5;
+
+	if (!isValidEmail(fromEmail)) {
+		// Fallback: extract any email-like pattern from the raw header
+		const emailFallback = fromRaw.match(/[\w.+-]+@[\w.-]+\.[a-z]{2,}/i);
+		if (emailFallback) {
+			fromEmail = emailFallback[0];
+			// If we found email in raw string, the "name" part might actually be the name
+			// Remove the email from raw to get remaining as name
+			const remaining = fromRaw.replace(emailFallback[0], '').replace(/[<>"]/g, '').trim();
+			if (remaining && !fromName) {
+				fromName = remaining;
+			}
+		} else {
+			// Last resort: use raw as email
+			fromEmail = fromRaw;
+		}
+	}
+
 	const from = {
-		name: fromMatch?.[1]?.trim(),
-		email: fromMatch?.[2]?.trim() || fromRaw
+		name: fromName,
+		email: fromEmail
 	};
 
 	// Parse To header

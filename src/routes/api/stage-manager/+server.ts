@@ -7,8 +7,10 @@
  * Flow:
  * 1. Edge Function runs at 9am, writes trigger to felix_cron_triggers (hosted Supabase)
  * 2. Aether client calls GET on page load / periodically
- * 3. GET checks for unprocessed triggers, scans starred emails if found
- * 4. Returns should_show_flash: true if Boss needs to talk to Felix
+ * 3. GET checks for unprocessed triggers, counts pending emails + scans
+ * 4. Returns should_show_flash: true with email_count + scan_count for Felix to review with Boss
+ *
+ * Note: No AI evaluation - Felix reviews correspondence manually with Boss
  */
 
 import { json } from '@sveltejs/kit';
@@ -131,10 +133,10 @@ async function checkAndProcessTriggers(): Promise<{
 		const trigger = triggers[0];
 		console.log(`[Stage Manager] Processing trigger from ${trigger.triggered_at}`);
 
-		// Run Felix's email check: learn senders, scan watched emails, evaluate
+		// Count pending emails from watched senders (no AI evaluation - Felix reviews manually)
 		const emailResult = await checkWatchedEmailsForFelix();
 
-		// Also check scanned documents (paper mail)
+		// Count pending scanned documents (paper mail)
 		const scanResult = await checkScannedDocsForFelix();
 
 		// Mark trigger as processed regardless of scan results

@@ -14,13 +14,11 @@ import {
 	startWatch,
 	stopWatch,
 	getHistory,
-	getAttachment,
 	type ParsedEmail
 } from './google-gmail';
 import { supabaseAdmin } from '$lib/supabase-admin';
 import { env } from '$env/dynamic/private';
 import { createClient } from '@supabase/supabase-js';
-import { OPENROUTER_API_KEY } from '$env/static/private';
 
 // Pub/Sub topic for Gmail notifications
 const GMAIL_PUBSUB_TOPIC = 'projects/tsushima-472819/topics/gmail-notifications';
@@ -186,7 +184,7 @@ export const GMAIL_TOOLS: Anthropic.Tool[] = [
 /**
  * Scan tool names (paper mail) - routed through Gmail executor
  */
-const SCAN_TOOL_NAMES = ['scan_paper_folder', 'list_pending_scans', 'mark_scan_addressed'];
+const SCAN_TOOL_NAMES = ['scan_paper_folder', 'list_pending_scans', 'read_scan', 'mark_scan_addressed'];
 
 /**
  * Check if a tool name is a Gmail tool (includes scan tools)
@@ -252,6 +250,7 @@ export async function executeGmailTool(
 		// Scan tools (paper mail) - delegate to scan-tools
 		case 'scan_paper_folder':
 		case 'list_pending_scans':
+		case 'read_scan':
 		case 'mark_scan_addressed': {
 			const { executeScanTool } = await import('./scan-tools');
 			const result = await executeScanTool(toolName, input);
@@ -300,70 +299,6 @@ async function getValidAccessToken(account: {
 		.eq('id', account.id);
 
 	return refreshed.access_token;
-}
-
-/**
- * Convert PDF attachments to JPEG for vision evaluation
- * Uses pdftoppm (poppler) for high-quality conversion
- */
-async function convertPdfAttachmentsToJpeg(
-	accessToken: string,
-	messageId: string,
-	attachments: { filename: string; attachmentId: string; mimeType: string }[]
-): Promise<{ filename: string; jpegBase64: string }[]> {
-	const { exec } = await import('child_process');
-	const { promisify } = await import('util');
-	const fs = await import('fs/promises');
-	const path = await import('path');
-	const sharp = (await import('sharp')).default;
-	const execAsync = promisify(exec);
-
-	const results: { filename: string; jpegBase64: string }[] = [];
-	const tempDir = '/tmp/felix-pdf-convert';
-	await fs.mkdir(tempDir, { recursive: true });
-
-	for (const attachment of attachments) {
-		if (attachment.mimeType !== 'application/pdf') continue;
-		if (!attachment.attachmentId) continue;
-
-		try {
-			// Fetch attachment data (base64)
-			const base64Data = await getAttachment(accessToken, messageId, attachment.attachmentId);
-
-			// Convert Gmail's URL-safe base64 to standard base64
-			const buffer = Buffer.from(base64Data.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
-
-			// Write PDF to temp file
-			const pdfPath = path.join(tempDir, `${Date.now()}_${attachment.filename}`);
-			await fs.writeFile(pdfPath, buffer);
-
-			// Convert first page to JPEG using pdftoppm
-			const baseName = pdfPath.replace('.pdf', '');
-			await execAsync(`pdftoppm -jpeg -r 150 -singlefile "${pdfPath}" "${baseName}"`);
-
-			const jpegPath = `${baseName}.jpg`;
-
-			// Read and optimize with Sharp
-			const optimizedBuffer = await sharp(jpegPath)
-				.jpeg({ quality: 80, mozjpeg: true })
-				.toBuffer();
-
-			// Clean up temp files
-			await fs.unlink(pdfPath).catch(() => {});
-			await fs.unlink(jpegPath).catch(() => {});
-
-			results.push({
-				filename: attachment.filename,
-				jpegBase64: optimizedBuffer.toString('base64')
-			});
-
-			console.log(`[Felix] Converted PDF "${attachment.filename}" to JPEG: ${(optimizedBuffer.length / 1024).toFixed(0)}KB`);
-		} catch (error) {
-			console.error(`[Felix] Failed to convert PDF ${attachment.filename}:`, error);
-		}
-	}
-
-	return results;
 }
 
 /**
@@ -940,7 +875,7 @@ async function executeScanStarred(
 		const allStarred: (ParsedEmail & {
 			account_email: string;
 			account_type: string;
-			pdf_texts?: { filename: string; text: string }[];
+			pdf_count?: number;
 		})[] = [];
 
 		for (const account of accounts) {
@@ -1094,27 +1029,6 @@ export async function checkAndRenewGmailWatches(): Promise<void> {
 const DEFAULT_USER_ID = '8288224b-40c0-41e3-aa30-5bd704533524';
 
 /**
- * Get Felix's configured model from user settings
- * Throws if not configured - no silent fallbacks
- */
-async function getFelixModel(): Promise<string> {
-	const { data, error } = await supabaseAdmin
-		.from('user_settings')
-		.select('model_felix')
-		.single();
-
-	if (error) {
-		throw new Error(`[Felix] Failed to fetch model setting: ${error.message}`);
-	}
-
-	if (!data?.model_felix) {
-		throw new Error('[Felix] model_felix not configured in user_settings. Set it in Settings → Models.');
-	}
-
-	return data.model_felix;
-}
-
-/**
  * Extract domain from email address
  */
 function extractDomain(email: string): string {
@@ -1133,6 +1047,12 @@ async function learnSenderFromStarred(
 ): Promise<void> {
 	const email = senderEmail.toLowerCase();
 	const domain = extractDomain(email);
+
+	// Validate email before inserting - prevent corrupted data
+	if (!email.includes('@') || email.length < 5 || domain.length < 3) {
+		console.error(`[Felix] Invalid email format, skipping: "${email}" (from message ${messageId})`);
+		return;
+	}
 
 	// Check if already watching this sender
 	const { data: existing } = await supabaseAdmin
@@ -1181,117 +1101,17 @@ async function getWatchedSenders(userId: string): Promise<string[]> {
 	return data.map((s) => s.email_address);
 }
 
-/**
- * Ask Felix to evaluate an email and decide if Boss needs to know about it
- * Uses vision for PDF attachments (German bureaucracy scans letters into PDFs)
- */
-async function evaluateEmailWithFelix(
-	email: {
-		from: string;
-		subject: string;
-		body: string;
-		pdfImages?: { filename: string; jpegBase64: string }[];
-	}
-): Promise<{ shouldAlert: boolean; reason: string }> {
-	try {
-		const felixModel = await getFelixModel();
-
-		const systemPrompt = `You are Felix, a financial assistant. Your job is to evaluate incoming emails and decide if they require Boss's attention.
-
-Alert Boss if the email:
-- Requires action (payment due, renewal needed, appointment to confirm)
-- Contains important financial information (bills, invoices, account statements)
-- Has a deadline or time-sensitive matter
-- Is from an insurance company, bank, government agency, or utility provider with actionable content
-
-Do NOT alert Boss if the email is:
-- Just a confirmation/receipt with no action needed
-- Marketing or promotional content
-- A newsletter or automated digest
-- An acknowledgment that something was received
-
-Respond in JSON format:
-{"shouldAlert": true/false, "reason": "brief explanation including any deadlines if visible"}`;
-
-		// Build user content - text + images if available
-		const userContent: Array<{ type: string; text?: string; image_url?: { url: string } }> = [
-			{
-				type: 'text',
-				text: `Evaluate this email:\n\nFrom: ${email.from}\nSubject: ${email.subject}\n\nBody:\n${email.body}`
-			}
-		];
-
-		// Add PDF images for vision evaluation
-		if (email.pdfImages && email.pdfImages.length > 0) {
-			userContent.push({
-				type: 'text',
-				text: `\n\n--- PDF Attachments (${email.pdfImages.length}) ---`
-			});
-			for (const pdf of email.pdfImages) {
-				userContent.push({
-					type: 'text',
-					text: `\n[${pdf.filename}]:`
-				});
-				userContent.push({
-					type: 'image_url',
-					image_url: {
-						url: `data:image/jpeg;base64,${pdf.jpegBase64}`
-					}
-				});
-			}
-		}
-
-		const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-				'HTTP-Referer': 'https://aether.vercel.app',
-				'X-Title': 'Aether Felix'
-			},
-			body: JSON.stringify({
-				model: felixModel,
-				messages: [
-					{ role: 'system', content: systemPrompt },
-					{ role: 'user', content: userContent }
-				],
-				max_tokens: 300,
-				temperature: 0.3
-			})
-		});
-
-		if (!response.ok) {
-			console.error('[Felix] Evaluation API error:', response.status);
-			return { shouldAlert: true, reason: 'Evaluation failed, alerting to be safe' };
-		}
-
-		const result = await response.json();
-		const content = result.choices?.[0]?.message?.content || '';
-
-		const jsonMatch = content.match(/\{[\s\S]*\}/);
-		if (jsonMatch) {
-			const parsed = JSON.parse(jsonMatch[0]);
-			return {
-				shouldAlert: Boolean(parsed.shouldAlert),
-				reason: parsed.reason || 'No reason provided'
-			};
-		}
-
-		return { shouldAlert: true, reason: 'Could not parse evaluation, alerting to be safe' };
-	} catch (error) {
-		console.error('[Felix] Evaluation error:', error);
-		return { shouldAlert: true, reason: 'Evaluation error, alerting to be safe' };
-	}
-}
+// NOTE: Email evaluation removed - Felix now reviews correspondence manually with Boss
+// The 9am cron just counts pending items, Felix directs Boss to the source
 
 /**
- * Main Stage Manager function: Learn senders, scan watched emails, evaluate and alert
+ * Count pending emails from watched senders
  *
  * Flow:
  * 1. Check starred emails - learn any new senders to watch
  * 2. Scan ALL emails from watched senders (not just starred)
- * 3. Evaluate each new email with Felix (Grok)
- * 4. Return emails that need Boss's attention
+ * 3. Store basic metadata (no AI evaluation - Felix reviews manually with Boss)
+ * 4. Return count of unaddressed emails
  */
 export async function checkWatchedEmailsForFelix(): Promise<{
 	hasEmailsNeedingAttention: boolean;
@@ -1299,7 +1119,6 @@ export async function checkWatchedEmailsForFelix(): Promise<{
 	emails: Array<{
 		from: string;
 		subject: string;
-		reason: string;
 	}>;
 	error?: string;
 }> {
@@ -1357,20 +1176,16 @@ export async function checkWatchedEmailsForFelix(): Promise<{
 
 		console.log(`[Felix] Scanning emails from ${watchedSenders.length} watched senders`);
 
-		// Step 3: Scan emails from watched senders
-		const emailsNeedingAttention: Array<{
-			from: string;
-			subject: string;
-			reason: string;
-		}> = [];
+		// Step 3: Scan emails from watched senders - just store metadata, no evaluation
+		const newEmails: Array<{ from: string; subject: string }> = [];
 
 		for (const account of accounts) {
 			try {
 				const accessToken = await getValidAccessToken(account);
 
-				// Search for emails from watched senders in the last 24 hours
+				// Search for emails from watched senders in the last 7 days
 				for (const sender of watchedSenders) {
-					const query = `from:${sender} newer_than:1d`;
+					const query = `from:${sender} newer_than:7d`;
 					const messageRefs = await listMessages(accessToken, query, 20);
 
 					for (const ref of messageRefs) {
@@ -1388,35 +1203,9 @@ export async function checkWatchedEmailsForFelix(): Promise<{
 						const fullMessage = await getMessage(accessToken, ref.id);
 						const parsed = parseMessage(fullMessage);
 
-						// Convert PDF attachments to JPEG for vision evaluation
-						const pdfAttachments = parsed.attachments.filter(
-							(a) => a.mimeType === 'application/pdf' && a.attachmentId
-						);
-						let pdfImages: { filename: string; jpegBase64: string }[] = [];
+						console.log(`[Felix] New email from watched sender: "${parsed.subject}" from ${parsed.from.email}`);
 
-						if (pdfAttachments.length > 0) {
-							pdfImages = await convertPdfAttachmentsToJpeg(
-								accessToken,
-								parsed.id,
-								pdfAttachments.map((a) => ({
-									filename: a.filename,
-									attachmentId: a.attachmentId,
-									mimeType: a.mimeType
-								}))
-							);
-						}
-
-						// Step 4: Evaluate with Felix (vision)
-						const evaluation = await evaluateEmailWithFelix({
-							from: parsed.from.email,
-							subject: parsed.subject,
-							body: parsed.body || parsed.snippet,
-							pdfImages
-						});
-
-						console.log(`[Felix] Evaluated "${parsed.subject}": ${evaluation.shouldAlert ? 'ALERT' : 'skip'} - ${evaluation.reason}`);
-
-						// Store in gmail_processed
+						// Store in gmail_processed - mark as needing attention, Felix reviews manually
 						await supabaseAdmin.from('gmail_processed').upsert({
 							gmail_account_id: account.id,
 							message_id: parsed.id,
@@ -1431,17 +1220,13 @@ export async function checkWatchedEmailsForFelix(): Promise<{
 								mimeType: a.mimeType,
 								size: a.size
 							})),
-							felix_evaluation: evaluation.reason,
-							needs_attention: evaluation.shouldAlert
+							needs_attention: true // All emails from watched senders need review
 						}, { onConflict: 'gmail_account_id,message_id' });
 
-						if (evaluation.shouldAlert) {
-							emailsNeedingAttention.push({
-								from: parsed.from.name || parsed.from.email,
-								subject: parsed.subject,
-								reason: evaluation.reason
-							});
-						}
+						newEmails.push({
+							from: parsed.from.name || parsed.from.email,
+							subject: parsed.subject
+						});
 					}
 				}
 			} catch (err) {
@@ -1449,10 +1234,21 @@ export async function checkWatchedEmailsForFelix(): Promise<{
 			}
 		}
 
+		// Step 4: Count total pending (unaddressed) emails
+		const accountIds = accounts.map((a) => a.id);
+		const { count: pendingCount } = await supabaseAdmin
+			.from('gmail_processed')
+			.select('*', { count: 'exact', head: true })
+			.in('gmail_account_id', accountIds)
+			.eq('needs_attention', true)
+			.is('addressed_at', null);
+
+		const totalPending = pendingCount || 0;
+
 		return {
-			hasEmailsNeedingAttention: emailsNeedingAttention.length > 0,
-			emailCount: emailsNeedingAttention.length,
-			emails: emailsNeedingAttention
+			hasEmailsNeedingAttention: totalPending > 0,
+			emailCount: totalPending,
+			emails: newEmails // Only the NEW emails found this scan
 		};
 	} catch (error) {
 		return {
@@ -1622,154 +1418,30 @@ async function executeMarkEmailAddressed(
 }
 
 // ============================================================================
-// Scanned Document Evaluation (Paper Mail)
+// Scanned Document Counting (Paper Mail)
 // ============================================================================
 
-import {
-	getUnevaluatedScans,
-	markScanEvaluated,
-	getPendingScanCount
-} from './scan-tools';
+import { getPendingScanCount, getPendingScans } from './scan-tools';
 
 /**
- * Evaluate a scanned document image with Felix (Grok vision)
- */
-async function evaluateScannedDocWithFelix(
-	fileName: string,
-	jpegBase64: string
-): Promise<{ shouldAlert: boolean; reason: string }> {
-	try {
-		const felixModel = await getFelixModel();
-
-		// Use vision-capable request format
-		const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-				'HTTP-Referer': 'https://aether.vercel.app',
-				'X-Title': 'Aether Felix'
-			},
-			body: JSON.stringify({
-				model: felixModel,
-				messages: [
-					{
-						role: 'system',
-						content: `You are Felix, a financial assistant. Your job is to evaluate scanned paper documents and decide if they require Boss's attention.
-
-Alert Boss if the document:
-- Requires action (payment due, response needed, form to fill)
-- Contains important financial information (bills, invoices, tax documents)
-- Has a deadline or time-sensitive matter
-- Is from an insurance company, bank, government agency (Finanzamt, Agentur für Arbeit), court, or utility provider
-- Contains legal notices or official correspondence
-
-Do NOT alert Boss if the document is:
-- Just a confirmation with no action needed
-- Marketing or promotional material
-- A receipt for a completed transaction with no further action
-- General informational content
-
-Respond in JSON format:
-{"shouldAlert": true/false, "reason": "brief explanation including any deadlines if visible"}`
-					},
-					{
-						role: 'user',
-						content: [
-							{
-								type: 'text',
-								text: `Evaluate this scanned document (filename: ${fileName}):`
-							},
-							{
-								type: 'image_url',
-								image_url: {
-									url: `data:image/jpeg;base64,${jpegBase64}`
-								}
-							}
-						]
-					}
-				],
-				max_tokens: 300,
-				temperature: 0.3
-			})
-		});
-
-		if (!response.ok) {
-			console.error('[Felix] Scan evaluation API error:', response.status);
-			return { shouldAlert: true, reason: 'Evaluation failed, alerting to be safe' };
-		}
-
-		const result = await response.json();
-		const content = result.choices?.[0]?.message?.content || '';
-
-		// Parse JSON response
-		const jsonMatch = content.match(/\{[\s\S]*\}/);
-		if (jsonMatch) {
-			const parsed = JSON.parse(jsonMatch[0]);
-			return {
-				shouldAlert: Boolean(parsed.shouldAlert),
-				reason: parsed.reason || 'No reason provided'
-			};
-		}
-
-		return { shouldAlert: true, reason: 'Could not parse evaluation, alerting to be safe' };
-	} catch (error) {
-		console.error('[Felix] Scan evaluation error:', error);
-		return { shouldAlert: true, reason: 'Evaluation error, alerting to be safe' };
-	}
-}
-
-/**
- * Evaluate all unevaluated scanned documents
+ * Count pending scanned documents
  * Called during the 9am cron alongside email scanning
+ * No AI evaluation - Felix reviews documents manually with Boss
  */
 export async function checkScannedDocsForFelix(): Promise<{
 	hasDocsNeedingAttention: boolean;
 	docCount: number;
-	docs: Array<{ fileName: string; reason: string }>;
+	docs: Array<{ fileName: string }>;
 	error?: string;
 }> {
-	const docsNeedingAttention: Array<{ fileName: string; reason: string }> = [];
-
 	try {
-		const unevaluatedScans = await getUnevaluatedScans();
-
-		if (unevaluatedScans.length === 0) {
-			// Still return count of pending (already evaluated) scans
-			const pendingCount = await getPendingScanCount();
-			return {
-				hasDocsNeedingAttention: pendingCount > 0,
-				docCount: pendingCount,
-				docs: []
-			};
-		}
-
-		console.log(`[Felix] Evaluating ${unevaluatedScans.length} scanned document(s)`);
-
-		for (const scan of unevaluatedScans) {
-			const evaluation = await evaluateScannedDocWithFelix(scan.file_name, scan.jpeg_base64);
-
-			console.log(
-				`[Felix] Evaluated scan "${scan.file_name}": ${evaluation.shouldAlert ? 'ALERT' : 'skip'} - ${evaluation.reason}`
-			);
-
-			await markScanEvaluated(scan.id, evaluation.shouldAlert, evaluation.reason);
-
-			if (evaluation.shouldAlert) {
-				docsNeedingAttention.push({
-					fileName: scan.file_name,
-					reason: evaluation.reason
-				});
-			}
-		}
-
-		// Add any previously evaluated pending scans to the count
-		const totalPendingCount = await getPendingScanCount();
+		const pendingScans = await getPendingScans();
+		const pendingCount = pendingScans.length;
 
 		return {
-			hasDocsNeedingAttention: totalPendingCount > 0,
-			docCount: totalPendingCount,
-			docs: docsNeedingAttention
+			hasDocsNeedingAttention: pendingCount > 0,
+			docCount: pendingCount,
+			docs: pendingScans.map((s) => ({ fileName: s.file_name }))
 		};
 	} catch (error) {
 		console.error('[Felix] Scanned doc check error:', error);

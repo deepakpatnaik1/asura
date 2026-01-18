@@ -76,11 +76,6 @@ import {
 	type GmailToolContext
 } from '$lib/api/gmail-tools';
 import { scanToolDefinitions } from '$lib/api/scan-tools';
-import {
-	BROWSER_TOOLS,
-	executeBrowserTool,
-	isBrowserTool
-} from '$lib/api/browser-tools';
 import { parseToolIntents, hasToolIntents } from '$lib/api/tool-intent-parser';
 import { createClient } from '@supabase/supabase-js';
 import { PUBLIC_SUPABASE_URL } from '$env/static/public';
@@ -257,7 +252,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 			const hasEngagementTools = personaTools.some(t => isEngagementTool(t));
 			const hasTemporalTools = personaTools.some(t => isTemporalTool(t));
 			const hasGmailTools = personaTools.some(t => isGmailTool(t));
-			const hasBrowserTools = personaTools.some(t => isBrowserTool(t));
 
 			log.info('Tool setup', {
 				persona,
@@ -316,11 +310,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 					allTools.push(...GMAIL_TOOLS);
 					// Add scan tools (paper mail) - routed through Gmail executor
 					allTools.push(...scanToolDefinitions);
-				}
-
-				// Add browser tools if persona has them (Felix)
-				if (hasBrowserTools) {
-					allTools.push(...BROWSER_TOOLS);
 				}
 			}
 
@@ -467,8 +456,6 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				return executeTemporalTool(toolName, input);
 			} else if (isGmailTool(toolName) && gmailContext) {
 				return executeGmailTool(toolName, input, gmailContext);
-			} else if (isBrowserTool(toolName)) {
-				return executeBrowserTool(toolName, input);
 			} else if (calendarContext) {
 				return executeCalendarTool(toolName, input, calendarContext, todoMutations);
 			} else {

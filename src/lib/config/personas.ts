@@ -93,14 +93,9 @@ export type ToolName =
 	// Scan tools (Felix) - paper mail scanning
 	| 'scan_paper_folder'
 	| 'list_pending_scans'
+	| 'read_scan'
 	| 'mark_scan_addressed'
-	// Browser tools (Felix) - portal automation
-	| 'browse_url'
-	| 'browser_click'
-	| 'browser_type'
-	| 'browser_snapshot'
-	| 'browser_close'
-	| 'browser_login';
+;
 
 /**
  * Persona configuration interface
@@ -227,14 +222,8 @@ const FELIX_TOOLS: ToolName[] = [
 	// Scan tools (paper mail)
 	'scan_paper_folder',
 	'list_pending_scans',
+	'read_scan',
 	'mark_scan_addressed',
-	// Browser tools
-	'browse_url',
-	'browser_click',
-	'browser_type',
-	'browser_snapshot',
-	'browser_close',
-	'browser_login',
 	// Other tools
 	'log_fitness',
 	'list_calendar_events',
