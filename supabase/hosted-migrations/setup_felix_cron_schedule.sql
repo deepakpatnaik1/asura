@@ -13,8 +13,10 @@ select vault.create_secret(
 );
 
 -- Step 3: Store service role key in vault (for Edge Function auth)
+-- Get your service_role key from: Supabase Dashboard > Project Settings > API > service_role (secret)
+-- NEVER commit the actual key to git!
 select vault.create_secret(
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1zcGxmZ216a3V2dGl3eGZ5cHd5Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2ODQ5MDk3NCwiZXhwIjoyMDg0MDY2OTc0fQ.FrP2Skn4ywMp-4qi4m9k7CDlfyMosFIa3LQ6nUoWZcM',
+  'YOUR_SERVICE_ROLE_KEY_HERE',  -- Replace with actual key when running in SQL Editor
   'felix_service_key'
 );
 
