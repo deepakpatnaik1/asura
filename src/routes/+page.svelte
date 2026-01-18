@@ -303,13 +303,16 @@
 
 	// Bookmark mode state (for placing navigation markers within message turns)
 	let bookmarkMode = $state(false);
-	interface BookmarkAnchor {
-		message_id: string;
-		anchor_type: 'header' | 'divider' | 'fenced' | 'codeblock' | 'paragraph';
-		anchor_text: string;
-		anchor_index: number;
+	// Bookmark = marker in content. hasBookmark() checks content strings (reactive).
+	// getBookmarkPosition() queries DOM for scroll position (only called on user action).
+
+	/**
+	 * Check if a bookmark marker exists in any message content.
+	 * Checks content strings (reactive) rather than DOM (stale during re-render).
+	 */
+	function hasBookmark(): boolean {
+		return allMessages.some(msg => msg.ai_response?.includes(BOOKMARK.marker));
 	}
-	let bookmarkAnchor = $state<BookmarkAnchor | null>(data.scrollBookmark || null);
 
 	/**
 	 * Get bookmark position relative to the scroll container.
@@ -317,10 +320,8 @@
 	 * Returns undefined if no bookmark marker exists or during SSR.
 	 */
 	function getBookmarkPosition(): number | undefined {
-		// Guard for SSR - document doesn't exist on server
 		if (typeof document === 'undefined') return undefined;
 
-		// Find the rendered bookmark marker in DOM (embedded in content via markdown renderer)
 		const marker = document.querySelector('.bookmark-marker');
 		if (!marker) return undefined;
 
@@ -330,6 +331,20 @@
 		const markerRect = marker.getBoundingClientRect();
 		const containerRect = container.getBoundingClientRect();
 		return markerRect.top - containerRect.top + container.scrollTop;
+	}
+
+	/**
+	 * Get the message ID containing the bookmark marker.
+	 * Used for clearing the bookmark via API.
+	 */
+	function getBookmarkMessageId(): string | null {
+		if (typeof document === 'undefined') return null;
+
+		const marker = document.querySelector('.bookmark-marker');
+		if (!marker) return null;
+
+		const messageTurn = marker.closest('[data-message-id]') as HTMLElement | null;
+		return messageTurn?.dataset.messageId || null;
 	}
 
 	interface AnnotationTarget {
@@ -1741,8 +1756,8 @@
 
 	/**
 	 * Handle click in messages area for bookmark placement mode.
-	 * Places a navigation marker by embedding a self-documenting bookmark comment in content via API.
-	 * See BOOKMARK constant in $lib/config/memory.ts for the marker format.
+	 * Places marker at the start of the clicked message turn.
+	 * Simplified: no anchor tracking, marker in content IS the bookmark.
 	 */
 	async function handleBookmarkClick(event: MouseEvent) {
 		if (!bookmarkMode) return;
@@ -1759,43 +1774,33 @@
 		const messageId = messageTurn.dataset.messageId;
 		if (!messageId) return;
 
-		// Find nearest content boundary (priority: headers > fenced > dividers > codeblocks > paragraphs)
-		const boundary = findNearestBookmarkBoundary(target, messageTurn);
-		if (!boundary) return;
-
-		// Call API to embed bookmark in content
+		// Call API to embed bookmark at start of this message's content
 		try {
 			const response = await fetch(`/api/superjournal/${messageId}/bookmark`, {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					anchor_type: boundary.type,
-					anchor_text: boundary.text,
-					anchor_index: boundary.index
-				})
+				body: JSON.stringify({ position: 'here' })
 			});
 
 			if (response.ok) {
 				const result = await response.json();
 
 				// Update local message content to show bookmark immediately
-				allMessages = allMessages.map(msg => {
-					if (msg.id === messageId) {
-						// For linked articles: content marker + updated content
-						// For regular messages: just the updated ai_response
-						if (result.is_linked_article && result.article_id) {
-							return { ...msg, ai_response: `<!--content:${result.article_id}-->\n${result.content}` };
-						}
-						return { ...msg, ai_response: result.content };
-					}
-					// Clear bookmark from old message if it was on a different message
-					if (result.cleared_message_id && msg.id === result.cleared_message_id) {
-						return { ...msg, ai_response: msg.ai_response?.replace(BOOKMARK.getPattern(), '') };
-					}
-					return msg;
-				});
+				if (result.content) {
+					allMessages = allMessages.map(msg => {
+						// First, strip bookmark from all messages (API cleared them)
+						let aiResponse = msg.ai_response?.replace(BOOKMARK.getPattern(), '');
 
-				bookmarkAnchor = result.bookmark_anchor;
+						// Then add bookmark to the target message
+						if (msg.id === messageId) {
+							if (result.is_linked_article && result.article_id) {
+								return { ...msg, ai_response: `<!--content:${result.article_id}-->\n${result.content}` };
+							}
+							return { ...msg, ai_response: result.content };
+						}
+						return { ...msg, ai_response: aiResponse };
+					});
+				}
 			}
 		} catch (err) {
 			console.error('Failed to place bookmark:', err);
@@ -1806,78 +1811,12 @@
 	}
 
 	/**
-	 * Find nearest content boundary element for bookmark placement.
-	 * Priority: headers > fenced containers > dividers > code blocks > paragraphs
-	 */
-	function findNearestBookmarkBoundary(clicked: HTMLElement, container: Element): { element: Element; type: string; text: string; index: number } | null {
-		const selectors: Record<string, string> = {
-			header: 'h1, h2, h3, h4, h5, h6',
-			fenced: '.fenced-container',
-			divider: '.flourish-divider',
-			codeblock: '.code-block-container',
-			paragraph: 'div[style*="min-height"]'
-		};
-
-		// Walk up from clicked element to find nearest boundary
-		let current: HTMLElement | null = clicked;
-		while (current && current !== container) {
-			for (const [type, selector] of Object.entries(selectors)) {
-				if (current.matches(selector)) {
-					const allOfType = container.querySelectorAll(selector);
-					const index = Array.from(allOfType).indexOf(current);
-					const text = getBookmarkAnchorText(current, type);
-					return { element: current, type, text, index };
-				}
-			}
-			current = current.parentElement;
-		}
-
-		// Fallback: find closest boundary by click position
-		for (const [type, selector] of Object.entries(selectors)) {
-			const elements = container.querySelectorAll(selector);
-			for (const el of elements) {
-				const rect = el.getBoundingClientRect();
-				const clickY = clicked.getBoundingClientRect().top;
-				// If clicked within or just below this element
-				if (clickY >= rect.top - 50 && clickY <= rect.bottom + 50) {
-					const allOfType = container.querySelectorAll(selector);
-					const index = Array.from(allOfType).indexOf(el);
-					const text = getBookmarkAnchorText(el as HTMLElement, type);
-					return { element: el, type, text, index };
-				}
-			}
-		}
-
-		return null;
-	}
-
-	/**
-	 * Extract identifying text from bookmark anchor element.
-	 */
-	function getBookmarkAnchorText(element: HTMLElement, type: string): string {
-		switch (type) {
-			case 'header':
-				return element.textContent?.slice(0, 100) || '';
-			case 'fenced':
-				// Get first line or container type
-				return element.className || element.textContent?.slice(0, 50) || '';
-			case 'codeblock':
-				// Get first line of code
-				return element.textContent?.split('\n')[0]?.slice(0, 100) || '';
-			case 'paragraph':
-				return element.textContent?.slice(0, 100) || '';
-			default:
-				return '';
-		}
-	}
-
-	/**
-	 * Clear bookmark via API - removes marker from content and clears state.
+	 * Clear bookmark via API - removes marker from all content.
+	 * Uses DOM to find which message currently has the bookmark.
 	 */
 	async function clearBookmark() {
-		if (!bookmarkAnchor) return;
-
-		const messageId = bookmarkAnchor.message_id;
+		const messageId = getBookmarkMessageId();
+		if (!messageId) return;
 
 		try {
 			const response = await fetch(`/api/superjournal/${messageId}/bookmark`, {
@@ -1887,20 +1826,11 @@
 			});
 
 			if (response.ok) {
-				const result = await response.json();
-
-				// Update local message content to remove bookmark marker
-				allMessages = allMessages.map(msg => {
-					if (msg.id === messageId) {
-						if (result.is_linked_article && result.article_id) {
-							return { ...msg, ai_response: `<!--content:${result.article_id}-->\n${result.content}` };
-						}
-						return { ...msg, ai_response: result.content };
-					}
-					return msg;
-				});
-
-				bookmarkAnchor = null;
+				// Strip bookmark marker from all local messages
+				allMessages = allMessages.map(msg => ({
+					...msg,
+					ai_response: msg.ai_response?.replace(BOOKMARK.getPattern(), '')
+				}));
 			}
 		} catch (err) {
 			console.error('Failed to clear bookmark:', err);
@@ -2676,11 +2606,11 @@
 					<button
 						class="control-btn hit-target"
 						class:active={bookmarkMode}
-						class:bookmark-active={bookmarkAnchor !== null}
-						style={(bookmarkMode || bookmarkAnchor) ? `color: ${currentAccentColor}` : ''}
-						title={bookmarkMode ? 'Exit bookmark placement mode' : (bookmarkAnchor ? 'Clear bookmark' : 'Place a bookmark marker')}
+						class:bookmark-active={hasBookmark()}
+						style={(bookmarkMode || hasBookmark()) ? `color: ${currentAccentColor}` : ''}
+						title={bookmarkMode ? 'Exit bookmark placement mode' : (hasBookmark() ? 'Clear bookmark' : 'Place a bookmark marker')}
 						onclick={async () => {
-							if (bookmarkAnchor && !bookmarkMode) {
+							if (hasBookmark() && !bookmarkMode) {
 								// Bookmark exists - clear it via API
 								await clearBookmark();
 							} else {
