@@ -91,7 +91,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession, 
 				artisan_cut: `[Image: ${altText}]`,
 				is_enabled: true, // Enabled so image appears in carousel
 				owner,
-				source_type: 'image'
+				source_type: 'image',
+				tier: 'raw' // Images are always raw tier (no artisan cut processing)
 			})
 			.select('id')
 			.single();
