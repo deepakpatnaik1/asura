@@ -143,95 +143,50 @@ export function scrollToTurn(
 }
 
 /**
- * Scroll to the next turn (down), including bookmark position if provided.
- * @param config - Scroll configuration
- * @param bookmarkPosition - Optional bookmark position (offsetTop from container)
+ * Scroll to the next turn (down).
  */
-export function scrollToNextTurn(config: ScrollConfig, bookmarkPosition?: number): void {
+export function scrollToNextTurn(config: ScrollConfig): void {
 	const container = getContainer(config);
 	const turns = getTurns(config);
 
-	if (!container) return;
+	if (!container || turns.length === 0) return;
 
 	const currentScrollTop = container.scrollTop;
 	const viewportThreshold = currentScrollTop + TURN_DETECTION_BUFFER;
 	const containerRect = container.getBoundingClientRect();
 
-	// Collect all navigation stops: turns + bookmark
-	const stops: { position: number; type: 'turn' | 'bookmark'; element?: Element }[] = [];
-
+	// Find next turn below current position
 	for (const turn of turns) {
 		const rect = turn.getBoundingClientRect();
 		const turnTop = rect.top - containerRect.top + currentScrollTop;
-		stops.push({ position: turnTop, type: 'turn', element: turn });
-	}
-
-	if (bookmarkPosition !== undefined) {
-		stops.push({ position: bookmarkPosition, type: 'bookmark' });
-	}
-
-	// Sort by position
-	stops.sort((a, b) => a.position - b.position);
-
-	// Find next stop below current position
-	const nextStop = stops.find(s => s.position > viewportThreshold);
-
-	if (nextStop) {
-		if (nextStop.type === 'turn' && nextStop.element) {
-			scrollToTurn(config, nextStop.element);
-		} else {
-			// Scroll to bookmark position
-			container.scrollTo({
-				top: Math.max(0, nextStop.position - BOSS_CARD_TOP_OFFSET),
-				behavior: 'instant'
-			});
+		if (turnTop > viewportThreshold) {
+			scrollToTurn(config, turn);
+			return;
 		}
 	}
 }
 
 /**
- * Scroll to the previous turn (up), including bookmark position if provided.
- * @param config - Scroll configuration
- * @param bookmarkPosition - Optional bookmark position (offsetTop from container)
+ * Scroll to the previous turn (up).
  */
-export function scrollToPreviousTurn(config: ScrollConfig, bookmarkPosition?: number): void {
+export function scrollToPreviousTurn(config: ScrollConfig): void {
 	const container = getContainer(config);
 	const turns = getTurns(config);
 
-	if (!container) return;
+	if (!container || turns.length === 0) return;
 
 	const currentScrollTop = container.scrollTop;
 	const viewportThreshold = currentScrollTop - TURN_DETECTION_BUFFER;
 	const containerRect = container.getBoundingClientRect();
 
-	// Collect all navigation stops: turns + bookmark
-	const stops: { position: number; type: 'turn' | 'bookmark'; element?: Element }[] = [];
-
-	for (const turn of turns) {
+	// Find previous turn above current position (iterate in reverse)
+	for (let i = turns.length - 1; i >= 0; i--) {
+		const turn = turns[i];
 		const rect = turn.getBoundingClientRect();
 		const turnTop = rect.top - containerRect.top + currentScrollTop;
-		stops.push({ position: turnTop, type: 'turn', element: turn });
-	}
-
-	if (bookmarkPosition !== undefined) {
-		stops.push({ position: bookmarkPosition, type: 'bookmark' });
-	}
-
-	// Sort by position (descending for finding previous)
-	stops.sort((a, b) => b.position - a.position);
-
-	// Find previous stop above current position
-	const prevStop = stops.find(s => s.position < viewportThreshold);
-
-	if (prevStop) {
-		if (prevStop.type === 'turn' && prevStop.element) {
-			scrollToTurn(config, prevStop.element);
-		} else {
-			// Scroll to bookmark position
-			container.scrollTo({
-				top: Math.max(0, prevStop.position - BOSS_CARD_TOP_OFFSET),
-				behavior: 'instant'
-			});
+		if (turnTop < viewportThreshold) {
+			scrollToTurn(config, turn);
+			return;
 		}
 	}
 }

@@ -1,6 +1,5 @@
 import { getPersonaAccentColor, getPersonaAccentBg, CODE_BLOCK_BG, TABLE_BORDER, BOSS_ACCENT, BOSS_ACCENT_BG, RED_CLAUDE_ACCENT, RED_CLAUDE_ACCENT_BG, BLUE_CLAUDE_ACCENT, BLUE_CLAUDE_ACCENT_BG } from '$lib/config/colors';
 import { DEFAULT_PERSONA } from '$lib/config/personas';
-import { BOOKMARK } from '$lib/config/memory';
 
 /**
  * Process inline markdown formatting (bold, italic, code) in a string
@@ -150,15 +149,6 @@ export async function renderMarkdown(
 
 	// Strip content markers (<!--content:uuid-->) used for lazy loading
 	let processed = markdown.replace(/<!--content:[a-f0-9-]+-->\n?/gi, '');
-
-	// Extract bookmark markers as placeholders (protect from escaping)
-	// The bookmark uses a self-documenting message to warn Claude not to delete it
-	const bookmarkMarkers: string[] = [];
-	processed = processed.replace(BOOKMARK.getPattern(), () => {
-		const placeholder = `__BOOKMARK_${bookmarkMarkers.length}__`;
-		bookmarkMarkers.push('<div class="bookmark-marker"><svg class="bookmark-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" fill-opacity="0.6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg><span class="bookmark-label">Bookmark</span></div>');
-		return placeholder + '\n';
-	});
 
 	// Normalize asterisk bullets to dash bullets (both are valid markdown)
 	// Handle both top-level (*) and indented (    *) bullets
@@ -907,7 +897,7 @@ export async function renderMarkdown(
 
 	// Wrap each line in a div for consistent line spacing (skip block elements - they handle their own spacing)
 	processed = collapsed.map(r => {
-		if (r.startsWith('__TABLE_') || r.startsWith('__CODE_') || r.startsWith('__QUOTE_') || r.startsWith('__FENCED_') || r.startsWith('__BOOKMARK_')) {
+		if (r.startsWith('__TABLE_') || r.startsWith('__CODE_') || r.startsWith('__QUOTE_') || r.startsWith('__FENCED_')) {
 			return r; // Block elements handle their own spacing
 		}
 		return `<div style="min-height: 1.6em;">${r}</div>`;
@@ -946,11 +936,6 @@ export async function renderMarkdown(
 		const containerHtml = `<div class="fenced-container fenced-${type}" style="${containerStyle}">${renderedInner}</div>`;
 
 		processed = processed.replace(`__FENCED_${i}__`, containerHtml);
-	}
-
-	// Restore bookmark marker HTML from placeholders
-	for (let i = 0; i < bookmarkMarkers.length; i++) {
-		processed = processed.replace(`__BOOKMARK_${i}__`, bookmarkMarkers[i]);
 	}
 
 	return `<div style="white-space: pre-wrap; font-family: inherit; margin: 0;">${processed}</div>`;

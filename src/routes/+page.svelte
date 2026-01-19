@@ -1,12 +1,11 @@
 <script lang="ts">
 	import { Icon } from 'svelte-icons-pack';
-	import { LuPaperclip, LuFolder, LuFilePenLine, LuLock, LuLockOpen, LuMaximize2, LuBookmark } from 'svelte-icons-pack/lu';
+	import { LuPaperclip, LuFolder, LuFilePenLine, LuLock, LuLockOpen, LuMaximize2 } from 'svelte-icons-pack/lu';
 	import { currentMessage, isLoading, sendMessage, abortCurrentMessage, lastMutations, lastWhiteboardMutations, lastCanvasMutations } from '$lib/stores/chat';
 	import { tick, onMount, onDestroy } from 'svelte';
 	import { DEFAULT_PERSONA, PERSONAS } from '$lib/config/personas';
 	import { type CanvasType, getDefaultCanvasForPersona } from '$lib/config/canvases';
 	import { getPersonaAccentColor, getPersonaAccentBg } from '$lib/config/colors';
-	import { BOOKMARK } from '$lib/config/memory';
 	import { CHAT_CONFIG, scrollToTurn, scrollToLastTurn, getTurns } from '$lib/ui/scroll';
 	import { createConfirmation } from '$lib/composables';
 	import ScrollControls from '$lib/components/ScrollControls.svelte';
@@ -300,52 +299,6 @@
 
 	// RTF lock mode - prevents accidental sends during RTF workflow
 	let rtfLockMode = $state(false);
-
-	// Bookmark mode state (for placing navigation markers within message turns)
-	let bookmarkMode = $state(false);
-	// Bookmark = marker in content. hasBookmark() checks content strings (reactive).
-	// getBookmarkPosition() queries DOM for scroll position (only called on user action).
-
-	/**
-	 * Check if a bookmark marker exists in any message content.
-	 * Checks content strings (reactive) rather than DOM (stale during re-render).
-	 */
-	function hasBookmark(): boolean {
-		return allMessages.some(msg => msg.ai_response?.includes(BOOKMARK.marker));
-	}
-
-	/**
-	 * Get bookmark position relative to the scroll container.
-	 * Queries DOM directly since bookmark marker is now part of rendered content.
-	 * Returns undefined if no bookmark marker exists or during SSR.
-	 */
-	function getBookmarkPosition(): number | undefined {
-		if (typeof document === 'undefined') return undefined;
-
-		const marker = document.querySelector('.bookmark-marker');
-		if (!marker) return undefined;
-
-		const container = document.querySelector('.messages-area') as HTMLElement;
-		if (!container) return undefined;
-
-		const markerRect = marker.getBoundingClientRect();
-		const containerRect = container.getBoundingClientRect();
-		return markerRect.top - containerRect.top + container.scrollTop;
-	}
-
-	/**
-	 * Get the message ID containing the bookmark marker.
-	 * Used for clearing the bookmark via API.
-	 */
-	function getBookmarkMessageId(): string | null {
-		if (typeof document === 'undefined') return null;
-
-		const marker = document.querySelector('.bookmark-marker');
-		if (!marker) return null;
-
-		const messageTurn = marker.closest('[data-message-id]') as HTMLElement | null;
-		return messageTurn?.dataset.messageId || null;
-	}
 
 	interface AnnotationTarget {
 		headerText: string;
@@ -1755,89 +1708,6 @@
 	}
 
 	/**
-	 * Handle click in messages area for bookmark placement mode.
-	 * Places marker at the start of the clicked message turn.
-	 * Simplified: no anchor tracking, marker in content IS the bookmark.
-	 */
-	async function handleBookmarkClick(event: MouseEvent) {
-		if (!bookmarkMode) return;
-
-		const target = event.target as HTMLElement;
-
-		// Skip interactive elements
-		if (target.closest('button') || target.closest('a') || target.closest('.bookmark-marker')) return;
-
-		// Find the message turn
-		const messageTurn = target.closest('[data-message-id]') as HTMLElement | null;
-		if (!messageTurn) return;
-
-		const messageId = messageTurn.dataset.messageId;
-		if (!messageId) return;
-
-		// Call API to embed bookmark at start of this message's content
-		try {
-			const response = await fetch(`/api/superjournal/${messageId}/bookmark`, {
-				method: 'PATCH',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ position: 'here' })
-			});
-
-			if (response.ok) {
-				const result = await response.json();
-
-				// Update local message content to show bookmark immediately
-				if (result.content) {
-					allMessages = allMessages.map(msg => {
-						// First, strip bookmark from all messages (API cleared them)
-						let aiResponse = msg.ai_response?.replace(BOOKMARK.getPattern(), '');
-
-						// Then add bookmark to the target message
-						if (msg.id === messageId) {
-							if (result.is_linked_article && result.article_id) {
-								return { ...msg, ai_response: `<!--content:${result.article_id}-->\n${result.content}` };
-							}
-							return { ...msg, ai_response: result.content };
-						}
-						return { ...msg, ai_response: aiResponse };
-					});
-				}
-			}
-		} catch (err) {
-			console.error('Failed to place bookmark:', err);
-		}
-
-		// Exit bookmark mode
-		bookmarkMode = false;
-	}
-
-	/**
-	 * Clear bookmark via API - removes marker from all content.
-	 * Uses DOM to find which message currently has the bookmark.
-	 */
-	async function clearBookmark() {
-		const messageId = getBookmarkMessageId();
-		if (!messageId) return;
-
-		try {
-			const response = await fetch(`/api/superjournal/${messageId}/bookmark`, {
-				method: 'PATCH',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(null)  // null = remove bookmark
-			});
-
-			if (response.ok) {
-				// Strip bookmark marker from all local messages
-				allMessages = allMessages.map(msg => ({
-					...msg,
-					ai_response: msg.ai_response?.replace(BOOKMARK.getPattern(), '')
-				}));
-			}
-		} catch (err) {
-			console.error('Failed to clear bookmark:', err);
-		}
-	}
-
-	/**
 	 * Restore annotation marker from articles data on page load
 	 */
 	function restoreAnnotationMarker() {
@@ -2439,8 +2309,7 @@
 			class="messages-content"
 			class:annotation-mode={annotationMode}
 			class:focus-selection-mode={focusSelectionMode}
-			class:bookmark-mode={bookmarkMode}
-			onclick={(e) => { handleAnnotationClick(e); handleFocusSelectionClick(e); handleBookmarkClick(e); }}
+			onclick={(e) => { handleAnnotationClick(e); handleFocusSelectionClick(e); }}
 		>
 			{#if hasMore && !focusedMessageId}
 				<button class="load-more-btn" onclick={loadMoreMessages} disabled={isLoadingMore}>
@@ -2560,7 +2429,7 @@
 						onSelect={selectPersona}
 					/>
 
-					<ScrollControls config={CHAT_CONFIG} bookmarkPosition={getBookmarkPosition()} />
+					<ScrollControls config={CHAT_CONFIG} />
 
 					<button
 						class="control-btn hit-target"
@@ -2601,25 +2470,6 @@
 						}}
 					>
 						<Icon src={LuMaximize2} size="11" />
-					</button>
-
-					<button
-						class="control-btn hit-target"
-						class:active={bookmarkMode}
-						class:bookmark-active={hasBookmark()}
-						style={(bookmarkMode || hasBookmark()) ? `color: ${currentAccentColor}` : ''}
-						title={bookmarkMode ? 'Exit bookmark placement mode' : (hasBookmark() ? 'Clear bookmark' : 'Place a bookmark marker')}
-						onclick={async () => {
-							if (hasBookmark() && !bookmarkMode) {
-								// Bookmark exists - clear it via API
-								await clearBookmark();
-							} else {
-								// No bookmark or in placement mode - toggle placement mode
-								bookmarkMode = !bookmarkMode;
-							}
-						}}
-					>
-						<Icon src={LuBookmark} size="11" />
 					</button>
 
 					<button
@@ -3015,70 +2865,5 @@
 		outline: 2px solid var(--current-accent);
 		outline-offset: 4px;
 		border-radius: 8px;
-	}
-
-	/* Bookmark mode styles */
-	.messages-content.bookmark-mode {
-		cursor: crosshair;
-	}
-
-	.messages-content.bookmark-mode :global(.ai-message) {
-		cursor: crosshair;
-	}
-
-	:global(.bookmark-marker) {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		padding: 4px 8px;
-		margin: 8px 0;
-		background: color-mix(in srgb, var(--boss-accent) 10%, transparent);
-		border: 0.5px solid color-mix(in srgb, var(--boss-accent) 50%, transparent);
-		border-left: 4px solid var(--boss-accent);
-		border-radius: 4px;
-		font-size: 12px;
-		color: hsl(var(--muted-foreground));
-		animation: markerPulse 0.3s ease-out;
-		position: relative;
-	}
-
-	:global(.bookmark-marker .bookmark-icon) {
-		color: var(--boss-accent);
-		flex-shrink: 0;
-	}
-
-	:global(.bookmark-marker .bookmark-label) {
-		color: var(--boss-accent);
-		font-weight: 500;
-	}
-
-	:global(.bookmark-dismiss) {
-		position: absolute;
-		right: 8px;
-		top: 50%;
-		transform: translateY(-50%);
-		background: transparent;
-		border: none;
-		color: hsl(var(--muted-foreground));
-		font-size: 1.2rem;
-		font-weight: bold;
-		cursor: pointer;
-		opacity: 0;
-		transition: opacity 0.2s;
-		padding: 4px 8px;
-		line-height: 1;
-	}
-
-	:global(.bookmark-marker:hover .bookmark-dismiss) {
-		opacity: 0.7;
-	}
-
-	:global(.bookmark-dismiss:hover) {
-		opacity: 1 !important;
-	}
-
-	/* Bookmark button active state when bookmark exists */
-	.control-btn.bookmark-active {
-		opacity: 1;
 	}
 </style>

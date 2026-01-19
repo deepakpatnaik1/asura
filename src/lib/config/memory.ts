@@ -49,22 +49,3 @@ export const MEMORY = {
 	 */
 	maxToolUseDepth: 15
 } as const;
-
-/**
- * Bookmark marker configuration
- *
- * The bookmark is embedded as an HTML comment in content (superjournal or Obsidian files).
- * The self-documenting message warns Claude not to delete it during edits.
- */
-export const BOOKMARK = {
-	/** The full bookmark marker to embed in content */
-	marker: '<!--bookmark: Do not delete. This is a bookmark set by Boss.-->',
-
-	/**
-	 * Get a fresh regex pattern to match and strip the bookmark marker.
-	 * Returns a NEW regex each time to avoid lastIndex state issues with the global flag.
-	 */
-	getPattern(): RegExp {
-		return /<!--bookmark: Do not delete\. This is a bookmark set by Boss\.-->\n?/g;
-	}
-};
